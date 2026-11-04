@@ -1,7 +1,8 @@
 import { CleanupLimit, CleanupResult } from "@yielded/auth/Persistence";
-import { Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import type { SqlTable } from "./native-sql-table";
@@ -13,8 +14,8 @@ import { appendSqlBatchStatement } from "./sql-commit";
 export interface SqlCleanupTable {
   readonly table: SqlTable;
   readonly keys: readonly [string, ...string[]];
-  readonly due: Fragment;
-  readonly order: ReadonlyArray<Fragment>;
+  readonly due: Statement.Fragment;
+  readonly order: ReadonlyArray<Statement.Fragment>;
   /** Internal capability: managed SQLite pending rows with a stable built-in
    * clock, globally unique non-null BINARY keys, and no table triggers. */
   readonly selectedKeysOwnDeletion?: true;
@@ -26,7 +27,7 @@ export const cleanupSqlRows = Effect.fnUntraced(function* (
   batch = false,
 ) {
   const limit = yield* Schema.decodeEffect(CleanupLimit)(requested);
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   let removed = 0;
 
   for (const candidate of candidates) {

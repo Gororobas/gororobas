@@ -1,7 +1,8 @@
 import * as M from "@yielded/auth/Passkey";
-import { Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { Fragment } from "effect/sql/Statement";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import type { PasskeyCeremonyMapping } from "./models/passkey-model";
@@ -26,7 +27,9 @@ export const makePasskeyNativeFlow = Effect.fnUntraced(function* (
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const flow = tables(mapping.flow.table);
   const now = tables.expression(mapping.clock.engineNowMillis);
-  const millis = (expression: Fragment) => tables.expression(mapping.clock.toMillis(expression));
+
+  const millis = (expression: Statement.Fragment) =>
+    tables.expression(mapping.clock.toMillis(expression));
 
   const exact = (key: string, value: unknown) =>
     exactSqlText(sql, flow.column(key), flow.value(key, value));
@@ -74,7 +77,7 @@ export const makePasskeyNativeFlow = Effect.fnUntraced(function* (
   const consume = (
     input: M.PasskeyAccess,
     ceremony: M.PasskeyCeremony,
-    condition: Fragment = sql`true`,
+    condition: Statement.Fragment = sql`true`,
   ) => sql`delete from ${flow.name} where ${access(input, ceremony)} and ${condition}`;
 
   const context = Effect.fnUntraced(function* (input: M.PasskeyAccess) {
@@ -112,7 +115,7 @@ export const makePasskeyNativeFlow = Effect.fnUntraced(function* (
       batch,
     );
 
-  const stage = Effect.fnUntraced(function* (statement: Fragment, count: number) {
+  const stage = Effect.fnUntraced(function* (statement: Statement.Fragment, count: number) {
     yield* appendSqlBatchStatement(sql`${statement}`);
     yield* appendSqlBatchStatement(sqlBatchAssertion(sql, sql`changes() = ${count}`));
   });
@@ -133,7 +136,7 @@ export const makePasskeyNativeFlow = Effect.fnUntraced(function* (
     context,
     cleanup,
     stage,
-    change: (statement: Fragment) => executeSqlChange(sql, statement),
+    change: (statement: Statement.Fragment) => executeSqlChange(sql, statement),
   };
 });
 

@@ -9,8 +9,12 @@ import {
 } from "@yielded/auth/Password";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Cause, Effect, Option, Redacted, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { PersistenceMappingError } from "./mapping-error";
 import type { AnyPasswordPersistenceMapping } from "./models/password-model";
@@ -193,8 +197,8 @@ export const makePasswordCredentials = Effect.fnUntraced(function* (
   });
 
   return {
-    findCredential: (uncaptured) =>
-      Effect.gen(function* () {
+    findCredential: Effect.fnUntraced(
+      function* (uncaptured) {
         const input = { ...uncaptured, identifier: { ...uncaptured.identifier } };
 
         yield* standalone;
@@ -226,9 +230,11 @@ export const makePasswordCredentials = Effect.fnUntraced(function* (
           (input.subjectId !== undefined && credential.revision.subjectId !== input.subjectId)
           ? Option.none()
           : Option.some(credential);
-      }).pipe(failure),
-    rehashIfCurrent: (input) =>
-      Effect.gen(function* () {
+      },
+      (_) => failure(_),
+    ),
+    rehashIfCurrent: Effect.fnUntraced(
+      function* (input) {
         const nextVerifier = Redacted.make(
           yield* Schema.decodeEffect(EncodedPasswordHash)(Redacted.value(input.nextVerifier)),
         );
@@ -289,6 +295,8 @@ export const makePasswordCredentials = Effect.fnUntraced(function* (
             and ${c.column(mapping.credential.credentialId)} = ${c.value(mapping.credential.credentialId, credential.credentialId)}
             and ${exact}`;
         }).pipe(Effect.flatten);
-      }).pipe(failure),
+      },
+      (_) => failure(_),
+    ),
   } satisfies Pick<PasswordPersistence["Service"], "findCredential" | "rehashIfCurrent">;
 });

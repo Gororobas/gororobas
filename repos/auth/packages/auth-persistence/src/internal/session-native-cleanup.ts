@@ -1,7 +1,8 @@
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import type { SessionCleanup } from "@yielded/auth/Sessions";
-import { Context, Effect } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import type { SessionCleanupMapping } from "./models/session-model";
 import type { NativeSqlTables } from "./native-sql-table";
@@ -24,12 +25,12 @@ export const makeNativeSessionCleanupServices = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   { readonly sessionCleanup: SessionCleanup },
   never,
-  SqlClient | LifecycleHooks | SqlBatchCommit
+  SqlClient.SqlClient | LifecycleHooks | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
   const boundedPending = yield* ManagedSqlitePendingCleanup;
 
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const executor = yield* makeSqlCommitExecutor(sessionUnavailable);
   const now = tables.expression(mapping.clock.engineNowMillis);
   const candidates: SqlCleanupTable[] = [];

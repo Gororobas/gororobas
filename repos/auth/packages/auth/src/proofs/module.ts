@@ -1,14 +1,12 @@
-import {
-  Result,
-  Cause,
-  Context,
-  DateTime,
-  Effect,
-  Layer,
-  Redacted,
-  Schema,
-  type Types,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import { defaultLayer } from "../auth/defaults";
 import {
@@ -258,15 +256,15 @@ export const makeProofModule = <
               scope: proofAbuseScope(moduleId, options.purpose, binding),
               policy: policy.abuse,
             })
-            .pipe(
-              Effect.as(true),
-              Effect.catchCause((cause) =>
-                cause.reasons.every(
-                  (reason) =>
-                    Cause.isFailReason(reason) && reason.error._tag === "ProofIngressDenied",
-                )
-                  ? Effect.succeed(false)
-                  : Effect.failCause(cause),
+            .pipe(Effect.as(true), (effect) =>
+              Effect.catchCauseIf(
+                effect,
+                (cause) =>
+                  cause.reasons.every(
+                    (reason) =>
+                      Cause.isFailReason(reason) && reason.error._tag === "ProofIngressDenied",
+                  ),
+                () => Effect.succeed(false),
               ),
             );
 

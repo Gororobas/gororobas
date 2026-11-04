@@ -1,4 +1,5 @@
-import type { Effect, Redacted } from "effect";
+import type * as Effect from "effect/Effect";
+import type * as Redacted from "effect/Redacted";
 
 import type { CredentialSlot } from "../operations/credentials";
 import type { OperationHttpError } from "./errors";

@@ -1,5 +1,12 @@
-import { Context, Crypto, DateTime, Effect, Layer, Redacted, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { TokenDigest } from "../Schema";
 import { makeSessionSigningCodec, type SessionSigningKeyring } from "../sessions/crypto";
@@ -82,44 +89,43 @@ export interface BindingModule<Id extends string, Purpose extends string> {
   readonly purpose: Purpose;
 }
 
-const makeBindingCodec = Effect.fn("RequestBinding.makeCodec")(function* (
-  configuration: RequestBindingConfiguration,
-) {
-  const policy = yield* Schema.decodeEffect(configurationSchema)(configuration).pipe(
-    Effect.mapError(() => RequestBindingConfigurationError.make({})),
-  );
+const makeBindingCodec = Effect.fn("RequestBinding.makeCodec")(
+  function* (configuration: RequestBindingConfiguration) {
+    const policy = yield* Schema.decodeEffect(configurationSchema)(configuration);
 
-  const signer = yield* makeSessionSigningCodec(envelope, policy.keyring, 2048).pipe(
-    Effect.mapError(() => RequestBindingConfigurationError.make({})),
-  );
+    const signer = yield* makeSessionSigningCodec(envelope, policy.keyring, 2048);
 
-  const read = Effect.fn("RequestBinding.read")(function* (credential: Redacted.Redacted<string>) {
-    const value = yield* signer
-      .decode(credential)
-      .pipe(
-        Effect.mapError((error) =>
-          error._tag === "SessionUnavailable"
-            ? RequestBindingUnavailable.make({})
-            : RequestBindingInvalid.make({}),
-        ),
-      );
+    const read = Effect.fn("RequestBinding.read")(function* (
+      credential: Redacted.Redacted<string>,
+    ) {
+      const value = yield* signer
+        .decode(credential)
+        .pipe(
+          Effect.mapError((error) =>
+            error._tag === "SessionUnavailable"
+              ? RequestBindingUnavailable.make({})
+              : RequestBindingInvalid.make({}),
+          ),
+        );
 
-    const now = DateTime.toEpochMillis(yield* DateTime.now);
+      const now = DateTime.toEpochMillis(yield* DateTime.now);
 
-    if (
-      value.generation !== policy.generation ||
-      value.issuedAtMillis > now ||
-      value.expiresAtMillis <= now ||
-      value.expiresAtMillis <= value.issuedAtMillis ||
-      value.expiresAtMillis - value.issuedAtMillis > policy.lifetimeMillis
-    )
-      return yield* RequestBindingInvalid.make({});
+      if (
+        value.generation !== policy.generation ||
+        value.issuedAtMillis > now ||
+        value.expiresAtMillis <= now ||
+        value.expiresAtMillis <= value.issuedAtMillis ||
+        value.expiresAtMillis - value.issuedAtMillis > policy.lifetimeMillis
+      )
+        return yield* RequestBindingInvalid.make({});
 
-    return value;
-  });
+      return value;
+    });
 
-  return { policy, signer, read };
-});
+    return { policy, signer, read };
+  },
+  Effect.mapError(() => RequestBindingConfigurationError.make({})),
+);
 
 /** Recover correlation from a verified private credential. This is not flow
  * authorization: the operation still verifies module, purpose, state and binding
@@ -198,7 +204,9 @@ export const makeRequestBinding = <const Id extends string, const Purpose extend
 
         const { policy, signer, read } = yield* makeBindingCodec(input);
 
-        const crypto = yield* Crypto.Crypto;
+        const crypto = yield* SecureRandom.SecureRandom;
+
+        const digests = yield* Digest.Digest;
 
         return RequestBinding.of({
           issue: Effect.fn("RequestBinding.issue")(function* (flowId) {
@@ -250,8 +258,8 @@ export const makeRequestBinding = <const Id extends string, const Purpose extend
               Redacted.value(credential),
             ]).pipe(Effect.mapError(() => RequestBindingInvalid.make({})));
 
-            const digest = yield* crypto
-              .digest("SHA-256", new TextEncoder().encode(message))
+            const digest = yield* digests
+              .digest(Digest.sha256, new TextEncoder().encode(message))
               .pipe(Effect.mapError(() => RequestBindingUnavailable.make({})));
 
             // Entry verification deadline only. Final proof/action expiry is still

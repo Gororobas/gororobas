@@ -1,4 +1,6 @@
-import { Option, Schema, SchemaGetter } from "effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 import { PersistenceMappingError } from "./mapping-error";
 

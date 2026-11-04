@@ -38,6 +38,7 @@ export * as Apple from "./Apple.ts";
 export * as Auth0 from "./Auth0.ts";
 export * as Atlassian from "./Atlassian.ts";
 export * as Cognito from "./Cognito.ts";
+export * as Discord from "./Discord.ts";
 export * as Dropbox from "./Dropbox.ts";
 export * as Figma from "./Figma.ts";
 export * as GitHub from "./GitHub.ts";

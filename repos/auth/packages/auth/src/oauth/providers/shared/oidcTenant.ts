@@ -1,4 +1,6 @@
-import { Effect, type Redacted, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import type * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import type { ProviderDefinition } from "../../providerDefinition";
 import type { OAuthUnavailable } from "../../signInErrors";

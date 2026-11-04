@@ -1,6 +1,7 @@
 /* oxlint-disable no-explicit-any -- physical mapping generics are erased only at this shared adapter boundary. */
 import * as M from "@yielded/auth/Passkey";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { randomId } from "./crypto";
 import { sqlBatchAssertion } from "./d1-planning";

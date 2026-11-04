@@ -1,5 +1,11 @@
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
 import { LifecycleEventId, lifecycleEvent, lifecycleEventEffect } from "../hooks/models";
@@ -116,10 +122,7 @@ export const makePasskeyManagement = <
       readonly begin: (
         invocation: AuthInvocation,
         input: typeof BeginInput.Type,
-      ) => Effect.Effect<
-        AuthOperationResult<typeof PasskeyRegistrationStarted.Type>,
-        PasskeyFailure
-      >;
+      ) => Effect.Effect<AuthOperationResult<PasskeyRegistrationStarted>, PasskeyFailure>;
       readonly complete: (
         invocation: AuthInvocation,
         input: typeof CompleteInput.Type,
@@ -131,10 +134,7 @@ export const makePasskeyManagement = <
       readonly rename: (
         invocation: AuthInvocation,
         input: typeof RenameInput.Type,
-      ) => Effect.Effect<
-        { readonly credential: typeof PasskeyCredentialSummary.Type },
-        PasskeyFailure
-      >;
+      ) => Effect.Effect<{ readonly credential: PasskeyCredentialSummary }, PasskeyFailure>;
       readonly remove: (
         invocation: AuthInvocation,
         input: typeof RemoveInput.Type,
@@ -152,7 +152,7 @@ export const makePasskeyManagement = <
         ceremonies = yield* PasskeyPersistence,
         actions = yield* PasskeyActionEvidence,
         strategy = yield* sessions.SessionStrategy,
-        crypto = yield* Crypto.Crypto,
+        digests = yield* Digest.Digest,
         hooks = yield* LifecycleHooks;
 
       const invalidation = sessionInvalidationWindow(
@@ -168,7 +168,9 @@ export const makePasskeyManagement = <
         Schema.encodeEffect(Schema.fromJsonString(Schema.toCodecJson(Schema.toType(schema))))(
           value,
         ).pipe(
-          Effect.flatMap((encoded) => crypto.digest("SHA-256", new TextEncoder().encode(encoded))),
+          Effect.flatMap((encoded) =>
+            digests.digest(Digest.sha256, new TextEncoder().encode(encoded)),
+          ),
           Effect.map((bytes) => TokenDigest.make(Base64Url.encode(bytes))),
           Effect.catchCause((cause) =>
             Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
@@ -451,7 +453,9 @@ export const makePasskeyManagement = <
             moduleId,
             action: "remove",
             commandId: request.commandId,
-            flowId: Schema.decodeSync(PasskeyBegin.fields.flowId)(request.commandId),
+            flowId: yield* Schema.decodeEffect(PasskeyBegin.fields.flowId)(request.commandId).pipe(
+              Effect.orDie,
+            ),
             revision: inspected.credential.revision,
             bindingDigest: yield* digest(
               Schema.Tuple([

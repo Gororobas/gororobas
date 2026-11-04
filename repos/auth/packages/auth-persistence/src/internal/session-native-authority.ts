@@ -9,8 +9,11 @@ import {
   type AuthenticationRequirement,
   type SessionUnavailable,
 } from "@yielded/auth/Sessions";
-import { Cause, DateTime, Effect, Option } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import { PersistenceMappingError } from "./mapping-error";
@@ -81,7 +84,7 @@ export const makeNativeAuthenticationAuthorityServices = Effect.fnUntraced(funct
 ): Effect.fn.Return<
   { readonly authenticationAuthority: AuthenticationAuthority["Service"] },
   SessionUnavailable,
-  SqlClient | LifecycleHooks | SqlBatchCommit
+  SqlClient.SqlClient | LifecycleHooks | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
 

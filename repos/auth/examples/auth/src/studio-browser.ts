@@ -1,5 +1,6 @@
 import { Atom as AuthAtom, OperationHttpClient as Fetch } from "@yielded/auth";
 import * as PasskeyBrowser from "@yielded/auth-simplewebauthn/Browser";
+import type { SubjectId } from "@yielded/auth/Schema";
 import { Effect, Layer, Redacted } from "effect";
 import { Atom } from "effect/reactivity";
 
@@ -10,7 +11,7 @@ import { transport } from "./studio-transport";
  * The host supplies an Effect HttpClient and the finite TOTP private reveal collector. */
 export const makeStudioBrowser = Effect.fn("Studio.browser")(function* <R = never, RNative = never>(
   options: Fetch.OperationFetchOptions<R, RNative>,
-  initialSubject: string | null = null,
+  initialSubject: SubjectId | null = null,
 ) {
   const lifetime = yield* AuthAtom.makeLifetime({ initialSubject }).pipe(
     Effect.provide(Fetch.layer(options)),

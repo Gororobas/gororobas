@@ -1,4 +1,4 @@
-import type { Fragment } from "effect/sql/Statement";
+import type * as Statement from "effect/sql/Statement";
 
 import type { SqlExpression as DirectSqlExpression } from "./sql-expression";
 
@@ -19,6 +19,6 @@ export interface AnyTableModel extends TableModel {
 
 /** Opaque native SQL expression for explicit adapter mappings. */
 export type SqlExpression =
-  | Fragment
+  | Statement.Fragment
   | DirectSqlExpression
   | { readonly getSQL: () => SqlExpression };

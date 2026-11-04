@@ -1,5 +1,41 @@
 # @yielded/oauth
 
+## 0.1.0-beta.47
+
+### Patch Changes
+
+- [#288](https://github.com/yielded-dev/auth/pull/288) [`109c420`](https://github.com/yielded-dev/auth/commit/109c4201e63637c8e9c23039c5a248b872fddca0) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Use Effect crypto and one `WebCrypto.layer` preset, and move Workers password hashing to `@yielded/auth-platform-workerd`. BEHAVIOR CHANGE: require Effect 4.1 and matching SQL drivers; replace `@yielded/crypto` and Auth's Workers subpaths with Effect crypto Layers or the Workers package, supply HTTP and the Kdf for `Testing.services()` separately, and use `Password.KdfAdmission.layer()`, optional `PasswordScrypt.layer`, and opaque Effect keys for JOSE.
+- Updated dependencies [[`109c420`](https://github.com/yielded-dev/auth/commit/109c4201e63637c8e9c23039c5a248b872fddca0)]:
+  - @yielded/jose@0.1.0-beta.47
+
+## 0.1.0-beta.46
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @yielded/jose@0.1.0-beta.46
+
+## 0.1.0-beta.45
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @yielded/jose@0.1.0-beta.45
+
+## 0.1.0-beta.44
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @yielded/jose@0.1.0-beta.44
+
+## 0.1.0-beta.43
+
+### Patch Changes
+
+- Updated dependencies [[`d29041b`](https://github.com/yielded-dev/auth/commit/d29041b595fe2c04a6c23dc974e3a40b49f8b307)]:
+  - @yielded/jose@0.1.0-beta.43
+
 ## 0.1.0-beta.42
 
 ### Patch Changes

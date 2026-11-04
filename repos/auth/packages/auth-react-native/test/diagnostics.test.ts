@@ -1,7 +1,11 @@
 import { it } from "@effect/vitest";
 import * as ReactNativePasskey from "@yielded/auth-react-native";
 import { PasskeyAuthenticationStarted } from "@yielded/auth/Passkey";
-import { Cause, Effect, Exit, Fiber, Logger } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Logger from "effect/Logger";
 import { Platform } from "react-native";
 import { Passkey } from "react-native-passkey";
 import { afterEach, expect, vi } from "vite-plus/test";
@@ -54,7 +58,7 @@ it.effect(
   "reports the installed peer's missing-module failure once and leaves expected cancellation quiet",
   () =>
     Effect.gen(function* () {
-      const native = yield* ReactNativePasskey.make();
+      const native = yield* ReactNativePasskey.make;
 
       expect((yield* native.capabilities).supported).toBe(true);
       expect(yield* Effect.flip(native.authenticate(input))).toMatchObject({
@@ -86,7 +90,7 @@ it.effect(
   "reports environment and response defects once without treating schema rejection as a defect",
   () =>
     Effect.gen(function* () {
-      const native = yield* ReactNativePasskey.make();
+      const native = yield* ReactNativePasskey.make;
 
       const version = vi.spyOn(Platform, "Version", "get").mockImplementation(() => {
         throw new Error("private-environment-marker");
@@ -124,7 +128,7 @@ it.effect(
 
 it.effect("leaves late settlement to guard cleanup after the caller's reporting scope ends", () =>
   Effect.gen(function* () {
-    const native = yield* ReactNativePasskey.make();
+    const native = yield* ReactNativePasskey.make;
     let rejectNative: (reason: unknown) => void = () => {};
     let entered = false;
 

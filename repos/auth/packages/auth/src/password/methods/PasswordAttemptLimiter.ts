@@ -1,5 +1,10 @@
-import { Cause, Context, Duration, Effect, Layer, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as RateLimiter from "effect/persistence/RateLimiter";
+import * as Schema from "effect/Schema";
 
 import { defaultLayer } from "../../auth/defaults";
 import { boundedMemoryRateLimiter, localRateLimiter } from "../../auth/rateLimiter";

@@ -1,4 +1,10 @@
-import { Cause, Context, DateTime, Effect, Layer, Schema, type Types } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import type { PreparedCommit } from "../hooks/commit";
 import { LifecycleEventId, lifecycleEvent, lifecycleSnapshot } from "../hooks/models";

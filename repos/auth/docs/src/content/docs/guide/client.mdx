@@ -11,7 +11,7 @@ and dispatches inputs.
 
 <FlowMap
   title="From a React action to an authenticated session"
-  description="React dispatches an Atom mutation through the client. A successful auth mutation refreshes the session query."
+  description="React dispatches an Atom mutation through the client. A completed authentication supplies its public session to the session atom."
   columns={3}
   boundary={{ row: 3, above: "Browser", below: "Server" }}
   nodes={[
@@ -31,7 +31,7 @@ and dispatches inputs.
     { from: "react", to: "mutation" },
     { from: "mutation", to: "client" },
     { from: "client", to: "routes", label: "Effect HttpClient" },
-    { from: "mutation", to: "session", label: "refreshes" },
+    { from: "mutation", to: "session", label: "updates" },
     { from: "session", to: "react", label: "useAtomValue" },
   ]}
 />
@@ -91,13 +91,14 @@ export function App() {
 }
 ```
 
-Reuse an existing provider if you have one. Successful auth mutations refresh
-`auth.session` automatically.
+Reuse an existing provider if you have one. Successful authentication supplies
+`auth.session` immediately after credential settlement; other successful mutations
+refresh it automatically.
 
 When the server enables [cookie caching](./sessions#cache-ordinary-session-reads),
 use `auth.getSession({ fresh: true })` to bypass it. Define this atom outside React
 renders. “Fresh” applies to each server fetch; Atom retention still applies between
-fetches. Auth mutations refresh both queries.
+fetches. Auth mutations update both queries.
 
 ## Dispatch a sign-in
 
@@ -114,7 +115,8 @@ signIn({ email, password });
 ```
 
 Render pending state from `result.waiting` and failures from its `AsyncResult`.
-An `Authenticated` success contains the typed session; complete any requested
+An `Authenticated` success supplies the typed session to `auth.session` and
+`auth.identity` without waiting for another request. Complete any requested
 additional factor before granting access. The account app's
 [form](https://github.com/yielded-dev/auth/blob/main/examples/shared/account/browser.tsx)
 and [Atom workflow](https://github.com/yielded-dev/auth/blob/main/examples/shared/account/client.ts)
@@ -186,6 +188,52 @@ pending query cannot populate the new account with the previous account's data.
 Separate application atoms such as `projects` keep their own lifetime: reactivity
 keys refresh them but do not make them account-scoped. See the
 [account lifetime reference](../reference/client#account-lifetime).
+
+To reopen local account data before the server is reachable, opt into an identity
+cache. Use a key scoped to this application and auth server:
+
+```ts title="apps/web/auth-client.ts"
+import { Atom as AuthAtom, Client } from "@yielded/auth";
+import type { SubjectId } from "@yielded/auth/Schema";
+import { Effect } from "effect";
+import { KeyValueStore } from "effect/persistence";
+
+import { AuthApi } from "@app/domain/auth-contract";
+
+export const AppClient = Client.make(AuthApi, { baseUrl: "https://app.example.com" });
+export const auth = AuthAtom.make(AppClient, {
+  identityCache: {
+    key: "app:app.example.com:identity:v1",
+    storage: KeyValueStore.layerStorage(() => localStorage),
+  },
+});
+
+export const verifyAccount = auth.runtime.fn<SubjectId>()(
+  Effect.fn("app.verifyAccount")(function* (expectedSubjectId, get) {
+    return yield* get.result(auth.verifiedSession(expectedSubjectId), {
+      suspendOnWaiting: true,
+    });
+  }),
+);
+```
+
+Read `auth.identity` with `useAtomValue`: `Unknown` has no known identity,
+`Remembered` and `Verified` carry `subjectId` and the public session `snapshot`, and
+`SignedOut` records a confirmed sign-out and remains visible through pending or
+failed session refreshes. A remembered identity selects local data;
+it grants no authority. The cache stores one public snapshot, never credentials or
+the Atom registry. Your application owns IndexedDB and other business data.
+
+Compose `auth.verifiedSession(expectedSubjectId)` into an Effect workflow before
+sending that account's queued work. It uses the shared live session and
+rejects a different or signed-out account; the server must still authorize each
+request. Check `auth.session` for network errors. A failed verification preserves
+the remembered account and its local work; confirmation of the same subject keeps
+that work, while a different subject or confirmed sign-out retires it.
+
+Browser focus and reconnect refresh the session when caching is enabled. See the
+[cache reference](../reference/client#remembered-identity) for storage requirements
+and the [consumer example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/auth-identity-cache.ts).
 
 ## Server rendering and hydration
 

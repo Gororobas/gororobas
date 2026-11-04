@@ -1,10 +1,15 @@
 import { CurrentCommitJournal, type LifecycleHooks } from "@yielded/auth/Hooks";
 import * as P from "@yielded/auth/Proofs";
-import { Crypto, Effect, Option, Schema, type PlatformError } from "effect";
-import { Base64Url } from "effect/encoding";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
-import type { Fragment } from "effect/sql/Statement";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Option from "effect/Option";
+import type * as PlatformError from "effect/PlatformError";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import { PersistenceMappingError } from "./mapping-error";
@@ -33,18 +38,18 @@ const invalidState = () =>
 /** Flow/context changes do not allocate new durable series. The hash bounds the
  * indexed key; the complete canonical binding is still checked independently. */
 const seriesKey = Effect.fnUntraced(function* (binding: P.ProofBinding) {
-  const crypto = yield* Crypto.Crypto;
+  const digests = yield* Digest.Digest;
 
-  const tuple = Schema.encodeSync(
+  const tuple = yield* Schema.encodeEffect(
     Schema.fromJsonString(Schema.Array(Schema.NullOr(Schema.String))),
   )([
     "effect-auth/proof-series/v1",
     binding.identifier.namespace,
     binding.identifier.value,
     binding._tag === "Identifier" ? null : binding.revision.subjectId,
-  ]);
+  ]).pipe(Effect.orDie);
 
-  return Base64Url.encode(yield* crypto.digest("SHA-256", new TextEncoder().encode(tuple)));
+  return Base64Url.encode(yield* digests.digest(Digest.sha256, new TextEncoder().encode(tuple)));
 });
 
 /** Shared native statements. A protected mutation calls redeemLocked only after
@@ -55,8 +60,9 @@ export const makeNativeProofStore = Effect.fnUntraced(function* (
   batch = false,
 ) {
   const externalOwner = yield* Effect.serviceOption(CurrentSqlCommit);
-  const sql = (yield* SqlClient).withoutTransforms();
-  const crypto = yield* Crypto.Crypto;
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
+  const crypto = yield* SecureRandom.SecureRandom;
+  const digests = yield* Digest.Digest;
   const p = mapping.proof;
   const proof = tables(p.table);
   const subject = tables(mapping.subject.table);
@@ -65,7 +71,9 @@ export const makeNativeProofStore = Effect.fnUntraced(function* (
   const rowLocks = !batch && sql.onDialectOrElse({ sqlite: () => false, orElse: () => true });
   const now = tables.expression(mapping.clock.engineNowMillis);
   const millis = (key: string) => tables.expression(mapping.clock.toMillis(proof.column(key)));
-  const instant = (value: Fragment) => tables.expression(mapping.clock.fromMillis(sql`(${value})`));
+
+  const instant = (value: Statement.Fragment) =>
+    tables.expression(mapping.clock.fromMillis(sql`(${value})`));
 
   const exact = (key: string, value: unknown) =>
     exactSqlText(sql, proof.column(key), proof.value(key, value));
@@ -75,7 +83,10 @@ export const makeNativeProofStore = Effect.fnUntraced(function* (
     readonly purpose: P.ProofPurpose;
     readonly binding: P.ProofBinding;
   }) {
-    const key = yield* seriesKey(input.binding).pipe(Effect.provideService(Crypto.Crypto, crypto));
+    const key = yield* seriesKey(input.binding).pipe(
+      Effect.provideService(SecureRandom.SecureRandom, crypto),
+      Effect.provideService(Digest.Digest, digests),
+    );
 
     return {
       key,
@@ -133,7 +144,7 @@ export const makeNativeProofStore = Effect.fnUntraced(function* (
     input: Parameters<P.ProofPersistence["Service"]["issue"]>[0],
   ): Effect.fn.Return<
     P.ProofIssueDecision,
-    | SqlError
+    | SqlError.SqlError
     | Schema.SchemaError
     | PlatformError.PlatformError
     | PersistenceMappingError
@@ -384,7 +395,10 @@ export const makeNativeProofServices = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   { readonly proofPersistence: P.ProofPersistence["Service"] },
   P.ProofUnavailable,
-  SqlClient | LifecycleHooks | Crypto.Crypto | SqlBatchCommit
+  | SqlClient.SqlClient
+  | LifecycleHooks
+  | (SecureRandom.SecureRandom | Digest.Digest)
+  | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
   const executor = yield* makeSqlCommitExecutor(unavailable);
@@ -398,18 +412,20 @@ export const makeNativeProofServices = Effect.fnUntraced(function* (
       ? executor.run(effect, mode)
       : executor.batch(effect).pipe(Effect.provideService(SqlBatchCommit, batch));
 
-  const prepare = <Value, A>(value: Value, project: P.PrepareProofCommit<Value, A>) =>
-    Effect.gen(function* () {
-      const journal = yield* CurrentCommitJournal;
+  const prepare = Effect.fnUntraced(function* <Value, A>(
+    value: Value,
+    project: P.PrepareProofCommit<Value, A>,
+  ) {
+    const journal = yield* CurrentCommitJournal;
 
-      const receipt = project(value, journal);
+    const receipt = project(value, journal);
 
-      if (!(receipt?._tag === "PreparedCommit" && Effect.isEffect(receipt.read)))
-        return yield* invalidState();
-      yield* registerSqlCommitReceipt(receipt);
+    if (!(receipt?._tag === "PreparedCommit" && Effect.isEffect(receipt.read)))
+      return yield* invalidState();
+    yield* registerSqlCommitReceipt(receipt);
 
-      return receipt;
-    });
+    return receipt;
+  });
 
   const proofPersistence: P.ProofPersistence["Service"] = {
     issue: (input, project) =>

@@ -1,5 +1,8 @@
-import { Crypto, Effect, Redacted, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Digest from "effect/crypto/Digest";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { TokenDigest } from "../Schema";
 import { phoneFailure } from "./failure";
@@ -16,7 +19,9 @@ export const phoneDigest = Effect.fn("Phone.digest")(function* (values: Readonly
 
   return TokenDigest.make(
     Base64Url.encode(
-      yield* (yield* Crypto.Crypto).digest("SHA-256", bytes).pipe(Effect.mapError(phoneFailure)),
+      yield* (yield* Digest.Digest)
+        .digest(Digest.sha256, bytes)
+        .pipe(Effect.mapError(phoneFailure)),
     ),
   );
 });

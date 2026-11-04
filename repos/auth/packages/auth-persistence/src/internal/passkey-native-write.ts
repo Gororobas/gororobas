@@ -1,9 +1,10 @@
 /* oxlint-disable no-explicit-any -- physical mapping generics are erased only at this shared adapter boundary. */
 import * as M from "@yielded/auth/Passkey";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { Fragment } from "effect/sql/Statement";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { randomId } from "./crypto";
 import { sqlBatchAssertion } from "./d1-planning";
@@ -71,24 +72,23 @@ export const makePasskeyNativeWrites = (
         ),
     );
 
-  const check = (condition: Fragment) =>
-    Effect.gen(function* () {
-      const current = (yield* SqlClient.SqlClient).withoutTransforms();
-      const rows = yield* current`select case when ${condition} then 1 else 0 end as valid`;
+  const check = Effect.fnUntraced(function* (condition: Statement.Fragment) {
+    const current = (yield* SqlClient.SqlClient).withoutTransforms();
+    const rows = yield* current`select case when ${condition} then 1 else 0 end as valid`;
 
-      if (rows.length !== 1 || Number(rows[0]!.valid) !== 1)
-        return yield* PersistenceMappingError.make({
-          operation: "mapping",
-          cause: "Passkey mutation postcondition failed",
-        });
-    });
+    if (rows.length !== 1 || Number(rows[0]!.valid) !== 1)
+      return yield* PersistenceMappingError.make({
+        operation: "mapping",
+        cause: "Passkey mutation postcondition failed",
+      });
+  });
 
-  const postcondition = (name: string, condition: Fragment) =>
+  const postcondition = (name: string, condition: Statement.Fragment) =>
     base.batch
       ? registerSqlBatchPostcondition({ name, statement: sqlBatchAssertion(sql, condition) })
       : registerSqlPostcondition({ name, check: check(condition) });
 
-  const write = (statement: Fragment, count: number) =>
+  const write = (statement: Statement.Fragment, count: number) =>
     base.batch
       ? flow.stage(statement, count)
       : flow.change(statement).pipe(
@@ -418,15 +418,14 @@ export const makePasskeyNativeManagement = (
             yield* flow.stage(statement, 1);
           } else {
             rows = yield* sql.onDialectOrElse({
-              mysql: () =>
-                Effect.gen(function* () {
-                  const changed = yield* flow.change(statement);
+              mysql: Effect.fnUntraced(function* () {
+                const changed = yield* flow.change(statement);
 
-                  if (changed > 1) return [];
+                if (changed > 1) return [];
 
-                  // With mysql2 -FOUND_ROWS an idempotent rename reports zero changes.
-                  return yield* sql`select ${credential.fields("c_")} from ${credential.name} where ${owned(nativeId, input.credentialId)} and ${eq(credential, mapping.write.credential.name, input.name)} and ${expression(mapping.write.policy.metadata(nativeId))}`;
-                }),
+                // With mysql2 -FOUND_ROWS an idempotent rename reports zero changes.
+                return yield* sql`select ${credential.fields("c_")} from ${credential.name} where ${owned(nativeId, input.credentialId)} and ${eq(credential, mapping.write.credential.name, input.name)} and ${expression(mapping.write.policy.metadata(nativeId))}`;
+              }),
               orElse: () => sql`${statement} returning ${credential.fields("c_")}`,
             });
           }
@@ -478,12 +477,12 @@ export const makePasskeyNativeManagement = (
             ((policy.requireImmediateInvalidation ||
               input.management.requireImmediateInvalidation) &&
               mapping.invalidation.window.existingSessions !== "immediate") ||
-            Schema.encodeSync(Schema.fromJsonString(M.PasskeyRemoved.fields.invalidation))(
-              input.invalidation,
-            ) !==
-              Schema.encodeSync(Schema.fromJsonString(M.PasskeyRemoved.fields.invalidation))(
-                mapping.invalidation.window,
-              )
+            (yield* Schema.encodeEffect(
+              Schema.fromJsonString(M.PasskeyRemoved.fields.invalidation),
+            )(input.invalidation).pipe(Effect.orDie)) !==
+              (yield* Schema.encodeEffect(
+                Schema.fromJsonString(M.PasskeyRemoved.fields.invalidation),
+              )(mapping.invalidation.window).pipe(Effect.orDie))
           )
             return yield* preparePasskeyNative({ _tag: "Rejected" }, prepare);
           const requirement = yield* mapping.write.policy.requirement(current.row, "remove");
@@ -579,7 +578,7 @@ export const makePasskeyNativeManagement = (
             invalidation: input.invalidation,
           };
 
-          const finalConditions: Array<Fragment> = [];
+          const finalConditions: Array<Statement.Fragment> = [];
 
           for (const mutation of mapping.invalidation.mutations) {
             const table = tables(mutation.table);

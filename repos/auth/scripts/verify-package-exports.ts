@@ -20,17 +20,13 @@ export const ReusableManifest = Schema.Struct({
 });
 
 const reusableDependencies = (name: string): ReadonlySet<string> | undefined =>
-  name === "@yielded/crypto"
+  name === "@yielded/oauth"
     ? coreDependencies
-    : name === "@yielded/jose"
-      ? new Set(["effect", "@yielded/crypto"])
-      : name === "@yielded/oauth"
-        ? new Set(["effect", "@yielded/jose"])
-        : name === "@yielded/auth"
-          ? new Set(["effect", "@yielded/crypto", "@yielded/jose", "@yielded/oauth"])
-          : name === "@yielded/auth-persistence"
-            ? new Set(["effect", "@yielded/auth", "@yielded/crypto"])
-            : undefined;
+    : name === "@yielded/auth"
+      ? new Set(["effect", "@yielded/oauth"])
+      : name === "@yielded/auth-persistence" || name === "@yielded/auth-platform-workerd"
+        ? new Set(["effect", "@yielded/auth"])
+        : undefined;
 
 /** Check source and publisher-resolved manifests, including aliases and optional peers. */
 export const reusableDependencyProblems = (
@@ -174,7 +170,7 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
     for (const pkg of packages) {
       for (const problem of reusableDependencyProblems(pkg.manifest, catalog))
         report(pkg.file, problem);
-      if (["@yielded/crypto", "@yielded/jose", "@yielded/oauth"].includes(pkg.manifest.name)) {
+      if (pkg.manifest.name === "@yielded/oauth") {
         for (const dependency of Object.keys({
           ...pkg.manifest.dependencies,
           ...pkg.manifest.optionalDependencies,
@@ -451,10 +447,7 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
             }
           });
           for (const { specifier, typeOnly } of imports) {
-            if (
-              ["@yielded/crypto", "@yielded/jose", "@yielded/oauth"].includes(manifest.name) &&
-              authPackage.test(specifier)
-            )
+            if (manifest.name === "@yielded/oauth" && authPackage.test(specifier))
               report(file, `${manifest.name} must not import Auth module ${specifier}`);
             if (manifest.name === "@yielded/auth-persistence" && /drizzle/i.test(specifier))
               report(
@@ -493,7 +486,11 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
               allowed !== undefined &&
               name !== manifest.name &&
               !(name !== undefined && allowed.has(name)) &&
-              !(manifest.name === "@yielded/crypto" && isBuiltin(specifier))
+              !(
+                file.endsWith("/src/PasswordScrypt.ts") &&
+                manifest.name === "@yielded/auth" &&
+                isBuiltin(specifier)
+              )
             )
               report(
                 file,

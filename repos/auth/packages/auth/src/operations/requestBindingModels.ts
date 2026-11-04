@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export const RequestBindingFlowId = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9._:/-]{1,256}$/),

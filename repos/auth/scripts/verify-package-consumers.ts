@@ -8,7 +8,6 @@ import ts from "typescript-twoslash";
 import { build as viteBuild } from "vite-plus";
 
 import authCryptoFixtures from "../packages/auth/test/crypto-fixtures.ts";
-import { aeadVectors, argon2Vector } from "../packages/crypto/test/vectors.ts";
 import { PublishManifest, withPublishManifests } from "./release-publish.ts";
 import { ReusableManifest, reusableDependencyProblems } from "./verify-package-exports.ts";
 
@@ -117,74 +116,15 @@ const checkReusableOperations = Effect.fn("packageConsumers.reusableOperations")
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
-  // Reuse independent RFC9106 and XChaCha draft vectors, including their provenance.
-  // JOSE's native oracle matches test/compact-validation.test.ts; no jose is installed.
   yield* fs.writeFileString(
     path.join(stage, "fixtures/reusable-operations.mjs"),
     `import assert from "node:assert/strict";
-import { createCipheriv, createHmac } from "node:crypto";
-import { Crypto, Effect, Layer, Redacted, Schema } from "effect";
+import { Effect, Layer, Redacted } from "effect";
+import { Digest, SecureRandom } from "effect/crypto";
 import { FetchHttpClient } from "effect/http";
 import { OAuth, Pkce } from "@yielded/oauth";
-import { Aead, Kdf, KdfAdmission } from "@yielded/crypto";
-import * as Portable from "@yielded/crypto/Portable";
-import { Jwe, Jwk, Jws, Jwt } from "@yielded/jose";
-const Platform = await import(process.argv[2]);
-const argon = ${JSON.stringify(argon2Vector)};
-const vector = ${JSON.stringify(aeadVectors[1])};
-const bytes = (hex) => new Uint8Array(Buffer.from(hex, "hex"));
-const hex = (value) => Buffer.from(value).toString("hex");
-const utf8 = (value) => new TextEncoder().encode(value);
 const text = (value) => new TextDecoder().decode(value);
-for (const backend of [Portable.layer(globalThis.crypto.subtle), Platform.layer()]) {
-  await Effect.runPromise(Effect.gen(function* () {
-    const kdf = yield* Kdf.Kdf;
-    const derived = yield* kdf.argon2id({
-      password: Redacted.make(bytes(argon.passwordHex)), salt: bytes(argon.saltHex),
-      secret: Redacted.make(bytes(argon.secretHex)), associatedData: bytes(argon.associatedDataHex),
-      memoryKiB: argon.memoryKiB, passes: argon.iterations,
-      parallelism: argon.parallelism, length: argon.lengthBytes,
-    });
-    assert.equal(hex(Redacted.value(derived)), argon.expectedHex);
-    const aead = yield* Aead.Aead;
-    const context = {
-      algorithm: vector.algorithm, key: Redacted.make(bytes(vector.keyHex)),
-      nonce: bytes(vector.nonceHex), additionalData: bytes(vector.aadHex),
-    };
-    const sealed = yield* aead.encrypt({ ...context, plaintext: Redacted.make(bytes(vector.plaintextHex)) });
-    assert.equal(hex(sealed), vector.sealedHex);
-    const opened = yield* aead.decrypt({ ...context, ciphertext: bytes(vector.sealedHex) });
-    assert.equal(hex(Redacted.value(opened)), vector.plaintextHex);
-    sealed[0] ^= 1;
-    const rejected = yield* aead.decrypt({ ...context, ciphertext: sealed }).pipe(Effect.flip);
-    assert.equal(rejected._tag, "CryptoAuthenticationFailed");
-
-    const secret = new Uint8Array(32).fill(7);
-    const jwk = { kty: "oct", k: Buffer.from(secret).toString("base64url") };
-    const signing = yield* Jwk.importSecret(Redacted.make(jwk), "HS256");
-    const payload = utf8(JSON.stringify({ sub: "packaged-consumer" }));
-    const input = Buffer.from(JSON.stringify({ alg: "HS256" })).toString("base64url") + "." + Buffer.from(payload).toString("base64url");
-    const expected = input + "." + createHmac("sha256", secret).update(input).digest("base64url");
-    const signed = yield* Jws.sign(Redacted.make(payload), signing, { alg: "HS256" });
-    assert.equal(Redacted.value(signed), expected);
-    const verified = yield* Jwt.verify(Schema.Struct({ sub: Schema.String }), Redacted.make(expected), signing, { algorithms: ["HS256"] });
-    assert.equal(verified.claims.sub, "packaged-consumer");
-
-    const encryption = yield* Jwk.importSecret(Redacted.make(jwk), "dir");
-    const header = Buffer.from(JSON.stringify({ alg: "dir", enc: "A256GCM" })).toString("base64url");
-    const iv = new Uint8Array(12);
-    const cipher = createCipheriv("aes-256-gcm", secret, iv);
-    cipher.setAAD(utf8(header));
-    const ciphertext = Buffer.concat([cipher.update(utf8("payload")), cipher.final()]);
-    const token = [header, "", Buffer.from(iv).toString("base64url"), ciphertext.toString("base64url"), cipher.getAuthTag().toString("base64url")].join(".");
-    const decrypted = yield* Jwe.decrypt(Redacted.make(token), encryption);
-    assert.equal(text(Redacted.value(decrypted.plaintext)), "payload");
-  }).pipe(Effect.provide(backend.pipe(Layer.provide(KdfAdmission.layer())))));
-}
-const effectCrypto = Layer.succeed(Crypto.Crypto, Crypto.make({
-  randomBytes: size => crypto.getRandomValues(new Uint8Array(size)),
-  digest: (algorithm, data) => Effect.promise(() => crypto.subtle.digest(algorithm, data)).pipe(Effect.map(buffer => new Uint8Array(buffer))),
-}));
+const effectCrypto = Layer.merge(SecureRandom.layerWebCrypto, Digest.layerWebCrypto);
 let requests = 0;
 const fetchReceipt = async (url, init) => {
   requests++;
@@ -208,16 +148,12 @@ await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
   assert.equal(Redacted.value(tokens.accessToken), "private-access");
   assert.equal(requests, 1);
 })).pipe(Effect.provide(Layer.merge(effectCrypto, FetchHttpClient.layer)), Effect.provideService(FetchHttpClient.Fetch, fetchReceipt)));
-console.log("Packaged portable/native Argon2id, XChaCha, JWS/JWT, JWE and native OAuth passed with only Effect and first-party packages.");`,
+console.log("Packaged OAuth and PKCE passed with Effect as the only runtime dependency.");`,
   );
   for (const runtime of ["node", "bun"] as const) {
     const child = yield* ChildProcess.make(
       runtime,
-      [
-        ...(runtime === "bun" ? ["--no-install"] : []),
-        "fixtures/reusable-operations.mjs",
-        `@yielded/crypto/platform-${runtime}`,
-      ],
+      [...(runtime === "bun" ? ["--no-install"] : []), "fixtures/reusable-operations.mjs"],
       { cwd: stage, stdout: "pipe", stderr: "pipe" },
     );
 
@@ -238,7 +174,10 @@ console.log("Packaged portable/native Argon2id, XChaCha, JWS/JWT, JWE and native
   }
 });
 
-const checkAuthOperations = Effect.fn("packageConsumers.authOperations")(function* (stage: string) {
+const checkAuthOperations = Effect.fn("packageConsumers.authOperations")(function* (
+  stage: string,
+  repositoryRoot: string,
+) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
@@ -247,12 +186,10 @@ const checkAuthOperations = Effect.fn("packageConsumers.authOperations")(functio
     `import assert from "node:assert/strict";
 import { Effect, Layer, Redacted, Schema } from "effect";
 import { Password, Totp, OAuth } from "@yielded/auth";
-import { layerCryptoWeb } from "@yielded/auth/WebCrypto";
-import * as Portable from "@yielded/crypto/Portable";
-import * as KdfAdmission from "@yielded/crypto/KdfAdmission";
 const fixtures = ${JSON.stringify(authCryptoFixtures)};
-const admission = KdfAdmission.layer({ maxQueued: 0 });
-const runtime = Layer.merge(layerCryptoWeb, Portable.layer(globalThis.crypto.subtle).pipe(Layer.provideMerge(admission)));
+const admission = Password.KdfAdmission.layer({ maxQueued: 0 });
+const { layer } = await import(process.argv[2]);
+const runtime = Layer.merge(layer, admission);
 const key = Redacted.make(Schema.decodeUnknownSync(Schema.Uint8ArrayFromBase64Url)(fixtures.totp.key));
 const keys = Layer.succeed(Totp.TotpSecretKeys, { current: Effect.succeed({ keyId: "key1", key }), get: () => Effect.succeed(key) });
 const keyring = { activeKeyId: "key1", keys: [{ id: "key1", material: Redacted.make(fixtures.oauth.key) }] };
@@ -286,12 +223,19 @@ await Effect.runPromise(Effect.gen(function* () {
     assert.deepEqual(Schema.encodeSync(plainSchema)(plain), fixture.plain);
   }
 }).pipe(Effect.provide(services)));
-console.log("Published Auth verifies stored passwords, TOTP/recovery and all four OAuth envelopes without third-party runtime packages.");`,
+console.log("Published Auth verifies stored passwords, TOTP/recovery and all four OAuth envelopes with an explicit Effect platform crypto Layer.");`,
   );
   for (const runtime of ["node", "bun"] as const) {
     const child = yield* ChildProcess.make(
       runtime,
-      [...(runtime === "bun" ? ["--no-install"] : []), "fixtures/auth-operations.mjs"],
+      [
+        ...(runtime === "bun" ? ["--no-install"] : []),
+        "fixtures/auth-operations.mjs",
+        path.join(
+          repositoryRoot,
+          `node_modules/@effect/platform-${runtime}/dist/${runtime === "bun" ? "Bun" : "Node"}Crypto.js`,
+        ),
+      ],
       { cwd: stage, stdout: "pipe", stderr: "pipe" },
     );
 
@@ -603,129 +547,105 @@ const checkReusableConsumers = Effect.fn("packageConsumers.reusable")(function* 
   const path = yield* Path.Path;
 
   const stage = yield* fs
-    .makeTempDirectoryScoped({ prefix: "yielded-crypto-consumers-" })
+    .makeTempDirectoryScoped({ prefix: "yielded-protocol-consumers-" })
     .pipe(Effect.flatMap((directory) => fs.realPath(directory)));
 
   yield* fs.makeDirectory(path.join(stage, "fixtures"), { recursive: true });
   yield* fs.copyFile(path.join(repositoryRoot, "package.json"), path.join(stage, "package.json"));
-  const { source, destination, manifest } = yield* stagePackage(repositoryRoot, stage, "crypto");
-  const jose = yield* stagePackage(repositoryRoot, stage, "jose");
   const oauth = yield* stagePackage(repositoryRoot, stage, "oauth");
 
-  if (
-    manifest.exports === undefined ||
-    jose.manifest.exports === undefined ||
-    oauth.manifest.exports === undefined
-  )
+  if (oauth.manifest.exports === undefined)
     return yield* PackageConsumerError.make({
-      message: "Crypto, JOSE and OAuth exports are required",
+      message: "OAuth exports are required",
     });
-  const joseEntries = Object.keys(jose.manifest.exports);
   const oauthEntries = Object.keys(oauth.manifest.exports);
-  const effectSource = yield* fs.realPath(path.join(source, "node_modules/effect"));
+  const effectSource = yield* fs.realPath(path.join(repositoryRoot, "node_modules/effect"));
 
   yield* fs.symlink(effectSource, path.join(stage, "node_modules/effect"));
 
-  const namespaces = ["Aead", "Errors", "Hmac", "Kdf", "KdfAdmission", "Signature"];
-  const joseNamespaces = ["Errors", "Jwe", "Jwk", "Jwks", "Jws", "Jwt"];
   const oauthNamespaces = ["Errors", "OAuth", "Oidc", "Pkce"];
-  const contracts = [".", ...namespaces.map((name) => `./${name}`)];
-  const backends = Object.keys(manifest.exports).filter((key) => !contracts.includes(key));
 
-  // Only first-party crypto, JOSE, OAuth and Effect exist throughout this stage.
+  // Only OAuth and Effect exist throughout this stage.
   yield* withPublishManifests(stage, () =>
     Effect.gen(function* () {
-      for (const directory of [destination, jose.destination, oauth.destination]) {
-        const published = yield* Schema.decodeEffect(Schema.fromJsonString(ReusableManifest))(
-          yield* fs.readFileString(path.join(directory, "package.json")),
-        );
+      const published = yield* Schema.decodeEffect(Schema.fromJsonString(ReusableManifest))(
+        yield* fs.readFileString(path.join(oauth.destination, "package.json")),
+      );
 
-        const problems = reusableDependencyProblems(published, {});
+      const problems = reusableDependencyProblems(published, {});
 
-        if (problems.length > 0)
-          return yield* PackageConsumerError.make({ message: problems.join("\n") });
-        yield* checkReusableBuild(directory);
-      }
-      for (const [probe, entries, packageName, rootNamespaces] of [
-        ["crypto-contracts", contracts, "@yielded/crypto", namespaces],
-        ["jose", joseEntries, "@yielded/jose", joseNamespaces],
-        ["oauth", oauthEntries, "@yielded/oauth", oauthNamespaces],
-        ["crypto-backends", backends, "@yielded/crypto", namespaces],
-      ] as const) {
-        const names = entries.map((key) =>
-          key === "." ? packageName : `${packageName}${key.slice(1)}`,
-        );
+      if (problems.length > 0)
+        return yield* PackageConsumerError.make({ message: problems.join("\n") });
+      yield* checkReusableBuild(oauth.destination);
+      const probe = "oauth";
+      const packageName = "@yielded/oauth";
 
-        const declarations = path.join(stage, "fixtures", `${probe}.ts`);
+      const names = oauthEntries.map((key) =>
+        key === "." ? packageName : `${packageName}${key.slice(1)}`,
+      );
 
-        yield* fs.writeFileString(
-          declarations,
-          names.map((name, index) => `export * as Crypto${index} from "${name}";`).join("\n"),
-        );
-        yield* checkDeclarations(stage, [declarations]);
+      const declarations = path.join(stage, "fixtures", `${probe}.ts`);
 
-        // Only the direct runtime entries may pull native imports into a consumer.
-        yield* fs.writeFileString(
-          path.join(stage, "fixtures", `${probe}-browser.ts`),
-          names
-            .filter((name) => !name.startsWith("@yielded/crypto/platform-"))
-            .map((name, index) => `export * as Crypto${index} from "${name}";`)
-            .join("\n"),
-        );
-        const chunks = yield* esbuildConsumer(stage, `${probe}-browser`);
+      yield* fs.writeFileString(
+        declarations,
+        names.map((name, index) => `export * as Crypto${index} from "${name}";`).join("\n"),
+      );
+      yield* checkDeclarations(stage, [declarations]);
 
-        const allowedDirectories = [
-          path.join(stage, "fixtures"),
-          path.join(destination, "dist"),
-          path.join(jose.destination, "dist"),
-          path.join(oauth.destination, "dist"),
-          effectSource,
-        ];
+      // Only the direct runtime entries may pull native imports into a consumer.
+      yield* fs.writeFileString(
+        path.join(stage, "fixtures", `${probe}-browser.ts`),
+        names.map((name, index) => `export * as Crypto${index} from "${name}";`).join("\n"),
+      );
+      const chunks = yield* esbuildConsumer(stage, `${probe}-browser`);
 
-        for (const module of chunks.flatMap((chunk) => chunk.modules)) {
-          const resolved = path.resolve(stage, module);
+      const allowedDirectories = [
+        path.join(stage, "fixtures"),
+        path.join(oauth.destination, "dist"),
+        effectSource,
+      ];
 
-          if (
-            !allowedDirectories.some((directory) => resolved.startsWith(`${directory}${path.sep}`))
-          )
-            return yield* PackageConsumerError.make({
-              message: `${probe} bundles a module outside Effect and the staged packages: ${module}`,
-            });
-        }
+      for (const module of chunks.flatMap((chunk) => chunk.modules)) {
+        const resolved = path.resolve(stage, module);
 
-        const child = yield* ChildProcess.make(
-          "node",
-          [
-            "--input-type=module",
-            "--eval",
-            `import assert from "node:assert/strict";
-const root = await import(${JSON.stringify(packageName)});
-assert.deepEqual(Object.keys(root).sort(), ${JSON.stringify(rootNamespaces)});
-for (const name of ${JSON.stringify(rootNamespaces)}) {
-  assert.equal(root[name], await import(${JSON.stringify(packageName + "/")} + name));
-}
-for (const name of ${JSON.stringify(names.filter((name) => name !== "@yielded/crypto/platform-workerd"))}) await import(name);`,
-          ],
-          { cwd: stage, stdout: "pipe", stderr: "pipe" },
-        );
-
-        const [stdout, stderr, code] = yield* Effect.all(
-          [
-            Stream.mkString(Stream.decodeText(child.stdout)),
-            Stream.mkString(Stream.decodeText(child.stderr)),
-            child.exitCode,
-          ],
-          { concurrency: 3 },
-        );
-
-        if (code !== 0)
+        if (!allowedDirectories.some((directory) => resolved.startsWith(`${directory}${path.sep}`)))
           return yield* PackageConsumerError.make({
-            message: `${probe} consumer exited ${code}: ${stdout}${stderr}`,
+            message: `${probe} bundles a module outside Effect and the staged packages: ${module}`,
           });
-        yield* Console.log(
-          `${probe}: ${names.length} published exports type-check with only Effect and first-party packages; Node loading excludes workerd and browser imports exclude platform entries.`,
-        );
       }
+
+      const child = yield* ChildProcess.make(
+        "node",
+        [
+          "--input-type=module",
+          "--eval",
+          `import assert from "node:assert/strict";
+const root = await import(${JSON.stringify(packageName)});
+assert.deepEqual(Object.keys(root).sort(), ${JSON.stringify(oauthNamespaces)});
+for (const name of ${JSON.stringify(oauthNamespaces)}) {
+assert.equal(root[name], await import(${JSON.stringify(packageName + "/")} + name));
+}
+for (const name of ${JSON.stringify(names)}) await import(name);`,
+        ],
+        { cwd: stage, stdout: "pipe", stderr: "pipe" },
+      );
+
+      const [stdout, stderr, code] = yield* Effect.all(
+        [
+          Stream.mkString(Stream.decodeText(child.stdout)),
+          Stream.mkString(Stream.decodeText(child.stderr)),
+          child.exitCode,
+        ],
+        { concurrency: 3 },
+      );
+
+      if (code !== 0)
+        return yield* PackageConsumerError.make({
+          message: `${probe} consumer exited ${code}: ${stdout}${stderr}`,
+        });
+      yield* Console.log(
+        `${probe}: ${names.length} published exports type-check with only Effect and first-party packages; Node loading excludes workerd and browser imports exclude platform entries.`,
+      );
       yield* checkReusableOperations(stage);
     }),
   );
@@ -764,11 +684,10 @@ export const verifyPackageConsumers = Effect.fn("verifyPackageConsumers")(functi
     return yield* PackageConsumerError.make({ message: "Core exports are missing" });
 
   // Load every core module with its complete first-party runtime graph and Effect.
-  for (const directory of ["crypto", "jose", "oauth"])
-    yield* stagePackage(repositoryRoot, stage, directory);
+  yield* stagePackage(repositoryRoot, stage, "oauth");
   for (const [name, target] of [
     ["@yielded/auth", destination],
-    ["effect", yield* fs.realPath(path.join(source, "node_modules/effect"))],
+    ["effect", yield* fs.realPath(path.join(repositoryRoot, "node_modules/effect"))],
   ] as const) {
     const link = path.join(stage, "node_modules", name);
 
@@ -804,7 +723,7 @@ export const verifyPackageConsumers = Effect.fn("verifyPackageConsumers")(functi
         [
           "--input-type=module",
           "--eval",
-          `for (const name of ${JSON.stringify(coreExports.filter((name) => name !== "@yielded/auth/WorkerdServices"))}) await import(name);`,
+          `for (const name of ${JSON.stringify(coreExports)}) await import(name);`,
         ],
         { cwd: stage, stdout: "pipe", stderr: "pipe" },
       );
@@ -819,9 +738,25 @@ export const verifyPackageConsumers = Effect.fn("verifyPackageConsumers")(functi
           message: `Core consumer with only Effect and first-party packages exited ${code}: ${stderr}`,
         });
       yield* Console.log(
-        `All ${coreExports.length} published core exports type-check with only Effect and first-party packages installed; Node loading excludes WorkerdServices.`,
+        `All ${coreExports.length} published core exports type-check and load in Node with only Effect and first-party packages installed.`,
       );
-      yield* checkAuthOperations(stage);
+      yield* checkAuthOperations(stage, repositoryRoot);
+    }),
+  );
+
+  const workerd = yield* stagePackage(repositoryRoot, stage, "auth-platform-workerd");
+
+  yield* withPublishManifests(stage, () =>
+    Effect.gen(function* () {
+      const declarations = path.join(stage, "fixtures/workerd-exports.ts");
+
+      yield* fs.writeFileString(
+        declarations,
+        `export * as Workerd from "@yielded/auth-platform-workerd";`,
+      );
+      yield* checkDeclarations(stage, [declarations]);
+      yield* checkReusableBuild(workerd.destination);
+      yield* Console.log("Workers package exports type-check separately from Auth.");
     }),
   );
 

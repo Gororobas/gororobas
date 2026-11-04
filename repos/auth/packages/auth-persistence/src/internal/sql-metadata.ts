@@ -1,44 +1,55 @@
-import { Effect } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Effect from "effect/Effect";
+import type * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { PersistenceMappingError } from "./mapping-error";
 import type { Table } from "./sql-table";
 import { identifier } from "./sql-table";
 
 /** Physical names are components, so a literal dot in a mapped name stays quoted. */
-export const sqlName = (sql: SqlClient, name: string): Fragment => sql.literal(identifier(name));
+export const sqlName = (sql: SqlClient.SqlClient, name: string): Statement.Fragment =>
+  sql.literal(identifier(name));
 
-export const sqlTable = (sql: SqlClient, table: Table): Fragment =>
+export const sqlTable = (sql: SqlClient.SqlClient, table: Table): Statement.Fragment =>
   sql.literal(
     (table.schema === undefined ? "" : identifier(table.schema) + ".") + identifier(table.name),
   );
 
-export const sqlColumn = (sql: SqlClient, table: Table, key: string, alias?: string): Fragment =>
+export const sqlColumn = (
+  sql: SqlClient.SqlClient,
+  table: Table,
+  key: string,
+  alias?: string,
+): Statement.Fragment =>
   sql`${alias === undefined ? sqlTable(sql, table) : sqlName(sql, alias)}.${sqlName(sql, table.columns[key]!.options.name)}`;
 
 export const sqlProjection = (
-  sql: SqlClient,
+  sql: SqlClient.SqlClient,
   table: Table,
   alias?: string,
   prefix = "",
-): Fragment =>
+): Statement.Fragment =>
   sql.csv(
     Object.keys(table.columns).map(
       (key) => sql`${sqlColumn(sql, table, key, alias)} as ${sqlName(sql, prefix + key)}`,
     ),
   );
 
-export const sqlValue = (sql: SqlClient, table: Table, key: string, value: unknown): unknown =>
+export const sqlValue = (
+  sql: SqlClient.SqlClient,
+  table: Table,
+  key: string,
+  value: unknown,
+): unknown =>
   table.columns[key]!.options.type === "boolean" && typeof value === "boolean"
     ? sql.onDialectOrElse({ sqlite: () => Number(value), orElse: () => value })
     : value;
 
 export const sqlInsert = (
-  sql: SqlClient,
+  sql: SqlClient.SqlClient,
   table: Table,
   values: Readonly<Record<string, unknown>>,
-): Fragment => {
+): Statement.Fragment => {
   // The built-in insert/update helpers split dots in names and flatten SQL
   // expression values. Keep physical name components and interpolated values.
   const keys = Object.keys(table.columns).filter((key) => values[key] !== undefined);
@@ -47,20 +58,20 @@ export const sqlInsert = (
 };
 
 export const sqlInsertMany = (
-  sql: SqlClient,
+  sql: SqlClient.SqlClient,
   table: Table,
   rows: ReadonlyArray<Readonly<Record<string, unknown>>>,
-): Fragment => {
+): Statement.Fragment => {
   const keys = Object.keys(table.columns).filter((key) => rows[0]?.[key] !== undefined);
 
   return sql`(${sql.csv(keys.map((key) => sqlName(sql, table.columns[key]!.options.name)))}) values ${sql.csv(rows.map((row) => sql`(${sql.csv(keys.map((key) => sql`${sqlValue(sql, table, key, row[key])}`))})`))}`;
 };
 
 export const sqlUpdate = (
-  sql: SqlClient,
+  sql: SqlClient.SqlClient,
   table: Table,
   values: Readonly<Record<string, unknown>>,
-): Fragment =>
+): Statement.Fragment =>
   sql.csv(
     Object.entries(values)
       .filter(([key, value]) => table.columns[key] !== undefined && value !== undefined)

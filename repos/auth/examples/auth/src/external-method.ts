@@ -1,6 +1,7 @@
 import { Hooks, type Identity, Operations, Schema as AuthSchema } from "@yielded/auth";
 import type { Redacted } from "effect";
 import { Context, DateTime, Effect, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 
 export class ExternalProofRejected extends Schema.TaggedError<ExternalProofRejected>()(
   "ExternalProofRejected",
@@ -53,6 +54,7 @@ export const ExternalRegistration = Operations.makeOperation("example.external.r
 export const externalMethodLayer = ExternalRegistration.handlerLayer(
   Effect.fn("ExternalRegistration.handle")(function* (input) {
     const verifier = yield* ExternalProofVerifier;
+    const crypto = yield* SecureRandom.SecureRandom;
     const authority = yield* RegistrationAuthority;
     const hooks = yield* Hooks.LifecycleHooks;
     const identifier = yield* verifier.verify(input.proof);
@@ -77,7 +79,7 @@ export const externalMethodLayer = ExternalRegistration.handlerLayer(
           transaction.recordOnboarding(subjectId);
           journal.stage(
             Hooks.lifecycleEvent({
-              id: Hooks.LifecycleEventId.make(globalThis.crypto.randomUUID()),
+              id: Hooks.LifecycleEventId.make(yield* crypto.uuidV4().pipe(Effect.orDie)),
               occurredAtMillis: DateTime.toEpochMillis(occurredAt),
               snapshot,
             }),

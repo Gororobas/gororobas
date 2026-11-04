@@ -14,8 +14,8 @@ import {
   index,
   type PgTable,
 } from "drizzle-orm/pg-core";
-import type { Effect } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
+import type * as Effect from "effect/Effect";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import { nativeDatabase, type NativeDatabaseHandle } from "../drizzle/native-database";
 import { makeDrizzleSqlTables } from "../drizzle/native-sql-table";
@@ -88,7 +88,9 @@ const describe = (table: PgTable): StorageTable => {
   };
 };
 
-export const postgresPersistence = <R>(acquire: Effect.Effect<object, never, R | SqlClient>) =>
+export const postgresPersistence = <R>(
+  acquire: Effect.Effect<object, never, R | SqlClient.SqlClient>,
+) =>
   createPersistence<PgTable, R, NativeDatabaseHandle>({
     nativeTables: (database) => makeDrizzleSqlTables(database.$client, database),
     makeTable,

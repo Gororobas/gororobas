@@ -1,4 +1,7 @@
-import { Array, DateTime, Effect, Schema } from "effect";
+import * as Array from "effect/Array";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { AuthenticationClock } from "../operations/clock";
 import { AuthenticationAssurance } from "../operations/context";

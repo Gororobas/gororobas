@@ -1,5 +1,15 @@
-import { Cause, Context, DateTime, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as HttpRouter from "effect/http/HttpRouter";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { reportAuthFailure, ReportedOperationDefect } from "../../internal/diagnostics";
 import { httpsOrigin as Origin } from "../../internal/origin";
@@ -48,10 +58,7 @@ export class Server extends Context.Service<
   }
 >()("effect-auth/OAuthProxy/Server") {}
 
-const sameConfiguration = (
-  left: typeof OAuthProtocolConfiguration.Type,
-  right: typeof OAuthProtocolConfiguration.Type,
-) =>
+const sameConfiguration = (left: OAuthProtocolConfiguration, right: OAuthProtocolConfiguration) =>
   Schema.encodeSync(Schema.fromJsonString(OAuthProtocolConfiguration))(left) ===
   Schema.encodeSync(Schema.fromJsonString(OAuthProtocolConfiguration))(right);
 

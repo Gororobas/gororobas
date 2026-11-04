@@ -1,4 +1,6 @@
-import { Context, type Effect, Layer } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type { TokenDigest } from "../Schema";
 import { make } from "./cryptography";
@@ -11,14 +13,14 @@ import type { TotpSecretBinding, TotpSecretEnvelope } from "./models";
 export class TotpCryptography extends Context.Service<
   TotpCryptography,
   {
-    readonly randomId: () => Effect.Effect<string, TotpUnavailable>;
+    readonly randomId: Effect.Effect<string, TotpUnavailable>;
     readonly digest: (value: string) => Effect.Effect<TokenDigest, TotpUnavailable>;
     readonly recoveryDigest: (
       moduleId: string,
       subjectId: string,
       value: string,
     ) => Effect.Effect<TokenDigest, TotpUnavailable>;
-    readonly generateSecret: () => Effect.Effect<Uint8Array, TotpUnavailable>;
+    readonly generateSecret: Effect.Effect<Uint8Array, TotpUnavailable>;
     readonly matchCode: (
       secret: Uint8Array,
       code: string,
@@ -42,6 +44,6 @@ export class TotpCryptography extends Context.Service<
     ) => Effect.Effect<Uint8Array, TotpUnavailable>;
   }
 >()("effect-auth/TotpCryptography") {
-  /** Supply owned Hmac/Aead, Effect Crypto, and application-owned TotpSecretKeys. */
+  /** Supply Effect Mac, Aead, SecureRandom and Digest, and application-owned TotpSecretKeys. */
   static readonly layer = Layer.effect(this, make);
 }

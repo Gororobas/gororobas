@@ -25,8 +25,8 @@ export const staffIdentity = Layer.succeed(Identity.IdentityRepository, {
           }),
         );
   }),
-  findIdentifier: () => Effect.succeed(Option.none()),
-  findExternalIdentity: () => Effect.succeed(Option.none()),
+  findIdentifier: () => Effect.succeedNone,
+  findExternalIdentity: () => Effect.succeedNone,
   listIdentifiers: () => Effect.succeed([]),
   listCredentials: () => Effect.succeed([]),
 });
@@ -44,8 +44,8 @@ export const shopperIdentity = Layer.succeed(Identity.IdentityRepository, {
           Identity.SubjectSnapshot.make({ subjectId, status: row.enabled ? "active" : "disabled" }),
         );
   }),
-  findIdentifier: () => Effect.succeed(Option.none()),
-  findExternalIdentity: () => Effect.succeed(Option.none()),
+  findIdentifier: () => Effect.succeedNone,
+  findExternalIdentity: () => Effect.succeedNone,
   listIdentifiers: () => Effect.succeed([]),
   listCredentials: () => Effect.succeed([]),
 });

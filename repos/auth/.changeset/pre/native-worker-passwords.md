@@ -1,5 +1,4 @@
 ---
-"@yielded/crypto": minor
 "@yielded/auth": minor
 ---
 

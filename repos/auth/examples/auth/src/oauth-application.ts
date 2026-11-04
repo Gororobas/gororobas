@@ -113,7 +113,7 @@ export const makeExample = <E, R>(config: {
     "/account",
     Effect.gen(function* () {
       const auth = yield* AppAuth;
-      const session = yield* auth.requireSession();
+      const session = yield* auth.requireSession;
       const connections = yield* auth.listAccountConnections({ limit: 20 });
 
       return yield* HttpServerResponse.json({ subjectId: session.subjectId, connections });

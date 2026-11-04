@@ -1,5 +1,7 @@
-import type { Context } from "effect";
-import { Effect, Layer, Option } from "effect";
+import type * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
 

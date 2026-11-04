@@ -1,4 +1,6 @@
-import { Effect, Layer, Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 
 import { SmsProofDelivery } from "../proofs/SmsProofDelivery";
 import { SmsDelivery } from "../sms/SmsDelivery";

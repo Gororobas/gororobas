@@ -6,7 +6,8 @@ import {
 } from "@yielded/auth/Passkey";
 import type { SubjectId } from "@yielded/auth/Schema";
 import type { AuthenticationRequirement } from "@yielded/auth/Sessions";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type { TableModel as Table, SqlExpression } from "../table-model";
 import type { PersistenceMappingError } from "./common";

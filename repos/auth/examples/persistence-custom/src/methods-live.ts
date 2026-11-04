@@ -1,6 +1,8 @@
 import { Hooks, Identity, Password, Schema as AuthSchema, Sessions } from "@yielded/auth";
 import { reportAuthFailure } from "@yielded/auth/Persistence";
-import { Cause, Crypto, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { Cause, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
+import * as Digest from "effect/crypto/Digest";
 import { Base64Url } from "effect/encoding";
 
 import { AppAuth } from "./auth";
@@ -19,7 +21,8 @@ export const AccountMethodsLive = Layer.effect(
     const authority = yield* Sessions.AuthenticationAuthority;
     const claims = yield* AppAuth.strategies.password.SessionClaims;
     const completion = yield* AppAuth.sessions.AuthenticationCompletion;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
+    const digests = yield* Digest.Digest;
     const moduleId = AppAuth.strategies.password.persistence.moduleId;
     const attempts = Password.defaultPasswordMethodPolicy.attempts;
 
@@ -55,9 +58,7 @@ export const AccountMethodsLive = Layer.effect(
         );
 
         const flowId = Sessions.AuthenticationFlowId.make(
-          yield* crypto
-            .randomUUIDv4()
-            .pipe(Effect.mapError(() => Password.PasswordUnavailable.make({}))),
+          yield* crypto.uuidV4().pipe(Effect.mapError(() => Password.PasswordUnavailable.make({}))),
         );
 
         const admission = yield* Effect.gen(function* () {
@@ -89,14 +90,15 @@ export const AccountMethodsLive = Layer.effect(
             });
 
           return candidate;
-        }).pipe(
-          Effect.catchCause((cause) =>
-            cause.reasons.every(
-              (reason) =>
-                Cause.isFailReason(reason) && Schema.is(Password.PasswordRejected)(reason.error),
-            )
-              ? Effect.succeed(undefined)
-              : Effect.failCause(cause),
+        }).pipe((effect) =>
+          Effect.catchCauseIf(
+            effect,
+            (cause) =>
+              cause.reasons.every(
+                (reason) =>
+                  Cause.isFailReason(reason) && Schema.is(Password.PasswordRejected)(reason.error),
+              ),
+            () => Effect.void,
           ),
         );
 
@@ -126,7 +128,7 @@ export const AccountMethodsLive = Layer.effect(
               admission.value,
             ).pipe(Effect.mapError(() => Password.PasswordUnavailable.make({})));
 
-        const checked = yield* Effect.gen(function* () {
+        const checked = yield* (function* () {
           if (captured === undefined) {
             yield* hasher
               .dummy(input.password)
@@ -196,8 +198,8 @@ export const AccountMethodsLive = Layer.effect(
             Effect.mapError(() => Password.PasswordUnavailable.make({})),
           );
 
-          const digest = yield* crypto
-            .digest("SHA-256", new TextEncoder().encode(binding))
+          const digest = yield* digests
+            .digest(Digest.sha256, new TextEncoder().encode(binding))
             .pipe(Effect.mapError(() => Password.PasswordUnavailable.make({})));
 
           const evidence: Sessions.AuthenticationEvidence = {
@@ -217,7 +219,7 @@ export const AccountMethodsLive = Layer.effect(
           };
 
           return { evidence, credential: captured, requirement };
-        });
+        })();
 
         const values = yield* claims.resolve({
           subjectId: checked.credential.revision.subjectId,

@@ -3,7 +3,7 @@ import type { LoginIdentifier } from "@yielded/auth/Identity";
 import type { ProofRedemptionInput } from "@yielded/auth/Proofs";
 import type { TokenDigest } from "@yielded/auth/Schema";
 import type { AuthenticationRequirement, SecurityRevision } from "@yielded/auth/Sessions";
-import type { Effect } from "effect";
+import type * as Effect from "effect/Effect";
 
 import type { AnyTableModel, TableModel as Table, SqlExpression } from "../table-model";
 import type { PersistenceMappingError, SubjectIdCodec } from "./common";

@@ -167,7 +167,7 @@ export const makeProxyEnvironment = (config: {
     "/account",
     Effect.gen(function* () {
       const auth = yield* AppAuth;
-      const session = yield* auth.requireSession();
+      const session = yield* auth.requireSession;
 
       return yield* HttpServerResponse.json({
         subjectId: session.subjectId,

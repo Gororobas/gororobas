@@ -1,5 +1,6 @@
 import { Atom as AuthAtom, Client, type Proofs } from "@yielded/auth";
 import { Effect, Redacted, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 
 import { LoginApi } from "./login-contract";
 
@@ -52,10 +53,17 @@ export const sendEmailCode = auth.runtime.fn<string>()(
   Effect.fn("example.sendEmailCode")(function* (email) {
     const client = yield* AppClient;
 
-    const ids = yield* Effect.try({
-      try: () => ({ flowId: crypto.randomUUID(), requestId: crypto.randomUUID() }),
-      catch: () => BrowserFlowUnavailable.make({}),
-    });
+    const ids = yield* Effect.gen(function* () {
+      const crypto = yield* SecureRandom.SecureRandom;
+
+      return yield* Effect.all({
+        flowId: crypto.uuidV4(),
+        requestId: crypto.uuidV4(),
+      });
+    }).pipe(
+      Effect.provide(SecureRandom.layerWebCrypto),
+      Effect.mapError(() => BrowserFlowUnavailable.make({})),
+    );
 
     yield* client.auth.beginEmailSignIn({ flowId: ids.flowId });
 

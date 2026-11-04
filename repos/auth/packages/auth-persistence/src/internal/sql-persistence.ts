@@ -1,5 +1,5 @@
-import { Effect } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Effect from "effect/Effect";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { PersistenceConfigurationError, type PersistenceApi } from "./configuration";
 import { makeNativeSqlTables } from "./native-sql-table";

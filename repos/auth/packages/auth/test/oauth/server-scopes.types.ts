@@ -1,11 +1,18 @@
 import { OAuthScope, OAuthServer } from "@yielded/auth";
-import type { Layer } from "effect";
-import { Effect, Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiClient from "effect/http-api/HttpApiClient";
+import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import type * as HttpApiError from "effect/http-api/HttpApiError";
+import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import type * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { expectTypeOf } from "vite-plus/test";
 
 // Compile-only contract for literal scope inference. Runtime proofs
 // cannot detect a typo accepted by the TypeScript API.
-export const literalScopes = () => {
+export const literalScopes = Effect.suspend(() => {
   const read = OAuthScope.make("documents:read");
   const write = OAuthScope.make("documents:write");
   const scopes = [read, write];
@@ -61,7 +68,7 @@ export const literalScopes = () => {
   });
 
   identity.Identity.of({
-    current: Effect.succeed(undefined),
+    current: Effect.as(Effect.void, undefined),
     active: () => Effect.succeed(true),
     profile: ({ scopes }) => {
       expectTypeOf(scopes[0]).toEqualTypeOf<
@@ -126,7 +133,7 @@ export const literalScopes = () => {
 
     expectTypeOf(unconfiguredAccess.scopes[0]).toEqualTypeOf<OAuthScope.OAuthScope>();
   });
-};
+});
 
 export const serviceScopes = () => {
   const narrow = OAuthServer.makeOpenId("same-id", { scopes: [OAuthScope.make("read")] });
@@ -155,3 +162,50 @@ export const serviceScopes = () => {
     >();
   };
 };
+
+// HttpApi requirements keep the brand on groups and endpoints, and generated
+// clients type the security failures without a middleware implementation.
+export const httpApiScopes = Effect.suspend(() => {
+  const read = OAuthScope.make("documents:read");
+  const write = OAuthScope.make("documents:write");
+  const resource = OAuthServer.make("typed-api", { scopes: [read, write] });
+  const described = { name: read, description: "Read your documents" };
+
+  HttpApiEndpoint.get("both", "/").annotate(OAuthScope.Required, { allOf: [described, write] });
+  HttpApiGroup.make("either").annotate(OAuthScope.Required, { anyOf: [read, write] });
+  // @ts-expect-error Endpoint requirements need branded scopes.
+  HttpApiEndpoint.get("plain", "/").annotate(OAuthScope.Required, { allOf: ["documents:read"] });
+  // @ts-expect-error Group requirements need branded scopes too.
+  HttpApiGroup.make("plain").annotate(OAuthScope.Required, { anyOf: ["documents:read"] });
+  // @ts-expect-error A requirement names its meaning; a bare list is ambiguous.
+  HttpApiEndpoint.get("bare", "/").annotate(OAuthScope.Required, [read]);
+  // @ts-expect-error No access can satisfy an empty anyOf.
+  HttpApiGroup.make("empty").annotate(OAuthScope.Required, { anyOf: [] });
+  // @ts-expect-error Literal checks are available with satisfies.
+  void ({ allOf: [OAuthScope.make("documents:raed")] } satisfies OAuthScope.Requirement<
+    typeof read | typeof write
+  >);
+
+  const Api = HttpApi.make("typed-api").add(
+    HttpApiGroup.make("documents")
+      .add(HttpApiEndpoint.get("list", "/documents", { success: Schema.Array(Schema.String) }))
+      .annotate(OAuthScope.Required, { allOf: [described] })
+      .middleware(OAuthScope.RequireAccess),
+  );
+
+  expectTypeOf(resource.securityLayer(Api)).toEqualTypeOf<
+    Layer.Layer<
+      OAuthScope.RequireAccess,
+      OAuthServer.ConfigurationError,
+      typeof resource.Service.Identifier
+    >
+  >();
+
+  return Effect.gen(function* () {
+    const client = yield* HttpApiClient.make(Api, { baseUrl: "https://api.example.com" });
+
+    expectTypeOf<
+      HttpApiError.Unauthorized | HttpApiError.Forbidden | HttpApiError.ServiceUnavailable
+    >().toExtend<Effect.Error<ReturnType<typeof client.documents.list>>>();
+  });
+});

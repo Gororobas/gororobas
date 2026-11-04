@@ -4,7 +4,9 @@ import {
   type AnyProofPersistenceMapping as SharedMapping,
 } from "@yielded/auth-persistence/Adapter";
 import { ProofUnavailable, ProofPersistence } from "@yielded/auth/Proofs";
-import { Cause, Effect, Layer } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { nativeClock } from "./native-clock";
 import type { NativeDatabaseHandle } from "./native-database";

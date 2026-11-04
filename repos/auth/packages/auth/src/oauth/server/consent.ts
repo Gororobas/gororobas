@@ -1,4 +1,6 @@
-import { Context, Effect, Layer } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type { SubjectId } from "../../Schema";
 import type { Authentication, Unavailable } from "./models";
@@ -27,6 +29,9 @@ export class OpenIdConsent extends Context.Service<
 export interface Consent {
   readonly clientName: string;
   readonly clientId: string;
+  /** False only for metadata-document clients, whose clientId is their HTTPS URL.
+   * Not a vetting signal: stored client names may be self-asserted.
+   */
   readonly registered: boolean;
   readonly subjectId: SubjectId;
   readonly resource: string;

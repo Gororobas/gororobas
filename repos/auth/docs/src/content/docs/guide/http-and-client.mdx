@@ -53,7 +53,7 @@ For browser queries and mutations, continue with the [Effect Atom client](./clie
   edges={[
     { from: "app", to: "yours" },
     { from: "client", to: "routes", label: "Contract actions" },
-    { from: "yours", to: "auth", label: "requireSession()" },
+    { from: "yours", to: "auth", label: "requireSession" },
     { from: "routes", to: "auth" },
     { from: "auth", to: "layers" },
   ]}
@@ -154,13 +154,13 @@ import { AppAuth } from "./auth";
 
 export const currentMember = Effect.fn("app.currentMember")(function* () {
   const auth = yield* AppAuth;
-  const session = yield* auth.requireSession();
+  const session = yield* auth.requireSession;
 
   return session.claims;
 });
 ```
 
-`requireSession()` fails with `AuthenticationRequired` when there is no valid
+`requireSession` fails with `AuthenticationRequired` when there is no valid
 session. Use `getSession()` for an optional session. Neither makes an HTTP call;
 your handler still owns authorization for the application action.
 

@@ -1,5 +1,13 @@
-import { Cause, Context, Crypto, DateTime, Effect, Redacted, Schema, type Types } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import { AuthenticationClock } from "../operations/clock";
 import type { AuthCredentialCommand } from "../operations/credentials";
@@ -83,11 +91,13 @@ export const makeSessionCookieCache = Effect.fnUntraced(function* <
     "session-cache",
   );
 
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
+
+  const digests = yield* Digest.Digest;
   const encoder = new TextEncoder();
 
   const digest = (credential: Redacted.Redacted<string>) =>
-    crypto.digest("SHA-256", encoder.encode(Redacted.value(credential))).pipe(
+    digests.digest(Digest.sha256, encoder.encode(Redacted.value(credential))).pipe(
       Effect.map(Base64Url.encode),
       Effect.catchCause((cause) =>
         Effect.failCause(Cause.map(cause, () => SessionUnavailable.make({}))),

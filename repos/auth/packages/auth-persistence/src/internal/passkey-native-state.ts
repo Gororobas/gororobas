@@ -1,9 +1,11 @@
 /* oxlint-disable no-explicit-any -- physical mapping generics are erased only at this shared adapter boundary. */
 import { AuthenticationClock } from "@yielded/auth/Operations";
 import * as M from "@yielded/auth/Passkey";
-import { Cause, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import type { PasskeyCredentialMapping, PasskeyPersistenceMapping } from "./models/passkey-model";
 import { sqlMapping, type NativeSqlTables } from "./native-sql-table";
@@ -44,7 +46,7 @@ export const makePasskeyNativeReadState = Effect.fnUntraced(function* (
   const factor = tables(read.authority.table);
   const now = clock === undefined ? sql`0` : tables.expression(clock.engineNowMillis);
 
-  const millis = (expression: Fragment) =>
+  const millis = (expression: Statement.Fragment) =>
     clock === undefined ? expression : tables.expression(clock.toMillis(expression));
 
   const storedNow =

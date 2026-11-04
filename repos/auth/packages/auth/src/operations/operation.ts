@@ -1,17 +1,16 @@
-import {
-  Cause,
-  Context,
-  DateTime,
-  Effect,
-  Layer,
-  Predicate,
-  Result,
-  Schema,
-  SchemaGetter,
-  Scope,
-  type Types,
-} from "effect";
-import { Rpc, RpcGroup } from "effect/rpc";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
+import * as Rpc from "effect/rpc/Rpc";
+import * as RpcGroup from "effect/rpc/RpcGroup";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
+import * as Scope from "effect/Scope";
+import type * as Types from "effect/Types";
 
 import {
   reportAuthFailure,
@@ -73,9 +72,11 @@ const operationFailure = Effect.fn("AuthOperation.failure")(function* <E>(
 const sanitizeOperationDefects =
   (stage: "local" | "rpc" | "private-output") =>
   <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    effect.pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasDies(cause) ? operationFailure(stage, cause) : Effect.failCause(cause),
+    effect.pipe((effect) =>
+      Effect.catchCauseIf(
+        effect,
+        (cause) => Cause.hasDies(cause),
+        (cause) => operationFailure(stage, cause),
       ),
     );
 

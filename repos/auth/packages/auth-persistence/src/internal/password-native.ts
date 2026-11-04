@@ -5,9 +5,16 @@ import * as P from "@yielded/auth/Password";
 import { ProofRedemptionInput } from "@yielded/auth/Proofs";
 import type { SubjectId } from "@yielded/auth/Schema";
 import { SecurityRevision, type AuthenticationRequirement } from "@yielded/auth/Sessions";
-import { Cause, DateTime, Effect, Option, Redacted, Schema, Crypto } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import { fragment, parameter, type Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import { PersistenceMappingError } from "./mapping-error";
@@ -48,13 +55,17 @@ export const makeNativePasswordServices = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   { readonly passwordPersistence: P.PasswordPersistence["Service"] },
   P.PasswordUnavailable,
-  SqlClient | LifecycleHooks | Crypto.Crypto | SqlBatchCommit
+  | SqlClient.SqlClient
+  | LifecycleHooks
+  | (SecureRandom.SecureRandom | Digest.Digest)
+  | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
   const clockPolicy = yield* AuthenticationClock;
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const executor = yield* makeSqlCommitExecutor(unavailable);
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
+  const digests = yield* Digest.Digest;
   const parent = yield* Effect.serviceOption(CurrentSqlCommit);
 
   const s = mapping.subject,
@@ -88,9 +99,19 @@ export const makeNativePasswordServices = Effect.fnUntraced(function* (
 
   const run = <A, E, R>(work: Effect.Effect<A, E, R>) =>
     (batch === undefined
-      ? executor.run(work.pipe(Effect.provideService(Crypto.Crypto, crypto)))
+      ? executor.run(
+          work.pipe(
+            Effect.provideService(SecureRandom.SecureRandom, crypto),
+            Effect.provideService(Digest.Digest, digests),
+          ),
+        )
       : executor
-          .batch(work.pipe(Effect.provideService(Crypto.Crypto, crypto)))
+          .batch(
+            work.pipe(
+              Effect.provideService(SecureRandom.SecureRandom, crypto),
+              Effect.provideService(Digest.Digest, digests),
+            ),
+          )
           .pipe(Effect.provideService(SqlBatchCommit, batch))
     ).pipe(Effect.provideService(AuthenticationClock, clockPolicy));
 
@@ -213,8 +234,8 @@ export const makeNativePasswordServices = Effect.fnUntraced(function* (
           ? []
           : policyColumns.map((key) => ({
               column: rawSubject.selectedColumn(key),
-              value: fragment([
-                parameter(
+              value: Statement.fragment([
+                Statement.parameter(
                   rows[0][nativeSqlAlias("password_subject_", rawSubject.keys.indexOf(key))],
                 ),
               ]),
@@ -227,18 +248,20 @@ export const makeNativePasswordServices = Effect.fnUntraced(function* (
     };
   });
 
-  const prepare = <V, A>(value: V, project: P.PreparePasswordCommit<V, A>) =>
-    Effect.gen(function* () {
-      const journal = yield* CurrentCommitJournal;
+  const prepare = Effect.fnUntraced(function* <V, A>(
+    value: V,
+    project: P.PreparePasswordCommit<V, A>,
+  ) {
+    const journal = yield* CurrentCommitJournal;
 
-      const receipt = project(value, journal);
+    const receipt = project(value, journal);
 
-      if (!(receipt?._tag === "PreparedCommit" && Effect.isEffect(receipt.read)))
-        return yield* invalidState();
-      yield* registerSqlCommitReceipt(receipt);
+    if (!(receipt?._tag === "PreparedCommit" && Effect.isEffect(receipt.read)))
+      return yield* invalidState();
+    yield* registerSqlCommitReceipt(receipt);
 
-      return receipt;
-    });
+    return receipt;
+  });
 
   const mutation = <A>(
     original: P.PasswordMutationInput,
@@ -395,7 +418,7 @@ export const makeNativePasswordServices = Effect.fnUntraced(function* (
         const deadline = Math.min(requestedDeadline, currentDeadline);
         const freshness = sql`${now} >= ${state.now} and ${now} < ${deadline} and ${proofValidity}`;
 
-        const stage = Effect.fnUntraced(function* (statement: Fragment) {
+        const stage = Effect.fnUntraced(function* (statement: Statement.Fragment) {
           if (batch === undefined) {
             if (!((yield* executeSqlChange(sql, statement)) === 1)) return yield* invalidState();
           } else {
@@ -469,7 +492,7 @@ export const makeNativePasswordServices = Effect.fnUntraced(function* (
           (a.status === undefined || a.d1ActiveStatusValue !== undefined) &&
           (input.credential === undefined || i.d1CurrentCondition !== undefined);
 
-        let resultingState: Fragment | undefined;
+        let resultingState: Statement.Fragment | undefined;
 
         if (canGuardResult) {
           const active =
@@ -477,7 +500,7 @@ export const makeNativePasswordServices = Effect.fnUntraced(function* (
               ? sql`1 = 1`
               : sql`${rawAuthority.column(a.status)} = ${rawAuthority.value(a.status, a.d1ActiveStatusValue)}`;
 
-          const conditions: Array<Fragment> = [
+          const conditions: Array<Statement.Fragment> = [
             finalPassword,
             freshness,
             sql`(select count(*) from ${rawAuthority.name} where ${subjectKey(rawAuthority, a.subjectId, nativeId)} and ${active}) = ${expectedFactors.length}`,

@@ -5,23 +5,33 @@ Use `vp help` and command help for options.
 
 ## Development
 
-Run `vp install` to install dependencies, patch TypeScript with Effect diagnostics,
-and configure Git hooks. Run `vp run ready` before handoff.
+Run `vp install` to install dependencies and configure Git hooks.
+Run `vp run ready` before handoff.
 
-`vp check` runs formatting and linting. `vp run check` also runs the patched
-compiler across workspaces and scripts. Include `vp env doctor` output when
-reporting toolchain failures.
+`vp check` runs formatting and linting. `vp run check` also runs TypeScript and
+Effect diagnostics through `effect-tsrs` across workspaces and scripts. Its bundled
+tsrs compiler checks both with `--type-check`; `--strict` makes warnings fail the check.
+Keep optional dependencies enabled for its platform binaries. Include
+`vp env doctor` output when reporting toolchain failures.
+
+TypeScript and `@effect/tsgo` remain available for editor features and the Effect
+configuration schema; typecheck tasks do not patch or invoke them.
+
+The shared Effect policy makes correctness, composition, and Schema diagnostics
+errors. Exact severities and scoped exceptions live in `tsconfig.base.json`.
+
+Within `packages/`, Effect diagnostics require namespace imports for `effect`
+and `@effect/*`, such as `import * as Effect from "effect/Effect"`. Examples,
+documentation, and repository scripts can use named imports.
 
 Shared versions live in the root catalog. Upgrade the Effect family together and
 rerun installation. Keep the catalog's Vitest version aligned with Vite+'s bundled
 runner so Effect's test integration uses the same version.
 
-The Drizzle compatibility patch comes from `@yielded/drizzle-effect-v4-patch`;
-remove it when Drizzle publishes a compatible release. Drizzle examples use
-`scripts/db-generate.ts` to generate SQL and compact JSON snapshots.
+Drizzle examples use `scripts/db-generate.ts` to generate SQL and compact JSON snapshots.
 
 When changing the workerd Argon2 compression routine, regenerate the checked-in
-Wasm with `vp run @yielded/crypto#build:wasm`. This requires LLVM Clang with the
+Wasm with `vp run @yielded/auth-platform-workerd#build:wasm`. This requires LLVM Clang with the
 wasm32 target and `wasm-ld`; ordinary builds do not require a C toolchain.
 
 Shared contributor skills are authored in [danieljvdm/skills](https://github.com/danieljvdm/skills) and distributed by Dev Kit into `.agents/skills`. Each committed copy records its pinned source in `.dev-kit-origin.json`. Keep shared copies identical to that source, put repository policy in `AGENTS.md`, and upstream reusable improvements before refreshing local edits. Use the transient Dev Kit CLI for explicit updates; it is not a repository dependency.
@@ -57,16 +67,13 @@ For an authorized manual release, run the handoff gate,
 npm access to the `yielded` organization. The dry run publishes nothing and
 creates no tags; the publish task restores source manifests after packaging.
 
-## CI and review
+## CI
 
-Require `ready` and `Effect Agent review` in the main branch ruleset. Review needs
-the repository secret `OPENAI_API_KEY` and a `pr-review` environment without
-required reviewers. Fork CI may require separate GitHub workflow approval.
+Require `ready` in the main branch ruleset. Fork CI may require separate GitHub
+workflow approval.
 
 Title and description edits do not rerun CI. After changing a PR's base, close and
-reopen it to validate the new diff. Draft PRs skip agent review. To retry a stopped
-review, use an authorized `@effect-agent review full` comment or manual workflow
-dispatch; `@effect-agent review` requests an incremental pass.
+reopen it to validate the new diff.
 
 ## Documentation
 

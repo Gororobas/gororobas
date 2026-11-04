@@ -13,8 +13,8 @@ import {
   index,
   type SQLiteTable,
 } from "drizzle-orm/sqlite-core";
-import { Effect } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
+import * as Effect from "effect/Effect";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import { nativeDatabase, type NativeDatabaseHandle } from "../drizzle/native-database";
 import { makeDrizzleSqlTables } from "../drizzle/native-sql-table";
@@ -87,7 +87,7 @@ const describe = (table: SQLiteTable): StorageTable => {
 };
 
 export const sqlitePersistence = <R>(
-  acquire: Effect.Effect<object, never, R | SqlClient>,
+  acquire: Effect.Effect<object, never, R | SqlClient.SqlClient>,
   options?: { readonly batch: true },
 ) =>
   createPersistence<SQLiteTable, R, NativeDatabaseHandle>({

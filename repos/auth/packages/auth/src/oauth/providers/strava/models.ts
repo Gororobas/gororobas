@@ -1,4 +1,4 @@
-import type { Redacted } from "effect";
+import type * as Redacted from "effect/Redacted";
 
 import type { OAuthConnectedProfile } from "../../permissionProfile";
 import { OAuthProviderKey } from "../../schema";

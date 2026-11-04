@@ -1,16 +1,14 @@
-import {
-  Result,
-  Context,
-  DateTime,
-  Effect,
-  Exit,
-  Layer,
-  Option,
-  Schema,
-  Crypto,
-  Cause,
-} from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { prepareCommit, hasCommitScope } from "../hooks/commit";
 import { reportAuthFailure } from "../internal/diagnostics";
@@ -83,7 +81,7 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
       const revocations = yield* Effect.serviceOption(OAuthConnectedRevocations);
       const { revokeGrant } = yield* OAuthConnectedProtocol;
       const { open } = yield* OAuthConnectedTokenProtector;
-      const { randomBytes } = yield* Crypto.Crypto;
+      const { randomBytes } = yield* SecureRandom.SecureRandom;
 
       const cleanup = Effect.fn("OAuthConnectedMaintenance.cleanup")(function* (
         invocation: AuthInvocation,

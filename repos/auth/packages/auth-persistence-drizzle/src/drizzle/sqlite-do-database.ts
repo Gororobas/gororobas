@@ -1,13 +1,13 @@
-import type { SqliteClient } from "@effect/sql-sqlite-do/SqliteClient";
+import type * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { PersistenceConfigurationError } from "@yielded/auth-persistence/Adapter";
 import type { AnyRelations } from "drizzle-orm";
 import { EffectTransactionRollbackError } from "drizzle-orm/effect-core";
 import type { EffectSQLiteDoDatabase } from "drizzle-orm/effect-sqlite-do";
-import { Effect } from "effect";
-import type { SqlError } from "effect/sql/SqlError";
+import * as Effect from "effect/Effect";
+import type * as SqlError from "effect/sql/SqlError";
 
 type NativeDatabase<T extends AnyRelations> = EffectSQLiteDoDatabase<T> & {
-  readonly $client: SqliteClient;
+  readonly $client: SqliteClient.SqliteClient;
 };
 
 type Queries<T extends AnyRelations> = Pick<
@@ -30,10 +30,10 @@ type Queries<T extends AnyRelations> = Pick<
 
 /** Drizzle queries with transactions owned by the captured Effect SQL client. */
 export type DatabaseValue<T extends AnyRelations = AnyRelations> = Queries<T> & {
-  readonly $client: SqliteClient;
+  readonly $client: SqliteClient.SqliteClient;
   readonly transaction: <A, E, R>(
     body: (transaction: Transaction<T>) => Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E | SqlError, R>;
+  ) => Effect.Effect<A, E | SqlError.SqlError, R>;
 };
 
 /** An asynchronous Durable Object transaction, including nested rollback. */

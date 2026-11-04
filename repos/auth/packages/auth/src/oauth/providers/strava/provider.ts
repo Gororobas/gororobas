@@ -1,5 +1,7 @@
-import { Effect, type Crypto } from "effect";
-import type { HttpClient } from "effect/http";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import type * as HttpClient from "effect/http/HttpClient";
 
 import { selectCallback } from "../../callback";
 import { wipeConnectedMaterial } from "../../grantTokens";
@@ -13,7 +15,10 @@ import { makeConnectedProtocol } from "./protocol";
 
 export const provider = (
   input: ProviderOptions,
-): ProviderDefinition<OAuthConfigurationError, HttpClient.HttpClient | Crypto.Crypto> => {
+): ProviderDefinition<
+  OAuthConfigurationError,
+  HttpClient.HttpClient | (SecureRandom.SecureRandom | Digest.Digest)
+> => {
   const options = { ...input };
 
   return {

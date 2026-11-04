@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export const CleanupLimit = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 }));
 

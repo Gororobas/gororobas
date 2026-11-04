@@ -1,5 +1,5 @@
-import { Effect } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Effect from "effect/Effect";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import type { MappingInput } from "./configuration";
 import { PersistenceMappingError } from "./mapping-error";
@@ -9,7 +9,7 @@ import type { SqlExpression } from "./table-model";
 
 /** Managed storage supports epoch milliseconds or canonical ISO text. */
 export const makeStorageClock = Effect.fnUntraced(function* (storage: MappingInput) {
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const encoded = storage.encodeInstant(0);
   const numeric = typeof encoded === "number";
 

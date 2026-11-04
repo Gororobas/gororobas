@@ -14,9 +14,13 @@ import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { ProofRedemptionInput, type ProofRedemptionPlan } from "@yielded/auth/Proofs";
 import type { TokenDigest } from "@yielded/auth/Schema";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Cause, Crypto, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import {
@@ -70,11 +74,12 @@ export const makeNativeEmailRegistrationServices = Effect.fnUntraced(function* <
 ): Effect.fn.Return<
   { readonly registrationAuthority: EmailRegistrationAuthority<Registration> },
   never,
-  SqlClient | LifecycleHooks | Crypto.Crypto
+  SqlClient.SqlClient | LifecycleHooks | (SecureRandom.SecureRandom | Digest.Digest)
 > {
-  const sql = (yield* SqlClient).withoutTransforms(),
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms(),
     executor = yield* makeSqlCommitExecutor(unavailable),
-    crypto = yield* Crypto.Crypto;
+    crypto = yield* SecureRandom.SecureRandom,
+    digests = yield* Digest.Digest;
 
   const s = mapping.subject,
     i = mapping.identifier,
@@ -104,12 +109,22 @@ export const makeNativeEmailRegistrationServices = Effect.fnUntraced(function* <
 
   const run = <A, E, R>(work: Effect.Effect<A, E, R>) =>
     batch === undefined
-      ? executor.run(work.pipe(Effect.provideService(Crypto.Crypto, crypto)))
+      ? executor.run(
+          work.pipe(
+            Effect.provideService(SecureRandom.SecureRandom, crypto),
+            Effect.provideService(Digest.Digest, digests),
+          ),
+        )
       : executor
-          .batch(work.pipe(Effect.provideService(Crypto.Crypto, crypto)))
+          .batch(
+            work.pipe(
+              Effect.provideService(SecureRandom.SecureRandom, crypto),
+              Effect.provideService(Digest.Digest, digests),
+            ),
+          )
           .pipe(Effect.provideService(SqlBatchCommit, batch));
 
-  const stage = Effect.fnUntraced(function* (statement: Fragment) {
+  const stage = Effect.fnUntraced(function* (statement: Statement.Fragment) {
     if (batch === undefined) {
       if (!((yield* executeSqlChange(sql, statement)) === 1)) return yield* invalidState();
     } else {
@@ -118,22 +133,21 @@ export const makeNativeEmailRegistrationServices = Effect.fnUntraced(function* <
     }
   });
 
-  const prepare = <A>(
+  const prepare = Effect.fnUntraced(function* <A>(
     decision: EmailRegistrationDecision,
     project: PrepareEmailCommit<EmailRegistrationDecision, A>,
-  ) =>
-    Effect.gen(function* () {
-      const receipt = project(decision, yield* CurrentCommitJournal);
+  ) {
+    const receipt = project(decision, yield* CurrentCommitJournal);
 
-      yield* registerSqlCommitReceipt(receipt);
+    yield* registerSqlCommitReceipt(receipt);
 
-      return receipt;
-    });
+    return receipt;
+  });
 
   const registrationAuthority: EmailRegistrationAuthority<Registration> = {
     inspect: (input) => executor.read(mapping.inspect(input)),
-    registerWithProof: (original, project) =>
-      Effect.gen(function* () {
+    registerWithProof: Effect.fnUntraced(
+      function* (original, project) {
         const registration = yield* mapping.snapshotRegistration(original.registration);
 
         const inspection = yield* mapping.inspect({
@@ -345,7 +359,7 @@ export const makeNativeEmailRegistrationServices = Effect.fnUntraced(function* <
               ),
             );
 
-            const conditions: Fragment[] = [
+            const conditions: Statement.Fragment[] = [
               redeemed.validUntil,
               sql`exists(select 1 from ${subject.name} where ${id(subject, s.id, native)} and ${exact(subject, s.securityRevision, securityRevision)} and ${id(subject, s.status, s.activeStatusValue)})`,
               sql`exists(select 1 from ${identifier.name} where ${identifierKey(input.identifier)} and ${id(identifier, i.subjectId, native)} and ${exact(identifier, i.bindingRevision, identifierRevision)} and ${id(identifier, i.verifiedAt, mapping.clock.encodeInstant(verifiedAt))})`,
@@ -396,13 +410,14 @@ export const makeNativeEmailRegistrationServices = Effect.fnUntraced(function* <
             return yield* prepare({ _tag: "Registered" }, project);
           }),
         );
-      }).pipe(
-        (effect) =>
+      },
+      (_) =>
+        ((effect) =>
           reportPersistenceFailure(effect, (error) => error._tag === "EmailUnavailable", {
             markReported: true,
-          }),
-        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
-      ),
+          }))(_),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+    ),
   };
 
   return { registrationAuthority };

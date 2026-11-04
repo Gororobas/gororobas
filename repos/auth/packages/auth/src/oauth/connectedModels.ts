@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { AssuranceEvidence, AuthenticationAssurance } from "../operations/context";
 import { RequestBindingFlowId } from "../operations/requestBinding";

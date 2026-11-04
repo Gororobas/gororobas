@@ -1,5 +1,12 @@
-import type { Hmac } from "@yielded/crypto/Hmac";
-import { Context, type Crypto, Duration, Effect, Layer, type Schema, type Scope } from "effect";
+import * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as Mac from "effect/crypto/Mac";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import type { AuthConfigurationError } from "../auth/AuthConfigurationError";
 import { hooksLayer } from "../auth/defaults";
@@ -82,7 +89,7 @@ const policy = (options: SessionOptions, immediate: boolean, cacheFor?: Duration
 
 /** Authoritative sessions by default. cacheFor delays revocation and claim changes
  * by at most five minutes or renewAfter, whichever is shorter. Enabling it also
- * requires Hmac and defaults signing keys from AuthConfig / AUTH_SECRET. */
+ * requires Mac.Mac and defaults signing keys from AuthConfig / AUTH_SECRET. */
 export const stateful = <const CacheFor extends Duration.Input | undefined = undefined>(
   options: SessionOptions & { readonly cacheFor?: CacheFor } = {},
 ): StatefulConfiguration<CacheFor> =>
@@ -102,12 +109,12 @@ export const stateAssisted = (options: SessionOptions = {}): StateAssistedConfig
   Object.freeze({ mode: "state-assisted", policy: policy(options, true) });
 
 export type SessionRequirements<C, Id extends string, Claims extends Schema.Top> =
-  | Crypto.Crypto
+  | (SecureRandom.SecureRandom | Digest.Digest)
   | (C extends StatefulConfiguration<infer CacheFor>
       ? Exclude<CacheFor, undefined> extends never
         ? never
-        : Hmac
-      : Hmac)
+        : Mac.Mac
+      : Mac.Mac)
   | Exclude<Claims["DecodingServices"] | Claims["EncodingServices"], Scope.Scope>
   | (C extends StatefulConfiguration<Duration.Input | undefined>
       ?

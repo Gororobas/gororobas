@@ -16,9 +16,9 @@ import { Auth, AuthContract, Client, Http, Password, Sessions } from "@yielded/a
 
 Contracts, strategies, and client helpers use the same root import. Distinct
 names such as `PasskeyContract` and `Passkey` keep their roles clear.
-Lower-level modules such as `HttpServer`, `Rpc`, `Strava`, and `WebCrypto` are
+Lower-level modules such as `OperationHttp`, `Strava`, and `WebCrypto` are
 also root namespaces. Access individual exports through the module, for example
-`Proofs.ProofKeys` or `WebCrypto.layerWebCrypto`.
+`Proofs.ProofKeys` or `Password.KdfAdmission.layer()`.
 
 Direct module paths remain available and expose the same namespaces:
 
@@ -41,30 +41,29 @@ Optional adapters are direct imports, for example `@yielded/auth-persistence-dri
 `@yielded/auth/adapters/Twilio`. Install only the peers
 required by the selected adapters.
 
-For Cloudflare Workers, import `@yielded/auth/WorkerdPasswordlessServices` directly
-for runtime crypto and HTTP without Wasm. Use `@yielded/auth/WorkerdServices` when
-the application also hashes passwords. Provide the selected `layer` once to your
-application. These modules are absent from the package root; see
+For Cloudflare Workers with password hashing, use `@yielded/auth-platform-workerd`
+and provide its `layer` once to your application. Use `WebCrypto.layer` for portable
+crypto without password hashing; provide an HTTP client separately. Auth does not depend on this companion package; see
 [runtime setup](./crypto#use-with-auth).
 
 ## Application composition
 
 Import application services and authentication methods from the root:
 
-| Modules                                                                                                                                                                                                                                                                   | Purpose                                                                  |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `Auth`                                                                                                                                                                                                                                                                    | Application services, configuration, and request boundaries.             |
-| `Identity`, `Schema`, `OAuthScope`                                                                                                                                                                                                                                        | Subject identifiers, claims, branded scopes, and shared schemas.         |
-| `Operations`, `Hooks`                                                                                                                                                                                                                                                     | Operation contracts and lifecycle hooks.                                 |
-| `Sessions`                                                                                                                                                                                                                                                                | Session strategies, persistence ports, and lifecycle operations.         |
-| `BrowserLogin`, `BrowserLoginContract`                                                                                                                                                                                                                                    | Native browser sign-in, shared handoff operations and platform services. |
-| `Password`                                                                                                                                                                                                                                                                | Password registration, sign-in, and account changes.                     |
-| `Email`, `PhoneOtp`, `Proofs`                                                                                                                                                                                                                                             | Email and phone methods, bound proofs, and private delivery.             |
-| `EmailDelivery`                                                                                                                                                                                                                                                           | Rendered private email, transport failures, templates, and link parsing. |
-| `Totp`, `Passkey`                                                                                                                                                                                                                                                         | Additional factors and passkey workflows.                                |
-| `OAuth`                                                                                                                                                                                                                                                                   | Provider sign-in, registration, linked accounts, and connected grants.   |
-| `OAuthProxy`                                                                                                                                                                                                                                                              | Stable callbacks for local and preview sign-in and registration.         |
-| `OpenIdConnect`, `Apple`, `Atlassian`, `Auth0`, `Cognito`, `Dropbox`, `Figma`, `GitHub`, `GitLab`, `Google`, `HuggingFace`, `Keycloak`, `Kick`, `Linear`, `Line`, `Microsoft`, `Notion`, `Okta`, `Railway`, `Roblox`, `Slack`, `Strava`, `Vercel`, `X`, `Zitadel`, `Zoom` | Native provider configuration and protocol Layers.                       |
+| Modules                                                                                                                                                                                                                                                                              | Purpose                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `Auth`                                                                                                                                                                                                                                                                               | Application services, configuration, and request boundaries.             |
+| `Identity`, `Schema`, `OAuthScope`                                                                                                                                                                                                                                                   | Subject identifiers, claims, branded scopes, and shared schemas.         |
+| `Operations`, `Hooks`                                                                                                                                                                                                                                                                | Operation contracts and lifecycle hooks.                                 |
+| `Sessions`                                                                                                                                                                                                                                                                           | Session strategies, persistence ports, and lifecycle operations.         |
+| `BrowserLogin`, `BrowserLoginContract`                                                                                                                                                                                                                                               | Native browser sign-in, shared handoff operations and platform services. |
+| `Password`                                                                                                                                                                                                                                                                           | Password registration, sign-in, and account changes.                     |
+| `Email`, `PhoneOtp`, `Proofs`                                                                                                                                                                                                                                                        | Email and phone methods, bound proofs, and private delivery.             |
+| `EmailDelivery`                                                                                                                                                                                                                                                                      | Rendered private email, transport failures, templates, and link parsing. |
+| `Totp`, `Passkey`                                                                                                                                                                                                                                                                    | Additional factors and passkey workflows.                                |
+| `OAuth`                                                                                                                                                                                                                                                                              | Provider sign-in, registration, linked accounts, and connected grants.   |
+| `OAuthProxy`                                                                                                                                                                                                                                                                         | Stable callbacks for local and preview sign-in and registration.         |
+| `OpenIdConnect`, `Apple`, `Atlassian`, `Auth0`, `Cognito`, `Discord`, `Dropbox`, `Figma`, `GitHub`, `GitLab`, `Google`, `HuggingFace`, `Keycloak`, `Kick`, `Linear`, `Line`, `Microsoft`, `Notion`, `Okta`, `Railway`, `Roblox`, `Slack`, `Strava`, `Vercel`, `X`, `Zitadel`, `Zoom` | Native provider configuration and protocol Layers.                       |
 
 ## Browser and transport boundaries
 
@@ -100,6 +99,7 @@ See [HTTP integration](../guide/http-and-client) for contract sharing,
 SDK integrations live in companion packages. Import the platform entrypoint
 you use.
 
+- **`@yielded/auth-platform-workerd`**: Workers runtime Layers with WASM password hashing.
 - **`@yielded/auth-simplewebauthn/Browser`**: Browser WebAuthn ceremonies through `make()` or `layer`.
 - **`@yielded/auth-simplewebauthn/Server`**: Server verification through `make(options)` or `layer`.
 - **`@yielded/auth-react-native`**: iOS passkey ceremonies through `make()` or `layer`; import only in the native entrypoint.
@@ -110,16 +110,15 @@ you use.
 - **`@yielded/auth/adapters/Twilio`**: SMS delivery through Effect HTTP; requires `TwilioConfig`.
 
 Auth owns schemas, workflows, and direct password, TOTP, and OAuth implementations.
-Its runtime dependencies are Effect and the first-party `@yielded/crypto`,
-`@yielded/jose`, and `@yielded/oauth` packages.
+Its runtime dependencies are Effect and `@yielded/oauth`. JOSE comes from `effect/jose`.
 `OpenIdConnect` and `GitHub` configure native providers without a provider SDK.
 Optional SDK adapters depend on Auth's public contracts; Auth never imports or
 re-exports them. Applications supply storage, policy, delivery authority, and
 explicit crypto/HTTP Layers.
 
 The direct `GitHub` module loads plain OAuth; its provider setup requires Effect
-`Crypto` and `HttpClient` in a `Scope`. `OpenIdConnect` additionally installs
-discovery and signed ID-token verification, requiring `Hmac` and `Signature`.
+`SecureRandom`, `Digest`, and `HttpClient` in a `Scope`. `OpenIdConnect` additionally installs
+discovery and signed ID-token verification, requiring Effect `Mac` and `Signature`.
 The `OAuth` module separately owns encryption of flow secrets and retained tokens.
 Direct paths narrow module loading; they do not change installed package dependencies.
 

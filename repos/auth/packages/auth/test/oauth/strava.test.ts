@@ -1,14 +1,13 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { it } from "@effect/vitest";
-import {
-  OAuth,
-  Operations,
-  Schema as AuthSchema,
-  Sessions,
-  Strava,
-  WebCrypto,
-} from "@yielded/auth";
-import { DateTime, Effect, Layer, Redacted, type Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import { OAuth, Operations, Schema as AuthSchema, Sessions, Strava } from "@yielded/auth";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import type * as Schema from "effect/Schema";
 import { expect } from "vite-plus/test";
 
 const providerKey = OAuth.OAuthProviderKey.make("strava");
@@ -91,7 +90,7 @@ const chunked = (body: Schema.Json, onCancel: () => void) => {
 
 const live = (response: () => Response) =>
   Layer.merge(
-    WebCrypto.layerWebCrypto,
+    NodeCrypto.layer,
     Layer.succeed(
       HttpClient.HttpClient,
       HttpClient.make((request) =>

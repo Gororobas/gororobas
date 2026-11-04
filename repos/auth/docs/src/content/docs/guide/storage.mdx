@@ -86,6 +86,11 @@ For Cloudflare D1, import `AuthPersistence` from
 See [D1 composition](../reference/adapters.md#managed-d1) for migrations and batch
 constraints.
 
+With `PhoneOtp.make({ lifecycle: true })` and `Sessions.stateful()`, managed or
+mapped storage also supports account signup and phone number updates. Supply
+account values through `Persistence.Provisioning`; see the
+[phone lifecycle guide](./phone).
+
 ## Your schema
 
 Declare your tables and connect them with `Persistence.map({ subjects, tables })`.
@@ -135,10 +140,11 @@ For an Auth definition with one sign-in-only `Password.make()` strategy and
 from `@yielded/auth-persistence/Testing`. Each acquisition starts with your seed
 subjects and discards its state when the scope closes. This storage is only for tests.
 
-`Testing.services()` supplies portable crypto and real password hashing using
-WebCrypto. Its optional `seed` makes credentials reproducible; omit it for secure
-randomness. Provide these services to both Auth and persistence, and supply your
-claims and private credential delivery.
+`Testing.services()` supplies real password hashing and WebCrypto entropy/digests.
+Provide an Effect Kdf Layer with Argon2id support, such as `NodeCrypto.layerKdf`.
+Its optional `seed` makes credentials reproducible; omit it for secure randomness.
+Provide these services to both Auth and persistence, and supply your claims and
+private credential delivery.
 
 Both Layers use the caller's clock, so `TestClock.adjust` controls expiry in Effect
 tests. The [consumer test](https://github.com/yielded-dev/auth/blob/main/examples/auth/test/in-memory.test.ts)

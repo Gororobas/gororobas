@@ -1,7 +1,10 @@
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { OAuthConnectedPersistence, OAuthConnectedRevocations } from "@yielded/auth/OAuth";
 import type { Table } from "drizzle-orm";
-import { type Crypto, Effect, Context } from "effect";
+import * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
 
 import type { D1BatchStatements } from "./D1BatchStatements";
 import { NativeDatabase, nativeDatabase } from "./native-database";
@@ -58,7 +61,7 @@ export const makeOAuthConnectedTarget = <
     A,
     OAuthCoordinatorError<E> | DatabaseError,
     | Exclude<R, OAuthConnectedPersistence | Provided>
-    | Crypto.Crypto
+    | (SecureRandom.SecureRandom | Digest.Digest)
     | LifecycleHooks
     | DatabaseRequirements
   >;
@@ -89,7 +92,7 @@ export const makeOAuthConnectedTarget = <
     A,
     OAuthCoordinatorError<E> | DatabaseError,
     | Exclude<R, OAuthConnectedPersistence | TxId | Provided>
-    | Crypto.Crypto
+    | (SecureRandom.SecureRandom | Digest.Digest)
     | LifecycleHooks
     | DatabaseRequirements
   >;
@@ -119,7 +122,10 @@ export const makeOAuthConnectedTarget = <
   ): Effect.Effect<
     A,
     OAuthCoordinatorError<E> | DatabaseError,
-    Exclude<R, OAuthConnectedPersistence> | Crypto.Crypto | LifecycleHooks | DatabaseRequirements
+    | Exclude<R, OAuthConnectedPersistence>
+    | (SecureRandom.SecureRandom | Digest.Digest)
+    | LifecycleHooks
+    | DatabaseRequirements
   > {
     return Effect.flatMap(nativeDatabase(acquire), (database) =>
       coordinateTargetOAuthConnected<TransactionOf<D>, A, E, Exclude<R, OAuthConnectedPersistence>>(
@@ -166,7 +172,7 @@ export const makeOAuthConnectedTarget = <
     A,
     OAuthCoordinatorError<E> | DatabaseError,
     | Exclude<R, OAuthConnectedRevocations | Provided>
-    | Crypto.Crypto
+    | (SecureRandom.SecureRandom | Digest.Digest)
     | LifecycleHooks
     | DatabaseRequirements
   >;
@@ -194,7 +200,7 @@ export const makeOAuthConnectedTarget = <
     A,
     OAuthCoordinatorError<E> | DatabaseError,
     | Exclude<R, OAuthConnectedRevocations | TxId | Provided>
-    | Crypto.Crypto
+    | (SecureRandom.SecureRandom | Digest.Digest)
     | LifecycleHooks
     | DatabaseRequirements
   >;
@@ -221,7 +227,10 @@ export const makeOAuthConnectedTarget = <
   ): Effect.Effect<
     A,
     OAuthCoordinatorError<E> | DatabaseError,
-    Exclude<R, OAuthConnectedRevocations> | Crypto.Crypto | LifecycleHooks | DatabaseRequirements
+    | Exclude<R, OAuthConnectedRevocations>
+    | (SecureRandom.SecureRandom | Digest.Digest)
+    | LifecycleHooks
+    | DatabaseRequirements
   > {
     return Effect.flatMap(nativeDatabase(acquire), (database) =>
       coordinateTargetOAuthConnectedRevocations<

@@ -1,8 +1,11 @@
 import * as M from "@yielded/auth/Passkey";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import { Cause, Context, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import {
   PersistenceConfigurationError,
@@ -128,8 +131,8 @@ const mappings = Effect.fnUntraced(function* (
           pg: () => sql`cast(extract(epoch from clock_timestamp()) * 1000 as bigint)`,
           orElse: () => sql`cast(round((julianday('now') - 2440587.5) * 86400000) as integer)`,
         }),
-        toMillis: (expression: Fragment) => expression,
-        fromMillis: (expression: Fragment) => expression,
+        toMillis: (expression: Statement.Fragment) => expression,
+        fromMillis: (expression: Statement.Fragment) => expression,
       },
       telemetry: {
         lastUsedAt: "lastUsedAt",
@@ -202,13 +205,13 @@ const mappings = Effect.fnUntraced(function* (
           requirement: s.actionRequirements,
           metadata,
           action: metadata,
-          remainingSignIn: (nativeId, excluded, row) =>
-            Effect.gen(function* () {
+          remainingSignIn: Effect.fnUntraced(
+            function* (nativeId, excluded, row) {
               const requirement = yield* Schema.decodeEffect(M.PasskeyRequirement)(
                 yield* s.requirements(row),
               );
 
-              const alternatives: Fragment[] = [];
+              const alternatives: Statement.Fragment[] = [];
 
               if (
                 requirement.alternatives.some(
@@ -247,15 +250,15 @@ const mappings = Effect.fnUntraced(function* (
               }
 
               return anySqlCondition(alternatives);
-            }).pipe(
-              Effect.catchCause((cause) =>
-                Effect.failCause(
-                  Cause.map(cause, (error) =>
-                    PersistenceMappingError.make({ operation: "mapping", cause: error }),
-                  ),
+            },
+            Effect.catchCause((cause) =>
+              Effect.failCause(
+                Cause.map(cause, (error) =>
+                  PersistenceMappingError.make({ operation: "mapping", cause: error }),
                 ),
               ),
             ),
+          ),
         },
       },
       invalidation: {

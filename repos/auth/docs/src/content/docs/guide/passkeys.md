@@ -197,7 +197,7 @@ them, before importing Effect or the adapter. It installs no global polyfills.
 ```ts
 import * as ReactNativePasskey from "@yielded/auth-react-native";
 
-const native = yield* ReactNativePasskey.make();
+const native = yield* ReactNativePasskey.make;
 const assertion = yield* native.authenticate({ started, mediation: "required" });
 ```
 

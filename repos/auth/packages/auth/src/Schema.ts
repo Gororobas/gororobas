@@ -1,4 +1,5 @@
-import { Schema, SchemaGetter } from "effect";
+import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 
 /** Opaque application subject. The consumer maps it to its own account id. */
 export const SubjectId = Schema.NonEmptyString.pipe(Schema.brand("effect-auth/SubjectId"));

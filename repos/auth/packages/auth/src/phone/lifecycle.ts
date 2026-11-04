@@ -1,4 +1,8 @@
-import { Crypto, DateTime, Effect, Layer, Schema } from "effect";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
 import { defaultLayer, hooksLayer } from "../auth/defaults";
@@ -344,7 +348,9 @@ export const makePhoneLifecycle = <
           const actionRequirement = yield* Schema.decodeEffect(
             Schema.toCodecIso(AuthenticationRequirement),
           )(
-            Schema.encodeSync(Schema.toCodecIso(AuthenticationRequirement))(verified.requirement),
+            yield* Schema.encodeEffect(Schema.toCodecIso(AuthenticationRequirement))(
+              verified.requirement,
+            ).pipe(Effect.orDie),
           ).pipe(Effect.mapError(phoneActionFailure));
 
           if (
@@ -529,7 +535,7 @@ export const makePhoneLifecycle = <
     strategy: makeAuthStrategy(
       methods,
       layer.pipe(
-        Layer.merge(Layer.effect(Crypto.Crypto, Crypto.Crypto)),
+        Layer.merge(Layer.effect(SecureRandom.SecureRandom, SecureRandom.SecureRandom)),
         Layer.provideMerge(defaultPhoneAdmissionLayer),
       ),
       { completion: true },

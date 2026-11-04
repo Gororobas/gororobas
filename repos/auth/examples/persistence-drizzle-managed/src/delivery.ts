@@ -1,5 +1,6 @@
 import { EmailDelivery } from "@yielded/auth";
-import { Config, Crypto, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Config, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 
 import {
   DeliveryLive as CloudflareDeliveryLive,
@@ -22,14 +23,14 @@ const LocalDeliveryLive = Layer.unwrap(
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const directory = path.join(yield* AppData, "mail");
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
 
     yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
 
     return Layer.succeed(EmailDelivery.EmailDelivery, {
       send: Effect.fn("Starter.deliverLocalEmail")(function* (message) {
         const body = yield* Schema.encodeEffect(LocalMessage)(message);
-        const id = yield* crypto.randomUUIDv4();
+        const id = yield* crypto.uuidV4();
 
         yield* fs.writeFileString(path.join(directory, `${id}.json`), body, {
           flag: "wx",

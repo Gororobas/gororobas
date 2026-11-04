@@ -1,8 +1,10 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { it } from "@effect/vitest";
-import { OAuth, OAuthProxy, WebCrypto } from "@yielded/auth";
-import * as KdfAdmission from "@yielded/crypto/KdfAdmission";
-import * as Portable from "@yielded/crypto/Portable";
-import { Effect, Layer, Redacted, Schema } from "effect";
+import { OAuth, OAuthProxy } from "@yielded/auth";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { expect } from "vite-plus/test";
 
 // Regression at f1da141a: an admitted form_post provider could not complete its
@@ -19,10 +21,7 @@ it.effect("completes a form_post callback through the proxy without repeating ex
     let record: OAuthProxy.Record | undefined;
     let exchanges = 0;
 
-    const crypto = Layer.merge(
-      WebCrypto.layerWebCrypto,
-      Portable.layer(globalThis.crypto.subtle).pipe(Layer.provide(KdfAdmission.layer())),
-    );
+    const crypto = NodeCrypto.layer;
 
     const persistence = Layer.succeed(OAuthProxy.Persistence, {
       get: () => Effect.succeed(record),
@@ -67,19 +66,18 @@ it.effect("completes a form_post callback through the proxy without repeating ex
                     oidcNonce: "B".repeat(43),
                   },
                 }).pipe(Effect.orDie),
-              exchangeVerifiedIdentity: (input) =>
-                Effect.gen(function* () {
-                  exchanges++;
-                  expect(input.response.user).toBe(user);
+              exchangeVerifiedIdentity: Effect.fnUntraced(function* (input) {
+                exchanges++;
+                expect(input.response.user).toBe(user);
 
-                  return yield* Schema.decodeEffect(OAuth.OAuthVerifiedExternalIdentity)({
-                    identity: {
-                      provider: binding.provider,
-                      issuer: "https://appleid.apple.com",
-                      subject: "apple-subject",
-                    },
-                  }).pipe(Effect.orDie);
-                }),
+                return yield* Schema.decodeEffect(OAuth.OAuthVerifiedExternalIdentity)({
+                  identity: {
+                    provider: binding.provider,
+                    issuer: "https://appleid.apple.com",
+                    subject: "apple-subject",
+                  },
+                }).pipe(Effect.orDie);
+              }),
             }),
         },
       },

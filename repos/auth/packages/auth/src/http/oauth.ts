@@ -1,4 +1,8 @@
-import { Context, Effect, Layer, Result, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import type { AnyRoute } from "../http-operation/contract";
 import { OperationHttpConfigurationError, OperationHttpError } from "../http-operation/errors";
@@ -183,51 +187,50 @@ export const makeOAuth = <E, R, ResponseR>(
     }),
   );
 
-  const callbacks = <Routes extends Readonly<Record<string, AnyRoute>>>(routes: Routes) =>
-    Effect.gen(function* () {
-      const { complete, entries } = yield* configuration;
-      const { trustedOrigins } = yield* OperationHttpServerConfig;
+  const callbacks = Effect.fnUntraced(function* <Routes extends Readonly<Record<string, AnyRoute>>>(
+    routes: Routes,
+  ) {
+    const { complete, entries } = yield* configuration;
+    const { trustedOrigins } = yield* OperationHttpServerConfig;
 
-      const flowId = yield* makeRequestBindingFlowResolver("oauth-entry");
+    const flowId = yield* makeRequestBindingFlowResolver("oauth-entry");
 
-      // The selected name was validated against the same action table. Preserve
-      // that table's concrete operation requirements through indexed lookup.
-      const route = routes[complete] as Routes[keyof Routes] | undefined;
+    // The selected name was validated against the same action table. Preserve
+    // that table's concrete operation requirements through indexed lookup.
+    const route = routes[complete] as Routes[keyof Routes] | undefined;
 
-      if (route === undefined)
-        return yield* OperationHttpConfigurationError.make({ reason: "callback" });
+    if (route === undefined)
+      return yield* OperationHttpConfigurationError.make({ reason: "callback" });
 
-      return entries.flatMap((entry) =>
-        entry.callbacks.map((callback) => {
-          const { respond: configuredRespond, ...callbackOptions } = callback;
-          const callbackRespond = configuredRespond ?? respond;
+    return entries.flatMap((entry) =>
+      entry.callbacks.map((callback) => {
+        const { respond: configuredRespond, ...callbackOptions } = callback;
+        const callbackRespond = configuredRespond ?? respond;
 
-          return oauthCallback<Routes[keyof Routes], ResponseR>(route, {
-            ...callbackOptions,
-            ...(callbackRespond === undefined ? {} : { respond: callbackRespond }),
-            provider: entry.provider,
-            requestBinding: "context",
-            allowedRedirectOrigins: trustedOrigins,
-            flowId: (_request, credentials) => {
-              const credential = credentials["request-binding"];
+        return oauthCallback<Routes[keyof Routes], ResponseR>(route, {
+          ...callbackOptions,
+          ...(callbackRespond === undefined ? {} : { respond: callbackRespond }),
+          provider: entry.provider,
+          requestBinding: "context",
+          allowedRedirectOrigins: trustedOrigins,
+          flowId: (_request, credentials) => {
+            const credential = credentials["request-binding"];
 
-              return credential === undefined
-                ? OperationHttpError.make({ reason: "credentials" })
-                : flowId(credential).pipe(
-                    Effect.mapError((error) =>
-                      OperationHttpError.make({
-                        reason:
-                          error._tag === "RequestBindingUnavailable"
-                            ? "unavailable"
-                            : "credentials",
-                      }),
-                    ),
-                  );
-            },
-          });
-        }),
-      );
-    });
+            return credential === undefined
+              ? OperationHttpError.make({ reason: "credentials" })
+              : flowId(credential).pipe(
+                  Effect.mapError((error) =>
+                    OperationHttpError.make({
+                      reason:
+                        error._tag === "RequestBindingUnavailable" ? "unavailable" : "credentials",
+                    }),
+                  ),
+                );
+          },
+        });
+      }),
+    );
+  });
 
   const callbackUrl = (provider: string, callbackId?: string) => {
     const entry = Result.getOrThrow(saved).entries.find((entry) => entry.provider === provider);

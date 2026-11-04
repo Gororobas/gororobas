@@ -1,8 +1,9 @@
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { reportAuthDiagnostic } from "@yielded/auth/Persistence";
 import { SessionUnavailable, type AuthenticationAuthority } from "@yielded/auth/Sessions";
-import { Cause, Effect } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { PersistenceConfigurationError } from "./configuration";
 import type { AuthenticationAuthorityMapping } from "./models/session-model";

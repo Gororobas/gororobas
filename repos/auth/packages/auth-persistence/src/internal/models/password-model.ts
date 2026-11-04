@@ -6,7 +6,8 @@ import type {
   EncodedPasswordHash,
 } from "@yielded/auth/Password";
 import type { AuthenticationRequirement, SecurityRevision } from "@yielded/auth/Sessions";
-import type { Effect, Redacted } from "effect";
+import type * as Effect from "effect/Effect";
+import type * as Redacted from "effect/Redacted";
 
 import type { AnyTableModel, TableModel as Table, SqlExpression } from "../table-model";
 import type { PersistenceMappingError, SubjectIdCodec } from "./common";

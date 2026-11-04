@@ -1,7 +1,13 @@
-import { Cause, Clock, Crypto, Duration, Effect, Layer, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Digest from "effect/crypto/Digest";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import * as RateLimiter from "effect/persistence/RateLimiter";
+import * as Schema from "effect/Schema";
 
 import { defaultLayer } from "./defaults";
 
@@ -104,26 +110,28 @@ const Bucket = Schema.fromJsonString(
 export const keyValueRateLimiterStore: Layer.Layer<
   RateLimiter.RateLimiterStore,
   never,
-  KeyValueStore.KeyValueStore | Crypto.Crypto
+  KeyValueStore.KeyValueStore | Digest.Digest
 > = Layer.effect(
   RateLimiter.RateLimiterStore,
   Effect.gen(function* () {
     const store = yield* KeyValueStore.KeyValueStore;
-    const crypto = yield* Crypto.Crypto;
+    const digests = yield* Digest.Digest;
     const unsupported = storeFailure("Auth rate limits support only one-token consumption");
 
     return RateLimiter.RateLimiterStore.of({
       fixedWindow: () => unsupported,
       adaptiveConsume: () => unsupported,
       adaptiveFeedback: () => unsupported,
-      tokenBucket: (request) =>
-        Effect.gen(function* () {
+      tokenBucket: Effect.fnUntraced(
+        function* (request) {
           if (request.allowOverflow || request.tokens !== 1) return yield* unsupported;
           const refillRateMillis = Duration.toMillis(request.refillRate);
           const now = yield* Clock.currentTimeMillis;
 
           const key = `effect-auth-rate:${Base64Url.encode(
-            yield* crypto.digest("SHA-256", new TextEncoder().encode(request.key)),
+            yield* digests
+              .digest(Digest.sha256, new TextEncoder().encode(request.key))
+              .pipe(Effect.catchDefect(() => storeFailure("Auth rate limit key digest failed"))),
           )}`;
 
           const stored = yield* store.get(key);
@@ -154,24 +162,22 @@ export const keyValueRateLimiterStore: Layer.Layer<
             yield* store.set(key, yield* Schema.encodeEffect(Bucket)(bucket));
 
           return [remaining, Math.max(0, now - bucket.lastRefill)] as const;
-        }).pipe(
-          Effect.catchCause((cause) =>
-            Effect.failCause(
-              Cause.map(cause, (error) =>
-                RateLimiter.RateLimiterError.make({
-                  reason: RateLimiter.RateLimitStoreError.make({
-                    message:
-                      error._tag === "KeyValueStoreError"
-                        ? "Auth rate limit key-value store failed"
-                        : error._tag === "PlatformError"
-                          ? "Auth rate limit key digest failed"
-                          : "Auth rate limit entry is malformed",
-                  }),
+        },
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              RateLimiter.RateLimiterError.make({
+                reason: RateLimiter.RateLimitStoreError.make({
+                  message:
+                    error._tag === "KeyValueStoreError"
+                      ? "Auth rate limit key-value store failed"
+                      : "Auth rate limit entry is malformed",
                 }),
-              ),
+              }),
             ),
           ),
         ),
+      ),
     });
   }),
 );

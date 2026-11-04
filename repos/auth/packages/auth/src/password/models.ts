@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** Sensitive credential material; service boundaries wrap this in Redacted. */
 export const EncodedPasswordHash = Schema.String.check(Schema.isMaxLength(512)).pipe(

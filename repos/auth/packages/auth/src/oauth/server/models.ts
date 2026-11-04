@@ -1,5 +1,7 @@
-import { Jwk, Jwks } from "@yielded/jose";
-import { Context, type Effect, Schema } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Jwks from "effect/jose/Jwks";
+import * as Schema from "effect/Schema";
 
 import * as OAuthScope from "../../OAuthScope";
 import { SubjectId } from "../../Schema";
@@ -19,7 +21,10 @@ export class ConfigurationError extends Schema.TaggedError<ConfigurationError>()
 export const Text = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(2048));
 export const Random = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));
 export const Scope = OAuthScope.OAuthScope;
-export const Scopes = Schema.NonEmptyArray(Scope).check(Schema.isMaxLength(32));
+export const maximumScopes = 1024;
+export const Scopes = Schema.NonEmptyArray(Scope).check(Schema.isMaxLength(maximumScopes));
+/** Space-separated scopes. Declared scopes must fit, so a client can request all of them. */
+export const ScopeText = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(8192));
 
 export const makeScopesSchema = <Scope extends OAuthScope.OAuthScope>(
   scope: Schema.Codec<Scope, string>,
@@ -79,7 +84,7 @@ export const AssertionAlgorithms = ["RS256", "PS256", "ES256", "EdDSA"] as const
 export const ClientAssertion = Schema.Struct({
   jwks: Schema.optionalKey(Jwks.KeySet),
   jwksUri: Schema.optionalKey(Url),
-  algorithm: Schema.optionalKey(Jwk.AsymmetricAlgorithm),
+  algorithm: Schema.optionalKey(Schema.Literals(AssertionAlgorithms)),
 }).check(
   Schema.makeFilter((value) => (value.jwks === undefined) !== (value.jwksUri === undefined)),
 );
@@ -91,6 +96,11 @@ export const Client = Schema.Struct({
   applicationType: Schema.optionalKey(Schema.Literals(["web", "native"])),
   /** Pre-registered confidential clients authenticate using Basic or form credentials. */
   clientSecret: Schema.optionalKey(Schema.Redacted(Text, { disallowJsonEncode: true })),
+  /** Unpadded base64url SHA-256 of a confidential client's secret, used instead of
+   * clientSecret when only the digest is kept. Only for generated secrets with at
+   * least 256 random bits; never digest a password.
+   */
+  clientSecretDigest: Schema.optionalKey(Random),
   /** Authenticate with private_key_jwt instead of a shared secret. */
   clientAssertion: Schema.optionalKey(ClientAssertion),
   grantTypes: Schema.optionalKey(
@@ -98,7 +108,10 @@ export const Client = Schema.Struct({
   ),
 }).check(
   Schema.makeFilter(
-    (value) => value.clientSecret === undefined || value.clientAssertion === undefined,
+    (value) =>
+      [value.clientSecret, value.clientSecretDigest, value.clientAssertion].filter(
+        (method) => method !== undefined,
+      ).length <= 1,
   ),
 );
 
@@ -113,7 +126,7 @@ export const TokenResponse = Schema.Struct({
   id_token: Schema.optionalKey(
     Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(16384)),
   ),
-  scope: Text,
+  scope: ScopeText,
 });
 
 export const AuthorizationMetadata = Schema.Struct({
@@ -126,11 +139,15 @@ export const AuthorizationMetadata = Schema.Struct({
   token_endpoint_auth_methods_supported: Schema.Array(
     Schema.Literals(["none", "client_secret_basic", "client_secret_post", "private_key_jwt"]),
   ),
-  token_endpoint_auth_signing_alg_values_supported: Schema.Array(Jwk.AsymmetricAlgorithm),
+  token_endpoint_auth_signing_alg_values_supported: Schema.Array(
+    Schema.Literals(AssertionAlgorithms),
+  ),
   revocation_endpoint_auth_methods_supported: Schema.Array(
     Schema.Literals(["none", "client_secret_basic", "client_secret_post", "private_key_jwt"]),
   ),
-  revocation_endpoint_auth_signing_alg_values_supported: Schema.Array(Jwk.AsymmetricAlgorithm),
+  revocation_endpoint_auth_signing_alg_values_supported: Schema.Array(
+    Schema.Literals(AssertionAlgorithms),
+  ),
   code_challenge_methods_supported: Schema.Array(Schema.Literal("S256")),
   authorization_response_iss_parameter_supported: Schema.Literal(true),
   client_id_metadata_document_supported: Schema.Boolean,
@@ -192,7 +209,9 @@ export const OpenIdMetadata = Schema.Struct({
   subject_types_supported: Schema.Array(Schema.Literal("public")),
   id_token_signing_alg_values_supported: Schema.Array(Schema.Literal("RS256")),
   token_endpoint_auth_methods_supported: Schema.Array(Schema.String),
-  token_endpoint_auth_signing_alg_values_supported: Schema.Array(Jwk.AsymmetricAlgorithm),
+  token_endpoint_auth_signing_alg_values_supported: Schema.Array(
+    Schema.Literals(AssertionAlgorithms),
+  ),
   code_challenge_methods_supported: Schema.Array(Schema.Literal("S256")),
   authorization_response_iss_parameter_supported: Schema.Literal(true),
   scopes_supported: Scopes,

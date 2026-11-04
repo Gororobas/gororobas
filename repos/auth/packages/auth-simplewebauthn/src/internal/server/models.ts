@@ -1,5 +1,5 @@
 import { PasskeyProfile } from "@yielded/auth/Passkey";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export const SimpleWebAuthnPasskeyProtocolOptions = Schema.Struct({
   profiles: Schema.NonEmptyArray(PasskeyProfile).check(Schema.isMaxLength(64)),

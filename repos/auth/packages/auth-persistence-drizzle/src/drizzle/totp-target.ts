@@ -7,7 +7,12 @@ import {
   TotpPersistence,
 } from "@yielded/auth/Totp";
 import type { Table } from "drizzle-orm";
-import { Cause, Effect, Schema, type Context, type Crypto } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { D1BatchStatements } from "./D1BatchStatements";
 import type { NativeDriverDatabase, NativeDriverTransaction } from "./driver-types";
@@ -85,7 +90,11 @@ export const makeTotpTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | TotpUnavailable | TotpConfigurationError | PersistenceMappingError,
-    Exclude<R, TotpPersistence | D1BatchStatements> | DR | RS | LifecycleHooks | Crypto.Crypto
+    | Exclude<R, TotpPersistence | D1BatchStatements>
+    | DR
+    | RS
+    | LifecycleHooks
+    | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinateTotpPersistence<
     DB extends D,
@@ -116,7 +125,7 @@ export const makeTotpTarget = <DatabaseId, D extends NativeDriverDatabase>(
     | DR
     | RS
     | LifecycleHooks
-    | Crypto.Crypto
+    | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinateTotpPersistence<
     DB extends D,
@@ -171,22 +180,22 @@ export const makeTotpTarget = <DatabaseId, D extends NativeDriverDatabase>(
 
   return {
     coordinateTotpPersistence,
-    makeTotpPersistenceServices: <
-      S extends Table,
-      F extends Table,
-      C extends Table,
-      N,
-      P extends Table = Table,
-      RS = never,
-    >(
-      source: TotpMappingSource<TotpMapping<S, F, C, N, P>, RS>,
-    ) =>
-      Effect.gen(function* () {
+    makeTotpPersistenceServices: Effect.fnUntraced(
+      function* <
+        S extends Table,
+        F extends Table,
+        C extends Table,
+        N,
+        P extends Table = Table,
+        RS = never,
+      >(source: TotpMappingSource<TotpMapping<S, F, C, N, P>, RS>) {
         const value = mapping(yield* Effect.isEffect(source) ? source : Effect.succeed(source));
 
         yield* validate(value);
 
         return yield* services(value);
-      }).pipe(Effect.provideServiceEffect(NativeDatabase, nativeDatabase(databaseService))),
+      },
+      Effect.provideServiceEffect(NativeDatabase, nativeDatabase(databaseService)),
+    ),
   };
 };

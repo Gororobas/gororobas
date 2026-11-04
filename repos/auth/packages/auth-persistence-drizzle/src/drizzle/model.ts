@@ -6,7 +6,11 @@ import {
   type LoginIdentifier,
 } from "@yielded/auth/Identity";
 import { getTableColumns, type AnyColumn, type InferInsertModel, type Table } from "drizzle-orm";
-import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 export {
   PersistenceMappingError,

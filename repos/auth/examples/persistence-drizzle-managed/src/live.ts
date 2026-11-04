@@ -2,7 +2,8 @@ import { Passkey, Password, Sessions } from "@yielded/auth";
 import { layer as layerSimpleWebAuthnPasskeyProtocol } from "@yielded/auth-simplewebauthn/Server";
 import { and, eq, getTableColumns } from "drizzle-orm";
 import * as Drizzle from "drizzle-orm/effect-sqlite-bun";
-import { Crypto, Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 
 import { AppAuth } from "../../shared/account/auth";
 import { Claims, minimumPasswordLength } from "../../shared/account/contract";
@@ -20,14 +21,14 @@ export const DatabaseReady = MigrationsLive.pipe(
 const ProvisioningLive = Layer.effect(
   Persistence.Provisioning,
   Effect.gen(function* () {
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
 
     return {
       password: {
         values: Effect.fn("Customers.values")(
           function* ({ registration }) {
-            const id = yield* crypto.randomUUIDv4();
-            const revision = yield* crypto.randomUUIDv4();
+            const id = yield* crypto.uuidV4();
+            const revision = yield* crypto.uuidV4();
 
             return {
               id,

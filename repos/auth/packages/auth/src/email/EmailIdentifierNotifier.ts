@@ -1,4 +1,5 @@
-import { Context, Effect } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 
 import { hookContribution } from "../hooks/LifecycleHooks";
 import { HookDeliveryFailed, type LifecycleEventId } from "../hooks/models";

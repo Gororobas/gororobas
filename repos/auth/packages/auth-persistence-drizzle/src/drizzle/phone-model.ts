@@ -2,7 +2,8 @@ import type * as Shared from "@yielded/auth-persistence/Adapter";
 import { hooksLayer } from "@yielded/auth/Persistence";
 import { PhonePersistence, PhoneSignInTargets } from "@yielded/auth/PhoneOtp";
 import type { SQL, Table } from "drizzle-orm";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type { PersistenceMappingError } from "./model";
 import type { ProofPersistenceMapping } from "./proof-model";

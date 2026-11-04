@@ -1,5 +1,10 @@
-import { Cause, Effect, Layer, Redacted, Schema } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/http";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { reportAuthFailure, ReportedOperationDefect } from "../internal/diagnostics";
 import { timeoutWithCause } from "../internal/timeout";

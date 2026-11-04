@@ -11,8 +11,10 @@ import {
 } from "@yielded/auth-persistence/Adapter";
 import { LifecycleHooks } from "@yielded/auth/Hooks";
 import { PasskeyConfigurationError, PasskeyUnavailable } from "@yielded/auth/Passkey";
-import { type Crypto, Effect } from "effect";
-import type { SqlClient } from "effect/sql";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import type { D1BatchStatements } from "../D1BatchStatements";
 import type { PersistenceMappingError } from "../model";
@@ -85,7 +87,7 @@ interface PasskeyMapped<M> {
   readonly base: () => Effect.Effect<
     NativePasskeyServices,
     PasskeyUnavailable,
-    Crypto.Crypto | LifecycleHooks
+    (SecureRandom.SecureRandom | Digest.Digest) | LifecycleHooks
   >;
 }
 
@@ -117,50 +119,47 @@ export const makePasskeyMapped = Effect.fnUntraced(function* <M, R>(
   };
 });
 
-export const makeTargetPasskeyCredentials = <M, R>(
+export const makeTargetPasskeyCredentials = Effect.fnUntraced(function* <M, R>(
   source: PasskeyMappingSource<M, R>,
   configuration: PasskeyTargetConfiguration,
-) =>
-  Effect.gen(function* () {
-    const target = yield* makePasskeyMapped(source, configuration);
+) {
+  const target = yield* makePasskeyMapped(source, configuration);
 
-    return yield* target
-      .provide(
-        makeNativePasskeyCredentialServices(
-          target.tables,
-          target.mapping as unknown as PasskeyNativeRead,
-        ),
-      )
-      .pipe(Effect.provideService(LifecycleHooks, emptyHooks));
-  });
-
-export const makeTargetPasskeyPersistence = <M, R>(
-  source: PasskeyMappingSource<M, R>,
-  configuration: PasskeyTargetConfiguration,
-) =>
-  Effect.gen(function* () {
-    const target = yield* makePasskeyMapped(source, configuration);
-
-    const base = yield* target.base();
-
-    return { passkeyPersistence: base.passkeyPersistence } satisfies PasskeyPersistenceServices;
-  });
-
-export const makeTargetPasskeyRegistration = <M, R>(
-  source: PasskeyMappingSource<M, R>,
-  configuration: PasskeyTargetConfiguration,
-) =>
-  Effect.gen(function* () {
-    const target = yield* makePasskeyMapped(source, configuration);
-
-    return yield* target.provide(
-      makeNativePasskeyCeremonyServices(
+  return yield* target
+    .provide(
+      makeNativePasskeyCredentialServices(
         target.tables,
-        target.mapping as unknown as NativePasskeyCeremonyMapping,
-        configuration.mode === "batch" ? target.batch : undefined,
+        target.mapping as unknown as PasskeyNativeRead,
       ),
-    );
-  });
+    )
+    .pipe(Effect.provideService(LifecycleHooks, emptyHooks));
+});
+
+export const makeTargetPasskeyPersistence = Effect.fnUntraced(function* <M, R>(
+  source: PasskeyMappingSource<M, R>,
+  configuration: PasskeyTargetConfiguration,
+) {
+  const target = yield* makePasskeyMapped(source, configuration);
+
+  const base = yield* target.base();
+
+  return { passkeyPersistence: base.passkeyPersistence } satisfies PasskeyPersistenceServices;
+});
+
+export const makeTargetPasskeyRegistration = Effect.fnUntraced(function* <M, R>(
+  source: PasskeyMappingSource<M, R>,
+  configuration: PasskeyTargetConfiguration,
+) {
+  const target = yield* makePasskeyMapped(source, configuration);
+
+  return yield* target.provide(
+    makeNativePasskeyCeremonyServices(
+      target.tables,
+      target.mapping as unknown as NativePasskeyCeremonyMapping,
+      configuration.mode === "batch" ? target.batch : undefined,
+    ),
+  );
+});
 
 export const coordinatePasskeyOwner = <S, Transaction, A, E, R, ESetup, RSetup>(
   database: NativeDatabaseHandle,

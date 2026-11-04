@@ -19,8 +19,8 @@ import {
 } from "drizzle-orm";
 import { getTableConfig as getMysqlTableConfig, MySqlTable } from "drizzle-orm/mysql-core";
 import { getTableConfig as getPgTableConfig, PgTable } from "drizzle-orm/pg-core";
-import { Predicate } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
+import * as Predicate from "effect/Predicate";
+import type * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
 
 type CapturedDialect = Pick<BuildQueryConfig, "escapeName" | "escapeString" | "codecs">;
@@ -150,7 +150,7 @@ const writeValues = (values: Readonly<Record<string, unknown>>) =>
 /** Capture the root database's compiler, not a later transaction object's
  * client. Call insert/update inside the operation to materialize hooks once. */
 export const makeDrizzleSqlTables = (
-  client: SqlClient,
+  client: SqlClient.SqlClient,
   capturedDatabase: object,
 ): NativeSqlTables => {
   const { database, dialect } = capture(capturedDatabase);

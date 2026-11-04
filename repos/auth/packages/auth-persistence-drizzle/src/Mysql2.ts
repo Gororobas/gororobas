@@ -1,7 +1,7 @@
 import type { AnyRelations } from "drizzle-orm";
 import { type EffectMysql2Database, makeWithDefaults } from "drizzle-orm/effect-mysql2";
 import type { AnyMySqlTable } from "drizzle-orm/mysql-core";
-import { Layer } from "effect";
+import * as Layer from "effect/Layer";
 
 import type {
   IdentityTables,

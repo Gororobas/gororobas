@@ -9,9 +9,15 @@ import {
   type TotpDecision,
   type TotpPersistence,
 } from "@yielded/auth/Totp";
-import { Cause, Crypto, DateTime, Effect, Option, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { digest, randomId } from "./crypto";
 import { sqlBatchAssertion } from "./d1-planning";
@@ -55,13 +61,17 @@ export const makeNativeTotpServices = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   { readonly totpPersistence: TotpPersistence["Service"] },
   never,
-  SqlClient | LifecycleHooks | Crypto.Crypto | SqlBatchCommit
+  | SqlClient.SqlClient
+  | LifecycleHooks
+  | (SecureRandom.SecureRandom | Digest.Digest)
+  | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
   const conditionalInsert = yield* makeConditionalSqlInsert();
 
-  const sql = (yield* SqlClient).withoutTransforms(),
-    crypto = yield* Crypto.Crypto,
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms(),
+    crypto = yield* SecureRandom.SecureRandom,
+    digests = yield* Digest.Digest,
     executor = yield* makeSqlCommitExecutor(unavailable),
     external = yield* Effect.serviceOption(CurrentSqlCommit);
 
@@ -104,14 +114,17 @@ export const makeNativeTotpServices = Effect.fnUntraced(function* (
         );
 
   const provide = <A, E, R>(work: Effect.Effect<A, E, R>) =>
-    work.pipe(Effect.provideService(Crypto.Crypto, crypto));
+    work.pipe(
+      Effect.provideService(SecureRandom.SecureRandom, crypto),
+      Effect.provideService(Digest.Digest, digests),
+    );
 
   const run = <A, E, R>(work: Effect.Effect<A, E, R>) =>
     batch === undefined
       ? executor.run(provide(work))
       : executor.batch(provide(work)).pipe(Effect.provideService(SqlBatchCommit, batch));
 
-  const stage = Effect.fnUntraced(function* (statement: Fragment, expected = 1) {
+  const stage = Effect.fnUntraced(function* (statement: Statement.Fragment, expected = 1) {
     if (batch !== undefined) {
       yield* appendSqlBatchStatement(sql`${statement}`);
       yield* appendSqlBatchStatement(sqlBatchAssertion(sql, sql`changes() = ${expected}`));
@@ -167,7 +180,7 @@ export const makeNativeTotpServices = Effect.fnUntraced(function* (
       if (value[c.id] === null || value[c.id] === undefined) continue;
       if (!(mapping.subjectIds.toSubject(value[c.subjectId]) === subjectId))
         return yield* invalidState();
-      if (!!credentials.some((entry) => entry.credentialId === value[c.id]))
+      if (credentials.some((entry) => entry.credentialId === value[c.id]))
         return yield* invalidState();
       credentials.push({ credentialId: value[c.id], revision: value[c.revision] });
     }
@@ -230,8 +243,12 @@ export const makeNativeTotpServices = Effect.fnUntraced(function* (
     if (
       !(
         input.moduleId === mapping.moduleId &&
-        Schema.encodeSync(Schema.fromJsonString(TotpPolicy))(input.policy) ===
-          Schema.encodeSync(Schema.fromJsonString(TotpPolicy))(mapping.policy)
+        (yield* Schema.encodeEffect(Schema.fromJsonString(TotpPolicy))(input.policy).pipe(
+          Effect.orDie,
+        )) ===
+          (yield* Schema.encodeEffect(Schema.fromJsonString(TotpPolicy))(mapping.policy).pipe(
+            Effect.orDie,
+          ))
       )
     )
       return yield* invalidState();
@@ -255,9 +272,9 @@ export const makeNativeTotpServices = Effect.fnUntraced(function* (
     let expectedCount: number | undefined,
       countGuardIndex = -1;
 
-    const guards: Fragment[] = [],
-      timeGuards: Fragment[] = [],
-      credentialGuards: { credentialId: string; condition: Fragment }[] = [];
+    const guards: Statement.Fragment[] = [],
+      timeGuards: Statement.Fragment[] = [],
+      credentialGuards: { credentialId: string; condition: Statement.Fragment }[] = [];
 
     const timeBound = (start: number, end: number) => {
       timeGuards.push(sql`${engineNow} >= ${start} and ${engineNow} < ${end}`);
@@ -674,15 +691,21 @@ export const makeNativeTotpServices = Effect.fnUntraced(function* (
             if (!(final !== undefined && final.now >= now)) return yield* invalidState();
             const expected = mapping.subject.decodeRequirement(expectedPolicy);
 
-            const encodedRequirement = Schema.encodeSync(
+            const encodedRequirement = Schema.encodeEffect(
               Schema.fromJsonString(AuthenticationRequirement),
             );
 
-            if (!(encodedRequirement(final.snapshot.requirement) === encodedRequirement(expected)))
+            if (
+              !(
+                (yield* encodedRequirement(final.snapshot.requirement).pipe(Effect.orDie)) ===
+                (yield* encodedRequirement(expected).pipe(Effect.orDie))
+              )
+            )
               return yield* invalidState();
           }
         }).pipe(
-          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.provideService(SecureRandom.SecureRandom, crypto),
+          Effect.provideService(Digest.Digest, digests),
           Effect.catchCause((cause) =>
             Effect.failCause(
               Cause.map(cause, (error) =>

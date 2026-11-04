@@ -1,6 +1,12 @@
-import type { Redacted } from "effect";
-import { Cause, Effect, Schema, Stream, Tracer } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Tracer from "effect/Tracer";
 
 import { timeoutOrElseWithCause } from "../../../internal/timeout";
 import { OAuthProtocolRejected, OAuthUnavailable } from "../../signInErrors";

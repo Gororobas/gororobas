@@ -6,9 +6,11 @@ import {
 } from "@yielded/auth/OAuth";
 import type { SubjectId } from "@yielded/auth/Schema";
 import type { AuthenticationRequirement } from "@yielded/auth/Sessions";
-import { Cause, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import type { PersistenceMappingError } from "../mapping-error";
 import type { OAuthSignInMapping, OAuthSubjectReadTable } from "../models/oauth-model";
@@ -349,8 +351,8 @@ export const makeOAuthNativeState = Effect.fnUntraced(function* (
   });
 
   const readCredential = Effect.fnUntraced(function* (
-    input: typeof OAuthCredentialKey.Type,
-    metadataAccess: Fragment = sql`true`,
+    input: OAuthCredentialKey,
+    metadataAccess: Statement.Fragment = sql`true`,
   ) {
     const nativeId = yield* mapping.subjectId.toNative(input.subjectId);
     let identityKey: unknown;

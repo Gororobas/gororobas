@@ -2,13 +2,16 @@
 import type { SqlNativeCommit } from "@yielded/auth-persistence/Adapter";
 import { PersistenceMappingError } from "@yielded/auth-persistence/Adapter";
 import { EffectMysql2Transaction } from "drizzle-orm/effect-mysql2/session";
-import { Cause, Context, Effect, Option } from "effect";
-import { makeWithTransaction, type SqlClient } from "effect/sql/SqlClient";
-import type { SqlError } from "effect/sql/SqlError";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as SqlError from "effect/sql/SqlError";
 
 interface MysqlTransactionScope {
-  readonly client: SqlClient;
-  readonly transaction: SqlClient["withTransaction"];
+  readonly client: SqlClient.SqlClient;
+  readonly transaction: SqlClient.SqlClient["withTransaction"];
   active: boolean;
 }
 
@@ -66,9 +69,9 @@ export const makeMysqlTransactionHandle = Effect.fnUntraced(function* (
  * the pooled connection's session default is never changed. */
 const withMysqlTransaction = <A, E, R, Failure>(
   unavailable: () => Failure,
-  client: SqlClient,
-  body: (transaction: SqlClient["withTransaction"]) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | Failure | SqlError, R> =>
+  client: SqlClient.SqlClient,
+  body: (transaction: SqlClient.SqlClient["withTransaction"]) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | Failure | SqlError.SqlError, R> =>
   Effect.scoped(
     Effect.gen(function* () {
       const connection = yield* client.reserve;
@@ -107,13 +110,13 @@ const withMysqlTransaction = <A, E, R, Failure>(
       const statement = (source: string) =>
         Effect.asVoid(connection.executeUnprepared(source, [], undefined));
 
-      const transaction = makeWithTransaction({
+      const transaction = SqlClient.makeWithTransaction({
         transactionService: client.transactionService,
         spanAttributes: [
           ["db.system", "mysql"],
           ["effect_auth.owner", "oauth"],
         ],
-        acquireConnection: Effect.succeed([undefined, connection] as const),
+        acquireConnection: () => Effect.succeed(connection),
         begin: () =>
           statement("SET TRANSACTION ISOLATION LEVEL READ COMMITTED").pipe(
             Effect.andThen(statement("BEGIN")),
@@ -165,7 +168,7 @@ const withMysqlTransaction = <A, E, R, Failure>(
   );
 
 /** Shared owner capability: one reserved connection, one-shot READ COMMITTED. */
-export const mysqlNativeCommit = (client: SqlClient): SqlNativeCommit["Service"] => ({
+export const mysqlNativeCommit = (client: SqlClient.SqlClient): SqlNativeCommit["Service"] => ({
   client,
   withTransaction: (effect) =>
     withMysqlTransaction(

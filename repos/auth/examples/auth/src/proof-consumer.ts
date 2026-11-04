@@ -16,32 +16,33 @@ export const makeExampleProofAuthority = Effect.gen(function* () {
   const hooks = yield* Hooks.LifecycleHooks;
   let committed: ProofRows = new Map();
 
-  const own = <A>(body: (rows: ProofRows, journal: Hooks.CommitJournal, now: number) => A) =>
-    Effect.gen(function* () {
-      if (yield* Hooks.hasCommitScope) return yield* Proofs.ProofUnavailable.make({});
+  const own = Effect.fnUntraced(function* <A>(
+    body: (rows: ProofRows, journal: Hooks.CommitJournal, now: number) => A,
+  ) {
+    if (yield* Hooks.hasCommitScope) return yield* Proofs.ProofUnavailable.make({});
 
-      return yield* Hooks.coordinateCommit((journal) =>
-        Effect.gen(function* () {
-          const now = DateTime.toEpochMillis(yield* DateTime.now);
+    return yield* Hooks.coordinateCommit((journal) =>
+      Effect.gen(function* () {
+        const now = DateTime.toEpochMillis(yield* DateTime.now);
 
-          return yield* Effect.try({
-            try: () => {
-              const rows = copyProofRows(committed);
-              const result = body(rows, journal, now);
+        return yield* Effect.try({
+          try: () => {
+            const rows = copyProofRows(committed);
+            const result = body(rows, journal, now);
 
-              committed = rows;
+            committed = rows;
 
-              return result;
-            },
-            catch: () => Proofs.ProofUnavailable.make({}),
-          });
-        }),
-      ).pipe(
-        Effect.map((result) => result.value),
-        Effect.mapError(() => Proofs.ProofUnavailable.make({})),
-        Effect.provideService(Hooks.LifecycleHooks, hooks),
-      );
-    });
+            return result;
+          },
+          catch: () => Proofs.ProofUnavailable.make({}),
+        });
+      }),
+    ).pipe(
+      Effect.map((result) => result.value),
+      Effect.mapError(() => Proofs.ProofUnavailable.make({})),
+      Effect.provideService(Hooks.LifecycleHooks, hooks),
+    );
+  });
 
   return Layer.succeed(
     Proofs.ProofPersistence,

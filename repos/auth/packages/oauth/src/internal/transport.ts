@@ -1,5 +1,13 @@
-import { Cause, Effect, Exit, Redacted, Schema, Stream, Tracer } from "effect";
-import { FetchHttpClient, HttpClient, type HttpClientRequest } from "effect/http";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Tracer from "effect/Tracer";
 
 import { Unavailable } from "../Errors";
 import * as V from "./validation";

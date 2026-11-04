@@ -54,7 +54,7 @@ Start with `auth.signIn({ provider: "apple", returnTarget: "/account" })` and
 redirect to the returned authorization URL. The callback completes sign-in.
 
 The preset mints an ES256 client-secret JWT from the `.p8` key through
-`@yielded/jose` on each token request. Lifetime defaults to five minutes and
+`effect/jose` on each token request. Lifetime defaults to five minutes and
 cannot exceed six months. `Apple.mintClientSecret` exposes the same minting for
 hosts that need the JWT outside the preset.
 

@@ -47,7 +47,8 @@ approximate policy; it is not a general-purpose Effect limiter.
 ```ts title="apps/server/rate-limits.ts"
 import * as Cloudflare from "alchemy/Cloudflare";
 import { RuntimeContext } from "alchemy/RuntimeContext";
-import { Crypto, Duration, Effect, Layer } from "effect";
+import { Duration, Effect, Layer } from "effect";
+import { Digest } from "effect/crypto";
 import { Base64Url } from "effect/encoding";
 import { RateLimiter } from "effect/persistence";
 
@@ -71,7 +72,7 @@ export const AuthRateLimitsLive = Layer.effect(
   Effect.gen(function* () {
     const native = yield* AuthRateLimit;
     const runtime = yield* RuntimeContext;
-    const crypto = yield* Crypto.Crypto;
+    const digests = yield* Digest.Digest;
     const window = Duration.seconds(authRateLimitConfig.period);
     const unsupported = Effect.fail(
       unavailable("Expected one token, ten attempts per minute, and fail on excess"),
@@ -92,9 +93,9 @@ export const AuthRateLimitsLive = Layer.effect(
           return yield* unsupported;
         }
 
-        const digest = yield* crypto
-          .digest("SHA-256", new TextEncoder().encode(request.key))
-          .pipe(Effect.mapError(unavailable));
+        const digest = yield* digests
+          .digest(Digest.sha256, new TextEncoder().encode(request.key))
+          .pipe(Effect.catchDefect(unavailable));
         const { success } = yield* native
           .limit({ key: Base64Url.encode(digest) })
           .pipe(Effect.provideService(RuntimeContext, runtime), Effect.mapError(unavailable));
@@ -173,7 +174,7 @@ export default Cloudflare.Worker(
 
 The relative imports are your application's existing Auth definition and services.
 `AuthDependencies` includes password hashing, persistence, claims, session services,
-and `Crypto.Crypto`; see [service composition](../reference/adapters#compose-the-application-layer).
+`SecureRandom.SecureRandom`, and `Digest.Digest`; see [service composition](../reference/adapters#compose-the-application-layer).
 Build the default-exported Worker from your Alchemy stack. The `env` declaration
 attaches the binding, and `RateLimitBinding` supplies its Effect implementation.
 Keep the default export: Alchemy's runtime entrypoint imports it from `main`.

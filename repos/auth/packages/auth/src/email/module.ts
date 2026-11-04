@@ -1,15 +1,13 @@
-import {
-  Cause,
-  Context,
-  Crypto,
-  DateTime,
-  Effect,
-  Layer,
-  Option,
-  Schema,
-  type Types,
-} from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
 import { defaultLayer, hooksLayer } from "../auth/defaults";
@@ -215,7 +213,7 @@ export const makeEmailSignInModule = <
         const proofs = yield* proof.Proofs;
         const claims = yield* SessionClaims;
         const completion = yield* sessions.AuthenticationCompletion;
-        const crypto = yield* Crypto.Crypto;
+        const digests = yield* Digest.Digest;
 
         const bound = Effect.fn("Email.signInBinding")(function* (
           request: typeof SignInBindingInput.Type,
@@ -265,8 +263,8 @@ export const makeEmailSignInModule = <
             returnTarget,
           ]).pipe(Effect.mapError(() => EmailUnavailable.make({})));
 
-          const bytes = yield* crypto
-            .digest("SHA-256", new TextEncoder().encode(message))
+          const bytes = yield* digests
+            .digest(Digest.sha256, new TextEncoder().encode(message))
             .pipe(
               Effect.catchCause((cause) =>
                 Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
@@ -450,6 +448,7 @@ export const makeEmailSignInModule = <
 
   return Object.freeze({
     ...makeSignIn(options.mode),
+    persistence: Object.freeze({ kind: "email" as const, moduleId, signIn: true as const }),
     binding,
     Begin,
     beginLayer,

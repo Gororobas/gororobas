@@ -1,4 +1,6 @@
-import { type Effect, Predicate, Schema } from "effect";
+import type * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 
 import type { OAuthProtocolRejected, OAuthUnavailable } from "../../signInErrors";
 import type {

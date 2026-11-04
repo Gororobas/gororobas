@@ -291,7 +291,7 @@ export {
   requiredPhoneConstraints,
 } from "./internal/models/phone-model";
 
-export { makeNativePhoneServices } from "./internal/phone-native";
+export { makeNativePhoneServices, PhoneRegistrationValues } from "./internal/phone-native";
 
 export {
   makeNativeEmailSignInServices,

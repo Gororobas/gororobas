@@ -3,9 +3,14 @@ import { CurrentCommitJournal, type LifecycleHooks } from "@yielded/auth/Hooks";
 import { ProofRedemptionInput } from "@yielded/auth/Proofs";
 import type { AuthenticationRevision } from "@yielded/auth/Sessions";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Cause, Crypto, DateTime, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import {
@@ -42,7 +47,7 @@ export const makeNativeEmailSignInServices = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   { readonly emailSignInTargets: E.EmailSignInTargets["Service"] },
   never,
-  SqlClient | LifecycleHooks
+  SqlClient.SqlClient | LifecycleHooks
 > {
   const executor = yield* makeSqlCommitExecutor(unavailable);
   const reader = yield* makeNativeEmailReader(tables, mapping);
@@ -61,13 +66,17 @@ export const makeNativeEmailAddressServices = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   { readonly emailAddressPersistence: E.EmailAddressPersistence["Service"] },
   never,
-  SqlClient | LifecycleHooks | Crypto.Crypto | SqlBatchCommit
+  | SqlClient.SqlClient
+  | LifecycleHooks
+  | (SecureRandom.SecureRandom | Digest.Digest)
+  | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
 
-  const sql = (yield* SqlClient).withoutTransforms(),
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms(),
     executor = yield* makeSqlCommitExecutor(unavailable),
-    crypto = yield* Crypto.Crypto;
+    crypto = yield* SecureRandom.SecureRandom,
+    digests = yield* Digest.Digest;
 
   const now = tables.expression(mapping.clock.engineNowMillis);
   const reader = yield* makeNativeEmailReader(tables, mapping, now);
@@ -103,12 +112,22 @@ export const makeNativeEmailAddressServices = Effect.fnUntraced(function* (
 
   const run = <A, X, R>(work: Effect.Effect<A, X, R>) =>
     batch === undefined
-      ? executor.run(work.pipe(Effect.provideService(Crypto.Crypto, crypto)))
+      ? executor.run(
+          work.pipe(
+            Effect.provideService(SecureRandom.SecureRandom, crypto),
+            Effect.provideService(Digest.Digest, digests),
+          ),
+        )
       : executor
-          .batch(work.pipe(Effect.provideService(Crypto.Crypto, crypto)))
+          .batch(
+            work.pipe(
+              Effect.provideService(SecureRandom.SecureRandom, crypto),
+              Effect.provideService(Digest.Digest, digests),
+            ),
+          )
           .pipe(Effect.provideService(SqlBatchCommit, batch));
 
-  const stage = Effect.fnUntraced(function* (statement: Fragment) {
+  const stage = Effect.fnUntraced(function* (statement: Statement.Fragment) {
     if (batch === undefined) {
       if (!((yield* executeSqlChange(sql, statement)) === 1)) return yield* invalidState();
     } else {
@@ -117,17 +136,16 @@ export const makeNativeEmailAddressServices = Effect.fnUntraced(function* (
     }
   });
 
-  const prepare = <A>(
+  const prepare = Effect.fnUntraced(function* <A>(
     decision: E.EmailAddressDecision,
     project: E.PrepareEmailCommit<E.EmailAddressDecision, A>,
-  ) =>
-    Effect.gen(function* () {
-      const receipt = project(decision, yield* CurrentCommitJournal);
+  ) {
+    const receipt = project(decision, yield* CurrentCommitJournal);
 
-      yield* registerSqlCommitReceipt(receipt);
+    yield* registerSqlCommitReceipt(receipt);
 
-      return receipt;
-    });
+    return receipt;
+  });
 
   const target = Effect.fnUntraced(function* (
     input: Parameters<E.EmailAddressPersistence["Service"]["target"]>[0],

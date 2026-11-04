@@ -1,7 +1,10 @@
-import { Effect, Redacted, Schema, type Scope } from "effect";
-import { Base64 } from "effect/encoding";
-import type { HttpClient } from "effect/http";
-import { HttpClientRequest } from "effect/http";
+import * as Effect from "effect/Effect";
+import * as Base64 from "effect/encoding/Base64";
+import type * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { ConfigurationError, Rejected, Unavailable } from "./Errors";
 import * as Ownership from "./internal/ownership";

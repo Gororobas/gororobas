@@ -1,8 +1,10 @@
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import * as M from "@yielded/auth/OAuth";
-import { Effect, Option, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { Fragment } from "effect/sql/Statement";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "../d1-planning";
 import { PersistenceMappingError } from "../mapping-error";
@@ -63,7 +65,7 @@ export const makeNativeOAuthRevocationServices = Effect.fnUntraced(function* (
       ? executor.run(effect, mode)
       : executor.batch(effect).pipe(Effect.provideService(SqlBatchCommit, batch));
 
-  const change = Effect.fnUntraced(function* (statement: Fragment) {
+  const change = Effect.fnUntraced(function* (statement: Statement.Fragment) {
     if (batch !== undefined) {
       yield* appendSqlBatchStatement(sql`${statement}`);
       yield* appendSqlBatchStatement(sqlBatchAssertion(sql, sql`changes() = 1`));
@@ -72,7 +74,7 @@ export const makeNativeOAuthRevocationServices = Effect.fnUntraced(function* (
     }
   });
 
-  const finish = (condition: Fragment) =>
+  const finish = (condition: Statement.Fragment) =>
     batch === undefined
       ? registerSqlPostcondition({
           name: "oauth-revocation",

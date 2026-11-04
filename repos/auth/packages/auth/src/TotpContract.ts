@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { makeOperation, operationGroup } from "./operations/operation";
 import { TotpFailure } from "./totp/errors";

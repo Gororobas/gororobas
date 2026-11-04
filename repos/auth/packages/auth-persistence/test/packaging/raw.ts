@@ -2,7 +2,8 @@ import { Auth, Sessions } from "@yielded/auth";
 import { AuthPersistence } from "@yielded/auth-persistence";
 import { SubjectId } from "@yielded/auth/Schema";
 import { Password } from "@yielded/auth/strategies";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 const App = Auth.make("raw-consumer", {
   claims: Schema.Struct({}),

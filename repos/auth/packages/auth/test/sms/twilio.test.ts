@@ -1,9 +1,13 @@
 import { it } from "@effect/vitest";
 import * as Twilio from "@yielded/auth/adapters/Twilio";
 import { SmsDelivery } from "@yielded/auth/SmsDelivery";
-import { Deferred, Effect, Fiber, Layer, Redacted } from "effect";
-import { HttpClient } from "effect/http";
-import { TestClock } from "effect/testing";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as HttpClient from "effect/http/HttpClient";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as TestClock from "effect/testing/TestClock";
 import { expect } from "vite-plus/test";
 
 const configuration = Layer.succeed(Twilio.TwilioConfig, {

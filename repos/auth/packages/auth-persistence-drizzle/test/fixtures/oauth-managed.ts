@@ -1,5 +1,5 @@
-import { NodeCrypto } from "@effect/platform-node";
-import { D1Client } from "@effect/sql-d1/D1Client";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as D1Client from "@effect/sql-d1/D1Client";
 import * as PgliteClient from "@effect/sql-pglite/PgliteClient";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Auth, OAuth, Sessions } from "@yielded/auth";
@@ -8,9 +8,12 @@ import { SubjectId } from "@yielded/auth/Schema";
 import { getTableColumns, getTableName, is } from "drizzle-orm";
 import * as Pg from "drizzle-orm/pg-core";
 import * as Sqlite from "drizzle-orm/sqlite-core";
-import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { SqlError } from "effect/sql/SqlError";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as SqlError from "effect/sql/SqlError";
 import { expect } from "vite-plus/test";
 
 import { AuthPersistence as D1Persistence } from "../../src/D1";
@@ -135,9 +138,9 @@ function quote(name: string): string {
   return '"' + name.replaceAll('"', '""') + '"';
 }
 
-const migrate = Effect.fnUntraced(function* (
+export const migrate = Effect.fnUntraced(function* (
   tables: ReadonlyArray<ManagedTable>,
-): Effect.fn.Return<void, SqlError, SqlClient.SqlClient> {
+): Effect.fn.Return<void, SqlError.SqlError, SqlClient.SqlClient> {
   const client = yield* SqlClient.SqlClient;
 
   for (const table of tables) {
@@ -170,7 +173,7 @@ const migrate = Effect.fnUntraced(function* (
 const insert = Effect.fnUntraced(function* (
   table: ManagedTable,
   row: Readonly<Record<string, string | boolean>>,
-): Effect.fn.Return<void, SqlError, SqlClient.SqlClient> {
+): Effect.fn.Return<void, SqlError.SqlError, SqlClient.SqlClient> {
   const client = yield* SqlClient.SqlClient;
   const columns = getTableColumns(table);
 
@@ -213,7 +216,7 @@ export const setup = Effect.fnUntraced(function* (
       }),
     ).pipe(
       Effect.map((client) =>
-        Context.make(D1Client, client).pipe(Context.add(SqlClient.SqlClient, client)),
+        Context.make(D1Client.D1Client, client).pipe(Context.add(SqlClient.SqlClient, client)),
       ),
     ),
   ).pipe(Layer.provide(sqlite));

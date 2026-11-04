@@ -7,7 +7,10 @@ import {
   type EmailRegistrationAuthority,
 } from "@yielded/auth-persistence/Adapter";
 import { EmailAddressPersistence, EmailSignInTargets, EmailUnavailable } from "@yielded/auth/Email";
-import { Cause, type Context, Effect, Layer } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type {
   AnyEmailAddressMapping,

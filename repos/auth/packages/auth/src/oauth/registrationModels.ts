@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { RequestBindingCredential, RequestBindingFlowId } from "../operations/requestBinding";
 import { TokenDigest } from "../Schema";

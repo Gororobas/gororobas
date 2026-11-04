@@ -1,5 +1,8 @@
-import { Effect, Redacted, Result, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import type { ProofDeliveryMessage } from "../proofs/delivery";
 import { ProofConfigurationError, ProofInvalid } from "../proofs/errors";

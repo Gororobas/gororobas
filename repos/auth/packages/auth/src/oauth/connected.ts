@@ -1,5 +1,14 @@
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Redacted, Result, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { prepareCommit } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
@@ -158,7 +167,8 @@ export const makeOAuthConnected = <const Id extends string>(
       const { seal: sealTokens } = yield* OAuthConnectedTokenProtector;
       const { resolve: resolveTarget } = yield* OAuthReturnTargets;
       const { before } = yield* LifecycleHooks;
-      const { randomBytes, digest } = yield* Crypto.Crypto;
+      const { randomBytes } = yield* SecureRandom.SecureRandom;
+      const { digest } = yield* Digest.Digest;
 
       const random = Effect.fn("OAuthConnected.random")(function* () {
         const bytes = yield* randomBytes(32).pipe(
@@ -175,7 +185,7 @@ export const makeOAuthConnected = <const Id extends string>(
       });
 
       const hash = Effect.fn("OAuthConnected.hash")(function* (value: string) {
-        const bytes = yield* digest("SHA-256", encoder.encode(value)).pipe(
+        const bytes = yield* digest(Digest.sha256, encoder.encode(value)).pipe(
           Effect.catchCause((cause) =>
             Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
           ),
@@ -202,14 +212,14 @@ export const makeOAuthConnected = <const Id extends string>(
         bytes.fill(0);
 
         return yield* hash(
-          Schema.encodeSync(strings)([
+          yield* Schema.encodeEffect(strings)([
             "effect-auth/oauth-connected-state/v1",
             id,
             String(policy.generation),
             provider,
             flowId,
             raw,
-          ]),
+          ]).pipe(Effect.orDie),
         );
       });
 
@@ -228,13 +238,13 @@ export const makeOAuthConnected = <const Id extends string>(
           revision,
           intentDigest,
           bindingDigest: yield* hash(
-            Schema.encodeSync(strings)([
+            yield* Schema.encodeEffect(strings)([
               "effect-auth/oauth-connected-action/v1",
               id,
               action,
               flowId,
               intentDigest,
-            ]),
+            ]).pipe(Effect.orDie),
           ),
         });
       });
@@ -436,7 +446,7 @@ export const makeOAuthConnected = <const Id extends string>(
             "connected-begin",
             intent.flowId,
             intent.revision,
-            Schema.encodeSync(intentJson)(intent),
+            yield* Schema.encodeEffect(intentJson)(intent).pipe(Effect.orDie),
           ),
           request.actionProof,
         );
@@ -490,15 +500,18 @@ export const makeOAuthConnected = <const Id extends string>(
         raw: typeof M.OAuthConnectedComplete.Type,
       ) {
         const authenticated = yield* connectedCaller(invocation).pipe(
-          Effect.catchTag("AuthenticationRequired", () => Effect.succeed(undefined)),
+          Effect.catchTag("AuthenticationRequired", () => Effect.void),
         );
 
         const request = yield* snapshotOAuthConnectedComplete.effect(raw);
         const response = request.response;
 
         if (
-          encoder.encode(Schema.encodeSync(Schema.fromJsonString(OAuthCallbackResponse))(response))
-            .length > 16384
+          encoder.encode(
+            yield* Schema.encodeEffect(Schema.fromJsonString(OAuthCallbackResponse))(response).pipe(
+              Effect.orDie,
+            ),
+          ).length > 16384
         )
           return yield* OAuthRejected.make({});
 
@@ -763,10 +776,10 @@ export const makeOAuthConnected = <const Id extends string>(
             "connected-disconnect",
             M.OAuthConnectedActionChallenge.fields.flowId.make(request.commandId),
             inspected.revision,
-            Schema.encodeSync(Schema.fromJsonString(M.OAuthConnectedDisconnectIntent))({
+            yield* Schema.encodeEffect(Schema.fromJsonString(M.OAuthConnectedDisconnectIntent))({
               key: { moduleId: id, subjectId: caller.subjectId, grantId: request.grantId },
               grantVersion: context.grantVersion,
-            }),
+            }).pipe(Effect.orDie),
           ),
           request.actionProof,
         );

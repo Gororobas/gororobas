@@ -1,5 +1,6 @@
 import type { Metadata } from "@yielded/oauth/OAuth";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { OpenIdConnectConfigurationError } from "./models";
 
@@ -71,27 +72,29 @@ export const supplementDiscovery = Effect.fnUntraced(function* (
     )
       return yield* OpenIdConnectConfigurationError.make({ reason: "metadata" });
   } else if (profile === "microsoft") {
-    if (metadata.jwks_uri === undefined)
+    const jwksUri = metadata.jwks_uri;
+
+    if (jwksUri === undefined)
       return yield* OpenIdConnectConfigurationError.make({ reason: "metadata" });
 
-    let sameOrigin = false;
+    const sameOrigin = yield* Effect.try({
+      try: () => {
+        const issuer = new URL(metadata.issuer);
+        const authorization = new URL(metadata.authorization_endpoint);
+        const token = new URL(metadata.token_endpoint);
+        const jwks = new URL(jwksUri);
 
-    try {
-      const issuer = new URL(metadata.issuer);
-      const authorization = new URL(metadata.authorization_endpoint);
-      const token = new URL(metadata.token_endpoint);
-      const jwks = new URL(metadata.jwks_uri);
-
-      sameOrigin =
-        issuer.origin === authorization.origin &&
-        issuer.origin === token.origin &&
-        issuer.origin === jwks.origin &&
-        authorization.pathname.endsWith("/oauth2/v2.0/authorize") &&
-        token.pathname.endsWith("/oauth2/v2.0/token") &&
-        jwks.pathname.endsWith("/discovery/v2.0/keys");
-    } catch {
-      sameOrigin = false;
-    }
+        return (
+          issuer.origin === authorization.origin &&
+          issuer.origin === token.origin &&
+          issuer.origin === jwks.origin &&
+          authorization.pathname.endsWith("/oauth2/v2.0/authorize") &&
+          token.pathname.endsWith("/oauth2/v2.0/token") &&
+          jwks.pathname.endsWith("/discovery/v2.0/keys")
+        );
+      },
+      catch: () => OpenIdConnectConfigurationError.make({ reason: "metadata" }),
+    });
 
     if (!sameOrigin) return yield* OpenIdConnectConfigurationError.make({ reason: "metadata" });
   } else {

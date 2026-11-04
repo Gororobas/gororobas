@@ -18,7 +18,7 @@ minutes by default (`lifetimeMillis` accepts 1,000–300,000).
 
 Return URLs must match registration exactly, without queries or fragments.
 HTTPS callbacks require a public hostname on port 443. The native client needs
-`BrowserLogin.Browser`, `BrowserLogin.Vault`, `Crypto.Crypto`, and
+`BrowserLogin.Browser`, `BrowserLogin.Vault`, `SecureRandom.SecureRandom`, `Digest.Digest`, and
 `OperationHttpClient.Client`. Share the vault with the transport, omit cookies,
 reject redirects, and never retry mutations. Keep credentials in the native host;
 expose only public session state to React or Electron renderers.

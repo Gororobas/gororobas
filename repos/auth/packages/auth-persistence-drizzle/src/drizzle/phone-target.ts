@@ -1,5 +1,6 @@
 import {
   makeNativePhoneServices,
+  PhoneRegistrationValues,
   type AnyPhoneMapping as SharedMapping,
 } from "@yielded/auth-persistence/Adapter";
 import {
@@ -7,7 +8,9 @@ import {
   PhoneLifecyclePolicy,
   PhoneConfigurationError,
 } from "@yielded/auth/PhoneOtp";
-import { Cause, Effect, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { NativeDatabase, type NativeDatabaseHandle } from "./native-database";
 import {
@@ -41,7 +44,11 @@ const services = Effect.fnUntraced(function* (
   const target = yield* nativeTarget(configuration);
   const mapping: SharedMapping = { ...source, proofs: nativeProofMapping(source.proofs) };
 
-  return yield* target.provide(makeNativePhoneServices(target.tables, mapping));
+  return yield* target.provide(
+    makeNativePhoneServices(target.tables, mapping).pipe(
+      Effect.provide(PhoneRegistrationValues.defaultLayer),
+    ),
+  );
 });
 
 export const makeTargetPhonePersistenceServices = (

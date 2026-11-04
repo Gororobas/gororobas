@@ -2,7 +2,6 @@
 "@yielded/auth": patch
 "@yielded/auth-persistence": patch
 "@yielded/auth-persistence-drizzle": patch
-"@yielded/jose": patch
 "@yielded/oauth": patch
 ---
 

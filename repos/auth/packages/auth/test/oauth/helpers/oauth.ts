@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 import { expect } from "vite-plus/test";
 
 /** Asserts the effect fails with the given tagged error. */

@@ -1,4 +1,4 @@
-import type { Schema } from "effect";
+import type * as Schema from "effect/Schema";
 
 import type { ProofBinding } from "./models";
 import { makeProofModule } from "./module";

@@ -4,7 +4,9 @@ import {
   OAuthModuleId,
   type OAuthUnavailable,
 } from "@yielded/auth/OAuth";
-import { Context, type Effect, Schema } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 /** Use the exact provider key, issuer and durable subject emitted by the configured adapter. */
 export const IdentityImport = Schema.Struct({

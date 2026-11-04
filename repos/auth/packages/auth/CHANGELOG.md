@@ -1,5 +1,81 @@
 # @yielded/auth
 
+## 0.1.0-beta.47
+
+### Minor Changes
+
+- [#278](https://github.com/yielded-dev/auth/pull/278) [`1dd5bbe`](https://github.com/yielded-dev/auth/commit/1dd5bbe219733a0f09614c2e3b2520f62bdb421f) Thanks [@leonitousconforti](https://github.com/leonitousconforti)! - Add Login with Discord through `Discord.provider`, an OpenID preset that merges UserInfo. Treat `null` standard UserInfo profile claims as absent and prefer `nickname` over `preferred_username` for OpenID display names.
+
+- [#277](https://github.com/yielded-dev/auth/pull/277) [`b0b5df2`](https://github.com/yielded-dev/auth/commit/b0b5df2d405bcbc70a04b4391763f16aed10f9e1) Thanks [@leonitousconforti](https://github.com/leonitousconforti)! - Let OAuth and OpenID servers declare up to 1024 scopes instead of 32, as long as their names fit 8192 characters joined by spaces, or 4096 with JWT access tokens. Access token verifiers accept the same limit; upgrade separately deployed verifiers before issuing tokens with more than 32 scopes.
+
+### Patch Changes
+
+- [#279](https://github.com/yielded-dev/auth/pull/279) [`197ddba`](https://github.com/yielded-dev/auth/commit/197ddba9395e4622c0d4dd0b8cb769b8d6364a78) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Compose email code and magic-link sign-in with managed or mapped persistence, including proof storage and verified-email lookup. Support stateless sessions for email sign-in alongside OAuth.
+
+  BEHAVIOR CHANGE: Definitions with email sign-in now require `emailCredentials` and `proofs` in managed migrations or mapped tables.
+
+- [#288](https://github.com/yielded-dev/auth/pull/288) [`109c420`](https://github.com/yielded-dev/auth/commit/109c4201e63637c8e9c23039c5a248b872fddca0) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Use Effect crypto and one `WebCrypto.layer` preset, and move Workers password hashing to `@yielded/auth-platform-workerd`. BEHAVIOR CHANGE: require Effect 4.1 and matching SQL drivers; replace `@yielded/crypto` and Auth's Workers subpaths with Effect crypto Layers or the Workers package, supply HTTP and the Kdf for `Testing.services()` separately, and use `Password.KdfAdmission.layer()`, optional `PasswordScrypt.layer`, and opaque Effect keys for JOSE.
+- Updated dependencies [[`109c420`](https://github.com/yielded-dev/auth/commit/109c4201e63637c8e9c23039c5a248b872fddca0)]:
+  - @yielded/jose@0.1.0-beta.47
+  - @yielded/oauth@0.1.0-beta.47
+
+## 0.1.0-beta.46
+
+### Patch Changes
+
+- [#276](https://github.com/yielded-dev/auth/pull/276) [`c38c0f0`](https://github.com/yielded-dev/auth/commit/c38c0f0a3298f53938d18289d12e9d510ef6b525) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Prevent pending authentication responses from populating the public session and identity cache during concurrent account changes.
+
+- [#274](https://github.com/yielded-dev/auth/pull/274) [`6d219e8`](https://github.com/yielded-dev/auth/commit/6d219e89989e72793ba627e37b3a349745cd9f72) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preserve confirmed signed-out identity during pending or failed session refreshes. Adopt the public session returned by declared authentication completions after credential settlement, including password sign-in, OAuth completion, and authenticating registration.
+- Updated dependencies []:
+  - @yielded/crypto@0.1.0-beta.46
+  - @yielded/jose@0.1.0-beta.46
+  - @yielded/oauth@0.1.0-beta.46
+
+## 0.1.0-beta.45
+
+### Minor Changes
+
+- [#271](https://github.com/yielded-dev/auth/pull/271) [`3f063b5`](https://github.com/yielded-dev/auth/commit/3f063b51533c64b118ee3325efd7795c26e66ddc) Thanks [@leonitousconforti](https://github.com/leonitousconforti)! - Protect `HttpApi` groups and endpoints with `OAuthScope.Required` scope requirements, the browser-safe `OAuthScope.RequireAccess` middleware, and an authorization server's `securityLayer(api)`. List described scopes for consent and scope pages with `OAuthScope.catalog(api)`.
+
+- [#270](https://github.com/yielded-dev/auth/pull/270) [`12c4b81`](https://github.com/yielded-dev/auth/commit/12c4b812aa09f2898573da0d41fae8af886055b8) Thanks [@leonitousconforti](https://github.com/leonitousconforti)! - Resolve OAuth and OpenID server clients from application storage with the optional per-server `Clients` service. Clients can authenticate with a `clientSecretDigest` instead of a stored plaintext secret.
+
+### Patch Changes
+
+- [#272](https://github.com/yielded-dev/auth/pull/272) [`267b2f4`](https://github.com/yielded-dev/auth/commit/267b2f4118de57829f98421e64e210a5df927db3) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Enable managed and mapped phone registration through `Persistence.Provisioning`, using application-supplied account values and the existing phone lifecycle.
+- Updated dependencies []:
+  - @yielded/crypto@0.1.0-beta.45
+  - @yielded/jose@0.1.0-beta.45
+  - @yielded/oauth@0.1.0-beta.45
+
+## 0.1.0-beta.44
+
+### Minor Changes
+
+- [#269](https://github.com/yielded-dev/auth/pull/269) [`81d27d1`](https://github.com/yielded-dev/auth/commit/81d27d14918acdd48ac2e51c5f34a6af246ea983) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Remember a public session snapshot in application-supplied local storage and expose its verification state through `auth.identity`. Gate account-owned workflows with `auth.verifiedSession(subjectId)` while preserving remembered local work through offline session failures.
+
+  BEHAVIOR CHANGE: Rename custom actions called `identity` or `verifiedSession`, and use `SubjectId` values from `Schema.SubjectId` or an existing identity codec for custom action projections and lifetime inputs; wire values are unchanged.
+
+### Patch Changes
+
+- [#268](https://github.com/yielded-dev/auth/pull/268) [`11e04fb`](https://github.com/yielded-dev/auth/commit/11e04fb14edbc0d409b88540cd1538fbddf2ab74) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Expose no-argument session actions, TOTP entropy operations, and React Native passkey construction as reusable Effects. BEHAVIOR CHANGE: yield `auth.requireSession`, `auth.signOut`, `auth.renewSession`, `TotpCryptography.randomId`, `TotpCryptography.generateSecret`, and `ReactNativePasskey.make` instead of calling them; HTTP client methods keep their existing call signatures.
+- Updated dependencies []:
+  - @yielded/crypto@0.1.0-beta.44
+  - @yielded/jose@0.1.0-beta.44
+  - @yielded/oauth@0.1.0-beta.44
+
+## 0.1.0-beta.43
+
+### Minor Changes
+
+- [#256](https://github.com/yielded-dev/auth/pull/256) [`d29041b`](https://github.com/yielded-dev/auth/commit/d29041b595fe2c04a6c23dc974e3a40b49f8b307) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Verify access tokens through a supplied JOSE key-set service with `OAuthServer.makeAccessTokenVerifierWithKeySet`. Preserve shared remote-key completion across Worker requests while keeping authority and request lifetimes under application control.
+
+### Patch Changes
+
+- Updated dependencies [[`d29041b`](https://github.com/yielded-dev/auth/commit/d29041b595fe2c04a6c23dc974e3a40b49f8b307)]:
+  - @yielded/jose@0.1.0-beta.43
+  - @yielded/oauth@0.1.0-beta.43
+  - @yielded/crypto@0.1.0-beta.43
+
 ## 0.1.0-beta.42
 
 ### Patch Changes

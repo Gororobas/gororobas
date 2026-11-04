@@ -1,6 +1,9 @@
 import type * as OAuth from "@yielded/oauth/OAuth";
 import * as Oidc from "@yielded/oauth/Oidc";
-import { Effect, Predicate, Redacted, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { OAuthConnectedProfile } from "../../../permissionProfile";
 import { OAuthProviderKey, OAuthGeneration } from "../../../schema";

@@ -37,15 +37,15 @@ export const DemoHttpLive = Layer.succeed(
       const id = yield* Schema.decodeEffect(athleteId)(external).pipe(Effect.orDie);
 
       const body = url.pathname.endsWith("athlete")
-        ? Schema.encodeSync(Schema.fromJsonString(Athlete))({ id })
-        : Schema.encodeSync(Schema.fromJsonString(TokenResponse))({
+        ? yield* Schema.encodeEffect(Schema.fromJsonString(Athlete))({ id }).pipe(Effect.orDie)
+        : yield* Schema.encodeEffect(Schema.fromJsonString(TokenResponse))({
             token_type: "Bearer",
             access_token: `demo-access-${id}`,
             refresh_token: `demo-refresh-${id}`,
             expires_at: Math.floor(DateTime.toEpochMillis(yield* DateTime.now) / 1000) + 21_600,
             athlete: { id, firstname: "Demo" },
             scope: "activity:read_all",
-          });
+          }).pipe(Effect.orDie);
 
       return HttpClientResponse.fromWeb(
         request,

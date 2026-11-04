@@ -1,5 +1,6 @@
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { it } from "@effect/vitest";
-import { Hooks, Proofs, WebCrypto } from "@yielded/auth";
+import { Hooks, Proofs } from "@yielded/auth";
 import { Deferred, Effect, Fiber, Layer, Logger, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vite-plus/test";
@@ -20,7 +21,7 @@ const proofs = Proofs.make({
 });
 
 const base = Layer.mergeAll(
-  WebCrypto.layerWebCrypto,
+  BunCrypto.layer,
   Hooks.LifecycleHooks.empty,
   Proofs.ProofKeys.layer({
     activeKeyId: "test",

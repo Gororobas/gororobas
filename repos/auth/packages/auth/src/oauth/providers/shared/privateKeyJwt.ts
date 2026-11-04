@@ -1,22 +1,19 @@
-import { Hmac } from "@yielded/crypto/Hmac";
-import { Signature } from "@yielded/crypto/Signature";
-import { Jwk, Jwt } from "@yielded/jose";
-import type { PrivateKey } from "@yielded/jose/Jwk";
 import { Unavailable } from "@yielded/oauth/Errors";
-import {
-  Cause,
-  Clock,
-  Context,
-  Effect,
-  Exit,
-  Layer,
-  Redacted,
-  Result,
-  Schema,
-  Scope,
-  Semaphore,
-} from "effect";
-import { Base64 } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Signature from "effect/crypto/Signature";
+import * as Effect from "effect/Effect";
+import * as Base64 from "effect/encoding/Base64";
+import * as Exit from "effect/Exit";
+import * as Jwk from "effect/jose/Jwk";
+import * as Jwt from "effect/jose/Jwt";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 
 import { makeScopedOperation } from "../../../internal/scoped-operation";
 import {
@@ -33,10 +30,10 @@ const Claims = Schema.Struct({
   exp: Schema.Finite,
 });
 
-/** Sign one ES256 client-secret JWT. The caller owns key wiping. */
+/** Sign one ES256 client-secret JWT with an opaque Effect signing key. */
 export const signPrivateKeyJwt = Effect.fn("OpenIdConnect.signPrivateKeyJwt")(function* (
   policy: Omit<PrivateKeyJwt, "privateKey">,
-  key: PrivateKey,
+  key: Jwk.PrivateKey,
 ) {
   const now = Math.floor((yield* Clock.currentTimeMillis) / 1000);
 
@@ -50,7 +47,7 @@ export const signPrivateKeyJwt = Effect.fn("OpenIdConnect.signPrivateKeyJwt")(fu
       exp: now + policy.lifetimeSeconds,
     },
     key,
-    { alg: "ES256", kid: policy.keyId },
+    { kid: policy.keyId },
   ).pipe(
     Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
   );
@@ -70,13 +67,6 @@ const importPrivateKeyJwt = Effect.fnUntraced(function* (policy: PrivateKeyJwt) 
   );
 });
 
-const wipe = (key: PrivateKey) =>
-  Effect.sync(() => {
-    Redacted.value(key.material).fill(0);
-    Redacted.wipeUnsafe(key.material);
-    Redacted.wipeUnsafe(key.jwk);
-  });
-
 /** Inward client-authentication port. Concrete policy is provided at composition. */
 export class PrivateKeyClientSecret extends Context.Service<
   PrivateKeyClientSecret,
@@ -88,25 +78,18 @@ export class PrivateKeyClientSecret extends Context.Service<
 >()("effect-auth/oauth/providers/PrivateKeyClientSecret") {
   /** Static client secrets stay on the OAuth client. */
   static readonly layerUnused = Layer.succeed(PrivateKeyClientSecret, {
-    mint: () => Effect.succeed(undefined),
+    mint: () => Effect.as(Effect.void, undefined),
   });
 
   /** Mint fresh ES256 assertions with one parsed key per installed policy. Keys
    * stay inside this Layer's crypto services and generation; teardown joins
-   * active mints before wiping every retained key. */
+   * active mints before releasing retained key references. */
   static readonly make = Effect.gen(function* () {
-    const signature = yield* Signature;
-    const hmac = yield* Hmac;
-    const keys = new Map<PrivateKeyJwt, PrivateKey>();
+    const signature = yield* Signature.Signature;
+    const keys = new Map<PrivateKeyJwt, Jwk.PrivateKey>();
 
-    // One finalizer preserves join-before-wipe even under a parallel parent Scope.
-    const { keyScope, scope } = yield* Effect.acquireRelease(
-      Effect.all({ keyScope: Scope.make(), scope: Scope.make() }),
-      ({ keyScope, scope }) =>
-        Scope.close(scope, Exit.void).pipe(
-          Effect.ensuring(Scope.close(keyScope, Exit.void)),
-          Effect.ensuring(Effect.sync(() => keys.clear())),
-        ),
+    const scope = yield* Effect.acquireRelease(Scope.make(), (scope) =>
+      Scope.close(scope, Exit.void).pipe(Effect.ensuring(Effect.sync(() => keys.clear()))),
     );
 
     const run = yield* makeScopedOperation(() => Unavailable.make({})).pipe(
@@ -127,9 +110,7 @@ export class PrivateKeyClientSecret extends Context.Service<
 
               if (existing !== undefined) return existing;
 
-              const key = yield* Effect.acquireRelease(importPrivateKeyJwt(policy), wipe).pipe(
-                Effect.provideService(Scope.Scope, keyScope),
-              );
+              const key = yield* importPrivateKeyJwt(policy);
 
               keys.set(policy, key);
 
@@ -139,14 +120,13 @@ export class PrivateKeyClientSecret extends Context.Service<
 
         return yield* signPrivateKeyJwt(policy, key);
       },
-      Effect.provideService(Signature, signature),
-      Effect.provideService(Hmac, hmac),
+      Effect.provideService(Signature.Signature, signature),
     );
 
     return PrivateKeyClientSecret.of({
       mint: (authentication) =>
         !isPrivateKeyAuthentication(authentication)
-          ? Effect.succeed(undefined)
+          ? Effect.as(Effect.void, undefined)
           : run(mint(authentication.privateKeyJwt)),
     });
   });

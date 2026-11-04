@@ -1,5 +1,12 @@
-import { Cause, Crypto, DateTime, Effect, Layer, Option, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
 import { defaultLayer, hooksLayer } from "../auth/defaults";
@@ -128,8 +135,8 @@ export const makePhoneOtp = <
       Option.isSome(target) ? target.value.custodyRevision : "",
     ]).pipe(Effect.mapError(phoneFailure));
 
-    const digest = yield* (yield* Crypto.Crypto)
-      .digest("SHA-256", new TextEncoder().encode(encoded))
+    const digest = yield* (yield* Digest.Digest)
+      .digest(Digest.sha256, new TextEncoder().encode(encoded))
       .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))));
 
     const base = {
@@ -308,14 +315,14 @@ export const makePhoneOtp = <
           invocation: AuthInvocation,
           input: { readonly phoneNumber: string; readonly locale?: string },
         ) {
-          const crypto = yield* Crypto.Crypto;
+          const crypto = yield* SecureRandom.SecureRandom;
 
           const flowId = yield* crypto
-            .randomUUIDv4()
+            .uuidV4()
             .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))));
 
           const requestId = yield* crypto
-            .randomUUIDv4()
+            .uuidV4()
             .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))));
 
           return yield* SignIn.invoke(invocation, {
@@ -328,7 +335,7 @@ export const makePhoneOtp = <
         completeSignIn: Complete.invoke,
       },
       layer.pipe(
-        Layer.merge(Layer.effect(Crypto.Crypto, Crypto.Crypto)),
+        Layer.merge(Layer.effect(SecureRandom.SecureRandom, SecureRandom.SecureRandom)),
         Layer.provideMerge(defaultPhoneAdmissionLayer),
       ),
       { completion: true },

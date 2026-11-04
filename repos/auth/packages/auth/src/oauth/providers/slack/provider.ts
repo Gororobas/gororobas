@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { discoveryProfile } from "../shared/discovery";
 import { makeOidcPreset, OidcPresetRegistration, type OidcPresetOptions } from "../shared/preset";

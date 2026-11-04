@@ -2,9 +2,11 @@ import { EmailCredentialSnapshot, EmailUnavailable } from "@yielded/auth/Email";
 import { LoginIdentifier } from "@yielded/auth/Identity";
 import type { SubjectId } from "@yielded/auth/Schema";
 import { AuthenticationRevision } from "@yielded/auth/Sessions";
-import { Effect, Option, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import type { AnyEmailSignInMapping } from "./models/email-model";
 import type { NativeSqlTables, SqlTable } from "./native-sql-table";
@@ -18,9 +20,9 @@ export const invalidEmailState = () => emailUnavailable();
 export const makeNativeEmailReader = Effect.fnUntraced(function* (
   tables: NativeSqlTables,
   mapping: AnyEmailSignInMapping,
-  engineNow?: Fragment,
+  engineNow?: Statement.Fragment,
 ) {
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   const s = mapping.subject,
     i = mapping.identifier,
@@ -73,7 +75,7 @@ export const makeNativeEmailReader = Effect.fnUntraced(function* (
     readonly sourceCredentialId?: string;
     readonly sourceIdentifier?: LoginIdentifier;
     readonly single?: boolean;
-    readonly validity?: Fragment;
+    readonly validity?: Statement.Fragment;
   }) {
     const native = yield* mapping.subjectId.toNative(input.subjectId);
     let source = input.sourceIdentifier;

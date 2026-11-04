@@ -10,7 +10,9 @@ import {
   type SessionStepUpCompletionPlan,
   type StatefulSessionRecord,
 } from "@yielded/auth/Sessions";
-import { DateTime, Effect, Schema } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { assessSessionAt, sameSessionRevision } from "./session-native-state";
 

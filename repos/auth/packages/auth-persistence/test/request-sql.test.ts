@@ -1,13 +1,20 @@
-import { NodeCrypto, NodeFileSystem } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { it } from "@effect/vitest";
 import { Auth, OAuth, Password, Sessions } from "@yielded/auth";
 import { hooksLayer } from "@yielded/auth/Persistence";
 import { SubjectId } from "@yielded/auth/Schema";
-import { Clock, Context, Effect, FileSystem, Layer, Schema } from "effect";
-import { Reactivity } from "effect/reactivity";
-import { SqlClient, Statement } from "effect/sql";
-import { ConnectionError, SqlError } from "effect/sql/SqlError";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Reactivity from "effect/reactivity/Reactivity";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlError from "effect/sql/SqlError";
+import * as Statement from "effect/sql/Statement";
 import { expect } from "vite-plus/test";
 
 import { AuthPersistence } from "../src/index";
@@ -84,13 +91,14 @@ const requestSql = Layer.effect(
   SqlClient.SqlClient,
   SqlClient.make({
     compiler: Statement.makeCompilerSqlite(),
+    driver: "@effect/sql-sqlite-node",
     spanAttributes: [],
     acquirer: Effect.gen(function* () {
       const client = yield* RequestClient;
 
       if (client === undefined)
-        return yield* SqlError.make({
-          reason: ConnectionError.make({ cause: "No request SQL client" }),
+        return yield* SqlError.SqlError.make({
+          reason: SqlError.ConnectionError.make({ cause: "No request SQL client" }),
         });
 
       return yield* client.reserve;
@@ -210,6 +218,7 @@ it.live(
       // Closing each physical connection on release makes expiration deterministic.
       const reconnecting = yield* SqlClient.make({
         compiler: Statement.makeCompilerSqlite(),
+        driver: "@effect/sql-sqlite-node",
         spanAttributes: [],
         acquirer: SqliteClient.make({ filename: `${directory}/oauth.sqlite` }).pipe(
           Effect.flatMap((client) => client.reserve),
@@ -290,13 +299,13 @@ it.live(
         ),
       ).toMatchObject({ _tag: "Failure", failure: { _tag: "OAuthUnavailable" } });
 
-      const decisions = yield* Effect.all(
-        [first, second].map((client) =>
+      const decisions = yield* Effect.forEach(
+        [first, second],
+        (client) =>
           issue(valid.oauthRegistrationIntents).pipe(
             Effect.flatMap((receipt) => receipt.read),
             Effect.provideService(RequestClient, client),
           ),
-        ),
         { concurrency: 2 },
       );
 

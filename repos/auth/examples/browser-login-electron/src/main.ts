@@ -1,10 +1,11 @@
 import { pathToFileURL } from "node:url";
 
-import { NodeHttpClient, NodeServices } from "@effect/platform-node";
+import { NodeCrypto, NodeHttpClient, NodeServices } from "@effect/platform-node";
 import { BrowserLogin } from "@yielded/auth";
 import { BrowserLogin as ElectronLogin } from "@yielded/auth-electron";
 import { reportAuthFailure } from "@yielded/auth/Persistence";
-import { Cause, Crypto, Effect, Exit, Fiber, Layer, Path, Schema, Scope } from "effect";
+import { Cause, Effect, Exit, Fiber, Layer, Path, Schema, Scope } from "effect";
+import * as Digest from "effect/crypto/Digest";
 import { Hex } from "effect/encoding";
 import { app, BrowserWindow, dialog, ipcMain, net, protocol } from "electron";
 
@@ -34,124 +35,123 @@ const startup = Effect.gen(function* () {
   return { browser, hostedUrl };
 });
 
-const launch = (config: Effect.Success<typeof startup>) =>
-  Effect.gen(function* () {
-    const { join } = yield* Path.Path;
-    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+const launch = Effect.fnUntraced(function* (config: Effect.Success<typeof startup>) {
+  const { join } = yield* Path.Path;
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const crypto = yield* Crypto.Crypto;
+  const digests = yield* Digest.Digest;
 
-    const vaultNamespace = Hex.encode(
-      yield* crypto.digest(
-        "SHA-256",
-        new TextEncoder().encode(
-          `electron\n${new URL(config.hostedUrl).origin}\ndev.yielded.auth://callback`,
-        ),
+  const vaultNamespace = Hex.encode(
+    yield* digests.digest(
+      Digest.sha256,
+      new TextEncoder().encode(
+        `electron\n${new URL(config.hostedUrl).origin}\ndev.yielded.auth://callback`,
       ),
-    );
+    ),
+  );
 
-    yield* Effect.promise(() => app.whenReady());
+  yield* Effect.promise(() => app.whenReady());
 
-    const services = yield* Layer.buildWithScope(
-      Layer.mergeAll(
-        Layer.succeed(BrowserLogin.Browser, config.browser),
-        ElectronLogin.layerVault({
-          path: join(app.getPath("userData"), "auth", vaultNamespace, "vault.bin"),
+  const services = yield* Layer.buildWithScope(
+    Layer.mergeAll(
+      Layer.succeed(BrowserLogin.Browser, config.browser),
+      ElectronLogin.layerVault({
+        path: join(app.getPath("userData"), "auth", vaultNamespace, "vault.bin"),
+      }),
+      // No browser fetch metadata, cookie jar or automatic redirect following.
+      NodeHttpClient.layerNodeHttp,
+    ),
+    scope,
+  );
+
+  const invoke = yield* makeHost(config.hostedUrl).pipe(Effect.provideContext(services));
+
+  const window = yield* Effect.acquireRelease(
+    Effect.sync(
+      () =>
+        new BrowserWindow({
+          width: 720,
+          height: 640,
+          webPreferences: {
+            preload: join(__dirname, "preload.cjs"),
+            contextIsolation: true,
+            sandbox: true,
+            nodeIntegration: false,
+          },
         }),
-        // No browser fetch metadata, cookie jar or automatic redirect following.
-        NodeHttpClient.layerNodeHttp,
-      ),
-      scope,
-    );
+    ),
+    (window) =>
+      Effect.sync(() => {
+        if (!window.isDestroyed()) window.destroy();
+      }),
+  );
 
-    const invoke = yield* makeHost(config.hostedUrl).pipe(Effect.provideContext(services));
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event) => event.preventDefault());
+  window.webContents.on("will-attach-webview", (event) => event.preventDefault());
+  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
+    callback(false),
+  );
+  window.webContents.session.setPermissionCheckHandler(() => false);
+  yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      protocol.handle("yielded-ui", (request) => {
+        const url = new URL(request.url);
 
-    const window = yield* Effect.acquireRelease(
-      Effect.sync(
-        () =>
-          new BrowserWindow({
-            width: 720,
-            height: 640,
-            webPreferences: {
-              preload: join(__dirname, "preload.cjs"),
-              contextIsolation: true,
-              sandbox: true,
-              nodeIntegration: false,
-            },
-          }),
-      ),
-      (window) =>
-        Effect.sync(() => {
-          if (!window.isDestroyed()) window.destroy();
-        }),
-    );
+        if (
+          request.method !== "GET" ||
+          url.protocol !== "yielded-ui:" ||
+          url.host !== "app" ||
+          url.username ||
+          url.password ||
+          url.search ||
+          url.hash ||
+          !/^\/(?:index\.html|assets\/[A-Za-z0-9._-]+\.(?:js|css))$/.test(url.pathname)
+        )
+          return new Response(null, { status: 404 });
 
-    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    window.webContents.on("will-navigate", (event) => event.preventDefault());
-    window.webContents.on("will-attach-webview", (event) => event.preventDefault());
-    window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
-      callback(false),
-    );
-    window.webContents.session.setPermissionCheckHandler(() => false);
-    yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        protocol.handle("yielded-ui", (request) => {
-          const url = new URL(request.url);
+        return net.fetch(pathToFileURL(join(__dirname, "renderer", url.pathname)).href);
+      }),
+    ),
+    () => Effect.sync(() => protocol.unhandle("yielded-ui")),
+  );
+  yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      ipcMain.handle(channel, (event, input: unknown) => {
+        const frame = event.senderFrame;
 
-          if (
-            request.method !== "GET" ||
-            url.protocol !== "yielded-ui:" ||
-            url.host !== "app" ||
-            url.username ||
-            url.password ||
-            url.search ||
-            url.hash ||
-            !/^\/(?:index\.html|assets\/[A-Za-z0-9._-]+\.(?:js|css))$/.test(url.pathname)
-          )
-            return new Response(null, { status: 404 });
+        if (
+          window.isDestroyed() ||
+          event.sender !== window.webContents ||
+          frame === null ||
+          frame !== window.webContents.mainFrame ||
+          frame.origin !== uiOrigin ||
+          frame.url !== uiUrl
+        )
+          return { _tag: "Failure", error: { _tag: "DesktopError", reason: "request" } };
 
-          return net.fetch(pathToFileURL(join(__dirname, "renderer", url.pathname)).href);
-        }),
-      ),
-      () => Effect.sync(() => protocol.unhandle("yielded-ui")),
-    );
-    yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        ipcMain.handle(channel, (event, input: unknown) => {
-          const frame = event.senderFrame;
+        return runPromise(
+          Effect.gen(function* () {
+            const fiber = yield* invoke(input).pipe(Effect.forkIn(scope));
 
-          if (
-            window.isDestroyed() ||
-            event.sender !== window.webContents ||
-            frame === null ||
-            frame !== window.webContents.mainFrame ||
-            frame.origin !== uiOrigin ||
-            frame.url !== uiUrl
-          )
-            return { _tag: "Failure", error: { _tag: "DesktopError", reason: "request" } };
-
-          return runPromise(
-            Effect.gen(function* () {
-              const fiber = yield* invoke(input).pipe(Effect.forkIn(scope));
-
-              return yield* Fiber.join(fiber);
-            }).pipe(
-              Effect.catchCause((cause) =>
-                reportAuthFailure("desktop", cause).pipe(
-                  Effect.as({
-                    _tag: "Failure" as const,
-                    error: { _tag: "DesktopError" as const, reason: "unavailable" as const },
-                  }),
-                ),
+            return yield* Fiber.join(fiber);
+          }).pipe(
+            Effect.catchCause((cause) =>
+              reportAuthFailure("desktop", cause).pipe(
+                Effect.as({
+                  _tag: "Failure" as const,
+                  error: { _tag: "DesktopError" as const, reason: "unavailable" as const },
+                }),
               ),
             ),
-          );
-        }),
-      ),
-      () => Effect.sync(() => ipcMain.removeHandler(channel)),
-    );
-    yield* Effect.promise(() => window.loadURL(uiUrl));
-  });
+          ),
+        );
+      }),
+    ),
+    () => Effect.sync(() => ipcMain.removeHandler(channel)),
+  );
+  yield* Effect.promise(() => window.loadURL(uiUrl));
+});
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -176,7 +176,7 @@ else {
 
   void Effect.runPromise(
     program.pipe(
-      Effect.provide(NodeServices.layer),
+      Effect.provide([NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest]),
       Effect.provideService(Scope.Scope, scope),
       Effect.catchCause((cause) =>
         (Cause.hasInterruptsOnly(cause)

@@ -1,15 +1,14 @@
-import {
-  Result,
-  Cause,
-  Context,
-  Crypto,
-  DateTime,
-  Effect,
-  Layer,
-  Schema,
-  type Types,
-} from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import { prepareCommit, hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
@@ -190,7 +189,8 @@ export const makeOAuthRegistration = <
       const authority = yield* RegistrationAuthority;
       const { read, inspect, cleanup } = authority;
       const { before } = yield* LifecycleHooks;
-      const crypto = yield* Crypto.Crypto;
+      const crypto = yield* SecureRandom.SecureRandom;
+      const digests = yield* Digest.Digest;
       const { randomBytes } = crypto;
 
       const services = (yield* Effect.context<
@@ -311,7 +311,7 @@ export const makeOAuthRegistration = <
 
             const event =
               application._tag === "Unbound"
-                ? yield* Effect.gen(function* () {
+                ? yield* (function* () {
                     const snapshot = yield* lifecycleSnapshotEffect({
                       action: "registration",
                       operation: `${moduleId}/oauth-registration`,
@@ -336,7 +336,7 @@ export const makeOAuthRegistration = <
                     bytes.fill(0);
 
                     return value;
-                  })
+                  })()
                 : undefined;
 
             const ownerData = yield* snapshotData(data);
@@ -408,7 +408,8 @@ export const makeOAuthRegistration = <
 
             return Object.freeze({ commit });
           },
-          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.provideService(SecureRandom.SecureRandom, crypto),
+          Effect.provideService(Digest.Digest, digests),
           registrationBoundary,
         ),
         cleanup: Effect.fn("OAuthRegistration.cleanup")(function* (limit) {

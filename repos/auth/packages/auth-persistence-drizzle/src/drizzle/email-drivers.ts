@@ -2,7 +2,10 @@ import type { EmailRegistrationAuthority } from "@yielded/auth-persistence/Adapt
 import { EmailAddressPersistence, type EmailUnavailable } from "@yielded/auth/Email";
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import type { Table } from "drizzle-orm";
-import { type Context, Effect, type Crypto } from "effect";
+import type * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
 
 import type { NativeDriverDatabase, NativeDriverTransaction } from "./driver-types";
 import type {
@@ -60,7 +63,10 @@ export const makeEmailTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | EmailUnavailable,
-    Exclude<R, EmailAddressPersistence> | DR | LifecycleHooks | Crypto.Crypto
+    | Exclude<R, EmailAddressPersistence>
+    | DR
+    | LifecycleHooks
+    | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinateEmailAddress<
     Database extends D,
@@ -93,7 +99,10 @@ export const makeEmailTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | EmailUnavailable,
-    Exclude<R, EmailAddressPersistence | TxId> | DR | LifecycleHooks | Crypto.Crypto
+    | Exclude<R, EmailAddressPersistence | TxId>
+    | DR
+    | LifecycleHooks
+    | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinateEmailAddress<
     Database extends D,
@@ -177,7 +186,7 @@ export const makeEmailTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | EmailUnavailable,
-    Exclude<R, TargetId> | DR | LifecycleHooks | Crypto.Crypto
+    Exclude<R, TargetId> | DR | LifecycleHooks | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinateEmailRegistration<
     TargetId,
@@ -214,7 +223,7 @@ export const makeEmailTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | EmailUnavailable,
-    Exclude<R, TargetId | TxId> | DR | LifecycleHooks | Crypto.Crypto
+    Exclude<R, TargetId | TxId> | DR | LifecycleHooks | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinateEmailRegistration<
     TargetId,

@@ -210,15 +210,12 @@ const harness = (
           return OAuthConnectedPersistence.of({
             ...persistence,
             settle: (input, prepare) =>
-              persistence
-                .settle(input, prepare)
-                .pipe(
-                  Effect.flatMap((receipt) =>
-                    input._tag === "SignIn"
-                      ? Effect.fail(OAuthUnavailable.make({}))
-                      : Effect.succeed(receipt),
-                  ),
+              persistence.settle(input, prepare).pipe(
+                Effect.filterOrFail(
+                  () => !(input._tag === "SignIn"),
+                  () => OAuthUnavailable.make({}),
                 ),
+              ),
           });
         }),
       ).pipe(Layer.provideMerge(durable))
@@ -355,7 +352,7 @@ const signIn = Effect.gen(function* () {
 
   if (issued?._tag !== "Issue") return yield* Effect.die("Missing session credential");
 
-  const session = yield* started.auth.requireSession().pipe(
+  const session = yield* started.auth.requireSession.pipe(
     Effect.provideService(AuthRequest, {
       ...started.call,
       credentials: { session: issued.credential },

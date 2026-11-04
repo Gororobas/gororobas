@@ -1,6 +1,7 @@
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { it } from "@effect/vitest";
-import { Auth, Hooks, Passkey, Sessions, WebCrypto } from "@yielded/auth";
+import { Auth, Hooks, Passkey, Sessions } from "@yielded/auth";
 import * as Native from "@yielded/auth-persistence-drizzle/SqliteNode";
 import { AuthenticationAssurance } from "@yielded/auth/Operations";
 import { SubjectId } from "@yielded/auth/Schema";
@@ -158,7 +159,7 @@ const harness = (
       Passkey.PasskeyConfig.layer({ profiles: [Tables.profile] }),
     ]),
     Layer.provideMerge(storage),
-    Layer.provide([WebCrypto.layerWebCrypto, Hooks.LifecycleHooks.empty]),
+    Layer.provide([BunCrypto.layer, Hooks.LifecycleHooks.empty]),
   );
 };
 
@@ -237,12 +238,14 @@ it.effect("rejects enrollment when authority time expires the challenge during v
   }).pipe(
     Effect.provide(
       harness({
-        verify: () =>
-          Effect.gen(function* () {
+        verify: Effect.fnUntraced(
+          function* () {
             yield* (yield* SqlClient.SqlClient)`UPDATE passkey_test_clock SET millis = 120001`;
 
             return verified;
-          }).pipe(Effect.orDie),
+          },
+          (_) => Effect.orDie(_),
+        ),
       }),
     ),
   ),

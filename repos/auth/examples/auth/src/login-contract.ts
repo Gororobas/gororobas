@@ -81,6 +81,8 @@ export const LoginApi = AuthContract.make("example/social-auth", {
           value.completion._tag === "Authenticated"
             ? value.completion.session.subjectId
             : undefined,
+        sessionFromSuccess: (value) =>
+          value.completion._tag === "Authenticated" ? value.completion.session : undefined,
       },
     }),
     beginEmailRegistration: AuthContract.action({

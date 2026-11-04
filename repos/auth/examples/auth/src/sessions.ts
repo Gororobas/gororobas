@@ -1,5 +1,6 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { Auth, Hooks, Operations, Schema as AuthSchema, Sessions, WebCrypto } from "@yielded/auth";
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
+import { Auth, Hooks, Operations, Schema as AuthSchema, Sessions } from "@yielded/auth";
 import { DateTime, Effect, Layer, Redacted, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { RpcSerialization, RpcServer } from "effect/rpc";
@@ -14,7 +15,7 @@ import {
 } from "./session-consumer";
 
 const base = Layer.mergeAll(
-  WebCrypto.layerWebCrypto,
+  BunCrypto.layer,
   Hooks.LifecycleHooks.empty,
   Auth.AuthConfig.layer({
     // Public demo secret. Production loads a stable, randomly generated secret.

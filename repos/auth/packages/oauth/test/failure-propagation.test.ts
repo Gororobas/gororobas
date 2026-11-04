@@ -1,7 +1,12 @@
 import { it } from "@effect/vitest";
-import { Cause, Deferred, Effect, Exit, Fiber, Scope } from "effect";
-import { HttpClient } from "effect/http";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as HttpClient from "effect/http/HttpClient";
+import * as Scope from "effect/Scope";
+import * as TestClock from "effect/testing/TestClock";
 import { expect } from "vite-plus/test";
 
 import { OAuth } from "../src/index";

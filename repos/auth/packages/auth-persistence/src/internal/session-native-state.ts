@@ -13,9 +13,12 @@ import {
   assessAuthentication,
   type AuthenticationEvidence,
 } from "@yielded/auth/Sessions";
-import { Cause, Effect, Schema, DateTime } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import { fragment, parameter, type Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as Statement from "effect/sql/Statement";
 
 import { PersistenceMappingError } from "./mapping-error";
 import type { SessionAuthorityTables, SessionExecution } from "./models/session-model";
@@ -91,7 +94,7 @@ export const makeNativeSessionAuthorityState = Effect.fnUntraced(function* (
   mapping: NativeSessionAuthorityMapping,
   batch = false,
 ) {
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const clockPolicy = yield* AuthenticationClock;
 
   const s = mapping.subject,
@@ -174,8 +177,8 @@ export const makeNativeSessionAuthorityState = Effect.fnUntraced(function* (
       policyValues: batch
         ? (s.requirementColumns ?? []).map((key) => ({
             column: subject.selectedColumn(key),
-            value: fragment([
-              parameter(projected[nativeSqlAlias("s_", subject.keys.indexOf(key))]),
+            value: Statement.fragment([
+              Statement.parameter(projected[nativeSqlAlias("s_", subject.keys.indexOf(key))]),
             ]),
           }))
         : [],
@@ -239,7 +242,10 @@ export const makeNativeSessionAuthorityState = Effect.fnUntraced(function* (
     });
   });
 
-  const authorityCondition = (revision: AuthenticationRevision, native: unknown): Fragment =>
+  const authorityCondition = (
+    revision: AuthenticationRevision,
+    native: unknown,
+  ): Statement.Fragment =>
     sql.and([
       sql`exists(select 1 from ${subject.name} where ${id(subject, s.id, native)} and ${exact(subject, s.securityRevision, revision.securityRevision)} and ${activeSubject(subject)})`,
       sql`(select count(*) from ${credential.name} where ${id(credential, c.subjectId, native)} and ${activeCredential(credential)}) = ${revision.credentials.length}`,

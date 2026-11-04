@@ -1,14 +1,22 @@
 import * as OAuth from "@yielded/oauth/OAuth";
 import type * as Oidc from "@yielded/oauth/Oidc";
-import { Cause, type Crypto, Effect, type Redacted, type Scope } from "effect";
-import type { HttpClient } from "effect/http";
+import * as Cause from "effect/Cause";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import type * as HttpClient from "effect/http/HttpClient";
+import type * as Redacted from "effect/Redacted";
+import type * as Scope from "effect/Scope";
 
 import { OAuthUnavailable } from "../../signInErrors";
 import { makeEmailEnrichment } from "../github/email";
 import { OpenIdConnectConfigurationError } from "./models";
 
 /** Provider construction captures explicit platform/crypto services within its Scope. */
-export type Requirements = Crypto.Crypto | HttpClient.HttpClient | Scope.Scope;
+export type Requirements =
+  | (SecureRandom.SecureRandom | Digest.Digest)
+  | HttpClient.HttpClient
+  | Scope.Scope;
 
 export interface NativeProvider {
   readonly client: OAuth.Client;

@@ -1,11 +1,13 @@
-import type { Scope } from "effect";
-import { Effect } from "effect";
-import type { Atom } from "effect/reactivity";
-import { AtomRegistry, Reactivity } from "effect/reactivity";
+import * as Effect from "effect/Effect";
+import type * as Atom from "effect/reactivity/Atom";
+import * as AtomRegistry from "effect/reactivity/AtomRegistry";
+import * as Reactivity from "effect/reactivity/Reactivity";
+import type * as Scope from "effect/Scope";
 
 import type { OperationFetchClient } from "../http-operation/client";
 import type { AnyRoute, RouteInput, RouteSuccess } from "../http-operation/contract";
 import { OperationHttpConfigurationError, OperationHttpError } from "../http-operation/errors";
+import type { SubjectId } from "../Schema";
 import { AuthAtomLifetime } from "./AuthAtomLifetime";
 import { AuthAtomWorkflow } from "./AuthAtomWorkflow";
 import { reportAtomDefects } from "./failures";
@@ -72,7 +74,7 @@ export const mutation = <Route extends AnyRoute, RuntimeError>(
     readonly runtime: Atom.AtomRuntime<AuthAtomLifetime | DecodeServices<Route>, RuntimeError>;
     readonly reactivityKeys: ReactivityKeys;
     readonly subject?: {
-      readonly fromSuccess: (success: RouteSuccess<Route>) => string | null | undefined;
+      readonly fromSuccess: (success: RouteSuccess<Route>) => SubjectId | null | undefined;
     };
   },
 ) =>
@@ -100,7 +102,7 @@ const completeAuthentication = Effect.fn("AuthAtom.completeAuthentication")(func
 >(
   route: Route,
   input: RouteInput<Route>,
-  subject: (value: RouteSuccess<Route>) => string | null | undefined,
+  subject: (value: RouteSuccess<Route>) => SubjectId | null | undefined,
   reactivityKeys: ReactivityKeys,
   expectedGeneration?: number,
 ) {

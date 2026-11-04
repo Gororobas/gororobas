@@ -8,8 +8,10 @@ import { reportAuthDiagnostic } from "@yielded/auth/Persistence";
 import { getTableColumns, getTableName, is, Table } from "drizzle-orm";
 import { getTableConfig as getMysqlTableConfig, MySqlTable } from "drizzle-orm/mysql-core";
 import { getTableConfig as getPgTableConfig, PgTable } from "drizzle-orm/pg-core";
-import { Cause, Effect, Result } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { NativeDatabase } from "./native-database";
 
@@ -71,7 +73,7 @@ export const validateDrizzleStorage = Effect.fnUntraced(
     }
     for (const [dialect, requirements] of batches) {
       yield* validateStorageBatch(dialect, requirements).pipe(
-        Effect.provideService(SqlClient, client),
+        Effect.provideService(SqlClient.SqlClient, client),
         Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, invalidMapping))),
       );
     }

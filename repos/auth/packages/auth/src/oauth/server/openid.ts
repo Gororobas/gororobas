@@ -1,7 +1,10 @@
-import type { Hmac } from "@yielded/crypto/Hmac";
-import type { Signature } from "@yielded/crypto/Signature";
-import { Jwk, Jwt } from "@yielded/jose";
-import { Cause, Effect, Redacted, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Signature from "effect/crypto/Signature";
+import * as Effect from "effect/Effect";
+import * as Jwk from "effect/jose/Jwk";
+import * as Jwt from "effect/jose/Jwt";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { AccessTokenClaims } from "./access-token";
 import type { Authentication } from "./models";
@@ -48,12 +51,12 @@ export const scopedProfile = (profile: OpenIdProfile, scopes: ReadonlyArray<stri
 });
 
 export const makeIdentityTokens = Effect.fnUntraced(function* (options: IdentitySigningKeys) {
-  const services = yield* Effect.context<Hmac | Signature>();
+  const services = yield* Effect.context<Signature.Signature>();
 
   const keys = yield* Schema.decodeUnknownEffect(
     Schema.Struct({
       activeKeyId: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
-      privateKey: Schema.Redacted(Schema.Unknown),
+      privateKey: Schema.Redacted(Jwk.PrivateJwk),
       publicKeys: Schema.NonEmptyArray(Jwk.PublicJwk).check(Schema.isMaxLength(16)),
     }),
   )(options, { reportInput: false }).pipe(Effect.mapError(() => ConfigurationError.make({})));
@@ -64,7 +67,7 @@ export const makeIdentityTokens = Effect.fnUntraced(function* (options: Identity
     ),
   );
 
-  const privateJwk = Redacted.value(signingKey.jwk);
+  const privateJwk = Redacted.value(keys.privateKey);
   const active = keys.publicKeys.find((key) => key.kid === keys.activeKeyId);
 
   if (
@@ -89,7 +92,6 @@ export const makeIdentityTokens = Effect.fnUntraced(function* (options: Identity
     jwks: { keys: keys.publicKeys },
     issueAccess: (claims: AccessTokenClaims) =>
       Jwt.sign(AccessTokenClaims, claims, signingKey, {
-        alg: "RS256",
         kid: keys.activeKeyId,
         typ: "at+jwt",
       }).pipe(
@@ -123,7 +125,7 @@ export const makeIdentityTokens = Effect.fnUntraced(function* (options: Identity
           ...scopedProfile(input.profile, input.scopes),
         },
         signingKey,
-        { alg: "RS256", kid: keys.activeKeyId, typ: "JWT" },
+        { kid: keys.activeKeyId, typ: "JWT" },
       ).pipe(
         Effect.provideContext(services),
         Effect.catchCause((cause) =>

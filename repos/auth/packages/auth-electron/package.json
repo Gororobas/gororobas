@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth-electron",
-  "version": "0.1.0-beta.42",
+  "version": "0.1.0-beta.47",
   "description": "Main-process Electron browser login and encrypted credential custody for Yielded Auth.",
   "homepage": "https://yielded.dev/auth/",
   "license": "MIT",
@@ -24,7 +24,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "check": "tsc --noEmit -p tsconfig.json"
+    "check": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict"
   },
   "dependencies": {
     "@yielded/auth": "workspace:*"
@@ -38,7 +38,7 @@
     "vite-plus": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.3",
+    "effect": "^4.1.2",
     "electron": "^44.5.1"
   }
 }

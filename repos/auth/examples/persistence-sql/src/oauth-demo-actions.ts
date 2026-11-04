@@ -1,5 +1,7 @@
 import { OAuth, Sessions } from "@yielded/auth";
-import { Context, Crypto, DateTime, Effect, Layer, Redacted, Schema } from "effect";
+import { Context, DateTime, Effect, Layer, Redacted, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
+import * as Digest from "effect/crypto/Digest";
 import { Base64Url } from "effect/encoding";
 import { SqlClient } from "effect/sql";
 
@@ -24,7 +26,8 @@ export class DemoActionCodes extends Context.Service<
 export const DemoActionsLive = Layer.effectContext(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
+    const digests = yield* Digest.Digest;
 
     yield* sql`CREATE TABLE IF NOT EXISTS demo_oauth_action_code (
     digest TEXT PRIMARY KEY, action TEXT NOT NULL, command_id TEXT NOT NULL,
@@ -33,8 +36,8 @@ export const DemoActionsLive = Layer.effectContext(
     VALUES (${ownerId}, ${factorId}, 'initial', 'active') ON CONFLICT DO NOTHING`;
 
     const digest = (secret: Redacted.Redacted<string>) =>
-      crypto
-        .digest("SHA-256", new TextEncoder().encode(Redacted.value(secret)))
+      digests
+        .digest(Digest.sha256, new TextEncoder().encode(Redacted.value(secret)))
         .pipe(Effect.map(Base64Url.encode));
 
     const issue: DemoActionCodes["Service"]["issue"] = Effect.fn("DemoActionCodes.issue")(
@@ -116,7 +119,6 @@ export const DemoActionsLive = Layer.effectContext(
         };
       },
       Effect.catchTags({
-        PlatformError: () => OAuth.OAuthUnavailable.make({}),
         SqlError: () => OAuth.OAuthUnavailable.make({}),
         SchemaError: () => OAuth.OAuthUnavailable.make({}),
       }),

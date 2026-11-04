@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** Local protocol configuration is invalid; no remote response or credential is retained. */
 export class ConfigurationError extends Schema.TaggedError<ConfigurationError>()(

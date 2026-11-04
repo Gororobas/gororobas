@@ -86,11 +86,11 @@ const auth = yield* AppAuth;
 
 const session = yield* auth.getSession();               // Allows a cached snapshot
 const current = yield* auth.getSession({ fresh: true }); // Reads authoritative state
-const required = yield* auth.requireSession();          // Fails when anonymous
+const required = yield* auth.requireSession;          // Fails when anonymous
 ```
 
 Missing, invalid, or expired credentials return `null`; storage failures remain
-failures. `requireSession()` allows caching and fails with `AuthenticationRequired`
+failures. `requireSession` allows caching and fails with `AuthenticationRequired`
 when anonymous. Reads do not renew credentials. A handler that already resolved
 an authoritative caller reuses that same private source for ordinary session
 reads; `{ fresh: true }` requests a new inspection. Cookie snapshots never become
@@ -109,7 +109,7 @@ for the runtime and request-level composition.
 ## Sign out
 
 ```ts
-const result = yield* auth.signOut();
+const result = yield* auth.signOut;
 ```
 
 Sign-out clears the client credential and reports server invalidation separately.
@@ -119,7 +119,7 @@ Its result distinguishes `revoked`, `already-invalid`, `client-only`, and
 ## Renew a session
 
 ```ts
-const session = yield* auth.renewSession();
+const session = yield* auth.renewSession;
 ```
 
 Renewal delivers a replacement credential through the request boundary.

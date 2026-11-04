@@ -8,9 +8,11 @@ import {
   SecurityRevision,
   type StatefulSessionRecord,
 } from "@yielded/auth/Sessions";
-import { DateTime, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import type { SubjectIdCodec } from "./models/common";
 import type { StatefulSessionTables, SessionExecution } from "./models/session-model";
@@ -40,12 +42,12 @@ export const sameSessionRecord = <Claims>(
   provenanceJson(left.provenance) === provenanceJson(right.provenance);
 
 export const makeConditionalSqlInsert = Effect.fnUntraced(function* () {
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   return Effect.fnUntraced(function* (
     table: SqlTable,
     values: Readonly<Record<string, unknown>>,
-    condition: Fragment,
+    condition: Statement.Fragment,
   ) {
     const fields = Object.entries(values).filter(([, value]) => value !== undefined);
 
@@ -61,7 +63,7 @@ export const makeNativeSessionRecords = Effect.fnUntraced(function* <Claims>(
   tables: NativeSqlTables,
   mapping: NativeSessionRecordMapping<Claims>,
 ) {
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const { futureToleranceMillis } = yield* AuthenticationClock;
 
   const s = mapping.session,

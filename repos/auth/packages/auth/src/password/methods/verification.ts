@@ -1,5 +1,11 @@
-import { Cause, Crypto, DateTime, Effect, Option, Redacted, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { hasCommitScope, type PreparedCommit } from "../../hooks/commit";
 import { HookDenied } from "../../hooks/models";
@@ -118,10 +124,13 @@ export const makePasswordVerification = ({
   const tuple = Schema.fromJsonString(Schema.Array(Schema.String));
 
   const digest = Effect.fn("Passwords.digest")(function* (parts: ReadonlyArray<string>) {
-    const crypto = yield* Crypto.Crypto;
+    const digests = yield* Digest.Digest;
 
     const bytes = yield* unexpected(
-      crypto.digest("SHA-256", encoder.encode(Schema.encodeSync(tuple)(parts))),
+      digests.digest(
+        Digest.sha256,
+        encoder.encode(yield* Schema.encodeEffect(tuple)(parts).pipe(Effect.orDie)),
+      ),
     );
 
     return TokenDigest.make(Base64Url.encode(bytes));
@@ -215,13 +224,14 @@ export const makePasswordVerification = ({
         });
 
       return candidate;
-    }).pipe(
-      Effect.catchCause((cause) =>
-        cause.reasons.every(
-          (reason) => Cause.isFailReason(reason) && reason.error._tag === "PasswordRejected",
-        )
-          ? Effect.succeed(undefined)
-          : Effect.failCause(cause),
+    }).pipe((effect) =>
+      Effect.catchCauseIf(
+        effect,
+        (cause) =>
+          cause.reasons.every(
+            (reason) => Cause.isFailReason(reason) && reason.error._tag === "PasswordRejected",
+          ),
+        () => Effect.void,
       ),
     );
 

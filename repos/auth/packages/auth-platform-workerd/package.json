@@ -1,0 +1,49 @@
+{
+  "name": "@yielded/auth-platform-workerd",
+  "version": "0.1.0-beta.47",
+  "description": "Cloudflare Workers runtime services and WASM password hashing for Yielded Auth.",
+  "homepage": "https://yielded.dev/auth/",
+  "bugs": {
+    "url": "https://github.com/yielded-dev/auth/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/auth.git",
+    "directory": "packages/auth-platform-workerd"
+  },
+  "files": [
+    "dist",
+    "src",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "type": "module",
+  "sideEffects": [],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict",
+    "test": "vp test --passWithNoTests",
+    "build:wasm": "clang --target=wasm32 -O3 -msimd128 -ffreestanding -fno-builtin -nostdlib -Wl,--no-entry -Wl,--import-memory -Wl,--export=argon2_block -Wl,--export=__heap_base -Wl,--strip-all src/internal/argon2-block.c -o src/internal/argon2.wasm"
+  },
+  "dependencies": {
+    "@yielded/auth": "workspace:*"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "effect": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^4.1.2"
+  }
+}

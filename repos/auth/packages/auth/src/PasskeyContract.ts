@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { LastSignInMethod } from "./identity/models";
 import { makeOperation, operationGroup } from "./operations/operation";

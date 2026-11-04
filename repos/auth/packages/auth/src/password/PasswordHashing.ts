@@ -1,4 +1,7 @@
-import { Context, type Effect, Layer, type Redacted } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Redacted from "effect/Redacted";
 
 import type { PasswordHashingConfig } from "./configuration";
 import type {
@@ -9,6 +12,7 @@ import type {
 } from "./errors";
 import { make } from "./hashing";
 import type { EncodedPasswordHash, PasswordVerification } from "./models";
+import { defaultScrypt } from "./Scrypt";
 
 type HashFailure = PasswordHashingUnavailable | PasswordInputInvalid | PasswordKdfBusy;
 
@@ -36,6 +40,7 @@ export class PasswordHashing extends Context.Service<
     readonly dummy: (password: Redacted.Redacted<string>) => Effect.Effect<void, HashFailure>;
   }
 >()("effect-auth/PasswordHashing") {
-  /** Supply Kdf and Effect Crypto; share KdfAdmission.layer from @yielded/crypto with the KDF backend. */
-  static readonly layer = (config?: PasswordHashingConfig) => Layer.effect(this, make(config));
+  /** Supply Effect Kdf, SecureRandom and a shared KdfAdmission.layer. Scrypt requires PasswordScrypt.layer. */
+  static readonly layer = (config?: PasswordHashingConfig) =>
+    Layer.effect(this, make(config)).pipe(Layer.provide(defaultScrypt));
 }

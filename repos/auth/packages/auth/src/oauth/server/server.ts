@@ -1,32 +1,42 @@
-import {
-  Cause,
-  Context,
-  Crypto,
-  DateTime,
-  Duration,
-  Effect,
-  Layer,
-  Option,
-  Redacted,
-  Result,
-  Schema,
-  Stream,
-  type Types,
-} from "effect";
-import { Base64Url } from "effect/encoding";
-import { Cookies, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { HttpApiBuilder, HttpApiSecurity } from "effect/http-api";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import type * as Exit from "effect/Exit";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import type * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import * as HttpApiError from "effect/http-api/HttpApiError";
+import type * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import * as HttpApiSecurity from "effect/http-api/HttpApiSecurity";
+import * as Cookies from "effect/http/Cookies";
+import * as HttpEffect from "effect/http/HttpEffect";
+import * as HttpRouter from "effect/http/HttpRouter";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import type * as Types from "effect/Types";
 
 import { reportAuthFailure, ReportedOperationDefect } from "../../internal/diagnostics";
 import { origin as Origin } from "../../internal/origin";
 import { timeoutWithCause } from "../../internal/timeout";
-import type * as OAuthScope from "../../OAuthScope";
+import * as OAuthScope from "../../OAuthScope";
 import { SubjectId } from "../../Schema";
 import { makeSessionSigningCodec, type SessionSigningKeyring } from "../../sessions/crypto";
 import { makeAccessTokenVerifier } from "./access-token";
 import { makeAuthorization, standardOpenIdScopes } from "./authorization";
 import {
   makeClients,
+  makeClientStore,
   matchesRedirect,
   MetadataConfiguration,
   type MetadataOptions,
@@ -51,6 +61,7 @@ import {
   Persistence,
   Random,
   ResourceMetadata,
+  ScopeText,
   Text,
   TokenResponse,
   makeAccessSchema,
@@ -68,6 +79,46 @@ const noStore = {
   pragma: "no-cache",
   "referrer-policy": "no-referrer",
 };
+
+const bearerChallenge = (
+  resourceMetadata: string,
+  scope: string | undefined,
+  error?: "invalid_token" | "insufficient_scope",
+) =>
+  `Bearer resource_metadata="${resourceMetadata}"${scope === undefined ? "" : `, scope="${scope}"`}${error ? `, error="${error}"` : ""}`;
+
+/** Only InvalidToken is the caller's failure. Report other reasons; interrupts keep their cause. */
+const classifyVerification = Effect.fnUntraced(function* <A>(
+  verified: Exit.Exit<A, InvalidToken | Unavailable | Cause.TimeoutError>,
+) {
+  if (verified._tag === "Success") return verified.value;
+
+  const unexpected = Cause.fromReasons(
+    verified.cause.reasons.filter(
+      (reason) =>
+        Cause.isDieReason(reason) ||
+        (Cause.isFailReason(reason) && reason.error._tag !== "OAuthServerInvalidToken"),
+    ),
+  );
+
+  yield* reportAuthFailure("http", unexpected);
+  if (Cause.hasInterrupts(verified.cause))
+    return yield* Effect.failCause(
+      Cause.fromReasons<never>([
+        ...verified.cause.reasons.filter(Cause.isInterruptReason),
+        ...(unexpected.reasons.length === 0
+          ? []
+          : [Cause.makeDieReason(ReportedOperationDefect.make({}))]),
+      ]),
+    );
+
+  return unexpected.reasons.length === 0 ? "invalid_token" : "unavailable";
+});
+
+/** An endpoint's requirement replaces its group's. */
+const requirementOf = (group: HttpApiGroup.Top, endpoint: HttpApiEndpoint.Top) =>
+  Context.getOrUndefined(endpoint.annotations, OAuthScope.Required) ??
+  Context.getOrUndefined(group.annotations, OAuthScope.Required);
 
 const json = (value: Schema.Json, status = 200) =>
   Response.json(value, { status, headers: noStore });
@@ -87,7 +138,7 @@ const AuthorizeQuery = Schema.Struct({
   ...AuthorizationCallback.fields,
   response_type: Schema.Literal("code"),
   resource: Schema.optionalKey(Url),
-  scope: Text,
+  scope: ScopeText,
   code_challenge: Random,
   code_challenge_method: Schema.Literal("S256"),
   nonce: Schema.optionalKey(Text),
@@ -112,7 +163,7 @@ const TokenRequest = Schema.Union([
     client_id: Text,
     resource: Schema.optionalKey(Url),
     refresh_token: Text,
-    scope: Schema.optionalKey(Text),
+    scope: Schema.optionalKey(ScopeText),
   }),
 ]);
 
@@ -171,6 +222,8 @@ const parameters = Effect.fnUntraced(function* (params: URLSearchParams) {
 });
 
 const maximumFormBytes = 16384;
+// JWT access carries its scopes; leave room for a reserved assertion in the revocation form.
+const maximumJwtScopeLength = 4096;
 
 const form = Effect.fnUntraced(function* (request: HttpServerRequest.HttpServerRequest) {
   if (
@@ -207,6 +260,7 @@ export interface Options {
   /** One authorization server per origin. HTTP is accepted only for loopback development. */
   readonly origin: string;
   readonly resource: string;
+  /** Static registrations; they take precedence over the server's Clients service. */
   readonly clients: ReadonlyArray<Client>;
   /** Enable public or private_key_jwt CIMD clients from these trusted HTTPS origins. */
   readonly clientMetadata?: MetadataOptions;
@@ -270,6 +324,7 @@ const makeServer = <
   const ScopesSchema = makeScopesSchema<Scope>(ScopeSchema);
   const AccessSchema = makeAccessSchema<Scope>(ScopeSchema);
   const authorizationSource = makeAuthorization<Id, Scope>(id, ScopeSchema);
+  const Clients = makeClientStore(id);
 
   const ScopedCurrentAccess = Context.Reference<Access<Scope> | undefined>(
     `effect-auth/OAuthServer/${id}/CurrentAccess/${JSON.stringify([...scopes].sort())}`,
@@ -355,13 +410,17 @@ const makeServer = <
           (resourceUrl.pathname !== "/" && resourceUrl.href !== config.resource) ||
           (options.identityKeys === undefined && resourceUrl.origin !== config.origin) ||
           resourceUrl.search ||
-          (config.clients.length === 0 && config.clientMetadata === undefined) ||
           config.loginPath === paths.authorize ||
-          new Set(config.clients.map((client) => client.clientId)).size !== config.clients.length
+          new Set(config.clients.map((client) => client.clientId)).size !== config.clients.length ||
+          // Clients may request every declared scope at once.
+          !Schema.is(ScopeText)(config.scopes.join(" ")) ||
+          (config.accessTokenFormat === "jwt" &&
+            config.scopes.join(" ").length > maximumJwtScopeLength)
         )
           return yield* ConfigurationError.make({});
 
         const clients = yield* makeClients(
+          id,
           config.clients,
           config.clientMetadata,
           config.origin,
@@ -411,7 +470,8 @@ const makeServer = <
             !config.scopes.some((scope) => scope === "openid"))
         )
           return yield* ConfigurationError.make({});
-        const crypto = yield* Crypto.Crypto;
+        const crypto = yield* SecureRandom.SecureRandom;
+        const digests = yield* Digest.Digest;
         const namespace = `${config.origin}/oauth/${id}`;
         const resourceMetadataPath = `/.well-known/oauth-protected-resource${resourceUrl.pathname === "/" ? "" : resourceUrl.pathname}`;
         const resourceMetadata = `${config.origin}${resourceMetadataPath}`;
@@ -501,17 +561,7 @@ const makeServer = <
 
         const clientFor = clients.resolve;
 
-        const validGrant = Effect.fnUntraced(function* (record: Record) {
-          const client = yield* clientFor(record.authorization.clientId).pipe(
-            Effect.catchCause((cause) =>
-              Effect.failCause(
-                Cause.map(cause, (error) =>
-                  error._tag === "OAuthServerRejected" ? InvalidToken.make({}) : error,
-                ),
-              ),
-            ),
-          );
-
+        const validGrant = Effect.fnUntraced(function* (record: Record, client: Client) {
           return (
             matchesRedirect(client, record.authorization.redirectUri) &&
             record.authorization.scopes.every(Schema.is(ScopeSchema)) &&
@@ -523,18 +573,34 @@ const makeServer = <
           );
         });
 
-        const read = Effect.fnUntraced(function* (token: Envelope) {
+        const read = Effect.fnUntraced(function* (token: Envelope, authenticatedClient?: Client) {
           const record = yield* store.get(namespace, token.grantId);
 
           if (
             !record ||
             record.status === "Revoked" ||
             record.expiresAtMillis <= (yield* now) ||
-            !(yield* validGrant(record))
+            (authenticatedClient !== undefined &&
+              authenticatedClient.clientId !== record.authorization.clientId)
           )
             return yield* InvalidToken.make({});
 
-          return record;
+          // Reuse only this request's exact client; later requests resolve it again.
+          const client =
+            authenticatedClient ??
+            (yield* clientFor(record.authorization.clientId).pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error._tag === "OAuthServerRejected" ? InvalidToken.make({}) : error,
+                  ),
+                ),
+              ),
+            ));
+
+          if (!(yield* validGrant(record, client))) return yield* InvalidToken.make({});
+
+          return { record, client };
         });
 
         const commit = Effect.fnUntraced(function* (
@@ -598,7 +664,7 @@ const makeServer = <
           const token = yield* decodeAccess(credential);
 
           if (token.kind !== "access") return yield* InvalidToken.make({});
-          const record = yield* read(token);
+          const { record } = yield* read(token);
 
           if (
             record.status !== "Active" ||
@@ -777,6 +843,7 @@ const makeServer = <
                 ).pipe(Effect.mapError(() => reject()));
 
                 const client = yield* clientFor(target.client_id);
+                const source = clients.source(client);
 
                 const redirectUri =
                   target.redirect_uri ??
@@ -814,6 +881,9 @@ const makeServer = <
                       query.max_age !== undefined)
                   )
                     return yield* reject();
+                  // Silent responses navigate without interaction.
+                  if (query.prompt === "none" && source === "stored")
+                    return yield* reject("unauthorized_client");
                   if (
                     client.grantTypes !== undefined &&
                     !client.grantTypes.includes("authorization_code")
@@ -843,10 +913,11 @@ const makeServer = <
                   );
 
                   // Static registrations and same-origin metadata callbacks are trusted.
-                  // Other registered callbacks require an explicit navigation decision.
+                  // Stored callbacks may be self-registered and need a navigation decision.
                   if (
-                    config.clients.some((entry) => entry.clientId === client.clientId) ||
-                    new URL(redirectUri).origin === new URL(client.clientId).origin
+                    source === "static" ||
+                    (source === "metadata" &&
+                      new URL(redirectUri).origin === new URL(client.clientId).origin)
                   )
                     return response;
 
@@ -901,7 +972,8 @@ const makeServer = <
 
               if (credential === undefined) return yield* reject();
               const token = yield* decode(Redacted.make(credential));
-              let record = yield* read(token);
+              const resolved = yield* read(token);
+              let record = resolved.record;
 
               if (
                 token.kind !== "consent" ||
@@ -992,13 +1064,13 @@ const makeServer = <
                   yield* commit(token.grantId, record, next);
                   record = next;
                 }
-                const client = yield* clientFor(record.authorization.clientId);
+                const client = resolved.client;
 
                 return new Response(
                   yield* consentRenderer.render({
                     clientName: client.name,
                     clientId: client.clientId,
-                    registered: config.clients.some((value) => value.clientId === client.clientId),
+                    registered: clients.source(client) !== "metadata",
                     subjectId,
                     resource: config.resource,
                     scopes: record.authorization.scopes,
@@ -1090,16 +1162,12 @@ const makeServer = <
               const expected = query.grant_type === "authorization_code" ? "code" : "refresh";
 
               if (token.kind !== expected) return yield* reject("invalid_grant");
-              const record = yield* read(token);
+              const { record } = yield* read(token, client);
 
-              if (
-                record.authorization.clientId !== query.client_id ||
-                record.subjectId === undefined
-              )
-                return yield* reject("invalid_grant");
+              if (record.subjectId === undefined) return yield* reject("invalid_grant");
               if (query.grant_type === "authorization_code") {
-                const digest = yield* crypto
-                  .digest("SHA-256", new TextEncoder().encode(query.code_verifier))
+                const digest = yield* digests
+                  .digest(Digest.sha256, new TextEncoder().encode(query.code_verifier))
                   .pipe(
                     Effect.map(Base64Url.encode),
                     Effect.catchCause((cause) =>
@@ -1135,7 +1203,7 @@ const makeServer = <
               const authorized =
                 openId === undefined
                   ? { scopes: requested }
-                  : yield* Effect.gen(function* () {
+                  : yield* (function* () {
                       if (record.authentication === undefined)
                         return yield* reject("invalid_grant");
 
@@ -1171,7 +1239,7 @@ const makeServer = <
                         ...decision,
                         scopes: [first, ...remaining] satisfies readonly [Scope, ...Scope[]],
                       };
-                    });
+                    })();
 
               const granted = authorized.scopes;
               const time = yield* now;
@@ -1330,22 +1398,28 @@ const makeServer = <
               }).pipe(Effect.mapError(() => reject()));
 
               const token = yield* decode(Redacted.make(query.token)).pipe(
-                Effect.catchCause((cause) =>
-                  cause.reasons.every(
-                    (reason) =>
-                      Cause.isFailReason(reason) && reason.error._tag === "OAuthServerInvalidToken",
-                  )
-                    ? decodeAccess(Redacted.make(query.token))
-                    : Effect.failCause(cause),
-                ),
-                Effect.catchCause((cause) =>
-                  cause.reasons.every(
-                    (reason) =>
-                      Cause.isFailReason(reason) && reason.error._tag === "OAuthServerInvalidToken",
-                  )
-                    ? Effect.void
-                    : Effect.failCause(cause),
-                ),
+                (effect) =>
+                  Effect.catchCauseIf(
+                    effect,
+                    (cause) =>
+                      cause.reasons.every(
+                        (reason) =>
+                          Cause.isFailReason(reason) &&
+                          reason.error._tag === "OAuthServerInvalidToken",
+                      ),
+                    () => decodeAccess(Redacted.make(query.token)),
+                  ),
+                (effect) =>
+                  Effect.catchCauseIf(
+                    effect,
+                    (cause) =>
+                      cause.reasons.every(
+                        (reason) =>
+                          Cause.isFailReason(reason) &&
+                          reason.error._tag === "OAuthServerInvalidToken",
+                      ),
+                    () => Effect.void,
+                  ),
               );
 
               if (token && (token.kind === "access" || token.kind === "refresh")) {
@@ -1450,6 +1524,7 @@ const makeServer = <
 
   /** Attach only to protected resource routes; metadata and consent stay public.
    * It does not install, wrap or reimplement an MCP protocol server.
+   * Use `securityLayer` for HttpApi groups.
    */
   const middleware = (requiredScopes: ReadonlyArray<Scope>) =>
     HttpRouter.middleware(
@@ -1460,7 +1535,7 @@ const makeServer = <
           return yield* ConfigurationError.make({});
 
         const challenge = (error?: "invalid_token" | "insufficient_scope") =>
-          `Bearer resource_metadata="${server.resourceMetadata}", scope="${requiredScopes.join(" ")}"${error ? `, error="${error}"` : ""}`;
+          bearerChallenge(server.resourceMetadata, requiredScopes.join(" "), error);
 
         return (httpEffect) =>
           Effect.gen(function* () {
@@ -1472,38 +1547,21 @@ const makeServer = <
                 headers: { ...noStore, "www-authenticate": challenge() },
               });
 
-            const verified = yield* server
+            const access = yield* server
               .verify(credential)
-              .pipe(timeoutWithCause("30 seconds"), Effect.exit);
-
-            if (verified._tag === "Failure") {
-              const unexpected = Cause.fromReasons(
-                verified.cause.reasons.filter(
-                  (reason) =>
-                    Cause.isDieReason(reason) ||
-                    (Cause.isFailReason(reason) && reason.error._tag !== "OAuthServerInvalidToken"),
-                ),
+              .pipe(
+                timeoutWithCause("30 seconds"),
+                Effect.exit,
+                Effect.flatMap(classifyVerification),
               );
 
-              yield* reportAuthFailure("http", unexpected);
-              if (Cause.hasInterrupts(verified.cause))
-                return yield* Effect.failCause(
-                  Cause.fromReasons<never>([
-                    ...verified.cause.reasons.filter(Cause.isInterruptReason),
-                    ...(unexpected.reasons.length === 0
-                      ? []
-                      : [Cause.makeDieReason(ReportedOperationDefect.make({}))]),
-                  ]),
-                );
-
-              return unexpected.reasons.length === 0
-                ? HttpServerResponse.empty({
-                    status: 401,
-                    headers: { ...noStore, "www-authenticate": challenge("invalid_token") },
-                  })
-                : HttpServerResponse.empty({ status: 503, headers: noStore });
-            }
-            const access = verified.value;
+            if (access === "invalid_token")
+              return HttpServerResponse.empty({
+                status: 401,
+                headers: { ...noStore, "www-authenticate": challenge("invalid_token") },
+              });
+            if (access === "unavailable")
+              return HttpServerResponse.empty({ status: 503, headers: noStore });
 
             if (!requiredScopes.every((scope) => access.scopes.includes(scope)))
               return HttpServerResponse.empty({
@@ -1519,16 +1577,138 @@ const makeServer = <
       }),
     );
 
+  const isScope = Schema.is(ScopeSchema);
+
+  /** Declared names of a requirement; undefined when absent, malformed or undeclared. */
+  const declaredRequirement = (requirement: OAuthScope.Requirement | undefined) => {
+    if (
+      requirement === undefined ||
+      (requirement.allOf === undefined && requirement.anyOf === undefined) ||
+      requirement.anyOf?.length === 0
+    )
+      return undefined;
+
+    const names = (entries: ReadonlyArray<OAuthScope.OAuthScope | OAuthScope.Described> = []) =>
+      entries.map((entry) => (typeof entry === "string" ? entry : entry.name));
+
+    const allOf = names(requirement.allOf);
+    const anyOf = names(requirement.anyOf);
+
+    return allOf.every(isScope) && anyOf.every(isScope) ? { allOf, anyOf } : undefined;
+  };
+
+  /** Implement `OAuthScope.RequireAccess` for `api` with the verification, deadline,
+   * failure reporting and challenges of `middleware`; denials fail as HttpApiError
+   * Unauthorized or Forbidden. Construction fails with ConfigurationError unless every
+   * endpoint using the middleware has a requirement of declared scopes, every endpoint
+   * with a requirement uses it, and `api` itself has none. Handlers read `CurrentAccess`.
+   */
+  const securityLayer = <ApiId extends string, Groups extends HttpApiGroup.Constraint>(
+    api: HttpApi.HttpApi<ApiId, Groups>,
+  ) =>
+    Layer.effect(
+      OAuthScope.RequireAccess,
+      Effect.gen(function* () {
+        const server = yield* Service;
+        let configured = Context.getOrUndefined(api.annotations, OAuthScope.Required) === undefined;
+
+        HttpApi.reflect(api, {
+          onGroup: () => undefined,
+          onEndpoint: ({ group, endpoint }) => {
+            const requirement = requirementOf(group, endpoint);
+
+            if (
+              endpoint.middlewares.has(OAuthScope.RequireAccess)
+                ? declaredRequirement(requirement) === undefined
+                : requirement !== undefined
+            )
+              configured = false;
+          },
+        });
+
+        if (!configured) return yield* ConfigurationError.make({});
+
+        return OAuthScope.RequireAccess.of({
+          bearer: Effect.fn("OAuthServer.requireAccess")(function* (
+            httpEffect,
+            { credential, endpoint, group },
+          ) {
+            const required = declaredRequirement(requirementOf(group, endpoint));
+
+            const advertised = new Set(
+              required === undefined ? [] : [...required.allOf, ...required.anyOf.slice(0, 1)],
+            );
+
+            const deny = (
+              error: HttpApiError.Unauthorized | HttpApiError.Forbidden,
+              reason?: "invalid_token" | "insufficient_scope",
+            ) => {
+              const challenge = bearerChallenge(
+                server.resourceMetadata,
+                advertised.size === 0 ? undefined : [...advertised].join(" "),
+                reason,
+              );
+
+              return HttpEffect.appendPreResponseHandler((_request, response) =>
+                Effect.succeed(
+                  HttpServerResponse.setHeaders(response, {
+                    ...noStore,
+                    "www-authenticate": challenge,
+                  }),
+                ),
+              ).pipe(Effect.andThen(Effect.fail(error)));
+            };
+
+            if (Redacted.value(credential) === "")
+              return yield* deny(HttpApiError.Unauthorized.make({}));
+
+            const access = yield* server
+              .verify(credential)
+              .pipe(
+                timeoutWithCause("30 seconds"),
+                Effect.exit,
+                Effect.flatMap(classifyVerification),
+              );
+
+            if (access === "invalid_token")
+              return yield* deny(HttpApiError.Unauthorized.make({}), "invalid_token");
+            if (access === "unavailable")
+              return HttpServerResponse.empty({ status: 503, headers: noStore });
+
+            if (required === undefined) {
+              yield* reportAuthFailure("http", Cause.die(ConfigurationError.make({})));
+
+              return HttpServerResponse.empty({ status: 503, headers: noStore });
+            }
+
+            if (
+              !required.allOf.every((scope) => access.scopes.includes(scope)) ||
+              (required.anyOf.length !== 0 &&
+                !required.anyOf.some((scope) => access.scopes.includes(scope)))
+            )
+              return yield* deny(HttpApiError.Forbidden.make({}), "insufficient_scope");
+
+            return yield* httpEffect.pipe(
+              Effect.provideService(CurrentAccess, access),
+              Effect.provideService(ScopedCurrentAccess, access),
+            );
+          }),
+        });
+      }),
+    );
+
   return {
     Service,
     layer,
     routes,
     middleware,
+    securityLayer,
     paths,
     Scope: ScopeSchema,
     Access: AccessSchema,
     CurrentAccess: ScopedCurrentAccess,
     Authorization: authorizationSource.Service,
+    Clients,
   };
 };
 
@@ -1569,8 +1749,10 @@ export const make = <const Id extends string, const S extends ReadonlyArray<OAut
     CurrentAccess: server.CurrentAccess,
     routes: server.routes,
     middleware: server.middleware,
+    securityLayer: server.securityLayer,
     paths: server.paths,
     Identity,
+    Clients: server.Clients,
     layer: (options: Options) => server.layer(options),
   };
 };
@@ -1578,8 +1760,9 @@ export const make = <const Id extends string, const S extends ReadonlyArray<OAut
 /** Registered-client OpenID Connect code flow with PKCE, RS256 and explicit consent.
  * Standard OpenID scopes are included alongside application scopes.
  * Applications own authentication, current session validity and profile disclosure.
- * Resource JWTs and rotating refresh tokens are opt-in; dynamic registration and
- * front/back-channel logout are not enabled.
+ * Resource JWTs and rotating refresh tokens are opt-in. Clients are static or come
+ * from the Clients service; registration endpoints and front/back-channel logout
+ * are not provided.
  */
 export const makeOpenId = <
   const Id extends string,

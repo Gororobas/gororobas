@@ -1,14 +1,6 @@
 import { BunRuntime } from "@effect/platform-bun";
-import {
-  Auth,
-  EmailDelivery,
-  Hooks,
-  Operations,
-  Password,
-  Proofs,
-  Sessions,
-  WebCrypto,
-} from "@yielded/auth";
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
+import { Auth, EmailDelivery, Hooks, Operations, Password, Proofs, Sessions } from "@yielded/auth";
 import { DateTime, Effect, Layer, Redacted } from "effect";
 import { Base64Url } from "effect/encoding";
 
@@ -23,7 +15,7 @@ import {
 const hashing = Password.PasswordHashing.layer().pipe(Layer.provide(CryptoLive));
 
 const base = Layer.mergeAll(
-  WebCrypto.layerWebCrypto,
+  BunCrypto.layer,
   Hooks.LifecycleHooks.empty,
   hashing,
   Proofs.ProofDispatchScheduler.layerInline,
@@ -52,23 +44,20 @@ const program = Effect.gen(function* () {
       }),
   };
 
-  const strategy = sessions
-    .statelessLayer(sessionPolicy)
-    .pipe(
-      Layer.provide(
-        Layer.succeed(Sessions.SessionSigningKeys, {
-          activeKeyId: "example",
-          keys: [
-            {
-              id: "example",
-              // Demo-only key material. Production requires independently generated random keys.
-              material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
-            },
-          ],
-        }),
-      ),
-    )
-    .pipe(Layer.provide(base));
+  const strategy = sessions.statelessLayer(sessionPolicy).pipe(
+    Layer.provide(
+      Layer.succeed(Sessions.SessionSigningKeys, {
+        activeKeyId: "example",
+        keys: [
+          {
+            id: "example",
+            material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
+          },
+        ],
+      }),
+    ),
+    Layer.provide(base),
+  );
 
   const completion = sessions
     .completionLayer()

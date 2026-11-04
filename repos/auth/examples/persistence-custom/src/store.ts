@@ -147,8 +147,8 @@ export class AccountStore extends Context.Service<
               return yield* body(state, DateTime.toEpochMillis(yield* DateTime.now));
             }),
           ),
-        transaction: (body) =>
-          Effect.gen(function* () {
+        transaction: Effect.fnUntraced(
+          function* (body) {
             if (yield* Hooks.hasCommitScope) return yield* StoreUnavailable.make({});
 
             const result = yield* Hooks.coordinateCommit((journal) =>
@@ -184,7 +184,9 @@ export class AccountStore extends Context.Service<
             ).pipe(Effect.catchTag("HookConfigurationError", () => StoreUnavailable.make({})));
 
             return result.value;
-          }).pipe(Effect.provideService(Hooks.LifecycleHooks, hooks)),
+          },
+          Effect.provideService(Hooks.LifecycleHooks, hooks),
+        ),
       });
     }),
   ).pipe(Layer.provide(DataDirectory.layer));

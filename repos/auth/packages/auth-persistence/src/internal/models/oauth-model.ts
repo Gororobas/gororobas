@@ -17,7 +17,8 @@ import { AuthenticationFactor } from "@yielded/auth/Operations";
 import type { CleanupResult } from "@yielded/auth/Persistence";
 import type { TokenDigest } from "@yielded/auth/Schema";
 import { type AuthenticationRequirement, SecurityRevision } from "@yielded/auth/Sessions";
-import { type Effect, Schema } from "effect";
+import type * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { TableModel as Table, SqlExpression } from "../table-model";
 import type { PersistenceMappingError, SubjectIdCodec } from "./common";

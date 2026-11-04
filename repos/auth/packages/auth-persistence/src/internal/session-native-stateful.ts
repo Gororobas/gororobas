@@ -13,9 +13,13 @@ import {
   type SessionRepository,
   type SessionUnavailable,
 } from "@yielded/auth/Sessions";
-import { Cause, DateTime, Effect, Option, Schema } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import type * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import { PersistenceMappingError, isMappedConstraintConflict } from "./mapping-error";
@@ -67,7 +71,7 @@ export const makeNativeStatefulSessionServices = Effect.fnUntraced(function* <Cl
     readonly sessionRepository: SessionRepository;
   },
   SessionUnavailable,
-  SqlClient | LifecycleHooks | SqlBatchCommit
+  SqlClient.SqlClient | LifecycleHooks | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
 
@@ -102,7 +106,7 @@ export const makeNativeStatefulSessionServices = Effect.fnUntraced(function* <Cl
           .pipe(Effect.provideService(SqlBatchCommit, batch))
     ).pipe(Effect.provideService(AuthenticationClock, state.clockPolicy));
 
-  const stage = Effect.fnUntraced(function* (statement: Fragment, expected?: number) {
+  const stage = Effect.fnUntraced(function* (statement: Statement.Fragment, expected?: number) {
     if (batch !== undefined) {
       yield* appendSqlBatchStatement(sql`${statement}`);
       if (expected !== undefined)
@@ -114,7 +118,7 @@ export const makeNativeStatefulSessionServices = Effect.fnUntraced(function* <Cl
     return yield* executeSqlChange(sql, statement);
   });
 
-  const finalCondition = Effect.fnUntraced(function* (name: string, condition: Fragment) {
+  const finalCondition = Effect.fnUntraced(function* (name: string, condition: Statement.Fragment) {
     if (batch !== undefined)
       yield* registerSqlBatchPostcondition({ name, statement: sqlBatchAssertion(sql, condition) });
     else if (Option.isSome(external))
@@ -374,13 +378,12 @@ export const makeNativeStatefulSessionServices = Effect.fnUntraced(function* <Cl
         ),
       ),
     verify: ({ digest }) =>
-      executor
-        .verify(verify(digest))
-        .pipe(
-          Effect.flatMap((record) =>
-            record === undefined ? Effect.fail(SessionInvalid.make({})) : Effect.succeed(record),
-          ),
+      executor.verify(verify(digest)).pipe(
+        Effect.filterOrFail(
+          (record) => !(record === undefined),
+          () => SessionInvalid.make({}),
         ),
+      ),
     rotate: (input, project) =>
       native(
         classify(

@@ -1,7 +1,10 @@
 import { FlowContext, Persistence, Record, Unavailable } from "@yielded/auth/OAuthProxy";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import { Cause, Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { identifier } from "./sql-table";
 import { requireStandalone } from "./standalone";

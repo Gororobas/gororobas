@@ -1,9 +1,15 @@
-import { Hmac } from "@yielded/crypto/Hmac";
-import { Signature } from "@yielded/crypto/Signature";
 import type * as OAuth from "@yielded/oauth/OAuth";
 import * as Oidc from "@yielded/oauth/Oidc";
-import { Cause, Context, Crypto, Effect, type Redacted } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/http";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as Mac from "effect/crypto/Mac";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Signature from "effect/crypto/Signature";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import type * as Redacted from "effect/Redacted";
 
 import { OAuthUnavailable } from "../../signInErrors";
 import { installProvider, prepareConfigurations, type InstalledProvider } from "./configuration";
@@ -21,7 +27,7 @@ import {
 } from "./models";
 import type { Requirements as OAuthRequirements } from "./native";
 
-export type Requirements = OAuthRequirements | Signature | Hmac;
+export type Requirements = OAuthRequirements | Signature.Signature | Mac.Mac;
 
 const configurationError = (error: Effect.Error<ReturnType<typeof Oidc.discover>>) =>
   error._tag === "OAuthConfigurationError"
@@ -94,9 +100,10 @@ const makeVerifier = Effect.fn("OpenIdConnect.makeVerifier")(function* (
     readonly clientSecret?: Redacted.Redacted<string>;
   },
 ) {
-  const context = Context.make(Crypto.Crypto, yield* Crypto.Crypto).pipe(
-    Context.add(Signature, yield* Signature),
-    Context.add(Hmac, yield* Hmac),
+  const context = Context.make(SecureRandom.SecureRandom, yield* SecureRandom.SecureRandom).pipe(
+    Context.add(Digest.Digest, yield* Digest.Digest),
+    Context.add(Signature.Signature, yield* Signature.Signature),
+    Context.add(Mac.Mac, yield* Mac.Mac),
   );
 
   const verifier = yield* Oidc.makeVerifier({

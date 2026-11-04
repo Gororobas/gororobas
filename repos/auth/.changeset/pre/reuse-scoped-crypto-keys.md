@@ -1,5 +1,4 @@
 ---
-"@yielded/crypto": minor
 ---
 
 Reduce portable Argon2id and HMAC scheduling overhead and XChaCha buffer allocation. Reuse AES-GCM and signature keys through scoped imports.

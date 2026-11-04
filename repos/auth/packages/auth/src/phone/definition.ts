@@ -1,4 +1,5 @@
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type {
   BindingOf,
@@ -9,7 +10,7 @@ import type {
 } from "../auth/definition";
 import { operationGroup } from "../operations/operation";
 import { snapshotPhoneConfiguration } from "./configuration";
-import { makePhoneLifecycle } from "./lifecycle";
+import { defaultPhoneLifecyclePolicy, makePhoneLifecycle } from "./lifecycle";
 import type { PhoneLifecyclePolicy } from "./lifecycleModels";
 import { makePhoneOtp } from "./module";
 
@@ -89,7 +90,9 @@ const captureLifecycle = <const Namespace extends string | undefined>(
 ) => {
   const options = snapshotPhoneConfiguration({
     ...input,
-    lifecycle: input.lifecycle === true ? (true as const) : Object.freeze({ ...input.lifecycle }),
+    lifecycle: Object.freeze({
+      ...(input.lifecycle === true ? defaultPhoneLifecyclePolicy : input.lifecycle),
+    }),
   });
 
   return { options };
@@ -115,13 +118,13 @@ const bindLifecycle = <
 
   const lifecycle = makePhoneLifecycle<Id, SessionId, Claims>(binding.namespace, {
     ...phoneOptions,
-    ...(lifecyclePolicy === true ? {} : { lifecycle: lifecyclePolicy }),
+    lifecycle: lifecyclePolicy,
     sessions: binding.sessions,
   });
 
   return Object.freeze({
     ...phone,
-    persistence: { ...phone.persistence, lifecycle: true as const },
+    persistence: { ...phone.persistence, lifecycle: true as const, lifecyclePolicy },
     lifecycle,
     operations: { ...phone.operations, ...lifecycle.operations },
     group: operationGroup(

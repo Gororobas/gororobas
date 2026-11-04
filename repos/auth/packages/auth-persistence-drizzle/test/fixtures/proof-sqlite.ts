@@ -1,6 +1,5 @@
-import { NodeCrypto } from "@effect/platform-node";
-import { D1Client } from "@effect/sql-d1/D1Client";
-import type { D1Client as D1ClientService } from "@effect/sql-d1/D1Client";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as D1Client from "@effect/sql-d1/D1Client";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Auth, Email, Password, PhoneOtp, Sessions } from "@yielded/auth";
 import { makeStorageMappings } from "@yielded/auth-persistence/Adapter";
@@ -15,10 +14,12 @@ import {
   text,
   type SQLiteTable,
 } from "drizzle-orm/sqlite-core";
-import { Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { SqlError } from "effect/sql/SqlError";
-import type { Statement } from "effect/sql/Statement";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import { Database as D1Database } from "../../src/drizzle/d1-database";
 import type { ProofPersistenceMapping } from "../../src/drizzle/proof-model";
@@ -130,11 +131,11 @@ export const database = Layer.effectDiscard(
  * run unchanged, in a real atomic SQLite transaction. The callback introduces a
  * competing committed writer immediately before that transaction begins. */
 export const makeD1Transport = Effect.fnUntraced(function* (
-  beforeBatch: Effect.Effect<void, SqlError, SqlClient.SqlClient> = Effect.void,
-): Effect.fn.Return<D1ClientService, never, SqlClient.SqlClient> {
+  beforeBatch: Effect.Effect<void, SqlError.SqlError, SqlClient.SqlClient> = Effect.void,
+): Effect.fn.Return<D1Client.D1Client, never, SqlClient.SqlClient> {
   const client = yield* SqlClient.SqlClient;
 
-  const batch = (statements: ReadonlyArray<Statement<unknown>>) =>
+  const batch = (statements: ReadonlyArray<Statement.Statement<unknown>>) =>
     beforeBatch.pipe(
       Effect.andThen(
         client.withTransaction(
@@ -160,17 +161,19 @@ export const makeD1Transport = Effect.fnUntraced(function* (
   // Keep SQLite's transaction owner private to batches; D1 views cannot recover it.
   Object.assign(transport, { safe: transport });
 
-  return transport as unknown as D1ClientService;
+  return transport as unknown as D1Client.D1Client;
 });
 
 export const d1Database = (
-  beforeBatch: Effect.Effect<void, SqlError, SqlClient.SqlClient> = Effect.void,
+  beforeBatch: Effect.Effect<void, SqlError.SqlError, SqlClient.SqlClient> = Effect.void,
 ) =>
   Layer.effect(
     D1Database,
     Effect.gen(function* () {
       const transport = yield* makeD1Transport(beforeBatch);
 
-      return yield* DrizzleD1.makeWithDefaults({}).pipe(Effect.provideService(D1Client, transport));
+      return yield* DrizzleD1.makeWithDefaults({}).pipe(
+        Effect.provideService(D1Client.D1Client, transport),
+      );
     }),
   ).pipe(Layer.provideMerge(database));

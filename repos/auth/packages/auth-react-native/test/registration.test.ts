@@ -1,7 +1,7 @@
 import { it } from "@effect/vitest";
 import * as ReactNativePasskey from "@yielded/auth-react-native";
 import { PasskeyRegistrationStarted } from "@yielded/auth/Passkey";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 import type { Passkey } from "react-native-passkey";
 import { afterEach, expect, vi } from "vite-plus/test";
 
@@ -49,7 +49,7 @@ afterEach(() => bridge.create.mockClear());
 // to "direct". Diagnostics tests cannot observe native registration selection.
 it.effect("limits native registration to platform credentials", () =>
   Effect.gen(function* () {
-    const native = yield* ReactNativePasskey.make();
+    const native = yield* ReactNativePasskey.make;
 
     yield* Effect.flip(native.register(started));
     expect(bridge.create).toHaveBeenCalledWith(expect.any(String), true, false);
@@ -59,7 +59,7 @@ it.effect("limits native registration to platform credentials", () =>
 // The same commit allowed RSA-only requests to create ES256 platform credentials.
 it.effect("rejects RSA-only registration before native credential creation", () =>
   Effect.gen(function* () {
-    const native = yield* ReactNativePasskey.make();
+    const native = yield* ReactNativePasskey.make;
 
     expect(
       yield* Effect.flip(

@@ -1,5 +1,6 @@
 import * as M from "@yielded/auth/OAuth";
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { OAuthConnectedMapping } from "../models/oauth-connected-model";
 import type { NativeSqlTables } from "../native-sql-table";

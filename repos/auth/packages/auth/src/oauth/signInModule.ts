@@ -1,16 +1,15 @@
-import {
-  Cause,
-  Context,
-  Crypto,
-  DateTime,
-  Effect,
-  Layer,
-  Redacted,
-  Result,
-  Schema,
-  type Types,
-} from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
 import { defaultLayer, hooksLayer } from "../auth/defaults";
@@ -193,7 +192,7 @@ export const makeOAuthMethod = <
   const makeAuthentication = Effect.gen(function* () {
     const { resolve: resolveClaims } = yield* SessionClaims;
     const { prepare: completeAuthentication } = yield* sessions.AuthenticationCompletion;
-    const { digest } = yield* Crypto.Crypto;
+    const { digest } = yield* Digest.Digest;
 
     return Effect.fn("OAuth.authenticate")(function* (input: {
       readonly context: OAuthSignInTransactionContext;
@@ -214,7 +213,7 @@ export const makeOAuthMethod = <
 
       const bindingDigest = TokenDigest.make(
         Base64Url.encode(
-          yield* digest("SHA-256", encoder.encode(encoded)).pipe(
+          yield* digest(Digest.sha256, encoder.encode(encoded)).pipe(
             Effect.catchCause((cause) =>
               Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
             ),
@@ -390,11 +389,12 @@ export const makeOAuthMethod = <
         const { seal, open } = yield* OAuthTransactionProtector;
         const { issue, consume, resolve } = yield* OAuthSignInPersistence;
         const authenticate = yield* makeAuthentication;
-        const crypto = yield* Crypto.Crypto;
-        const { digest } = crypto;
+        const crypto = yield* SecureRandom.SecureRandom;
+        const digests = yield* Digest.Digest;
+        const { digest } = yield* Digest.Digest;
 
         const hash = Effect.fn("OAuth.hash")(function* (message: string) {
-          const result = yield* digest("SHA-256", encoder.encode(message)).pipe(
+          const result = yield* digest(Digest.sha256, encoder.encode(message)).pipe(
             Effect.catchCause((cause) =>
               Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
             ),
@@ -540,7 +540,7 @@ export const makeOAuthMethod = <
             sealed,
           });
 
-          const expected = Schema.encodeSync(flowJson)(flow);
+          const expected = yield* Schema.encodeEffect(flowJson)(flow).pipe(Effect.orDie);
 
           type Issuance =
             | { readonly _tag: "Rejected" }
@@ -557,7 +557,11 @@ export const makeOAuthMethod = <
 
                 if (checked._tag === "Rejected")
                   return journal.prepare({ _tag: "Rejected" as const });
-                if (Schema.encodeSync(flowJson)(checked.flow) !== expected)
+                if (
+                  (yield* Schema.encodeResult(flowJson)(checked.flow).pipe(
+                    Result.mapError(() => OAuthUnavailable.make({})),
+                  )) !== expected
+                )
                   return yield* Result.fail(OAuthUnavailable.make({}));
 
                 return journal.prepare({
@@ -744,7 +748,10 @@ export const makeOAuthMethod = <
 
               if (prepared === undefined) return yield* OAuthRejected.make({});
               const intentCodec = Schema.fromJsonString(OAuthRegistrationIntent);
-              const expected = Schema.encodeSync(intentCodec)(prepared.intent);
+
+              const expected = yield* Schema.encodeEffect(intentCodec)(prepared.intent).pipe(
+                Effect.orDie,
+              );
 
               const issued = yield* registration
                 .issue(
@@ -755,7 +762,9 @@ export const makeOAuthMethod = <
 
                       if (
                         checked._tag === "RegistrationIssued" &&
-                        Schema.encodeSync(intentCodec)(checked.intent) !== expected
+                        (yield* Schema.encodeResult(intentCodec)(checked.intent).pipe(
+                          Result.mapError(() => OAuthUnavailable.make({})),
+                        )) !== expected
                       )
                         return yield* Result.fail(OAuthUnavailable.make({}));
 
@@ -782,12 +791,12 @@ export const makeOAuthMethod = <
             const connection =
               access === undefined
                 ? undefined
-                : yield* Effect.gen(function* () {
+                : yield* (function* () {
                     if (privateGrant === undefined || grantStartedAt === undefined)
                       return yield* OAuthUnavailable.make({});
 
                     return yield* access.retain(flow, credential, privateGrant, grantStartedAt);
-                  });
+                  })();
 
             const established = yield* authenticate({
               context,
@@ -809,7 +818,8 @@ export const makeOAuthMethod = <
             };
           },
           Effect.scoped,
-          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.provideService(SecureRandom.SecureRandom, crypto),
+          Effect.provideService(Digest.Digest, digests),
           Effect.tapError((error) =>
             reportAuthDiagnostic(
               "oauth-completion",
@@ -824,7 +834,7 @@ export const makeOAuthMethod = <
   };
 
   const signInLayer = (configuration: OAuthSignInPolicy) =>
-    makeSignInLayer(configuration, Effect.succeed(undefined));
+    makeSignInLayer(configuration, Effect.as(Effect.void, undefined));
 
   function registration<
     Registration extends Schema.Codec<unknown, unknown, unknown, unknown>,
@@ -946,10 +956,10 @@ export const makeOAuthMethod = <
       Effect.mapError(() => InvalidOperationInput.make({})),
     );
 
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
 
     const flowId = yield* crypto
-      .randomUUIDv4()
+      .uuidV4()
       .pipe(
         Effect.catchCause((cause) =>
           Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),

@@ -1,4 +1,6 @@
-import { Context, type Effect, Schema } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { credentialSlots } from "../http-operation/models";
 import type { CleanupLimit, CleanupResult } from "../persistence/cleanup";
