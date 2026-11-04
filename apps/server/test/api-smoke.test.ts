@@ -10,6 +10,7 @@
 import { NodeServices } from "@effect/platform-node"
 import { assert, describe, expect, it } from "@effect/vitest"
 import {
+  ExternalDataObservationId,
   GororobasApi,
   Handle,
   LoroDocFrontier,
@@ -144,6 +145,11 @@ const SeededTargets = Effect.gen(function* () {
     `SELECT handle FROM profiles WHERE visibility = 'PUBLIC' ORDER BY id LIMIT 1`,
   )
 
+  const externalDataObservation = yield* one(
+    Schema.Struct({ id: ExternalDataObservationId }),
+    `SELECT id FROM wiki_article_external_data_observations ORDER BY id LIMIT 1`,
+  )
+
   return {
     publication,
     comment,
@@ -155,6 +161,7 @@ const SeededTargets = Effect.gen(function* () {
     organization,
     generatedNewcomer,
     profile,
+    externalDataObservation,
   }
 })
 
@@ -281,6 +288,16 @@ const requests = ({
       client.wiki.listWikiArticleChildPlaces({
         params: { kind: targets.article.kind, handle: targets.article.handle },
         query: { language: "pt", pageSize: 12, currentPage: 0 },
+      }),
+    "wiki.getWikiArticleExternalData": () =>
+      client.wiki.getWikiArticleExternalData({
+        params: { kind: targets.article.kind, handle: targets.article.handle },
+      }),
+    "wiki.listExternalDataObservations": () =>
+      client.wiki.listExternalDataObservations({ query: { outcome: "Success" } }),
+    "wiki.getExternalDataObservation": () =>
+      client.wiki.getExternalDataObservation({
+        params: { observationId: targets.externalDataObservation.id },
       }),
     "moderation.getModerationQueue": () => client.moderation.getModerationQueue(),
 

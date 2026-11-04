@@ -176,11 +176,15 @@ const navigationLinks = <Message>(
     ),
   )
 
-/** A link that looks like the search field, for pages other than search. */
-export const searchLink = <Message>(href: string, h: HtmlBuilder<Message>): Html =>
+/** A link that looks like the search field, for pages other than search. `onClick` is sent
+ *  alongside the navigation, such as to focus the field once it renders. */
+export const searchLink = <Message>(
+  { href, onClick }: Readonly<{ href: string; onClick: Message }>,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.a(
     styledAttributes(
-      [h.Href(href), h.AriaLabel("Abrir busca")],
+      [h.Href(href), h.AriaLabel("Abrir busca"), h.OnClick(onClick)],
       searchSurfaceStyle,
       searchLinkStyle,
     ),

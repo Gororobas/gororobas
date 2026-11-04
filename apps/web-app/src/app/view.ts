@@ -12,12 +12,14 @@ import {
   ApplicationComposition,
   type ApplicationViewBuilder,
   AuthenticationBinding,
+  ExternalDataObservationsBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
   wikiArticleKey,
 } from "./composition"
+import { Message } from "./message"
 import type { Model } from "./model"
 import { ApplicationRoute, type SearchType, loginRouter, searchUrl } from "./route"
 
@@ -175,6 +177,18 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
             }),
           ),
       }),
+    ExternalDataObservations: () =>
+      Option.match(model.maybeExternalDataObservations, {
+        onNone: () => h.empty,
+        onSome: (log) =>
+          h.block(
+            ExternalDataObservationsBinding.embedView({
+              key: log.queryKey,
+              slotId: "external-data-observations",
+              model: log.model,
+            }),
+          ),
+      }),
     NotFound: ({ path }) => prose(notFound(path, h), h),
   })
 
@@ -185,6 +199,7 @@ const title = (route: ApplicationRoute): string =>
     WikiArticleDebug: () => "Depuração | Gororobas",
     Login: () => "Entrar | Gororobas",
     MyPlaces: () => "Meus lugares | Gororobas",
+    ExternalDataObservations: () => "Dados externos | Gororobas",
     NotFound: () => "Página não encontrada | Gororobas",
   })
 
@@ -193,7 +208,18 @@ export const view = ApplicationComposition.makeView((model, h): Document => ({
   body: h.div(styledAttributes([], shellStyle), [
     ...(ApplicationRoute.guards.Search(model.route)
       ? []
-      : [header({ model, search: AppShell.searchLink(searchUrl(), h) }, h)]),
+      : [
+          header(
+            {
+              model,
+              search: AppShell.searchLink(
+                { href: searchUrl(), onClick: Message.ClickedSearchLink() },
+                h,
+              ),
+            },
+            h,
+          ),
+        ]),
     h.main(styledAttributes([], mainStyle), [page(model, h)]),
     ...(ApplicationRoute.guards.Search(model.route)
       ? []

@@ -4,7 +4,12 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 import { UnauthorizedError } from "../authorization/session.js"
 import { BookmarkState, SupportedLanguage } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
-import { MediaAssetId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
+import {
+  ExternalDataObservationId,
+  MediaAssetId,
+  WikiArticleId,
+  WikiArticleRevisionId,
+} from "../common/ids.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import { InvalidMediaAssetError, MediaNotFoundError } from "../media-assets/errors.js"
 import {
@@ -22,6 +27,7 @@ import {
   WikiSearchParams,
 } from "./domain.js"
 import {
+  ExternalDataObservationNotFoundError,
   WikiArticleRevisionAlreadyEvaluatedError,
   WikiArticleRevisionNotFoundError,
   WikiArticleNotFoundError,
@@ -31,6 +37,12 @@ import {
   BookIdSuggestion,
   BookIdSuggestionsQuery,
 } from "./external-data/kinds/book-external-data.js"
+import {
+  ExternalDataObservationDetail,
+  ExternalDataObservationLogPage,
+  ExternalDataObservationLogQuery,
+  WikiArticleExternalData,
+} from "./external-data/views.js"
 import { WikiArticleRevisionRow } from "./wiki-article.js"
 
 export class WikiApiGroup extends HttpApiGroup.make("wiki")
@@ -171,6 +183,31 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
       params: WikiArticleLookup,
       query: WikiChildPlacesParams,
     }),
+  )
+  .add(
+    HttpApiEndpoint.get("getWikiArticleExternalData", "/wiki/:kind/:handle/external-data", {
+      success: WikiArticleExternalData,
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
+      params: WikiArticleLookup,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("listExternalDataObservations", "/external-data/observations", {
+      success: ExternalDataObservationLogPage,
+      error: UnauthorizedError,
+      query: ExternalDataObservationLogQuery,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get(
+      "getExternalDataObservation",
+      "/external-data/observations/:observationId",
+      {
+        success: ExternalDataObservationDetail,
+        error: [UnauthorizedError, ExternalDataObservationNotFoundError],
+        params: Schema.Struct({ observationId: ExternalDataObservationId }),
+      },
+    ),
   )
   .add(
     HttpApiEndpoint.put("setMainMedia", "/wiki/:wikiArticleId/main-media", {

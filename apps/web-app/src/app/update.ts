@@ -29,7 +29,9 @@ export const update = ApplicationComposition.makeUpdate({
       External: ({ href }) =>
         Update.combineSteps([makeCommandsStep(() => [LoadExternal({ href })])])(model),
     }),
+  ClickedSearchLink: makeFieldsStep(() => ({ isSearchFieldFocusPending: () => true })),
   ChangedUrl: (model, { url }) => changeRouteStep(url)(model),
+  CompletedFocusSearchField: makeNoopStep(),
   CompletedNavigateInternal: makeNoopStep(),
   CompletedLoadExternal: makeNoopStep(),
   CompletedReadToday: makeFieldsStep.fromMessage(({ today }) => ({

@@ -7,6 +7,8 @@ import { DeviceLocation } from "../lib/device-location"
 
 export const Message = defineMessageUnion({
   ClickedLink: { request: UrlRequest },
+  ClickedSearchLink: {},
+  CompletedFocusSearchField: {},
   ChangedUrl: { url: Url },
   CompletedNavigateInternal: {},
   CompletedLoadExternal: {},

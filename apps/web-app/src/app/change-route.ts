@@ -5,8 +5,10 @@ import { Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { Url } from "foldkit/url"
 
+import { FocusSearchField } from "./command"
 import {
   AuthenticationBinding,
+  ExternalDataObservationsBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
@@ -14,13 +16,41 @@ import {
   wikiArticleKey,
 } from "./composition"
 import { makeFieldsStep, makeStep } from "./definition"
-import { ApplicationRoute, urlToApplicationRoute } from "./route"
+import {
+  ApplicationRoute,
+  type ObservationLogQuery,
+  observationLogQueryOf,
+  observationLogUrl,
+  urlToApplicationRoute,
+} from "./route"
 
 const clearPagesStep = makeFieldsStep(() => ({
   maybeWikiArticle: () => Option.none(),
   maybeWikiArticleDebug: () => Option.none(),
   maybeProfileLocationsEditor: () => Option.none(),
+  maybeExternalDataObservations: () => Option.none(),
 }))
+
+/** Each filter combination is its own URL, so the log loads afresh when one changes. */
+const showExternalDataObservationsStep = (query: ObservationLogQuery) => {
+  const queryKey = observationLogUrl(query)
+
+  return makeStep((model) =>
+    Option.exists(model.maybeExternalDataObservations, (log) => log.queryKey === queryKey)
+      ? { model }
+      : ExternalDataObservationsBinding.init({
+          key: queryKey,
+          args: [query],
+          toParentModel: (child) =>
+            modifyFields(model, {
+              maybeWikiArticle: () => Option.none(),
+              maybeWikiArticleDebug: () => Option.none(),
+              maybeProfileLocationsEditor: () => Option.none(),
+              maybeExternalDataObservations: () => Option.some({ queryKey, model: child }),
+            }),
+        }),
+  )
+}
 
 /** The timeline reloads every time the page opens, so changes made elsewhere show up. */
 const showProfileLocationsEditorStep = makeStep((model) =>
@@ -80,13 +110,27 @@ export const enterRouteStep = (route: ApplicationRoute) =>
       Update.combineSteps([clearPagesStep, SearchBinding.informQueryChange({ query })]),
     WikiArticle: ({ kind, handle }) => showWikiArticleStep({ kind, handle }),
     MyPlaces: () => showProfileLocationsEditorStep,
+    ExternalDataObservations: (route) =>
+      showExternalDataObservationsStep(observationLogQueryOf(route)),
     NotFound: () => clearPagesStep,
   })
 
+/** The search link's request lasts one navigation: arriving anywhere else drops it. */
+const consumeSearchFieldFocusStep = (route: ApplicationRoute) =>
+  makeStep((model) => ({
+    model: modifyFields(model, { isSearchFieldFocusPending: () => false }),
+    commands:
+      model.isSearchFieldFocusPending && ApplicationRoute.guards.Search(route)
+        ? [FocusSearchField()]
+        : [],
+  }))
+
 export const changeRouteStep = (url: Url) => {
   const route = urlToApplicationRoute(url)
+
   return Update.combineSteps([
     makeFieldsStep(() => ({ route: () => route })),
     enterRouteStep(route),
+    consumeSearchFieldFocusStep(route),
   ])
 }

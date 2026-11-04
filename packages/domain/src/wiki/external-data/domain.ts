@@ -10,6 +10,7 @@ import { PlantExternalDataInputs, PlantExternalDataResult } from "./kinds/plant-
 export * from "./common.js"
 export * from "./kinds/book-external-data.js"
 export * from "./kinds/plant-external-data.js"
+export * from "./views.js"
 
 export const ExternalDataResult = Schema.Union([
   PlantExternalDataResult,

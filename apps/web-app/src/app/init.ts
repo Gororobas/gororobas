@@ -18,6 +18,8 @@ export const init = ApplicationComposition.makeInit((url: Url) => {
       maybeWikiArticle: Option.none(),
       maybeWikiArticleDebug: Option.none(),
       maybeProfileLocationsEditor: Option.none(),
+      maybeExternalDataObservations: Option.none(),
+      isSearchFieldFocusPending: false,
     },
     commands: [ReadToday()],
     steps: [enterRouteStep(route)],

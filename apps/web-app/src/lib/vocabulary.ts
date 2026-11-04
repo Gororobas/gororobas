@@ -206,32 +206,60 @@ export const profileTypeLabels: Readonly<Record<ProfileType, string>> = {
   ORGANIZATION: "Organizações",
 }
 
-/** Plant wording; other kinds read these states generically. */
-export const plantBookmarkLabels: Readonly<Record<BookmarkState, string>> = {
-  INTERESTED: "Quero plantar",
-  ACTIVE: "Estou plantando",
-  PREVIOUSLY_ACTIVE: "Já plantei",
-  INDIFFERENT: "Não tenho interesse",
-}
+/** A bookmark's states in the words of what the article is about: a book is read, a plant planted. */
+export type BookmarkVocabulary = Readonly<{
+  /** Someone's own relationship to the article, such as "Quero ler". */
+  states: Readonly<Record<BookmarkState, string>>
+  /** How others' bookmarks are grouped on the article's page, such as "Querem ler". */
+  groups: Readonly<Record<BookmarkState, string>>
+}>
 
-export const bookmarkLabels: Readonly<Record<BookmarkState, string>> = {
-  INTERESTED: "Tenho interesse",
-  ACTIVE: "Estou usando",
-  PREVIOUSLY_ACTIVE: "Já usei",
-  INDIFFERENT: "Não tenho interesse",
-}
+const vocabulary = (
+  states: Omit<Record<BookmarkState, string>, "INDIFFERENT">,
+  groups: Omit<Record<BookmarkState, string>, "INDIFFERENT">,
+): BookmarkVocabulary => ({
+  states: { ...states, INDIFFERENT: "Não tenho interesse" },
+  groups: { ...groups, INDIFFERENT: "Sem interesse" },
+})
 
-/** How others' bookmarks are grouped on a plant page. */
-export const plantBookmarkerGroupLabels: Readonly<Record<BookmarkState, string>> = {
-  INTERESTED: "Querem plantar",
-  ACTIVE: "Plantando",
-  PREVIOUSLY_ACTIVE: "Já plantaram",
-  INDIFFERENT: "Sem interesse",
-}
+const plantVocabulary = vocabulary(
+  { INTERESTED: "Quero plantar", ACTIVE: "Estou plantando", PREVIOUSLY_ACTIVE: "Já plantei" },
+  { INTERESTED: "Querem plantar", ACTIVE: "Plantando", PREVIOUSLY_ACTIVE: "Já plantaram" },
+)
 
-export const bookmarkerGroupLabels: Readonly<Record<BookmarkState, string>> = {
-  INTERESTED: "Têm interesse",
-  ACTIVE: "Usando",
-  PREVIOUSLY_ACTIVE: "Já usaram",
-  INDIFFERENT: "Sem interesse",
+const usageVocabulary = vocabulary(
+  { INTERESTED: "Tenho interesse", ACTIVE: "Estou usando", PREVIOUSLY_ACTIVE: "Já usei" },
+  { INTERESTED: "Têm interesse", ACTIVE: "Usando", PREVIOUSLY_ACTIVE: "Já usaram" },
+)
+
+export const bookmarkVocabularies: Readonly<Record<WikiArticleKind, BookmarkVocabulary>> = {
+  PLANT: plantVocabulary,
+  PLANT_CULTIVAR: plantVocabulary,
+  ANIMAL: vocabulary(
+    { INTERESTED: "Quero criar", ACTIVE: "Estou criando", PREVIOUSLY_ACTIVE: "Já criei" },
+    { INTERESTED: "Querem criar", ACTIVE: "Criando", PREVIOUSLY_ACTIVE: "Já criaram" },
+  ),
+  BOOK: vocabulary(
+    { INTERESTED: "Quero ler", ACTIVE: "Estou lendo", PREVIOUSLY_ACTIVE: "Já li" },
+    { INTERESTED: "Querem ler", ACTIVE: "Lendo", PREVIOUSLY_ACTIVE: "Já leram" },
+  ),
+  FILM: vocabulary(
+    { INTERESTED: "Quero assistir", ACTIVE: "Estou assistindo", PREVIOUSLY_ACTIVE: "Já assisti" },
+    { INTERESTED: "Querem assistir", ACTIVE: "Assistindo", PREVIOUSLY_ACTIVE: "Já assistiram" },
+  ),
+  CONCEPT: vocabulary(
+    { INTERESTED: "Quero aprender", ACTIVE: "Estou praticando", PREVIOUSLY_ACTIVE: "Já pratiquei" },
+    { INTERESTED: "Querem aprender", ACTIVE: "Praticando", PREVIOUSLY_ACTIVE: "Já praticaram" },
+  ),
+  PLACE: vocabulary(
+    { INTERESTED: "Quero conhecer", ACTIVE: "Estou por lá", PREVIOUSLY_ACTIVE: "Já estive lá" },
+    { INTERESTED: "Querem conhecer", ACTIVE: "Estão por lá", PREVIOUSLY_ACTIVE: "Já estiveram lá" },
+  ),
+  TOOL: usageVocabulary,
+  RESOURCE: usageVocabulary,
+  NOTEWORTHY_ENTITY: vocabulary(
+    { INTERESTED: "Quero conhecer", ACTIVE: "Participo", PREVIOUSLY_ACTIVE: "Já participei" },
+    { INTERESTED: "Querem conhecer", ACTIVE: "Participam", PREVIOUSLY_ACTIVE: "Já participaram" },
+  ),
+  UNCATEGORIZED: usageVocabulary,
 }

@@ -19,4 +19,4 @@ export const WikiArticleBlock = Block.make("WikiArticle", {
   Message,
 })
 
-export const { makeFieldsStep, makeStep } = WikiArticleBlock
+export const { makeFieldsStep, makeNoopStep, makeStep } = WikiArticleBlock

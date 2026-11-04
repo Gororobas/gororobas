@@ -1,5 +1,5 @@
 import { HashMap, Option } from "effect"
-import { AsyncData } from "foldkit"
+import { AsyncData, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
 import {
@@ -9,14 +9,19 @@ import {
   LoadPublications,
   SaveBookmark,
 } from "./command"
-import { WikiArticleComposition } from "./composition"
-import { makeFieldsStep } from "./definition"
+import {
+  BookmarkDrawerBinding,
+  BookmarkPopoverBinding,
+  WikiArticleComposition,
+} from "./composition"
+import { makeFieldsStep, makeStep } from "./definition"
 import {
   BookmarkSaving,
   BookmarkerResults,
   ChildPlaceResults,
   ContributorResults,
   CultivarResults,
+  ExternalDataResults,
   PageResult,
   PublicationResults,
   RelatedResults,
@@ -100,16 +105,30 @@ export const update = WikiArticleComposition.makeUpdate({
   FailedLoadPublications: makeFieldsStep.fromMessage(({ error }) => ({
     publicationsAsyncData: () => PublicationResults.Failure({ error }),
   })),
+  SucceededLoadExternalData: makeFieldsStep.fromMessage(({ externalData }) => ({
+    externalDataAsyncData: () => ExternalDataResults.Success({ data: externalData }),
+  })),
+  FailedLoadExternalData: makeFieldsStep.fromMessage(({ error }) => ({
+    externalDataAsyncData: () => ExternalDataResults.Failure({ error }),
+  })),
   UpdatedViewerBookmarks: makeFieldsStep.fromMessage(({ bookmarks }) => ({
     viewerBookmarks: () => bookmarks,
   })),
+  ClickedOpenBookmarkDrawer: BookmarkDrawerBinding.requestOpen(),
+  // Choosing closes whichever of the popover or drawer offered the choice.
   SelectedBookmarkState: (model, { maybeState }) =>
-    BookmarkSaving.guards.Saving(model.bookmarkSaving)
-      ? { model }
-      : {
-          model: modifyFields(model, { bookmarkSaving: () => BookmarkSaving.Saving() }),
-          commands: [SaveBookmark({ lookup: model.lookup, maybeState })],
-        },
+    Update.combineSteps(
+      BookmarkSaving.guards.Saving(model.bookmarkSaving)
+        ? []
+        : [
+            makeStep((current) => ({
+              model: modifyFields(current, { bookmarkSaving: () => BookmarkSaving.Saving() }),
+              commands: [SaveBookmark({ lookup: current.lookup, maybeState })],
+            })),
+            BookmarkPopoverBinding.requestClose(),
+            BookmarkDrawerBinding.requestClose(),
+          ],
+    )(model),
   SucceededSaveBookmark: (model, { maybeState }) => ({
     model: modifyFields(model, {
       bookmarkSaving: () => BookmarkSaving.Idle(),

@@ -13,7 +13,11 @@ import {
 } from "@gororobas/domain/common/enums"
 import { WikiArticleId } from "@gororobas/domain/common/ids"
 import { Handle } from "@gororobas/domain/common/primitives"
-import { WikiArticleKind } from "@gororobas/domain/wiki/domain"
+import {
+  ExternalDataOutcomeTag,
+  ExternalDataProvider,
+  WikiArticleKind,
+} from "@gororobas/domain/wiki/domain"
 import {
   Array as EffectArray,
   Effect,
@@ -57,6 +61,7 @@ const wikiArticleTabSlugs = {
 
 const SEARCH_SEGMENT = "buscar"
 const MY_PLACES_SEGMENT = "meus-lugares"
+const EXTERNAL_DATA_OBSERVATIONS_SEGMENT = "dados-externos"
 
 /** Decodes one segment through a total lookup table, so every value has exactly one slug. */
 const slugCodec = <const Value extends string, const Slug extends string>(
@@ -229,6 +234,68 @@ export const emptySearchQuery: SearchQuery = {
   profileType: Option.none(),
 }
 
+// EXTERNAL DATA OBSERVATIONS QUERY
+
+/** Pages count from 1 in the URL; anything else reads as the first page. */
+const pageParam = Schema.OptionFromOptional(Schema.String).pipe(
+  Schema.decodeTo(
+    Schema.Int,
+    SchemaTransformation.transform<number, Option.Option<string>>({
+      decode: (maybeRaw) =>
+        pipe(
+          maybeRaw,
+          Option.map((raw) => Number(EffectString.trim(raw))),
+          Option.filter((page) => Number.isInteger(page) && page >= 1),
+          Option.match({ onNone: () => 0, onSome: (page) => page - 1 }),
+        ),
+      encode: (currentPage) =>
+        currentPage === 0 ? Option.none() : Option.some(String(currentPage + 1)),
+    }),
+  ),
+)
+
+const wikiArticleIdParam = Schema.OptionFromOptional(Schema.String).pipe(
+  Schema.decodeTo(
+    Schema.Option(WikiArticleId),
+    // An ID that doesn't decode reads as absent rather than failing the route.
+    SchemaTransformation.transform<Option.Option<string>, Option.Option<string>>({
+      decode: Option.filter(Schema.is(WikiArticleId)),
+      encode: (id) => id,
+    }),
+  ),
+)
+
+/** Which observations the log shows, all of it in the URL so a view can be shared. */
+export const ObservationLogQuery = Schema.Struct({
+  provider: Schema.Option(ExternalDataProvider),
+  outcome: Schema.Option(ExternalDataOutcomeTag),
+  wikiArticleId: Schema.Option(WikiArticleId),
+  currentPage: Schema.Int,
+})
+
+export type ObservationLogQuery = typeof ObservationLogQuery.Type
+
+const ObservationLogQueryParameters = Schema.Struct({
+  provider: optionalParam(ExternalDataProvider, "enum"),
+  outcome: optionalParam(ExternalDataOutcomeTag, "raw"),
+  wikiArticleId: wikiArticleIdParam,
+  currentPage: pageParam,
+}).pipe(
+  Schema.encodeKeys({
+    provider: "provedor",
+    outcome: "resultado",
+    wikiArticleId: "artigo",
+    currentPage: "pagina",
+  }),
+)
+
+export const emptyObservationLogQuery: ObservationLogQuery = {
+  provider: Option.none(),
+  outcome: Option.none(),
+  wikiArticleId: Option.none(),
+  currentPage: 0,
+}
+
 // ROUTES
 
 export const ApplicationRoute = defineRouteUnion({
@@ -237,6 +304,7 @@ export const ApplicationRoute = defineRouteUnion({
   WikiArticleDebug: { wikiArticleId: WikiArticleId },
   Login: {},
   MyPlaces: {},
+  ExternalDataObservations: ObservationLogQuery.fields,
   NotFound: { path: Schema.String },
 })
 
@@ -287,12 +355,27 @@ export const myPlacesRouter = pipe(
   Route.mapTo(ApplicationRoute.MyPlaces),
 )
 
+export const externalDataObservationsRouter = pipe(
+  literal(EXTERNAL_DATA_OBSERVATIONS_SEGMENT),
+  Route.query(ObservationLogQueryParameters),
+  Route.mapTo(ApplicationRoute.ExternalDataObservations),
+)
+
+export const observationLogUrl = (query: Partial<ObservationLogQuery> = {}): string =>
+  externalDataObservationsRouter({ ...emptyObservationLogQuery, ...query })
+
+export const observationLogQueryOf = ({
+  _tag,
+  ...query
+}: typeof ApplicationRoute.ExternalDataObservations.Type): ObservationLogQuery => query
+
 export const urlToApplicationRoute = Route.parseUrlWithFallback(
   Route.oneOf(
     homeRouter,
     searchRouter,
     loginRouter,
     myPlacesRouter,
+    externalDataObservationsRouter,
     wikiArticleDebugRouter,
     wikiArticleTabRouter,
     wikiArticleAboutRouter,

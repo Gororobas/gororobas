@@ -1,4 +1,8 @@
-import type { WikiArticleLookup } from "@gororobas/domain/wiki/domain"
+import type {
+  WikiArticleExternalData,
+  WikiArticleKind,
+  WikiArticleLookup,
+} from "@gororobas/domain/wiki/domain"
 import { HashMap, Option } from "effect"
 
 import {
@@ -6,6 +10,7 @@ import {
   LoadChildPlaces,
   LoadContributors,
   LoadCultivars,
+  LoadExternalData,
   LoadPage,
   LoadRelated,
 } from "./command"
@@ -16,10 +21,21 @@ import {
   ChildPlaceResults,
   ContributorResults,
   CultivarResults,
+  ExternalDataResults,
   PageResult,
   PublicationResults,
   RelatedResults,
 } from "./model"
+
+const hasExternalData = (kind: WikiArticleKind) => kind === "PLANT" || kind === "BOOK"
+
+const emptyExternalData: WikiArticleExternalData = {
+  attributions: [],
+  wikipediaLinks: [],
+  taxonomy: null,
+  media: [],
+  bookEditions: [],
+}
 
 export const init = WikiArticleComposition.makeInit((lookup: WikiArticleLookup) => ({
   model: {
@@ -35,6 +51,9 @@ export const init = WikiArticleComposition.makeInit((lookup: WikiArticleLookup) 
         ? ChildPlaceResults.Loading()
         : ChildPlaceResults.Success({ data: { places: [], totalCount: 0 } }),
     publicationsAsyncData: PublicationResults.Loading(),
+    externalDataAsyncData: hasExternalData(lookup.kind)
+      ? ExternalDataResults.Loading()
+      : ExternalDataResults.Success({ data: emptyExternalData }),
     viewerBookmarks: HashMap.empty(),
     bookmarkSaving: BookmarkSaving.Idle(),
     maybeBookmarkerFilter: Option.none(),
@@ -49,5 +68,6 @@ export const init = WikiArticleComposition.makeInit((lookup: WikiArticleLookup) 
     LoadContributors({ lookup }),
     ...(lookup.kind === "PLANT" ? [LoadCultivars({ lookup })] : []),
     ...(lookup.kind === "PLACE" ? [LoadChildPlaces({ lookup, currentPage: 0 })] : []),
+    ...(hasExternalData(lookup.kind) ? [LoadExternalData({ lookup })] : []),
   ],
 }))

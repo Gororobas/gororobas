@@ -1,18 +1,11 @@
-import { BookmarkState } from "@gororobas/domain/common/enums"
 import type { WikiArticleContributor } from "@gororobas/domain/wiki/domain"
 import { Style, When } from "@pleat/core"
-import { Array as EffectArray, DateTime, HashMap, Option, Record } from "effect"
+import { Array as EffectArray, DateTime, HashMap, Option } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
-import { loginRouter, wikiArticleUrl } from "../../../app/route"
-import {
-  bookmarkLabels,
-  bookmarkerGroupLabels,
-  plantBookmarkLabels,
-  plantBookmarkerGroupLabels,
-  wikiKindLabels,
-} from "../../../lib/vocabulary"
+import { wikiArticleUrl } from "../../../app/route"
+import { bookmarkVocabularies, wikiKindLabels } from "../../../lib/vocabulary"
 import { aboutName, ofName } from "../../../lib/wiki-article-names"
 import { imageUrl } from "../../../media-urls"
 import { AppText } from "../../../ui/app-text"
@@ -24,22 +17,14 @@ import { PublicationCard } from "../../../ui/publication-card"
 import { RichText } from "../../../ui/rich-text"
 import { SectionCard, cardBleedStyle } from "../../../ui/section-card"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
-import { borderWidth } from "../../../ui/theme"
-import {
-  breakpoint,
-  controlSize,
-  fontSize,
-  fontWeight,
-  radius,
-  space,
-  toneColors,
-  tones,
-} from "../../../ui/theme"
+import { breakpoint, fontWeight, radius, space, toneColors, tones } from "../../../ui/theme"
 import { WikiArticleRow } from "../../../ui/wiki-article-row"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
-import { BookmarkSaving, type Model } from "../model"
+import { type Model } from "../model"
+import * as BookmarkPicker from "./bookmark-picker"
 import * as ChildPlaces from "./child-places"
+import * as ExternalData from "./external-data"
 import * as Overview from "./overview"
 import {
   type ArticleState,
@@ -95,35 +80,6 @@ const heroCaptionStyle = Style.make({
   backgroundColor: tones.primary.backgroundCard,
   color: tones.neutral.shade[800],
 })
-
-const bookmarkStyle = Style.make({ display: "grid", rowGap: space[2] })
-
-const bookmarkSelectStyle = Style.make({
-  inlineSize: "100%",
-  blockSize: controlSize.lg,
-  paddingInline: space[4],
-  border: `${borderWidth.strong} solid ${tones.neutral.ramp[600]}`,
-  borderRadius: radius.full,
-  cornerShape: "squircle",
-  backgroundColor: tones.primary.ramp[400],
-  color: tones.neutral.ramp[900],
-  fontSize: fontSize.regular,
-  cursor: "pointer",
-  outline: "none",
-}).pipe(Style.when(When.focusVisible, focusRingDeclarations))
-
-const bookmarkLinkStyle = Style.make({
-  display: "flex",
-  alignItems: "center",
-  gap: space[2],
-  blockSize: controlSize.lg,
-  paddingInline: space[4],
-  borderRadius: radius.full,
-  cornerShape: "squircle",
-  backgroundColor: tones.primary.ramp[400],
-  color: tones.neutral.ramp[900],
-  outline: "none",
-}).pipe(Style.when(When.focusVisible, focusRingDeclarations))
 
 const carouselStyle = Style.make({
   display: "flex",
@@ -204,63 +160,8 @@ const hero = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
     ],
   })
 
-const bookmarkPicker = (
-  { model, page, isSignedIn }: ArticleState & Readonly<{ isSignedIn: boolean }>,
-  h: WikiArticleViewBuilder,
-): Html => {
-  const labels = page.kind === "PLANT" ? plantBookmarkLabels : bookmarkLabels
-  const maybeState = HashMap.get(model.viewerBookmarks, page.id)
-  const decode = (value: string) =>
-    Option.liftPredicate(value, (candidate): candidate is BookmarkState =>
-      BookmarkState.literals.some((state) => state === candidate),
-    )
-
-  if (!isSignedIn) {
-    return h.a(styledAttributes([h.Href(loginRouter())], bookmarkLinkStyle), [
-      Icons.bookmark({ size: "md" }),
-      `${labels.INTERESTED}? Entre para salvar`,
-    ])
-  }
-
-  return h.div(styledAttributes([], bookmarkStyle), [
-    h.select(
-      styledAttributes(
-        [
-          h.AriaLabel("Sua relação com este artigo"),
-          h.Disabled(BookmarkSaving.guards.Saving(model.bookmarkSaving)),
-          h.OnChange((value) => Message.SelectedBookmarkState({ maybeState: decode(value) })),
-        ],
-        bookmarkSelectStyle,
-      ),
-      [
-        h.option(
-          [h.Value(""), h.Selected(Option.isNone(maybeState))],
-          [Option.isNone(maybeState) ? "Salvar na minha lista…" : "Remover da minha lista"],
-        ),
-        ...Record.toEntries(labels).map(([state, label]) =>
-          h.option([h.Value(state), h.Selected(Option.contains(maybeState, state))], [label]),
-        ),
-      ],
-    ),
-    ...(BookmarkSaving.guards.Failed(model.bookmarkSaving)
-      ? [
-          AppText.view(
-            {
-              element: "p",
-              appearance: "footnote",
-              tone: "destructive",
-              attributes: [h.Role("alert")],
-              children: [model.bookmarkSaving.error],
-            },
-            h,
-          ),
-        ]
-      : []),
-  ])
-}
-
 const bookmarkers = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): Html => {
-  const groupLabels = page.kind === "PLANT" ? plantBookmarkerGroupLabels : bookmarkerGroupLabels
+  const groupLabels = bookmarkVocabularies[page.kind].groups
 
   return SectionCard.view(
     {
@@ -683,16 +584,16 @@ export const view = (
       ...ordered({ order: 4, children: cultivars({ model, page }, h) }, h),
       ...ordered({ order: 4, children: ChildPlaces.view({ model, page }, h) }, h),
       ...ordered({ order: 6, children: aboutContent(page, h) }, h),
+      ...ordered({ order: 6, children: ExternalData.mainSections({ model, page }, h) }, h),
       ...ordered({ order: 7, children: publicationsPreview({ model, page, maybeToday }, h) }, h),
       ...ordered({ order: 8, children: related(model, h) }, h),
       ...ordered({ order: 9, children: photosPreview(page, h) }, h),
+      ...ordered({ order: 9, children: ExternalData.mediaSection({ model, page }, h) }, h),
     ]),
     h.aside(styledAttributes([h.AriaLabel(`Quem acompanha ${aboutName(page)}`)], columnStyle), [
-      ...ordered(
-        { order: 2, children: [bookmarkPicker({ model, page, maybeToday, isSignedIn }, h)] },
-        h,
-      ),
+      ...ordered({ order: 2, children: [BookmarkPicker.view({ model, page, isSignedIn }, h)] }, h),
       ...ordered({ order: 5, children: [bookmarkers({ model, page, maybeToday }, h)] }, h),
+      ...ordered({ order: 5, children: ExternalData.wikipediaSection({ model, page }, h) }, h),
       ...ordered(
         { order: 10, children: [contributionsPreview({ model, page, maybeToday }, h)] },
         h,

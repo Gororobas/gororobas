@@ -5,7 +5,7 @@ import { Array as EffectArray, Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
 import { wikiArticleUrl } from "../../app/route"
-import { bookmarkLabels, plantBookmarkLabels, wikiKindLabels } from "../../lib/vocabulary"
+import { bookmarkVocabularies, wikiKindLabels } from "../../lib/vocabulary"
 import { ofName, primaryName } from "../../lib/wiki-article-names"
 import { imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
@@ -141,8 +141,9 @@ const kindLabel = (article: WikiArticleQueriedCardData): string =>
   })
 
 const bookmarkLabel = (config: WikiArticleRowConfig): Option.Option<string> =>
-  Option.map(config.maybeBookmarkState ?? Option.none(), (state) =>
-    config.article.kind === "PLANT" ? plantBookmarkLabels[state] : bookmarkLabels[state],
+  Option.map(
+    config.maybeBookmarkState ?? Option.none(),
+    (state) => bookmarkVocabularies[config.article.kind].states[state],
   )
 
 /** One article in a results grid. Without a photo, its kind's icon stands in. */

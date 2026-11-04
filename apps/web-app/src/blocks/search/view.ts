@@ -11,6 +11,7 @@ import type { ClientFailure } from "../../lib/client-failure"
 import { wikiKindLabels } from "../../lib/vocabulary"
 import { AppButton } from "../../ui/app-button"
 import * as AppDrawer from "../../ui/app-drawer/view"
+import { popoverBackdropStyle, popoverPanelStyle } from "../../ui/app-popover/styles"
 import * as AppShell from "../../ui/app-shell"
 import { AppText } from "../../ui/app-text"
 import { Chip } from "../../ui/chip"
@@ -213,19 +214,6 @@ const badgeStyle = Style.make({
   fontSize: fontSize.caption,
 })
 
-const popoverPanelStyle = Style.make({
-  zIndex: layer.overlay,
-  display: "grid",
-  rowGap: space[3],
-  inlineSize: "min(22rem, calc(100vw - 2rem))",
-  padding: space[4],
-  border: `${borderWidth.hairline} solid ${toneColors.border}`,
-  borderRadius: radius.lg,
-  backgroundColor: toneColors.backgroundCard,
-  outline: "none",
-})
-
-const popoverBackdropStyle = Style.make({ position: "fixed", inset: 0, zIndex: layer.raised })
 const drawerGroupsStyle = Style.make({ display: "grid", rowGap: space[5] })
 const drawerGroupStyle = Style.make({ display: "grid", rowGap: space[2] })
 
@@ -371,6 +359,9 @@ const resultsView = <A>(
 
 // CONTROLS
 
+/** The search page's text field, which the app shell's search link focuses on arrival. */
+export const SEARCH_FIELD_ID = "search-text"
+
 const searchField = (query: SearchQuery, h: SearchViewBuilder): Html =>
   h.form(
     styledAttributes(
@@ -381,7 +372,7 @@ const searchField = (query: SearchQuery, h: SearchViewBuilder): Html =>
       AppText.view(
         {
           element: "label",
-          attributes: styledAttributes([h.For("search-text")], visuallyHiddenStyle),
+          attributes: styledAttributes([h.For(SEARCH_FIELD_ID)], visuallyHiddenStyle),
           children: ["Buscar"],
         },
         h,
@@ -389,7 +380,7 @@ const searchField = (query: SearchQuery, h: SearchViewBuilder): Html =>
       h.input(
         styledAttributes(
           [
-            h.Id("search-text"),
+            h.Id(SEARCH_FIELD_ID),
             h.Type("search"),
             h.Name("q"),
             h.Attribute("autocomplete", "off"),

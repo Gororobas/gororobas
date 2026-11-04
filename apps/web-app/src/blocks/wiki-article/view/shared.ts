@@ -1,7 +1,7 @@
 import type { MediaAssetRow } from "@gororobas/domain/media-assets/domain"
 import { tiptapToText } from "@gororobas/domain/rich-text/tiptap-to-text"
 import type { WikiArticleQueriedPageData } from "@gororobas/domain/wiki/domain"
-import { Style, When } from "@pleat/core"
+import { Style } from "@pleat/core"
 import { Array as EffectArray, DateTime, Option, String as EffectString } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
@@ -14,19 +14,9 @@ import * as Icons from "../../../ui/icons"
 import type { IconConfig } from "../../../ui/icons"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { cardBleedStyle } from "../../../ui/section-card"
-import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import { emptyStateStyle } from "../../../ui/styles/surfaces"
-import {
-  borderWidth,
-  breakpoint,
-  duration,
-  fontSize,
-  fontWeight,
-  radius,
-  space,
-  toneColors,
-  tones,
-} from "../../../ui/theme"
+import { TabNavigation } from "../../../ui/tab-navigation"
+import { breakpoint, space } from "../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../composition"
 import type { Model } from "../model"
 
@@ -57,41 +47,6 @@ export const chipRowStyle = Style.make({
   scrollbarWidth: "none",
   paddingBlock: space[1],
 })
-
-const tabsStyle = Style.make({
-  display: "flex",
-  gap: space[1],
-  overflowX: "auto",
-  scrollbarWidth: "none",
-})
-
-/** Underlined tabs that sit on the header's bottom edge. */
-const tabStyle = Style.make({
-  display: "inline-flex",
-  flexShrink: 0,
-  alignItems: "center",
-  gap: space[2],
-  paddingInline: space[3],
-  paddingBlock: space[3],
-  borderBlockEnd: `${borderWidth.thick} solid transparent`,
-  borderStartStartRadius: radius.md,
-  borderStartEndRadius: radius.md,
-  color: tones.neutral.shade[700],
-  fontWeight: fontWeight.semibold,
-  outline: "none",
-  transitionProperty: "color, background-color, border-color",
-  transitionDuration: duration.control,
-}).pipe(
-  Style.when(When.hover, { color: tones.neutral.shade[900], backgroundColor: toneColors.hover }),
-  Style.when(When.focusVisible, focusRingDeclarations),
-)
-
-const currentTabStyle = Style.make({
-  color: tones.accent.shade[800],
-  borderBlockEndColor: tones.accent.shade[600],
-})
-
-const compactTabStyle = Style.make({ paddingBlock: space[2], fontSize: fontSize.footnote })
 
 const tabIcons: Readonly<Record<WikiArticleTab, (config?: IconConfig) => Html>> = {
   About: Icons.encyclopedia,
@@ -132,27 +87,19 @@ export const tabs = (
     ["Contributions", "Contribuições"],
   ]
 
-  return h.nav(
-    styledAttributes([h.AriaLabel(label)], tabsStyle),
-    entries.map(([tab, tabLabel]) => {
-      const isCurrent = tab === currentTab
-
-      return h.a(
-        styledAttributes(
-          [
-            h.Href(wikiArticleUrl({ kind: page.kind, handle: page.handle }, tab)),
-            h.AriaCurrent(isCurrent ? "page" : "false"),
-          ],
-          tabStyle,
-          ...(isCurrent ? [currentTabStyle] : []),
-          ...(isCompact ? [compactTabStyle] : []),
-        ),
-        [
-          ...(isCompact ? [] : [tabIcons[tab]({ mode: isCurrent ? "duotone" : "outline" })]),
-          tabLabel,
-        ],
-      )
-    }),
+  return TabNavigation.view(
+    {
+      ariaLabel: label,
+      size: isCompact ? "compact" : "regular",
+      items: entries.map(([tab, tabLabel]) => ({
+        key: tab,
+        label: tabLabel,
+        href: wikiArticleUrl({ kind: page.kind, handle: page.handle }, tab),
+        isCurrent: tab === currentTab,
+        maybeIcon: tabIcons[tab],
+      })),
+    },
+    h,
   )
 }
 

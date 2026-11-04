@@ -1,7 +1,7 @@
 /** Wiki article-related errors. */
 import { Schema } from "effect"
 
-import { WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
+import { ExternalDataObservationId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { WikiArticleKind } from "./wiki-article.js"
 
@@ -25,4 +25,10 @@ export class WikiArticleRevisionAlreadyEvaluatedError extends Schema.TaggedError
   "WikiArticleRevisionAlreadyEvaluatedError",
   { id: WikiArticleRevisionId },
   { httpApiStatus: 409 },
+) {}
+
+export class ExternalDataObservationNotFoundError extends Schema.TaggedError<ExternalDataObservationNotFoundError>()(
+  "ExternalDataObservationNotFoundError",
+  { id: ExternalDataObservationId },
+  { httpApiStatus: 404 },
 ) {}

@@ -4,10 +4,12 @@ import { Array as EffectArray, DateTime, Match, Option } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
-import { type WikiArticleTab, wikiArticleUrl } from "../../../app/route"
+import { type WikiArticleTab, wikiArticleDebugRouter, wikiArticleUrl } from "../../../app/route"
 import { placeKindLabels } from "../../../lib/vocabulary"
 import { inPreposition, ofName, primaryName } from "../../../lib/wiki-article-names"
+import { AppButton } from "../../../ui/app-button"
 import { AppText } from "../../../ui/app-text"
+import * as Icons from "../../../ui/icons"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import { pageColumnStyle } from "../../../ui/styles/page-column"
@@ -51,6 +53,28 @@ const headerStyle = Style.make({
 }).pipe(Style.when(breakpoint.md, { paddingBlockStart: space[8] }))
 
 const identityStyle = Style.make({ display: "flex", alignItems: "center", gap: space[4] })
+const identityTextStyle = Style.make({ flex: 1, minInlineSize: 0 })
+const debugLinkStyle = Style.make({ alignSelf: "flex-start", flexShrink: 0 })
+
+/** Development builds link each article to its stored data, projections and provider observations. */
+const debugLink = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
+  import.meta.env.DEV
+    ? [
+        AppButton.view(
+          {
+            href: wikiArticleDebugRouter({ wikiArticleId: page.id }),
+            children: [Icons.sledgehammer({ size: "sm" }), "Depurar"],
+            title: "Ver os dados guardados deste artigo",
+            tone: "neutral",
+            mode: "outline",
+            size: "sm",
+            styles: [debugLinkStyle],
+          },
+          h,
+        ),
+      ]
+    : []
+
 const titleStyle = Style.make({ color: tones.secondary.emphasis })
 const scientificNameStyle = Style.make({ fontStyle: "italic", color: tones.neutral.shade[700] })
 const parentPlantStyle = Style.make({ color: tones.neutral.shade[700] })
@@ -215,39 +239,37 @@ const header = (
     h.header(styledAttributes([], pageColumnStyle, headerStyle), [
       h.div(styledAttributes([], identityStyle), [
         headerThumbnail({ page, size: "md" }, h),
-        h.div(
-          [],
-          [
-            AppText.view(
-              {
-                element: "h1",
-                appearance: "xxl",
-                weight: "semibold",
-                lineHeight: "tight",
-                styles: [titleStyle],
-                children: [primaryName(page)],
-              },
-              h,
-            ),
-            ...EffectArray.fromOption(
-              Option.map(parentPlant(page), (card) => parentPlantLink(card, h)),
-            ),
-            ...placeLineage(page, h),
-            ...EffectArray.fromOption(
-              Option.map(scientificName(page), (name) =>
-                AppText.view(
-                  {
-                    element: "p",
-                    appearance: "large",
-                    styles: [scientificNameStyle],
-                    children: [name],
-                  },
-                  h,
-                ),
+        h.div(styledAttributes([], identityTextStyle), [
+          AppText.view(
+            {
+              element: "h1",
+              appearance: "xxl",
+              weight: "semibold",
+              lineHeight: "tight",
+              styles: [titleStyle],
+              children: [primaryName(page)],
+            },
+            h,
+          ),
+          ...EffectArray.fromOption(
+            Option.map(parentPlant(page), (card) => parentPlantLink(card, h)),
+          ),
+          ...placeLineage(page, h),
+          ...EffectArray.fromOption(
+            Option.map(scientificName(page), (name) =>
+              AppText.view(
+                {
+                  element: "p",
+                  appearance: "large",
+                  styles: [scientificNameStyle],
+                  children: [name],
+                },
+                h,
               ),
             ),
-          ],
-        ),
+          ),
+        ]),
+        ...debugLink(page, h),
       ]),
       tabs({ page, currentTab: tab, label: `Seções ${ofName(page)}` }, h),
     ]),

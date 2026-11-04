@@ -1,7 +1,9 @@
 import { ElevationInMeters } from "@gororobas/domain/profiles/locations"
 import { DateTime, Effect, Layer, Option, Schema } from "effect"
+import * as Dom from "foldkit/dom"
 import { load, pushUrl } from "foldkit/navigation"
 
+import { SEARCH_FIELD_ID } from "../blocks/search"
 import { DeviceLocation } from "../lib/device-location"
 import { ApplicationBlock } from "./definition"
 import { Message } from "./message"
@@ -19,6 +21,18 @@ export const LoadExternal = ApplicationBlock.makeCommand("LoadExternal", {
   messages: [Message.CompletedLoadExternal],
   handler: function* () {
     return ({ href }) => load(href).pipe(Effect.as(Message.CompletedLoadExternal()))
+  },
+})
+
+export const FocusSearchField = ApplicationBlock.makeCommand("FocusSearchField", {
+  messages: [Message.CompletedFocusSearchField],
+  handler: function* () {
+    return () =>
+      // The search page may have been left before it rendered.
+      Dom.focus(`#${SEARCH_FIELD_ID}`).pipe(
+        Effect.catchTag("ElementNotFound", () => Effect.void),
+        Effect.as(Message.CompletedFocusSearchField()),
+      )
   },
 })
 
@@ -71,5 +85,6 @@ export const EffectsLayer = Layer.mergeAll(
   NavigateInternal.layer,
   LoadExternal.layer,
   ReadToday.layer,
+  FocusSearchField.layer,
   LocateDevice.layer,
 )
