@@ -70,7 +70,9 @@ type ArgsWithOptions<Variables, Options> = {} extends Variables ? [variables: Va
  * `partial: false`, it returns the decoded result and fails with a
  * `ResponseError` on any `errors`. With `partial: true` it returns
  * `{ data, errors }`. `partial` must be a literal `true` or `false`, not
- * an arbitrary `boolean`.
+ * an arbitrary `boolean`. A non-2xx HTTP response never succeeds, even with
+ * `partial: true`: it fails with a `ResponseError` when it has `errors`, and
+ * with a `TransportError` otherwise.
  *
  * An operation without variables is called as `client.Viewer()` or, with
  * options, `client.Viewer(undefined, { headers })`.
@@ -378,15 +380,18 @@ const makeMethod = <Op extends GraphQL.Any>(
   // Type boundary: a middleware sees the errors of the middleware further in
   // as `Types.unhandled` (as in `RpcMiddleware`), and none of their
   // requirements. Those errors are part of `GraphQL.Error<Op>`, so the chain
-  // restates its type here. Force POST only at the transport boundary.
+  // restates its type here. Force POST and the resolved URL apply only at the
+  // transport boundary.
   const execute = (
     index: number,
     request: GraphQLRequest,
-    forcePost: boolean
+    forcePost: boolean,
+    resolvedUrl: internalGraphQL.ResolvedUrl
   ): Effect.Effect<ExecutionResult, GraphQL.Error<Op>, GraphQLMiddleware.Requires<GraphQL.Middleware<Op>>> =>
     index === chain.length
       ? protocol.execute(request).pipe(
         forcePost ? Effect.provideService(internalGraphQL.ForcePost, true) : identity,
+        resolvedUrl === undefined ? identity : Effect.provideService(internalGraphQL.ResolvedUrl, resolvedUrl),
         Effect.mapError(fail),
         Effect.flatMap(decodeResponse)
       )
@@ -394,11 +399,20 @@ const makeMethod = <Op extends GraphQL.Any>(
         operation,
         request,
         next: (request) =>
-          execute(index + 1, request, forcePost) as Effect.Effect<
+          execute(index + 1, request, forcePost, resolvedUrl) as Effect.Effect<
             ExecutionResult,
             GraphQLClientError | Types.unhandled
           >
       }) as Effect.Effect<ExecutionResult, GraphQL.Error<Op>, GraphQLMiddleware.Requires<GraphQL.Middleware<Op>>>
+
+  // Hands a resolver batch's URL to the transport only, so calls made by
+  // middleware resolve their own.
+  const run = (request: GraphQLRequest, forcePost: boolean) =>
+    internalGraphQL.ResolvedUrl.use((resolved) =>
+      resolved === undefined
+        ? execute(0, request, forcePost, undefined)
+        : execute(0, request, forcePost, resolved).pipe(Effect.provideService(internalGraphQL.ResolvedUrl, undefined))
+    )
 
   const subscribe = (
     index: number,
@@ -441,7 +455,7 @@ const makeMethod = <Op extends GraphQL.Any>(
     Exclude<GraphQL.Services<Op>, R2>
   > {
     return buildRequest(variables, options).pipe(
-      Effect.flatMap((request) => execute(0, request, false)),
+      Effect.flatMap((request) => run(request, false)),
       Effect.flatMap(
         (result): Effect.Effect<
           GraphQL.Result<Op> | PartialResult<GraphQL.Result<Op>>,
@@ -452,7 +466,7 @@ const makeMethod = <Op extends GraphQL.Any>(
       Effect.provideContext(callContext(options))
     )
   }
-  internalGraphQL.rawExecutors.set(method, (request) => execute(0, request, true))
+  internalGraphQL.rawExecutors.set(method, { execute: (request) => run(request, true), url: protocol.url })
   return Object.assign(method, { operation })
 }
 
