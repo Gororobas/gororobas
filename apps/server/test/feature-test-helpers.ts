@@ -49,7 +49,6 @@ export const ProfileTestDataTable = Schema.Struct({
       Schema.Struct({ field: Schema.Literal("handle"), value: Handle }),
       Schema.Struct({ field: Schema.Literal("name"), value: PersonProfileRow.fields.name }),
       Schema.Struct({ field: Schema.Literal("bio"), value: Schema.String }),
-      Schema.Struct({ field: Schema.Literal("location"), value: PersonProfileRow.fields.location }),
       Schema.Struct({ field: Schema.Literal("visibility"), value: ProfileVisibility }),
     ]),
   ),
@@ -61,7 +60,6 @@ export const profileUpdateFromTestDataTable = (table: typeof ProfileTestDataTabl
       Match.value(row).pipe(
         Match.when({ field: "handle" }, ({ value }) => ({ ...update, handle: value })),
         Match.when({ field: "name" }, ({ value }) => ({ ...update, name: value })),
-        Match.when({ field: "location" }, ({ value }) => ({ ...update, location: value })),
         Match.when({ field: "visibility" }, ({ value }) => ({ ...update, visibility: value })),
         Match.when({ field: "bio" }, ({ value }): ProfileRowUpdate => ({
           ...update,

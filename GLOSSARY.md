@@ -14,6 +14,14 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Enrichment**: the derived work a committed change requests: external provider data and link inference for approved wiki articles, link inference and translations for publication content, translations for comments. Services request it through `Enrichment` (`apps/server/src/enrichment/`) after their transaction commits; requests are best-effort and logged when they fail.
 
+## Places
+
+**Place**: a PLACE wiki article: anywhere people recognize, from countries and municipalities to biomes, páramos and watersheds (`PlaceKind`). Whether it's a single territory or a kind of place found in many regions, people perceive it as a place.
+
+**Gazetteer place**: a country, state or municipality from the gazetteer (Who's On First), identified by its `WhosOnFirstId`. It becomes a place wiki article the first time something references it, created by the system and attributed to no one; `place_projections` maps one to the other.
+
+**Profile location**: one entry of a profile's location timeline: a place, with an optional label and device elevation, or free text in the owner's words, with optional partial dates and its own `InformationVisibility`. Coordinates are never stored. The **latest location** is the first entry in timeline order (open-ended entries, then the latest started); profile cards show it only when it's public.
+
 ## Moderation
 
 **Moderation status**: where a publication, publication comment or media asset stands in the moderation lifecycle: `APPROVED_BY_DEFAULT`, `CENSORED` or `REAPPROVED_AFTER_CENSORING` (`ModerationStatus`, stored in `moderation_status`).

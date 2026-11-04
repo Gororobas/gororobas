@@ -62,6 +62,8 @@ export const reiconGenerator = (svgPaths: ReiconSvgPaths, config: IconConfig = {
   return inertHtml.svg([
     inertHtml.AriaHidden(true),
     inertHtml.ViewBox("0 0 24 24"),
+    // Some outline icons, such as add-circle, draw strokes without saying their fill is none.
+    ...(mode === "outline" ? [inertHtml.Attribute("fill", "none")] : []),
     ...css(iconStyle({ size, tone }), ...styles),
     inertHtml.InnerHTML(svgPaths[mode]),
   ])

@@ -11,6 +11,7 @@ import { WikiBookArticle } from "./kinds/book.js"
 import { WikiConceptArticle } from "./kinds/concept.js"
 import { WikiFilmArticle } from "./kinds/film.js"
 import { WikiNoteworthyEntityArticle } from "./kinds/noteworthy-entity.js"
+import { WikiPlaceArticle } from "./kinds/place.js"
 import { WikiPlantCultivarArticle } from "./kinds/plant-cultivar.js"
 import { WikiPlantArticle } from "./kinds/plant.js"
 import { WikiResourceArticle } from "./kinds/resource.js"
@@ -27,6 +28,7 @@ export const WikiArticleEditableData = Schema.Union([
   WikiPlantArticle.EditableArticle,
   WikiPlantCultivarArticle.EditableArticle,
   WikiResourceArticle.EditableArticle,
+  WikiPlaceArticle.EditableArticle,
   WikiToolArticle.EditableArticle,
   WikiUncategorizedArticle.EditableArticle,
 ]).pipe(Schema.toTaggedUnion("kind"))
@@ -75,6 +77,7 @@ export const WikiArticleProjectionRow = Schema.Union([
   WikiFilmArticle.ProjectionRow,
   WikiNoteworthyEntityArticle.ProjectionRow,
   WikiResourceArticle.ProjectionRow,
+  WikiPlaceArticle.ProjectionRow,
   WikiToolArticle.ProjectionRow,
   WikiUncategorizedArticle.ProjectionRow,
 ]).pipe(Schema.toTaggedUnion("kind"))
@@ -100,6 +103,7 @@ export const WikiArticleTranslationProjectionRow = Schema.Union([
   WikiPlantArticle.TranslationProjectionRow,
   WikiPlantCultivarArticle.TranslationProjectionRow,
   WikiResourceArticle.TranslationProjectionRow,
+  WikiPlaceArticle.TranslationProjectionRow,
   WikiToolArticle.TranslationProjectionRow,
   WikiUncategorizedArticle.TranslationProjectionRow,
 ]).pipe(Schema.toTaggedUnion("kind"))
@@ -116,6 +120,7 @@ export const WikiArticleQueriedPageRow = Schema.Union([
   WikiPlantArticle.QueriedPageData,
   WikiPlantCultivarArticle.QueriedPageData,
   WikiResourceArticle.QueriedPageData,
+  WikiPlaceArticle.QueriedPageData,
   WikiToolArticle.QueriedPageData,
   WikiUncategorizedArticle.QueriedPageData,
 ]).pipe(Schema.toTaggedUnion("kind"))
@@ -159,6 +164,7 @@ export const WikiArticleQueriedPageData = Schema.Union([
     parentPlant: OptionalColumn(WikiCultivarParentPlant),
   }),
   WikiResourceArticle.QueriedPageData,
+  WikiPlaceArticle.QueriedPageData,
   WikiToolArticle.QueriedPageData,
   WikiUncategorizedArticle.QueriedPageData,
 ]).pipe(Schema.toTaggedUnion("kind"))
@@ -217,6 +223,12 @@ export const projectArticle = (
         WikiResourceArticle.ProjectionRow.make({
           kind: resource.kind,
           attributes: WikiResourceArticle.projectAttributes(resource.attributes),
+          ...metadata,
+        }),
+      PLACE: (place) =>
+        WikiPlaceArticle.ProjectionRow.make({
+          kind: place.kind,
+          attributes: WikiPlaceArticle.projectAttributes(place.attributes),
           ...metadata,
         }),
       TOOL: (tool) =>

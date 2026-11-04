@@ -2,6 +2,7 @@ import { Style } from "@pleat/core"
 import { Option } from "effect"
 import type { Attribute, Html } from "foldkit/html"
 
+import { myPlacesRouter } from "../../app/route"
 import { AppButton } from "../../ui/app-button"
 import { AppCard } from "../../ui/app-card"
 import { AppField } from "../../ui/app-field"
@@ -237,15 +238,21 @@ export const view = AuthenticationComposition.makeView((model, h): Html =>
                     : null,
                 h,
               ),
-              AppButton.view(
-                {
-                  mode: "outline",
-                  isDisabled: isSigningOut,
-                  onClick: Message.ClickedSignOut(),
-                  children: ["Sair"],
-                },
-                h,
-              ),
+              h.div(styledAttributes([], actionsStyle), [
+                AppButton.view(
+                  { tone: "primary", href: myPlacesRouter(), children: ["Meus lugares"] },
+                  h,
+                ),
+                AppButton.view(
+                  {
+                    mode: "outline",
+                    isDisabled: isSigningOut,
+                    onClick: Message.ClickedSignOut(),
+                    children: ["Sair"],
+                  },
+                  h,
+                ),
+              ]),
             ],
           },
           h,

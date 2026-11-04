@@ -1,7 +1,13 @@
-import { Effect, Schema } from "effect"
+import { Clock, Effect, Schema } from "effect"
 import { type LoroDoc } from "loro-crdt"
 
-import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "./domain.js"
+import {
+  CrdtCommit,
+  CrdtCommitEncoded,
+  LoroDocFrontier,
+  LoroDocSnapshot,
+  LoroDocUpdate,
+} from "./domain.js"
 import { InvalidCrdtUpdateError } from "./errors.js"
 import {
   applyCrdtUpdateWithCommit,
@@ -20,6 +26,7 @@ export const defineCrdtDocument = <
   EditError,
 >(configuration: {
   schema: S
+  /** Builds the document's containers without committing: `create` commits them with its attribution. */
   createDocument: (data: S["Type"]) => Effect.Effect<LoroDoc, E>
   // oxlint-disable-next-line effect/no-unknown-returns -- Projections are untrusted until decoded by the model schema.
   projectDocument: (document: LoroDoc) => unknown
@@ -50,8 +57,22 @@ export const defineCrdtDocument = <
     )
   }
 
-  const create = Effect.fn("CrdtDocument.create")(function* (sourceData: S["Type"]) {
+  /** Without a `commit`, the initial change carries no attribution, as in documents created before commits named their authors. */
+  const create = Effect.fn("CrdtDocument.create")(function* (
+    sourceData: S["Type"],
+    commit?: CrdtCommit,
+  ) {
     const document = yield* configuration.createDocument(sourceData)
+
+    document.commit(
+      commit === undefined
+        ? undefined
+        : {
+            message: yield* Schema.encodeEffect(CrdtCommitEncoded)(commit),
+            timestamp: yield* Clock.currentTimeMillis,
+          },
+    )
+
     const data = yield* read(document)
 
     return {

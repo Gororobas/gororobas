@@ -38,6 +38,7 @@ import {
   similarityQuery,
 } from "../db/full-text-search.js"
 import { orderByLanguagePreference } from "../db/language-preference.js"
+import { latestPublicProfileLocationJson } from "../profiles/location-sql.js"
 
 /**
  * Article projections with their status, which only `wiki_article_sources` stores: approval and
@@ -590,7 +591,8 @@ const findNameCandidates = SqlSchema.findAll({
 /** Public, active profiles as `ProfileCardData` JSON, for nesting in a row. */
 const publicProfileCardJson = (sql: SqlClient, personIdColumn: string) => sql`
   (SELECT json_object('id', p.id, 'type', p.type, 'handle', p.handle, 'name', p.name,
-      'location', p.location, 'photoId', photo.id)
+      'location', json(${latestPublicProfileLocationJson(sql, { profileIdColumn: "p.id", language: "pt" })}),
+      'photoId', photo.id)
     FROM profiles p
     LEFT JOIN media_assets photo ON photo.id = p.photo_id AND photo.moderation_status <> 'CENSORED'
     WHERE p.id = ${sql.literal(personIdColumn)} AND p.visibility = 'PUBLIC'

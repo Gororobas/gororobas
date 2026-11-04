@@ -56,7 +56,7 @@ export const view = <Message>(config: ProfileRowConfig, h: HtmlBuilder<Message>)
               {
                 element: "span",
                 appearance: detailAppearances[size],
-                children: [profile.location],
+                children: [profile.location.text],
               },
               h,
             ),

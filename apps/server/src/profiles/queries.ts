@@ -6,6 +6,7 @@ import {
   ProfileRow,
   ProfileSearchParams,
   ProfileCardData,
+  ProfileLocationCardData,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Option, Schema, SchemaGetter } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
@@ -18,16 +19,23 @@ import {
   SIMILARITY_CANDIDATES,
   similarityQuery,
 } from "../db/full-text-search.js"
+import { latestPublicProfileLocationJson } from "./location-sql.js"
+
+const ProfileCardRow = Schema.Struct({
+  ...ProfileCardData.fields,
+  location: Schema.NullOr(Schema.fromJsonString(ProfileLocationCardData)),
+})
 
 /** Text searches rank by relevance, then alphabetically. */
 export const searchProfiles = SqlSchema.findAll({
   Request: ProfileSearchParams,
-  Result: ProfileCardData,
+  Result: ProfileCardRow,
   execute: (query) =>
     SqlClient.SqlClient.use((sql) => {
       /** Text searches join their ranking, and order by it before the name. */
       const select = (ranking: Statement.Fragment, orderBy: Statement.Fragment) => sql`
-        SELECT p.id, p.type, p.handle, p.name, p.location, m.id AS photo_id
+        SELECT p.id, p.type, p.handle, p.name, m.id AS photo_id,
+          ${latestPublicProfileLocationJson(sql, { profileIdColumn: "p.id", language: "pt" })} AS location
         FROM profiles p
         ${ranking}
         LEFT JOIN media_assets m ON m.id = p.photo_id AND m.moderation_status <> 'CENSORED'
@@ -158,7 +166,6 @@ export const fetchProfileMetadata = SqlSchema.findOneOption({
         p.handle,
         p.name,
         p.bio,
-        p.location,
         p.photo_id as photoId,
         p.visibility,
         p.created_at as createdAt,

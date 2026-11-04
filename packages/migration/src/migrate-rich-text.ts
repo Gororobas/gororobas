@@ -114,7 +114,7 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
             attrs: {
               version: 1,
               referenceId: id,
-              // Gel tags were migrated into CONCEPT wiki articles that keep the tag's mapped ID.
+              // Gel tags were migrated into CONCEPT (or, for biomes, PLACE) wiki articles that keep the tag's mapped ID.
               referenceType:
                 entityType === "Profile"
                   ? "PROFILE"

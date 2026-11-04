@@ -37,6 +37,7 @@ import { MediaAssetsStorage } from "../src/media-assets/storage.js"
 import { OrganizationsRepository } from "../src/organizations/repository.js"
 import { PeopleRepository } from "../src/people/repository.js"
 import { PeopleService } from "../src/people/service.js"
+import { GazetteerFixture } from "../src/places/gazetteer-fixture.js"
 import { ProfilesRepository } from "../src/profiles/repository.js"
 import { ProfileService } from "../src/profiles/service.js"
 import { PublicationsRepository } from "../src/publications/repository.js"
@@ -104,7 +105,7 @@ export const TestLayer = Layer.mergeAll(
   IdGenTest,
   Layer.effect(OrganizationsRepository, OrganizationsRepository.make),
   Layer.effect(ProfilesRepository, ProfilesRepository.make),
-).pipe(Layer.provideMerge(AppSqlTest))
+).pipe(Layer.provideMerge(AppSqlTest), Layer.provideMerge(GazetteerFixture))
 
 /**
  * Extended test layer that includes service layers for integration tests.

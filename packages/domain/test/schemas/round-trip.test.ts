@@ -152,14 +152,13 @@ describe("Schema Round-Trip Properties", () => {
             const withNulls = {
               ...original,
               bio: null,
-              location: null,
               photoId: null,
             }
 
             const encoded = yield* Schema.encodeEffect(ProfileRow)(withNulls)
             const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
 
-            return decoded.bio === null && decoded.location === null && decoded.photoId === null
+            return decoded.bio === null && decoded.photoId === null
           }),
       }),
     )

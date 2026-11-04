@@ -16,6 +16,7 @@ import {
   tones,
   toneColors,
   toneStyle,
+  type Tone,
 } from "../theme"
 
 /** The card's inline padding, which side-scrolling strips bleed through. */
@@ -89,6 +90,8 @@ export type SectionCardConfig = Readonly<{
   /** Drops the card surface when the section is the whole page. */
   isBare?: boolean
   headingElement?: "h1" | "h2"
+  /** The surface's tone; primary unless the section should recede, as a list of cards does. */
+  tone?: Tone
 }>
 
 /** A titled group of content, such as one kind of search result or one part of an article. */
@@ -96,7 +99,7 @@ export const view = <Message>(config: SectionCardConfig, h: HtmlBuilder<Message>
   h.section(
     styledAttributes(
       [h.AriaLabel(config.title)],
-      ...(config.isBare === true ? [bareStyle] : [toneStyle("primary"), cardStyle]),
+      ...(config.isBare === true ? [bareStyle] : [toneStyle(config.tone ?? "primary"), cardStyle]),
     ),
     [
       h.div(styledAttributes([], headingRowStyle), [

@@ -38,6 +38,7 @@ const wikiKindSlugs = {
   BOOK: "livros",
   FILM: "filmes",
   CONCEPT: "conceitos",
+  PLACE: "lugares",
   TOOL: "ferramentas",
   RESOURCE: "recursos",
   NOTEWORTHY_ENTITY: "organizacoes",
@@ -55,6 +56,7 @@ const wikiArticleTabSlugs = {
 } as const satisfies Record<WikiArticleTab, string>
 
 const SEARCH_SEGMENT = "buscar"
+const MY_PLACES_SEGMENT = "meus-lugares"
 
 /** Decodes one segment through a total lookup table, so every value has exactly one slug. */
 const slugCodec = <const Value extends string, const Slug extends string>(
@@ -234,6 +236,7 @@ export const ApplicationRoute = defineRouteUnion({
   WikiArticle: { kind: WikiArticleKind, handle: Handle, tab: WikiArticleTab },
   WikiArticleDebug: { wikiArticleId: WikiArticleId },
   Login: {},
+  MyPlaces: {},
   NotFound: { path: Schema.String },
 })
 
@@ -279,11 +282,17 @@ export const wikiArticleDebugRouter = pipe(
 
 export const loginRouter = pipe(literal("login"), Route.mapTo(ApplicationRoute.Login))
 
+export const myPlacesRouter = pipe(
+  literal(MY_PLACES_SEGMENT),
+  Route.mapTo(ApplicationRoute.MyPlaces),
+)
+
 export const urlToApplicationRoute = Route.parseUrlWithFallback(
   Route.oneOf(
     homeRouter,
     searchRouter,
     loginRouter,
+    myPlacesRouter,
     wikiArticleDebugRouter,
     wikiArticleTabRouter,
     wikiArticleAboutRouter,

@@ -77,6 +77,22 @@ export type ProfileVisibility = typeof ProfileVisibility.Type
 export const InformationVisibility = Schema.Literals(["PRIVATE", "COMMUNITY", "PUBLIC"])
 export type InformationVisibility = typeof InformationVisibility.Type
 
+/** What a PLACE wiki article is, as people perceive it: a territory, an ecological region, a landscape. */
+export const PlaceKind = Schema.Literals([
+  "COUNTRY",
+  "STATE", // States, departments, provinces
+  "MUNICIPALITY", // Municipalities, counties, partidos
+  "LOCALITY", // Veredas, bairros, towns and villages within a municipality
+  "BIOME", // Large named regions such as the Cerrado or the Amazon
+  "ECOREGION", // Mapped subdivisions of a biome, such as RESOLVE ecoregions
+  "ECOSYSTEM", // Páramos, mangroves, dry forests: places people recognize wherever they occur
+  "WATERSHED",
+  "PROTECTED_AREA",
+  "LANDFORM", // Mountains, valleys, plateaus, serras
+])
+
+export type PlaceKind = typeof PlaceKind.Type
+
 /** Publications can't be private */
 export const PublicationVisibility = Schema.Literals(["COMMUNITY", "PUBLIC"])
 export type PublicationVisibility = typeof PublicationVisibility.Type

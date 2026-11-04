@@ -6,6 +6,7 @@ import {
   animalRoleLabels,
   entityTypeLabels,
   resourceFormatLabels,
+  placeKindLabels,
   toolUsageLabels,
 } from "../../../../lib/vocabulary"
 import { agreeingWith } from "../../../../lib/wiki-article-names"
@@ -73,6 +74,16 @@ const kindFacts = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
             title: "Papéis no agroecossistema",
             maybeValues: attributes.roles,
             labels: animalRoleLabels,
+          },
+          h,
+        ),
+      PLACE: ({ attributes }) =>
+        chipFact(
+          {
+            id: "place-kind",
+            title: "Tipo de lugar",
+            maybeValues: Option.map(attributes.placeKind, (placeKind) => [placeKind]),
+            labels: placeKindLabels,
           },
           h,
         ),

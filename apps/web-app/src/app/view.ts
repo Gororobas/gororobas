@@ -12,6 +12,7 @@ import {
   ApplicationComposition,
   type ApplicationViewBuilder,
   AuthenticationBinding,
+  MyPlacesBinding,
   SearchBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
@@ -162,6 +163,18 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
         ),
         h,
       ),
+    MyPlaces: () =>
+      Option.match(model.maybeMyPlaces, {
+        onNone: () => h.empty,
+        onSome: (myPlaces) =>
+          h.block(
+            MyPlacesBinding.embedView({
+              slotId: "my-places",
+              model: myPlaces,
+              viewInputs: { isSignedIn: isSignedIn(model.authentication) },
+            }),
+          ),
+      }),
     NotFound: ({ path }) => prose(notFound(path, h), h),
   })
 
@@ -171,6 +184,7 @@ const title = (route: ApplicationRoute): string =>
     WikiArticle: () => "Enciclopédia | Gororobas",
     WikiArticleDebug: () => "Depuração | Gororobas",
     Login: () => "Entrar | Gororobas",
+    MyPlaces: () => "Meus lugares | Gororobas",
     NotFound: () => "Página não encontrada | Gororobas",
   })
 

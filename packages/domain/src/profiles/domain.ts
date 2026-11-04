@@ -9,6 +9,7 @@ import { Handle, TimestampedStruct } from "../common/primitives.js"
 import { toSearchableText } from "../common/utils/strings.js"
 import { OrganizationRow } from "../organizations/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
+import { ProfileLocationCardData } from "./locations.js"
 
 export const ProfileSearchParams = Schema.Struct({
   text: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
@@ -16,19 +17,23 @@ export const ProfileSearchParams = Schema.Struct({
 })
 export type ProfileSearchParams = typeof ProfileSearchParams.Type
 
-/** What profile search matches, stored in `profiles.searchable_text` whenever these fields change. */
+/**
+ * What profile search matches, stored in `profiles.searchable_text` whenever these fields change.
+ * Only a public latest location is searchable: anyone can search profiles.
+ */
 export const profileSearchableText = (profile: {
   readonly name: string
   readonly handle: string
-  readonly location: string | null
-}) => toSearchableText([profile.name, profile.handle, profile.location ?? ""].join(" "))
+  readonly publicLocationText: string | null
+}) => toSearchableText([profile.name, profile.handle, profile.publicLocationText ?? ""].join(" "))
 
 export const ProfileCardData = Schema.Struct({
   id: ProfileId,
   type: ProfileType,
   handle: Handle,
   name: Schema.String,
-  location: Schema.NullOr(Schema.String),
+  /** The profile's latest location, when the reader may see it. */
+  location: Schema.NullOr(ProfileLocationCardData),
   photoId: Schema.NullOr(MediaAssetId),
 })
 
@@ -38,7 +43,6 @@ const CoreProfileRow = Schema.Struct({
   ...TimestampedStruct.fields,
   bio: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
   handle: Handle,
-  location: Schema.NullOr(Schema.Trimmed.check(Schema.isNonEmpty())),
   name: Schema.Trimmed.check(Schema.isNonEmpty()),
   photoId: Schema.NullOr(MediaAssetId),
   visibility: ProfileVisibility,

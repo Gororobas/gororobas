@@ -20,11 +20,14 @@ import { MediaAssetsRepository } from "../media-assets/repository.js"
 import { MediaAssetsStorage } from "../media-assets/storage.js"
 import { OrganizationsRepository } from "../organizations/repository.js"
 import { PeopleRepository } from "../people/repository.js"
+import { PlacesService } from "../places/service.js"
+import { ProfileLocationsService } from "../profiles/locations-service.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PublicationCommentsRepository } from "../publication-comments/repository.js"
 import { PublicationsRepository } from "../publications/repository.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
 import type { SeedContext } from "./seed-context.js"
+import { seedProfileLocations } from "./seed-locations.js"
 import { makeSeedMedia, type SeedMedia } from "./seed-media.js"
 import {
   makeHandleRegistry,
@@ -167,6 +170,11 @@ const SeedRepositoriesLive = Layer.mergeAll(
   Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make),
 )
 
+const SeedServicesLive = Layer.effect(ProfileLocationsService, ProfileLocationsService.make).pipe(
+  Layer.provideMerge(Layer.effect(PlacesService, PlacesService.make)),
+  Layer.provideMerge(SeedRepositoriesLive),
+)
+
 /** Logs how many rows a phase seeded, measured on the real monotonic clock. */
 const logPhase =
   <A>(name: string, size: (result: A) => number) =>
@@ -229,6 +237,7 @@ const seedDatabaseWithFreshRandom = (options: SeedOptions) =>
 
       yield* seedWikiRevisions(context).pipe(logPhase("wiki revisions", total))
       yield* seedBookmarks(context).pipe(logPhase("bookmarks", total))
+      yield* seedProfileLocations(context).pipe(logPhase("profile locations", total))
       yield* seedExternalData(context).pipe(logPhase("external data records", total))
       yield* seedComments(context).pipe(logPhase("comments", total))
 
@@ -248,6 +257,6 @@ const seedDatabaseWithFreshRandom = (options: SeedOptions) =>
       })),
       tables: yield* countTableRows,
     }
-  }).pipe(Effect.provide(SeedRepositoriesLive), Random.withSeed(options.seed))
+  }).pipe(Effect.provide(SeedServicesLive), Random.withSeed(options.seed))
 
 export type SeedReport = Effect.Success<ReturnType<typeof seedDatabase>>

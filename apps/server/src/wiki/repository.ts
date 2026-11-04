@@ -2,6 +2,7 @@ import { WikiArticleCrdt } from "@gororobas/domain"
 import {
   CreateWikiArticleInput,
   CreateWikiArticleRevisionInput,
+  type CrdtCommit,
   entityReferenceRelations,
   projectArticle,
   projectTranslation,
@@ -44,11 +45,14 @@ import {
   insertHandleRows,
   replaceRelations,
   insertRevisionRow,
+  insertSystemRevisionRow,
   insertRevisionMediaAssetRows,
   insertTranslationRows,
   updateSourceRow,
   updateRevisionRow,
   upsertArticleRow,
+  upsertPlaceProjectionRow,
+  deletePlaceProjectionRow,
 } from "./mutations.js"
 import {
   listCards,
@@ -169,6 +173,18 @@ const persistHandleProjections = Effect.fn("persistHandleProjections")(function*
   )
 })
 
+const persistPlaceProjection = (input: {
+  sourceData: WikiArticleEditableData
+  wikiArticleId: WikiArticleId
+}) =>
+  input.sourceData.kind === "PLACE" && Option.isSome(input.sourceData.attributes.whosOnFirstId)
+    ? upsertPlaceProjectionRow({
+        wikiArticleId: input.wikiArticleId,
+        whosOnFirstId: input.sourceData.attributes.whosOnFirstId.value,
+        placeKind: Option.getOrNull(input.sourceData.attributes.placeKind),
+      })
+    : deletePlaceProjectionRow(input.wikiArticleId)
+
 const persistArticleProjection = (input: {
   currentCrdtFrontier: LoroDocFrontier
   sourceData: WikiArticleEditableData
@@ -193,6 +209,7 @@ const persistArticleProjection = (input: {
 
     yield* persistHandleProjections(input)
     yield* persistTranslationProjections(input)
+    yield* persistPlaceProjection(input)
 
     yield* replaceRelations({
       wikiArticleId: input.wikiArticleId,
@@ -255,8 +272,12 @@ const applyRevisionMediaSelection = Effect.fn("applyRevisionMediaSelection")(fun
   yield* applyRevisionMediaDetails({ revisionId: input.revisionId, updatedAt: input.updatedAt })
 })
 
-const createWikiArticle = (
-  input: CreateWikiArticleInput,
+/**
+ * People's articles carry a `HumanCommit` and may await evaluation; system processes' carry a
+ * `SystemCommit`, are approved as they're created and are attributed to no one.
+ */
+const insertWikiArticle = (
+  input: Omit<CreateWikiArticleInput, "createdById"> & { readonly commit: CrdtCommit },
   options: { id?: WikiArticleId; isPendingApproval?: boolean } = {},
 ) =>
   SqlClient.SqlClient.use((sql) =>
@@ -265,7 +286,20 @@ const createWikiArticle = (
       const revisionId = yield* IdGen.make(WikiArticleRevisionId)
       const now = yield* DateTime.now
       yield* assertCultivarParentIsPublishedPlant(input.wikiArticle)
-      const created = yield* WikiArticleCrdt.create(input.wikiArticle)
+      const created = yield* WikiArticleCrdt.create(input.wikiArticle, input.commit)
+
+      const revision = {
+        id: revisionId,
+        createdAt: now,
+        updatedAt: now,
+        wikiArticleId,
+        crdtUpdate: created.initialCrdtUpdate,
+        fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
+        evaluatedAt: options.isPendingApproval ? Option.none() : Option.some(now),
+        evaluation: options.isPendingApproval ? "PENDING" : "APPROVED",
+        evaluationReason: Option.none(),
+        hasMediaSelection: input.mediaAssets !== undefined,
+      } satisfies Omit<WikiArticleRevisionRow, "createdById" | "evaluatedById">
 
       yield* persistCrdtDocumentCreation({
         insertCrdt: insertSourceRow({
@@ -275,20 +309,19 @@ const createWikiArticle = (
           status: input.status,
           updatedAt: now,
         }),
-        insertRevision: insertRevisionRow({
-          id: revisionId,
-          createdAt: now,
-          updatedAt: now,
-          wikiArticleId,
-          createdById: input.createdById,
-          crdtUpdate: created.initialCrdtUpdate,
-          fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
-          evaluatedAt: options.isPendingApproval ? Option.none() : Option.some(now),
-          evaluatedById: options.isPendingApproval ? Option.none() : Option.some(input.createdById),
-          evaluation: options.isPendingApproval ? "PENDING" : "APPROVED",
-          evaluationReason: Option.none(),
-          hasMediaSelection: input.mediaAssets !== undefined,
-        }),
+        insertRevision: Schema.is(HumanCommit)(input.commit)
+          ? insertRevisionRow({
+              ...revision,
+              createdById: input.commit.personId,
+              evaluatedById: options.isPendingApproval
+                ? Option.none()
+                : Option.some(input.commit.personId),
+            })
+          : insertSystemRevisionRow({
+              ...revision,
+              createdById: null,
+              evaluatedById: Option.none(),
+            }),
         persistProjection: options.isPendingApproval
           ? Effect.void
           : persistArticleProjection({
@@ -322,6 +355,11 @@ const createWikiArticle = (
       Effect.map((article) => article.id),
     ),
   )
+
+const createWikiArticle = (
+  { createdById, ...input }: CreateWikiArticleInput,
+  options: { id?: WikiArticleId; isPendingApproval?: boolean } = {},
+) => insertWikiArticle({ ...input, commit: HumanCommit.make({ personId: createdById }) }, options)
 
 const createRevision = (input: CreateWikiArticleRevisionInput) =>
   SqlClient.SqlClient.use((sql) =>
@@ -500,6 +538,8 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
         attachMediaToWikiArticle,
         createRevision,
         createWikiArticle,
+        /** For system processes, which carry a `SystemCommit`. */
+        createWikiArticleWithCommit: insertWikiArticle,
         evaluateRevision,
         findPageByHandleAndKind,
         findByHandle: (handle: string) => findDatabaseRowByHandle(handle),

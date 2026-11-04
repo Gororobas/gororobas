@@ -115,7 +115,6 @@ CREATE TABLE `profiles` (
   `handle` text NOT NULL,
   `name` text NOT NULL,
   `bio` json NULL,
-  `location` text NULL,
   `photo_id` text NULL,
   `visibility` text NOT NULL,
   `searchable_text` text NOT NULL,
@@ -126,6 +125,35 @@ CREATE TABLE `profiles` (
 );
 -- Create index "profiles_handle" to table: "profiles"
 CREATE UNIQUE INDEX `profiles_handle` ON `profiles` (`handle`);
+-- Create "profile_locations" table
+CREATE TABLE `profile_locations` (
+  `id` text NULL,
+  `profile_id` text NOT NULL,
+  `kind` text NOT NULL,
+  `free_text` text NULL,
+  `place_id` text NULL,
+  `label` text NULL,
+  `elevation` integer NULL,
+  `start_date` text NULL,
+  `end_date` text NULL,
+  `visibility` text NOT NULL,
+  `created_at` text NOT NULL,
+  `updated_at` text NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `0` FOREIGN KEY (`place_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION,
+  CONSTRAINT `1` FOREIGN KEY (`profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CHECK ((kind = 'FREE_TEXT') = (free_text IS NOT NULL)),
+  CHECK ((kind = 'KNOWN_PLACE') = (place_id IS NOT NULL)),
+  CHECK (
+    kind = 'KNOWN_PLACE'
+    OR (
+      label IS NULL
+      AND elevation IS NULL
+    )
+  )
+);
+-- Create index "idx_profile_locations_profile_id" to table: "profile_locations"
+CREATE INDEX `idx_profile_locations_profile_id` ON `profile_locations` (`profile_id`);
 -- Create "people" table
 CREATE TABLE `people` (
   `id` text NULL,
@@ -295,6 +323,16 @@ CREATE TABLE `wiki_article_handles` (
 );
 -- Create index "wiki_article_handles_kind_handle" to table: "wiki_article_handles"
 CREATE UNIQUE INDEX `wiki_article_handles_kind_handle` ON `wiki_article_handles` (`kind`, `handle`);
+-- Create "place_projections" table
+CREATE TABLE `place_projections` (
+  `wiki_article_id` text NULL,
+  `whos_on_first_id` text NOT NULL,
+  `place_kind` text NULL,
+  PRIMARY KEY (`wiki_article_id`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "place_projections_whos_on_first_id" to table: "place_projections"
+CREATE UNIQUE INDEX `place_projections_whos_on_first_id` ON `place_projections` (`whos_on_first_id`);
 -- Create "wiki_article_relations" table
 CREATE TABLE `wiki_article_relations` (
   `wiki_article_id` text NOT NULL,

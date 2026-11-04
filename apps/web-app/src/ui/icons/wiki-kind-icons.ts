@@ -9,6 +9,7 @@ export const wikiKindIcons: Readonly<Record<WikiArticleKind, (config?: IconConfi
   PLANT: Icons.leaf,
   PLANT_CULTIVAR: Icons.layers,
   CONCEPT: Icons.lightbulb,
+  PLACE: Icons.mapPoint,
   BOOK: Icons.book,
   FILM: Icons.video,
   ANIMAL: Icons.paw,

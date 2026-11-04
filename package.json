@@ -7,6 +7,7 @@
     "prepare": "effect-tsgo patch --no-typescript --oxlint --tsrs",
     "clean": "node scripts/clean.mjs",
     "build": "pnpm --filter @gororobas/web-app build",
+    "dev:migrated": "export APP_DB_FILENAME=\"$PWD/apps/server/data/migrated/gororobas.db\" MEDIA_ASSETS_DIRECTORY=\"$PWD/apps/server/data/migrated/media-assets\" && pnpm --filter @gororobas/migration migrate && API_PORT=4200 AUTH_ORIGIN=http://localhost:4643 WORKFLOWS_DB_FILENAME=:memory: pnpm --filter @gororobas/server start",
     "type-check": "pnpm --recursive --if-present --parallel run type-check && tsc --noEmit -p scripts/tsconfig.json",
     "lint": "effect-tsgo oxlint --deny-warnings --fix --fix-dangerously --fix-suggestions --config=./oxlint.config.ts",
     "lint:check": "effect-tsgo oxlint --deny-warnings --config=./oxlint.config.ts",

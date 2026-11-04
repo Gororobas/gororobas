@@ -5,6 +5,8 @@ import {
   PersonId,
   TimestampColumn,
   WikiArticleRevisionId,
+  PlaceKind,
+  WhosOnFirstId,
   WikiArticleId,
   WikiArticleMediaAssetRow,
   WikiArticleSourceRow,
@@ -13,6 +15,7 @@ import {
   type LinkSource,
   WikiArticleRelationRow,
   WikiArticleRevisionInsertRow,
+  WikiArticleSystemRevisionInsertRow,
   WikiArticleRevisionMediaAssetRow,
   WikiArticleRevisionUpdateRow,
   WikiArticleTranslationProjectionRow,
@@ -31,6 +34,12 @@ export const insertSourceRow = SqlSchema.void({
 
 export const insertRevisionRow = SqlSchema.void({
   Request: WikiArticleRevisionInsertRow,
+  execute: (row) =>
+    SqlClient.use((sql) => sql`INSERT INTO wiki_article_revisions ${sql.insert(row)}`),
+})
+
+export const insertSystemRevisionRow = SqlSchema.void({
+  Request: WikiArticleSystemRevisionInsertRow,
   execute: (row) =>
     SqlClient.use((sql) => sql`INSERT INTO wiki_article_revisions ${sql.insert(row)}`),
 })
@@ -94,6 +103,30 @@ export const upsertArticleRow = SqlSchema.void({
         INSERT INTO wiki_article_projections ${sql.insert(row)}
         ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt"])}
       `,
+    ),
+})
+
+/** Gazetteer-backed places, so profile locations and filters can join on Who's On First IDs. */
+export const upsertPlaceProjectionRow = SqlSchema.void({
+  Request: Schema.Struct({
+    wikiArticleId: WikiArticleId,
+    whosOnFirstId: WhosOnFirstId,
+    placeKind: Schema.NullOr(PlaceKind),
+  }),
+  execute: (row) =>
+    SqlClient.use(
+      (sql) => sql`
+        INSERT INTO place_projections ${sql.insert(row)}
+        ON CONFLICT(wiki_article_id) DO UPDATE SET ${sql.update(row, ["wikiArticleId"])}
+      `,
+    ),
+})
+
+export const deletePlaceProjectionRow = SqlSchema.void({
+  Request: WikiArticleId,
+  execute: (wikiArticleId) =>
+    SqlClient.use(
+      (sql) => sql`DELETE FROM place_projections WHERE wiki_article_id = ${wikiArticleId}`,
     ),
 })
 

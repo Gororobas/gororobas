@@ -11,12 +11,14 @@ import {
   DateTime,
   Effect,
   FileSystem,
+  Layer,
   Option,
   Path,
   Schema,
 } from "effect"
 import { Command, Flag } from "effect/cli"
 
+import { GazetteerLive } from "../places/gazetteer-live.js"
 import { makeAppSql } from "../sql.js"
 import { DEFAULT_SEED, defaultSeedAnchor, SeedScale, seedDatabase } from "./seed-database.js"
 
@@ -77,7 +79,7 @@ const seed = Command.make(
         anchor: Option.isSome(flags.anchor)
           ? DateTime.fromDateUnsafe(flags.anchor.value)
           : yield* defaultSeedAnchor,
-      }).pipe(Effect.provide(makeAppSql(database)))
+      }).pipe(Effect.provide(Layer.mergeAll(makeAppSql(database), GazetteerLive)))
 
       yield* Console.log(
         yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))({

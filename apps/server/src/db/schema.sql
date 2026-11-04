@@ -108,15 +108,44 @@ CREATE TABLE profiles (
   handle text NOT NULL UNIQUE,
   name text NOT NULL,
   bio json,
-  location text,
   photo_id text,
   visibility text NOT NULL, -- ProfileVisibility
-  -- Name, handle and location folded for full-text search (indexed at the end of this file)
+  -- Name, handle and latest location's text, when public, folded for full-text search (indexed at the end of this file)
   searchable_text text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL,
   FOREIGN KEY (photo_id) REFERENCES media_assets (id) ON DELETE SET NULL
 );
+
+-- A profile's location timeline. Coordinates are never stored: known places are municipalities,
+-- states or countries from the gazetteer, and devices only report their elevation.
+CREATE TABLE profile_locations (
+  id text PRIMARY KEY,
+  profile_id text NOT NULL,
+  kind text NOT NULL, -- FREE_TEXT or KNOWN_PLACE
+  free_text text,
+  place_id text, -- a PLACE wiki article
+  label text,
+  elevation integer, -- meters, rounded to 10; only its owner sees it
+  start_date text, -- PartialDate
+  end_date text, -- PartialDate
+  visibility text NOT NULL, -- InformationVisibility
+  created_at text NOT NULL,
+  updated_at text NOT NULL,
+  CHECK ((kind = 'FREE_TEXT') = (free_text IS NOT NULL)),
+  CHECK ((kind = 'KNOWN_PLACE') = (place_id IS NOT NULL)),
+  CHECK (
+    kind = 'KNOWN_PLACE'
+    OR (
+      label IS NULL
+      AND elevation IS NULL
+    )
+  ),
+  FOREIGN KEY (profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
+  FOREIGN KEY (place_id) REFERENCES wiki_article_sources (id)
+);
+
+CREATE INDEX idx_profile_locations_profile_id ON profile_locations (profile_id);
 
 CREATE TABLE people (
   id text PRIMARY KEY,
@@ -293,6 +322,14 @@ CREATE TABLE wiki_article_handles (
   language text NOT NULL, -- SupportedLanguage
   PRIMARY KEY (wiki_article_id, kind, handle),
   UNIQUE (kind, handle),
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_sources (id) ON DELETE CASCADE
+);
+
+-- PLACE articles backed by a gazetteer place, which keeps their shape and hierarchy.
+CREATE TABLE place_projections (
+  wiki_article_id text PRIMARY KEY,
+  whos_on_first_id text NOT NULL UNIQUE,
+  place_kind text, -- PlaceKind
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_sources (id) ON DELETE CASCADE
 );
 

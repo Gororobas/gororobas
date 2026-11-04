@@ -27,6 +27,7 @@ import {
   FileSystem,
   Layer,
   Option,
+  Record,
   Redacted,
   Schedule,
   Schema,
@@ -40,6 +41,7 @@ import { WorkflowEngine } from "effect/workflow"
 import { ApiLive } from "../src/api-live.js"
 import { makeAuthentication } from "../src/authentication/app-auth.js"
 import { authenticationLayer } from "../src/authentication/authentication-live.js"
+import { GazetteerFixture } from "../src/places/gazetteer-fixture.js"
 import { LanguageDetectionServiceStub } from "../src/translation/language-detection-service.js"
 import { TranslationService } from "../src/translation/translation-service.js"
 import { WorkflowsLive } from "../src/workflows-live.js"
@@ -102,6 +104,7 @@ const makeApiTestClient = Effect.gen(function* () {
 
   const dependencies = Layer.mergeAll(
     Layer.succeedContext(context),
+    GazetteerFixture,
     NodeServices.layer,
     NodeHttpServer.layerHttpServices,
     Layer.succeed(
@@ -152,11 +155,18 @@ const makeApiTestClient = Effect.gen(function* () {
   )
   const handler = (request: Request) => app.handler(request, requestContext)
 
-  /** A `fetch` that sends `browser`'s cookies, for routes the typed client doesn't describe. */
-  const fetchWith = (browser: TestBrowser): typeof globalThis.fetch => {
+  /**
+   * A `fetch` that sends `browser`'s cookies, for routes the typed client doesn't describe.
+   * `extraHeaders` stand in for what proxies add, such as Cloudflare's `CF-IPCountry`.
+   */
+  const fetchWith = (
+    browser: TestBrowser,
+    extraHeaders: Record.ReadonlyRecord<string, string> = {},
+  ): typeof globalThis.fetch => {
     // Origin and Cookie are forbidden on an existing Request's headers, so build a new one.
     return (input, init) => {
       const headers = new Headers(init?.headers)
+      Record.toEntries(extraHeaders).forEach(([name, value]) => headers.set(name, value))
       headers.set("origin", authenticationTestOrigin)
       headers.set("x-effect-auth-csrf", "1")
       headers.set("cookie", browser.cookieHeader())
@@ -170,10 +180,10 @@ const makeApiTestClient = Effect.gen(function* () {
     ({ path, ...init }: RequestInit & { readonly path: string }) =>
       Effect.tryPromise(() => fetchWith(browser)(`${authenticationTestOrigin}${path}`, init))
 
-  const clientWith = (browser: TestBrowser) =>
+  const clientWith = (browser: TestBrowser, extraHeaders?: Record.ReadonlyRecord<string, string>) =>
     HttpApiClient.make(GororobasApi, { baseUrl: authenticationTestOrigin }).pipe(
       Effect.provide(FetchHttpClient.layer),
-      Effect.provideService(FetchHttpClient.Fetch, fetchWith(browser)),
+      Effect.provideService(FetchHttpClient.Fetch, fetchWith(browser, extraHeaders)),
     )
 
   /** A browser with its own cookie jar, like a person's device. */

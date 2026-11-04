@@ -10,6 +10,7 @@ import { WikiAnimalArticleCrdtOperations } from "./kinds/animal.crdt.js"
 import { WikiBookArticleCrdtOperations } from "./kinds/book.crdt.js"
 import { WikiFilmArticleCrdtOperations } from "./kinds/film.crdt.js"
 import { WikiNoteworthyEntityArticleCrdtOperations } from "./kinds/noteworthy-entity.crdt.js"
+import { WikiPlaceArticleCrdtOperations } from "./kinds/place.crdt.js"
 import { WikiPlantCultivarArticleCrdtOperations } from "./kinds/plant-cultivar.crdt.js"
 import { WikiPlantArticleCrdtOperations } from "./kinds/plant.crdt.js"
 import { WikiResourceArticleCrdtOperations } from "./kinds/resource.crdt.js"
@@ -27,6 +28,7 @@ export const WikiArticleEdit = Schema.Union([
   WikiPlantArticleCrdtOperations.AttributeEdit,
   WikiPlantCultivarArticleCrdtOperations.AttributeEdit,
   WikiResourceArticleCrdtOperations.AttributeEdit,
+  WikiPlaceArticleCrdtOperations.AttributeEdit,
   WikiToolArticleCrdtOperations.AttributeEdit,
   WikiUncategorizedArticleCrdtOperations.AttributeEdit,
   WikiArticleTranslationCrdtOperations.AttributeEdit,
@@ -59,6 +61,9 @@ const applyWikiArticleEdit = (document: LoroDoc, edit: WikiArticleEdit) => {
   }
   if (Schema.is(WikiResourceArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiResourceArticleCrdtOperations.applyAttributeEdit(document, edit)
+  }
+  if (Schema.is(WikiPlaceArticleCrdtOperations.AttributeEdit)(edit)) {
+    return WikiPlaceArticleCrdtOperations.applyAttributeEdit(document, edit)
   }
   if (Schema.is(WikiToolArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiToolArticleCrdtOperations.applyAttributeEdit(document, edit)
@@ -167,8 +172,6 @@ const createWikiArticleDocument = Effect.fn("createWikiArticleDocument")(functio
       )
     }
   })
-
-  sourceDocument.commit()
 
   return sourceDocument
 })

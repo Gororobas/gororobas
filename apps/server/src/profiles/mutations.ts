@@ -10,11 +10,12 @@ import { Effect, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
 import { deleteAuthSubject } from "../authentication/delete-auth-subject.js"
+import { latestPublicProfileLocationJson } from "./location-sql.js"
 
 const SearchableProfileFields = Schema.Struct({
   name: Schema.String,
   handle: Schema.String,
-  location: Schema.NullOr(Schema.String),
+  publicLocationText: Schema.NullOr(Schema.String),
 })
 
 const findSearchableProfileFields = SqlSchema.findOne({
@@ -22,9 +23,22 @@ const findSearchableProfileFields = SqlSchema.findOne({
   Result: SearchableProfileFields,
   execute: (id) =>
     SqlClient.SqlClient.use(
-      (sql) => sql`SELECT name, handle, location FROM profiles WHERE id = ${id}`,
+      (sql) => sql`
+        SELECT p.name, p.handle,
+          json_extract(${latestPublicProfileLocationJson(sql, { profileIdColumn: "p.id", language: "pt" })}, '$.text') AS public_location_text
+        FROM profiles p WHERE p.id = ${id}
+      `,
     ),
 })
+
+/** Recomputes what search matches after its name, handle or locations change. */
+export const refreshProfileSearchableText = (id: ProfileId) =>
+  SqlClient.SqlClient.use((sql) =>
+    Effect.gen(function* () {
+      const searchableText = profileSearchableText(yield* findSearchableProfileFields(id))
+      yield* sql`UPDATE profiles SET ${sql.update({ searchableText })} WHERE id = ${id}`
+    }),
+  )
 
 export const updateProfileRow = SqlSchema.void({
   Request: ProfileRowUpdate.pipe(
@@ -34,12 +48,8 @@ export const updateProfileRow = SqlSchema.void({
     SqlClient.SqlClient.use((sql) =>
       Effect.gen(function* () {
         yield* sql`UPDATE profiles SET ${sql.update(update)} WHERE id = ${id}`
-        if (!("name" in update || "handle" in update || "location" in update)) return
-
-        const searchableText = profileSearchableText(
-          yield* findSearchableProfileFields(ProfileId.make(id)),
-        )
-        yield* sql`UPDATE profiles SET ${sql.update({ searchableText })} WHERE id = ${id}`
+        if (!("name" in update || "handle" in update)) return
+        yield* refreshProfileSearchableText(ProfileId.make(id))
       }).pipe(sql.withTransaction),
     ),
 })
@@ -49,7 +59,11 @@ export const insertProfile = SqlSchema.void({
   execute: (profile) =>
     SqlClient.SqlClient.use(
       (sql) =>
-        sql`INSERT INTO profiles ${sql.insert({ ...profile, searchableText: profileSearchableText(profile) })}`,
+        sql`INSERT INTO profiles ${sql.insert({
+          ...profile,
+          // New profiles have no locations yet.
+          searchableText: profileSearchableText({ ...profile, publicLocationText: null }),
+        })}`,
     ),
 })
 

@@ -15,6 +15,7 @@ export const init = ApplicationComposition.makeInit((url: Url) => {
       maybeToday: Option.none(),
       maybeWikiArticle: Option.none(),
       maybeWikiArticleDebug: Option.none(),
+      maybeMyPlaces: Option.none(),
     },
     commands: [ReadToday()],
     steps: [enterRouteStep(route)],

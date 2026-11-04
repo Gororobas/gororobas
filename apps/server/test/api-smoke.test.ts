@@ -18,6 +18,7 @@ import {
   OrganizationId,
   PersonId,
   ProfileId,
+  ProfileLocationId,
   PublicationCommentContentRevisionId,
   PublicationCommentId,
   PublicationId,
@@ -25,6 +26,7 @@ import {
   WikiArticleId,
   WikiArticleKind,
   WikiArticleRevisionId,
+  WhosOnFirstId,
   WikiConceptArticle,
 } from "@gororobas/domain"
 import {
@@ -46,6 +48,11 @@ import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
 import { IdGenLive } from "../src/id-gen-live.js"
+import {
+  FIXTURE_GAZETTEER_IDS,
+  GazetteerFixture,
+  VILLA_DE_LEYVA_COORDINATES,
+} from "../src/places/gazetteer-fixture.js"
 import { DEFAULT_SEED, seedDatabase } from "../src/seed/seed-database.js"
 import { AppSqlTest } from "../src/sql.js"
 import { ApiTestClient } from "./api-test-client.js"
@@ -185,7 +192,12 @@ interface CreatedDuringSmoke {
   publicationId?: PublicationId
   commentId?: PublicationCommentId
   organizationId?: OrganizationId
+  profileLocationId?: ProfileLocationId
 }
+
+/** No location has this ID: updates and deletions without one of the persona's own get a 404. */
+const missingProfileLocationId = ProfileLocationId.make("01890000-0000-7000-8000-000000000000")
+const villaDeLeyva = WhosOnFirstId.make(FIXTURE_GAZETTEER_IDS.villaDeLeyva)
 
 const requests = ({
   client,
@@ -264,11 +276,49 @@ const requests = ({
       }),
     "moderation.getModerationQueue": () => client.moderation.getModerationQueue(),
 
+    "places.searchGazetteerPlaces": () =>
+      client.places.searchGazetteerPlaces({ query: { text: "Madrid" } }),
+    "places.getGazetteerPlace": () =>
+      client.places.getGazetteerPlace({ params: { id: villaDeLeyva } }),
+    "places.findMunicipalityContaining": () =>
+      client.places.findMunicipalityContaining({ payload: VILLA_DE_LEYVA_COORDINATES }),
+    "profileLocations.listMyLocations": () => client.profileLocations.listMyLocations(),
+
     // Creation
+    "profileLocations.addMyLocation": () =>
+      Effect.tap(
+        client.profileLocations.addMyLocation({
+          payload: {
+            place: {
+              _tag: "GazetteerPlace",
+              gazetteerPlaceId: villaDeLeyva,
+              label: Option.some(`Sítio de ${persona}`),
+              elevation: Option.some(2150),
+            },
+            startDate: Option.none(),
+            endDate: Option.none(),
+            visibility: "PUBLIC",
+          },
+        }),
+        (location) =>
+          Effect.sync(() => {
+            created.profileLocationId = location.id
+          }),
+      ),
+    "profileLocations.updateMyLocation": () =>
+      client.profileLocations.updateMyLocation({
+        params: { id: created.profileLocationId ?? missingProfileLocationId },
+        payload: {
+          place: { _tag: "FreeText", text: "Viajando por aí" },
+          startDate: Option.none(),
+          endDate: Option.none(),
+          visibility: "COMMUNITY",
+        },
+      }),
     "people.completeOnboarding": () =>
       client.people.completeOnboarding({ payload: { name: `Smoke ${persona}` } }),
     "people.updateProfile": () =>
-      client.people.updateProfile({ payload: { location: "Brasília, DF" } }),
+      client.people.updateProfile({ payload: { name: `Smoke ${persona}` } }),
     "mediaAssets.uploadMedia": () => {
       const form = new FormData()
       form.append("file", new Blob([PNG], { type: "image/png" }), "pixel.png")
@@ -401,6 +451,10 @@ const requests = ({
       }),
 
     // Destructive endpoints last, acting on what the persona created when possible.
+    "profileLocations.deleteMyLocation": () =>
+      client.profileLocations.deleteMyLocation({
+        params: { id: created.profileLocationId ?? missingProfileLocationId },
+      }),
     "publicationComments.deletePublicationComment": () =>
       client.publicationComments.deletePublicationComment({
         params: { id: created.commentId ?? targets.comment.id },
@@ -455,6 +509,7 @@ const seededEnvironment = Effect.gen(function* () {
 
   return Layer.mergeAll(
     AppSqlTest,
+    GazetteerFixture,
     IdGenLive,
     WorkflowEngine.layerMemory,
     NodeServices.layer,

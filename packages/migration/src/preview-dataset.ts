@@ -160,7 +160,8 @@ export const readPreviewDataset = (directory: string) =>
       { concurrency: 1 },
     )
 
-    const concepts = yield* sql`SELECT * FROM wiki_article_projections WHERE kind = 'CONCEPT'`
+    const concepts =
+      yield* sql`SELECT * FROM wiki_article_projections WHERE kind IN ('CONCEPT', 'PLACE')`
 
     dataset.concepts = exports.concepts.map(({ file, data }) => ({
       ...data,

@@ -1,6 +1,7 @@
 import type { Block } from "foldkit"
 
 import { AuthenticationBlock } from "../blocks/authentication"
+import { MyPlacesBlock } from "../blocks/my-places"
 import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
@@ -41,7 +42,20 @@ export const WikiArticleDebugBinding = ApplicationDefinition.makeBinding(WikiArt
   subscriptions: { when: (model, wikiArticleId) => isDebugRouteFor(model.route, wikiArticleId) },
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
-  bindings: [AuthenticationBinding, SearchBinding, WikiArticleBinding, WikiArticleDebugBinding],
+export const MyPlacesBinding = ApplicationDefinition.makeBinding(MyPlacesBlock, {
+  field: "maybeMyPlaces",
+  delivery: { when: (model) => ApplicationRoute.guards.MyPlaces(model.route) },
+  subscriptions: { when: (model) => ApplicationRoute.guards.MyPlaces(model.route) },
 })
+
+export const ApplicationComposition = ApplicationDefinition.makeComposition({
+  bindings: [
+    AuthenticationBinding,
+    SearchBinding,
+    WikiArticleBinding,
+    WikiArticleDebugBinding,
+    MyPlacesBinding,
+  ],
+})
+
 export type ApplicationViewBuilder = Block.ViewBuilderFor<typeof ApplicationComposition>

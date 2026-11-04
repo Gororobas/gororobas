@@ -38,6 +38,7 @@ import { HttpRouter } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
+import { GazetteerFixture } from "../../../apps/server/src/places/gazetteer-fixture.js"
 import {
   authenticationTestBindingKey,
   authenticationTestProofKey,
@@ -121,7 +122,7 @@ const fixture = Effect.gen(function* () {
             type: "PERSON",
             visibility: "PUBLIC",
             bio: null,
-            location: null,
+            location: index === 0 ? "Bogotá" : null,
             photo_gel_id: null,
             created_at: date,
             updated_at: date,
@@ -330,6 +331,7 @@ it.live(
         NodeServices.layer,
         NodeHttpServer.layerHttpServices,
         WorkflowEngine.layerMemory,
+        GazetteerFixture,
       )
 
       const app = yield* Effect.acquireRelease(
@@ -429,6 +431,18 @@ it.live(
 
       yield* Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
+
+        expect(
+          yield* sql`SELECT profile_id, kind, free_text, visibility FROM profile_locations`,
+        ).toEqual([
+          {
+            profileId: data.users[0].profile.id,
+            kind: "FREE_TEXT",
+            freeText: "Bogotá",
+            visibility: "PUBLIC",
+          },
+        ])
+
         expect(yield* sql`SELECT created_by_id FROM wiki_article_revisions`).toEqual([
           { createdById: data.users[1].profile.id },
         ])

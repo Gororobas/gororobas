@@ -31,6 +31,7 @@ import {
   similarityQuery,
 } from "../db/full-text-search.js"
 import { orderByLanguagePreference } from "../db/language-preference.js"
+import { latestPublicProfileLocationJson } from "../profiles/location-sql.js"
 /** A publication's projection joined with the columns its source row owns. */
 import { selectPublicationRows } from "./projection.js"
 
@@ -169,7 +170,8 @@ export const findPublicationCardContent = SqlSchema.findOneOption({
       (sql) => sql`
       SELECT t.content, t.language, t.original_language,
         json_object('id', owner.id, 'type', owner.type, 'handle', owner.handle, 'name', owner.name,
-          'location', owner.location, 'photoId', photo.id) AS owner,
+          'location', json(${latestPublicProfileLocationJson(sql, { profileIdColumn: "owner.id", language })}),
+          'photoId', photo.id) AS owner,
         (SELECT json_group_array(DISTINCT linked.wiki_article_id)
           FROM publication_wiki_articles linked
           JOIN wiki_article_projections article ON article.id = linked.wiki_article_id

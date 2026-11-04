@@ -301,10 +301,6 @@ export const CONCEPTS: NonEmpty<Localized> = [
   localized(["Feira", "Market", "Feria"]),
   localized(["Reforma agrária", "Land reform", "Reforma agraria"]),
   localized(["Educação", "Education", "Educación"]),
-  localized(["Cerrado", "Cerrado", "Cerrado"]),
-  localized(["Mata Atlântica", "Atlantic Forest", "Mata Atlántica"]),
-  localized(["Amazônia", "Amazon", "Amazonía"]),
-  localized(["Caatinga", "Caatinga", "Caatinga"]),
   localized(["Água", "Water", "Agua"]),
   localized(["Polinizadores", "Pollinators", "Polinizadores"]),
   localized(["Receitas", "Recipes", "Recetas"]),
@@ -328,6 +324,19 @@ export const WIKI_NAMES: Readonly<
     localized(["Codorna", "Quail", "Codorniz"]),
     localized(["Porco caipira", "Heritage pig", "Cerdo criollo"]),
     localized(["Tilápia", "Tilapia", "Tilapia"]),
+  ],
+  // Places people write about. Municipalities, states and countries come from the gazetteer.
+  PLACE: [
+    localized(["Cerrado", "Cerrado", "Cerrado"]),
+    localized(["Mata Atlântica", "Atlantic Forest", "Mata Atlántica"]),
+    localized(["Amazônia", "Amazon", "Amazonía"]),
+    localized(["Caatinga", "Caatinga", "Caatinga"]),
+    localized(["Páramo", "Páramo", "Páramo"]),
+    localized(["Bosque seco tropical", "Tropical dry forest", "Bosque seco tropical"]),
+    localized(["Pantanal", "Pantanal", "Pantanal"]),
+    localized(["Chapada Diamantina", "Chapada Diamantina", "Chapada Diamantina"]),
+    localized(["Serra da Mantiqueira", "Mantiqueira Mountains", "Sierra de la Mantiqueira"]),
+    localized(["Altiplano cundiboyacense", "Cundiboyacense Plateau", "Altiplano cundiboyacense"]),
   ],
   BOOK: [
     localized(["O Solo que Respira", "The Breathing Soil", "El Suelo que Respira"]),
@@ -475,6 +484,25 @@ export const PLACES: NonEmpty<string> = [
   "Bogotá, Colômbia",
   "Chapada Diamantina, BA",
   "Serra da Mantiqueira, MG",
+]
+
+/** Locations people describe instead of naming a place. */
+export const FREE_TEXT_LOCATIONS: NonEmpty<string> = [
+  "Online",
+  "Viajando por aí",
+  "Algún rincón de Argentina",
+  "Entre a cidade e a roça",
+  "Na estrada com a família",
+  "Litoral norte",
+]
+
+/** How people describe where they are within a municipality. */
+export const LOCATION_LABELS: NonEmpty<string> = [
+  "Sítio na zona rural",
+  "Quintal no centro",
+  "Vereda alta, perto do páramo",
+  "Assentamento a 20 km da cidade",
+  "Horta comunitária do bairro",
 ]
 
 export const ORGANIZATION_PREFIXES: NonEmpty<string> = [

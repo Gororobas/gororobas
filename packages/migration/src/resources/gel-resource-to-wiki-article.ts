@@ -99,7 +99,7 @@ const organizationEntityTypesByHandle: OrganizationEntityTypesByHandle = {
   ana: "NETWORK",
 }
 
-/** Gel tags were migrated into CONCEPT wiki articles that keep the tag's mapped ID. */
+/** Gel tags were migrated into CONCEPT (or, for biomes, PLACE) wiki articles that keep the tag's mapped ID. */
 export const gelResourceRelatedWikiArticleIds = Effect.fn("gelResourceRelatedWikiArticleIds")(
   function* (source: GelResourceWithRelations) {
     const context = yield* MigrationContext

@@ -28,6 +28,9 @@ export type MediaAssetId = typeof MediaAssetId.Type
 export const ProfileId = UUID.pipe(Schema.brand("ProfileId"))
 export type ProfileId = typeof ProfileId.Type
 
+export const ProfileLocationId = UUID.pipe(Schema.brand("ProfileLocationId"))
+export type ProfileLocationId = typeof ProfileLocationId.Type
+
 export const OrganizationId = ProfileId.pipe(Schema.brand("OrganizationId"))
 export type OrganizationId = typeof OrganizationId.Type
 

@@ -1,9 +1,11 @@
 import {
   IdGen,
   WikiArticleCommonNameInCrdtList,
+  WikiArticleEditableData,
   WikiArticleEditableTranslations,
   WikiArticleId,
   WikiConceptArticle,
+  WikiPlaceArticle,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, FileSystem, Option, Path, Record, Schema } from "effect"
 
@@ -35,7 +37,42 @@ const NOTE_TYPE_NAMES = {
 
 export const noteTypeGelId = (type: string) => `note-type:${type}`
 
-/** Gel tags become CONCEPT wiki articles that keep the tag's mapped ID. */
+/** Gel tagged content with Brazil's biomes; in the wiki they're places people can be in. */
+const BIOME_TAG_HANDLES: ReadonlyArray<string> = [
+  "amazonia",
+  "caatinga",
+  "cerrado",
+  "mata-atlantica",
+  "pampa",
+  "pantanal",
+]
+
+/** Most tags are CONCEPT articles; biomes are PLACE articles. */
+export const gelTagArticle = ({
+  handle,
+  translations,
+}: Readonly<{
+  handle: string
+  translations: WikiArticleEditableTranslations
+}>): WikiArticleEditableData =>
+  BIOME_TAG_HANDLES.includes(handle)
+    ? WikiPlaceArticle.EditableArticle.make({
+        kind: "PLACE",
+        attributes: WikiPlaceArticle.EditableAttributes.make({
+          placeKind: Option.some("BIOME"),
+          whosOnFirstId: Option.none(),
+          wikidataId: Option.none(),
+          geonamesId: Option.none(),
+        }),
+        translations,
+      })
+    : WikiConceptArticle.EditableArticle.make({
+        kind: "CONCEPT",
+        attributes: WikiConceptArticle.EditableAttributes.make({}),
+        translations,
+      })
+
+/** Gel tags become CONCEPT (or, for biomes, PLACE) wiki articles that keep the tag's mapped ID. */
 export const sourceGelTags = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
@@ -98,16 +135,12 @@ export const sourceGelTags = Effect.gen(function* () {
           },
         })
 
-        const article = WikiConceptArticle.EditableArticle.make({
-          kind: "CONCEPT",
-          attributes: WikiConceptArticle.EditableAttributes.make({}),
-          translations,
-        })
+        const article = gelTagArticle({ handle: tag.handle, translations })
 
         yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))({
           id,
           latest_source: tag,
-          article: yield* Schema.encodeEffect(WikiConceptArticle.EditableArticle)(article),
+          article: yield* Schema.encodeEffect(WikiArticleEditableData)(article),
         }).pipe(
           Effect.flatMap((encoded) =>
             fs.writeFileString(path.join(conceptsDirectory, `${tag.handle}.json`), encoded),

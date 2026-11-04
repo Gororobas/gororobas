@@ -124,7 +124,6 @@ export class OrganizationsService extends Context.Service<OrganizationsService>(
             type: "ORGANIZATION",
             visibility: "PUBLIC",
             bio: null,
-            location: null,
             photoId: null,
             createdAt: now,
             updatedAt: now,

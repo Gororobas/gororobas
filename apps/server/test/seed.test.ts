@@ -37,6 +37,8 @@ import {
 import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient, SqlSchema } from "effect/sql"
 
+import { GazetteerFixture } from "../src/places/gazetteer-fixture.js"
+import type { Gazetteer } from "../src/places/gazetteer.js"
 import { countTableRows, DEFAULT_SEED, seedDatabase } from "../src/seed/seed-database.js"
 import { AppSqlTest } from "../src/sql.js"
 
@@ -118,7 +120,7 @@ const dumpWithoutCrdtInternals = Effect.gen(function* () {
 })
 
 /** A fresh in-memory database per run, sharing one temporary media directory per test. */
-type SeedRequirements = SqlClient.SqlClient | FileSystem.FileSystem | Path.Path
+type SeedRequirements = SqlClient.SqlClient | Gazetteer | FileSystem.FileSystem | Path.Path
 
 const withSeedEnvironment = <A, E>(
   run: (
@@ -139,7 +141,10 @@ const withSeedEnvironment = <A, E>(
     )
 
     return yield* run((effect) =>
-      effect.pipe(Effect.provide(Layer.mergeAll(AppSqlTest, environment)), Effect.orDie),
+      effect.pipe(
+        Effect.provide(Layer.mergeAll(AppSqlTest, GazetteerFixture, environment)),
+        Effect.orDie,
+      ),
     )
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 

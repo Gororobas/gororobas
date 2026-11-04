@@ -153,6 +153,10 @@ const legibleAttribute = (input: {
         : null
     }
 
+    // Gazetteer-backed places are created from the gazetteer (`seed-locations.ts`), never with
+    // generated IDs that could collide with real ones.
+    if (key === "whosOnFirstId") return null
+
     if (key === "googleBooksVolumeId") {
       return context.isRepresentative || (yield* chance(0.7)) ? yield* nanoId : null
     }

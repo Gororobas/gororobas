@@ -69,7 +69,6 @@ export const completeOnboarding = Effect.fn("People.completeOnboarding")(functio
         handle: yield* availableHandle(input.name),
         name: input.name,
         bio: null,
-        location: null,
         photoId: null,
         visibility: "PUBLIC",
         createdAt: now,

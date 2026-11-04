@@ -21,7 +21,8 @@
   "lsp": {
     "effect-tsgo": {
       "binary": {
-        "path": "node_modules/.bin/tsrs"
+        "path": "node_modules/.bin/tsrs",
+        "arguments": ["--lsp", "--stdio"]
       }
     }
   }

@@ -45,6 +45,16 @@ To start the server with a fresh, seeded in-memory database instead, set `APP_DB
 - **Media**: a small pool of generated images goes through the real media pipeline once and is cached under `MEDIA_ASSETS_DIRECTORY/.seed-pool`; every seeded media asset is a symlink to a pool entry.
 - **Coverage**: `test/seed.test.ts` fails when a table receives no seeded rows or seeded rows don't decode with the read-side schemas. When adding a table, seed it in `src/seed/` or justify the exemption in that test.
 
+## Places and the gazetteer
+
+People pick where they are from a gazetteer: the countries, states and municipalities of [Who's On First](https://whosonfirst.org/) (CC BY; credit it wherever places are shown), kept in a read-only SQLite database apart from the app's. It powers place search, finding the municipality around a device's position and each place's hierarchy. A gazetteer place becomes a PLACE wiki article the first time a profile location references it.
+
+```sh
+pnpm --filter @gororobas/server gazetteer:build --countries co,br
+```
+
+The script downloads each country's Who's On First admin database into `data/gazetteer-sources/`, keeps current countries, regions and counties (municipalities), simplifies their outlines for display and writes `data/gazetteer.db` (about 300 MB for Colombia and Brazil). Towns, which Who's On First only has as points, become searchable names of their municipality. The server reads `GAZETTEER_DB_FILENAME`, else `data/gazetteer.db`, else a dozen-place fixture (`src/places/gazetteer-fixture.ts`) that tests also use.
+
 ## Local authentication
 
 From `apps/server`:
@@ -80,6 +90,7 @@ HTTP authentication is supported on loopback origins only in development, using 
 | `API_PORT` | HTTP port, default 4000. The web app's Vite proxy reads the same variable; `WEB_PORT` (default 4443) moves the web app. Set `AUTH_ORIGIN` to the matching web origin. |
 | `SEED_SCALE` | When set (`tiny`, `small`, `medium`, `large`), seeds an empty database at startup. See [Fake data](#fake-data). |
 | `SEED` | Seed string for startup seeding, default `gororobas`. |
+| `GAZETTEER_DB_FILENAME` | The gazetteer database. Defaults to `data/gazetteer.db` when it exists, else a small fixture. See [Places and the gazetteer](#places-and-the-gazetteer). |
 
 Production uses [Resend’s email API](https://resend.com/docs/api-reference/emails/send-email) and fails startup if `RESEND_API_KEY` or `AUTH_EMAIL_FROM` is missing or empty. Use a verified sender domain, disable link tracking/rewriting in Resend, and set the actual HTTPS `AUTH_ORIGIN`. The normal application entry point includes its API and workflow layers.
 

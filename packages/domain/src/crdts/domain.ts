@@ -25,7 +25,8 @@ export type HumanCommit = typeof HumanCommit.Type
 export const SystemCommit = Schema.TaggedStruct("SystemCommit", {
   workflowName: Schema.String,
   workflowVersion: Schema.String,
-  model: Schema.String,
+  /** The model that produced the change, for workflows that use one. */
+  model: Schema.optionalKey(Schema.String),
 })
 
 export type SystemCommit = typeof SystemCommit.Type

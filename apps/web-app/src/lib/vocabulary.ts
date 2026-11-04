@@ -3,7 +3,9 @@ import {
   type AnimalRole,
   type BookmarkState,
   type EdiblePlantPart,
+  type InformationVisibility,
   NoteworthyEntityType,
+  type PlaceKind,
   type PlantLifecycle,
   type PlantUsage,
   type PlantingMethod,
@@ -25,10 +27,30 @@ export const wikiKindLabels: Readonly<
   BOOK: { singular: "Livro", plural: "Livros" },
   FILM: { singular: "Filme", plural: "Filmes" },
   CONCEPT: { singular: "Conceito", plural: "Conceitos" },
+  PLACE: { singular: "Lugar", plural: "Lugares" },
   TOOL: { singular: "Ferramenta", plural: "Ferramentas" },
   RESOURCE: { singular: "Recurso", plural: "Recursos" },
   NOTEWORTHY_ENTITY: { singular: "Organização", plural: "Organizações" },
   UNCATEGORIZED: { singular: "Outro", plural: "Outros" },
+}
+
+export const placeKindLabels: Readonly<Record<PlaceKind, string>> = {
+  COUNTRY: "País",
+  STATE: "Estado ou departamento",
+  MUNICIPALITY: "Município",
+  LOCALITY: "Localidade",
+  BIOME: "Bioma",
+  ECOREGION: "Ecorregião",
+  ECOSYSTEM: "Ecossistema",
+  WATERSHED: "Bacia hidrográfica",
+  PROTECTED_AREA: "Área protegida",
+  LANDFORM: "Relevo",
+}
+
+export const informationVisibilityLabels: Readonly<Record<InformationVisibility, string>> = {
+  PUBLIC: "Público",
+  COMMUNITY: "Comunidade",
+  PRIVATE: "Privado",
 }
 
 export const plantUsageLabels: Readonly<Record<PlantUsage, string>> = {

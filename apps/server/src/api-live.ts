@@ -16,7 +16,11 @@ import { OrganizationsService } from "./organizations/service.js"
 import { PeopleApiLive } from "./people/api-live.js"
 import { PeopleRepository } from "./people/repository.js"
 import { PeopleService } from "./people/service.js"
+import { PlacesApiLive } from "./places/api-live.js"
+import { PlacesService } from "./places/service.js"
 import { ProfilesApiLive } from "./profiles/api-live.js"
+import { ProfileLocationsApiLive } from "./profiles/locations-api-live.js"
+import { ProfileLocationsService } from "./profiles/locations-service.js"
 import { ProfilesRepository } from "./profiles/repository.js"
 import { ProfileService } from "./profiles/service.js"
 import { PublicationCommentsApiLive } from "./publication-comments/api-live.js"
@@ -38,6 +42,8 @@ const ImplementedApi = HttpApi.make(GororobasApi.identifier).add(
   GororobasApi.groups.people,
   GororobasApi.groups.publications,
   GororobasApi.groups.profiles,
+  GororobasApi.groups.profileLocations,
+  GororobasApi.groups.places,
   GororobasApi.groups.wiki,
 )
 
@@ -61,6 +67,9 @@ const ServicesLive = Layer.mergeAll(
   Layer.effect(PublicationCommentsService, PublicationCommentsService.make),
   Layer.effect(PublicationsService, PublicationsService.make),
   Layer.effect(WikiArticlesService, WikiArticlesService.make),
+  Layer.effect(ProfileLocationsService, ProfileLocationsService.make).pipe(
+    Layer.provideMerge(Layer.effect(PlacesService, PlacesService.make)),
+  ),
 ).pipe(
   Layer.provideMerge(MediaServicesLive),
   Layer.provideMerge(RepositoriesLive),
@@ -77,6 +86,8 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
   PeopleApiLive,
   PublicationsApiLive,
   ProfilesApiLive,
+  ProfileLocationsApiLive,
+  PlacesApiLive,
   WikiApiLive,
 ]).pipe(
   HttpRouter.provideRequest(ServicesLive),

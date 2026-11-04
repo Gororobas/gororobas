@@ -23,7 +23,6 @@ Feature: People
         | handle   | maria-da-terra          |
         | name     | Maria da Terra          |
         | bio      | Agricultora e educadora |
-        | location | Brasília, DF            |
       Then their profile shows the updated information
 
     Scenario: Person changes their handle

@@ -1,39 +1,104 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Handle, IdGen, PersonId, PlatformAccessLevel } from "@gororobas/domain"
+import {
+  Handle,
+  IdGen,
+  InformationVisibility,
+  type PartialDate,
+  PersonId,
+  PlatformAccessLevel,
+} from "@gororobas/domain"
 import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
-import { DateTime, Effect, Option, Result, Schema } from "effect"
+import { DateTime, Effect, Layer, Option, Result, Schema } from "effect"
 
+import { PlacesService } from "../../src/places/service.js"
+import { ProfileLocationsService } from "../../src/profiles/locations-service.js"
 import { ProfilesRepository } from "../../src/profiles/repository.js"
 import { ProfileService } from "../../src/profiles/service.js"
+import { WikiArticlesRepository } from "../../src/wiki/repository.js"
 import { seedPerson, TestLayerWithServices, withSession } from "../test-helpers.js"
 
 const lookups = ["handle", "id"] as const
 
+const ProfileLocationsTestLayer = Layer.effect(
+  ProfileLocationsService,
+  ProfileLocationsService.make,
+).pipe(
+  Layer.provideMerge(Layer.effect(PlacesService, PlacesService.make)),
+  Layer.provideMerge(Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make)),
+)
+
 describe("ProfileService reads", () => {
-  it.effect("searches public profiles by location and excludes community profiles", () =>
+  it.effect("searches public profiles by their public latest location only", () =>
     Effect.gen(function* () {
-      const { person: publicPerson } = yield* seedPerson("COMMUNITY")
-      const { person: communityPerson } = yield* seedPerson("COMMUNITY")
+      const { person: sharesPublicly } = yield* seedPerson("COMMUNITY")
+      const { person: communityProfile } = yield* seedPerson("COMMUNITY")
+      const { person: keepsPrivate } = yield* seedPerson("COMMUNITY")
+      const { person: movedSincePublic } = yield* seedPerson("COMMUNITY")
       const repository = yield* ProfilesRepository
+      const locations = yield* ProfileLocationsService
       const updatedAt = yield* DateTime.now
 
-      yield* repository.updateProfileRow({
-        id: publicPerson.id,
-        location: "Tropical Andes",
-        updatedAt,
+      const tropicalAndes = (
+        visibility: InformationVisibility,
+        endDate: Option.Option<PartialDate> = Option.none(),
+      ) =>
+        ({
+          place: { _tag: "FreeText", text: "Tropical Andes" },
+          startDate: Option.none(),
+          endDate,
+          visibility,
+        }) as const
+
+      yield* locations.add({
+        profileId: sharesPublicly.id,
+        payload: tropicalAndes("PUBLIC"),
+        language: "pt",
       })
 
       yield* repository.updateProfileRow({
-        id: communityPerson.id,
-        location: "Tropical Andes",
+        id: communityProfile.id,
         visibility: "COMMUNITY",
         updatedAt,
       })
 
+      yield* locations.add({
+        profileId: communityProfile.id,
+        payload: tropicalAndes("PUBLIC"),
+        language: "pt",
+      })
+
+      yield* locations.add({
+        profileId: keepsPrivate.id,
+        payload: tropicalAndes("PRIVATE"),
+        language: "pt",
+      })
+
+      // An older public entry stays unsearchable once a private one replaces it.
+      yield* locations.add({
+        profileId: movedSincePublic.id,
+        payload: tropicalAndes(
+          "PUBLIC",
+          Option.some({ precision: "year", year: 2020, timezone: "UTC" }),
+        ),
+        language: "pt",
+      })
+
+      yield* locations.add({
+        profileId: movedSincePublic.id,
+        payload: {
+          ...tropicalAndes("PRIVATE"),
+          place: { _tag: "FreeText", text: "Somewhere else" },
+        },
+        language: "pt",
+      })
+
       const profiles = yield* repository.searchProfiles({ text: "andes" })
 
-      expect(profiles.map(({ id }) => id)).toEqual([publicPerson.id])
-    }).pipe(Effect.provide(TestLayerWithServices)),
+      expect(profiles.map(({ id }) => id)).toEqual([sharesPublicly.id])
+      expect(profiles[0]?.location).toEqual({ text: "Tropical Andes", placeHandle: null })
+    }).pipe(
+      Effect.provide(ProfileLocationsTestLayer.pipe(Layer.provideMerge(TestLayerWithServices))),
+    ),
   )
 
   lookups.forEach((lookup) => {

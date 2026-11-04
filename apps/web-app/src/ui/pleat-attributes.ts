@@ -69,3 +69,10 @@ export const styledAttributes = <Message, A extends object = Attribute<Message> 
     }),
   ]
 }
+
+/** Pleat styles as a class name, for `@foldkit/ui` options that only take one, such as a
+ *  combobox item's `className`. */
+export const styledClassName = (...parts: ReadonlyArray<Part>): string =>
+  css(...parts)
+    .flatMap((attribute) => (isClassAttribute(attribute) ? [attribute.value] : []))
+    .join(" ")

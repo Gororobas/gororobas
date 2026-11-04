@@ -8,6 +8,8 @@ pnpm --filter @gororobas/migration migrate
 
 This exports live Gel data, rebuilds converted collections, imports through the server's normal SQLite migrations/repositories, validates history and foreign keys, then replaces `apps/server/gororobas.db`. A previous database is copied to a `.before-migration-*` backup. An unsuccessful data import leaves the existing application database intact. SQLite sidecars on an existing target cause an error: stop the application before replacing it.
 
+To migrate into the isolated `api-migrated` database and start the API on port 4200, run `pnpm dev:migrated` from the workspace root. In another terminal, start the matching frontend with `WEB_PORT=4643 API_PORT=4200 pnpm --filter @gororobas/web-app dev` and open http://localhost:4643. Configure the server environment and Mailpit as described in the [server README](../../apps/server/README.md). Each run refreshes the data from Gel; stop any server using the migrated database first.
+
 To separate export from ingestion, or rerun frozen conversions without contacting Gel:
 
 ```sh
@@ -29,6 +31,6 @@ After configuring and starting the [normal server](../../apps/server/README.md),
 pnpm --filter @gororobas/migration verify:apis
 ```
 
-`MIGRATION_API_ORIGIN` defaults to `http://127.0.0.1:4000`. `MIGRATION_API_REPORT_FILENAME` optionally saves the report. Verification decodes API responses with domain schemas, checks every article and its history (Gel tags become CONCEPT articles), public profiles, publications by ID/handle and their histories, public media originals and all derivatives, community access denial, and missing-record responses. Automated integration tests additionally sign in a migrated account through magic links and read its bookmarks.
+`MIGRATION_API_ORIGIN` defaults to `http://127.0.0.1:4000`. `MIGRATION_API_REPORT_FILENAME` optionally saves the report. Verification decodes API responses with domain schemas, checks every article and its history (Gel tags become CONCEPT articles, and the tags for Brazil's biomes PLACE articles), public profiles, publications by ID/handle and their histories, public media originals and all derivatives, community access denial, and missing-record responses. Automated integration tests additionally sign in a migrated account through magic links and read its bookmarks.
 
 The independent [preview viewer](preview/README.md) remains available through `preview:sqlite`; its synthetic account and metadata-only media are for preview use.

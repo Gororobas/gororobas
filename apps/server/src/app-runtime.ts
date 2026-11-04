@@ -4,12 +4,15 @@ import { Layer, ManagedRuntime } from "effect"
 
 import { ClusterLive, ClusterTest } from "./cluster-live.js"
 import { ErrorReporterLive } from "./error-reporter-live.js"
+import { GazetteerFixture } from "./places/gazetteer-fixture.js"
+import { GazetteerLive } from "./places/gazetteer-live.js"
 import { AppSqlLive, AppSqlTest } from "./sql.js"
 
 export const AppRuntimeLive = ManagedRuntime.make(
   Layer.provide(
     Layer.mergeAll(
       AppSqlLive,
+      GazetteerLive,
       ClusterLive,
       ErrorReporterLive,
       Maple.layer({
@@ -24,7 +27,10 @@ export const AppRuntimeLive = ManagedRuntime.make(
 )
 
 export const AppRuntimeTest = ManagedRuntime.make(
-  Layer.provide(Layer.mergeAll(AppSqlTest, ClusterTest, ErrorReporterLive), NodeServices.layer),
+  Layer.provide(
+    Layer.mergeAll(AppSqlTest, GazetteerFixture, ClusterTest, ErrorReporterLive),
+    NodeServices.layer,
+  ),
 )
 
 export type AppRuntime = typeof AppRuntimeLive

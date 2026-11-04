@@ -37,13 +37,7 @@ import {
   type SeedContext,
 } from "./seed-context.js"
 import { chance, pick, pickOption, pickWeighted, sample } from "./seed-random.js"
-import {
-  FIRST_NAMES,
-  ORGANIZATION_CORES,
-  ORGANIZATION_PREFIXES,
-  PLACES,
-  SURNAMES,
-} from "./vocabulary.js"
+import { FIRST_NAMES, ORGANIZATION_CORES, ORGANIZATION_PREFIXES, SURNAMES } from "./vocabulary.js"
 
 /** Domain reserved for seeded accounts; `.test` can never receive real email. */
 export const SEED_EMAIL_DOMAIN = "gororobas.test"
@@ -117,7 +111,6 @@ const insertPerson = (input: {
       handle: input.handle,
       name: input.name,
       bio: (yield* chance(input.isPersona ? 1 : 0.6)) ? yield* shortText("pt") : null,
-      location: (yield* chance(0.7)) ? yield* pick(PLACES) : null,
       photoId: null,
       visibility: input.isPersona
         ? "PUBLIC"
@@ -234,17 +227,21 @@ export const seedPeople = (
 
     const generated = yield* Effect.forEach(
       EffectArray.makeBy(Math.max(0, input.count - SEED_PERSONAS.length), (index) => index),
-      () =>
+      (index) =>
         Effect.gen(function* () {
           const name = `${yield* pick(FIRST_NAMES)} ${yield* pick(SURNAMES)}`
 
-          const accessLevel = yield* pickWeighted(PlatformAccessLevel.literals, {
-            COMMUNITY: 60,
-            NEWCOMER: 25,
-            MODERATOR: 5,
-            ADMIN: 1,
-            BLOCKED: 3,
-          })
+          // The moderation queue always has someone besides the newcomer persona to approve.
+          const accessLevel =
+            index === 0
+              ? "NEWCOMER"
+              : yield* pickWeighted(PlatformAccessLevel.literals, {
+                  COMMUNITY: 60,
+                  NEWCOMER: 25,
+                  MODERATOR: 5,
+                  ADMIN: 1,
+                  BLOCKED: 3,
+                })
 
           const setBy = accessLevel === "NEWCOMER" ? undefined : yield* pickOption(staff)
 
@@ -288,7 +285,6 @@ const seedOrganization = (
           handle,
           name,
           bio: (yield* chance(0.8)) ? yield* shortText("pt") : null,
-          location: (yield* chance(0.8)) ? yield* pick(PLACES) : null,
           photoId: null,
           visibility: yield* pickWeighted(ProfileVisibility.literals, { PUBLIC: 5, COMMUNITY: 1 }),
           createdAt: now,

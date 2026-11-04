@@ -2,6 +2,7 @@ import { WikiArticleId } from "@gororobas/domain/common/ids"
 import { Schema } from "effect"
 
 import { AuthenticationBlock } from "../blocks/authentication"
+import { MyPlacesBlock } from "../blocks/my-places"
 import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
@@ -26,4 +27,5 @@ export const Model = Schema.Struct({
   maybeToday: Schema.Option(Schema.DateTimeUtc),
   maybeWikiArticle: Schema.Option(WikiArticleInstance),
   maybeWikiArticleDebug: Schema.Option(WikiArticleDebugInstance),
+  maybeMyPlaces: Schema.Option(MyPlacesBlock.Model),
 })

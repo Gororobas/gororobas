@@ -174,223 +174,241 @@ const markAsVideo = (mediaAssetId: MediaAssetId) =>
       })} WHERE id = ${mediaAssetId}`,
   )
 
-it.live("streams a multipart upload to storage and serves a validated AVIF variant", () =>
-  withApi(({ owner, root, filesystem, path }) =>
-    Effect.gen(function* () {
-      const file = yield* paddedPng(12 * 1024 * 1024)
-      const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
+it.live(
+  "streams a multipart upload to storage and serves a validated AVIF variant",
+  () =>
+    withApi(({ owner, root, filesystem, path }) =>
+      Effect.gen(function* () {
+        const file = yield* paddedPng(12 * 1024 * 1024)
+        const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
 
-      expect(media.byteSize).toBe(file.length)
-      expect(
-        new Uint8Array(yield* filesystem.readFile(path.join(root, media.id, "original"))),
-      ).toEqual(file)
+        expect(media.byteSize).toBe(file.length)
+        expect(
+          new Uint8Array(yield* filesystem.readFile(path.join(root, media.id, "original"))),
+        ).toEqual(file)
 
-      const image = yield* owner({ path: media.url })
-      expect(image.headers.get("content-type")).toBe("image/avif")
+        const image = yield* owner({ path: media.url })
+        expect(image.headers.get("content-type")).toBe("image/avif")
 
-      expect(
-        yield* Effect.tryPromise(async () =>
-          sharp(Buffer.from(await image.arrayBuffer())).metadata(),
-        ),
-      ).toMatchObject({ format: "heif", width: 80 })
-    }),
-  ),
+        expect(
+          yield* Effect.tryPromise(async () =>
+            sharp(Buffer.from(await image.arrayBuffer())).metadata(),
+          ),
+        ).toMatchObject({ format: "heif", width: 80 })
+      }),
+    ),
+  100_000,
 )
 
-it.live("serves byte ranges, HEAD and stale If-Range requests from the original", () =>
-  withApi(({ owner }) =>
-    Effect.gen(function* () {
-      const file = yield* paddedPng(64 * 1024)
-      const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
-      const originalPath = `/media/${media.id}/original/original`
+it.live(
+  "serves byte ranges, HEAD and stale If-Range requests from the original",
+  () =>
+    withApi(({ owner }) =>
+      Effect.gen(function* () {
+        const file = yield* paddedPng(64 * 1024)
+        const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
+        const originalPath = `/media/${media.id}/original/original`
 
-      yield* Effect.forEach(
-        [
-          ["bytes=2-6", 2, 6],
-          ["bytes=-4", file.length - 4, file.length - 1],
-          [`bytes=${file.length - 2}-`, file.length - 2, file.length - 1],
-        ] as const,
-        Effect.fn(function* ([range, start, end]) {
-          const response = yield* owner({ path: originalPath, headers: { range } })
+        yield* Effect.forEach(
+          [
+            ["bytes=2-6", 2, 6],
+            ["bytes=-4", file.length - 4, file.length - 1],
+            [`bytes=${file.length - 2}-`, file.length - 2, file.length - 1],
+          ] as const,
+          Effect.fn(function* ([range, start, end]) {
+            const response = yield* owner({ path: originalPath, headers: { range } })
 
-          expect(response.status).toBe(206)
-          expect(response.headers.get("content-type")).toBe("image/png")
-          expect(response.headers.get("content-range")).toBe(`bytes ${start}-${end}/${file.length}`)
-          expect(response.headers.get("content-length")).toBe(String(end - start + 1))
-          expect(yield* bytesOf(response)).toEqual(file.slice(start, end + 1))
-        }),
-        { concurrency: 1, discard: true },
-      )
+            expect(response.status).toBe(206)
+            expect(response.headers.get("content-type")).toBe("image/png")
+            expect(response.headers.get("content-range")).toBe(
+              `bytes ${start}-${end}/${file.length}`,
+            )
+            expect(response.headers.get("content-length")).toBe(String(end - start + 1))
+            expect(yield* bytesOf(response)).toEqual(file.slice(start, end + 1))
+          }),
+          { concurrency: 1, discard: true },
+        )
 
-      const head = yield* owner({ path: originalPath, method: "HEAD" })
-      expect(head.headers.get("content-length")).toBe(String(file.length))
-      expect((yield* bytesOf(head)).byteLength).toBe(0)
+        const head = yield* owner({ path: originalPath, method: "HEAD" })
+        expect(head.headers.get("content-length")).toBe(String(file.length))
+        expect((yield* bytesOf(head)).byteLength).toBe(0)
 
-      const staleRange = yield* owner({
-        path: originalPath,
-        headers: { range: "bytes=0-1", "if-range": "different-etag" },
-      })
-      expect(staleRange.status).toBe(200)
-      expect(yield* bytesOf(staleRange)).toEqual(file)
+        const staleRange = yield* owner({
+          path: originalPath,
+          headers: { range: "bytes=0-1", "if-range": "different-etag" },
+        })
+        expect(staleRange.status).toBe(200)
+        expect(yield* bytesOf(staleRange)).toEqual(file)
 
-      expect((yield* owner({ path: originalPath, headers: { range: "bytes=-0" } })).status).toBe(
-        416,
-      )
-    }),
-  ),
+        expect((yield* owner({ path: originalPath, headers: { range: "bytes=-0" } })).status).toBe(
+          416,
+        )
+      }),
+    ),
+  100_000,
 )
 
-it.live("rejects unknown variants and malformed uploads", () =>
-  withApi(({ owner, visitor }) =>
-    Effect.gen(function* () {
-      const file = yield* paddedPng(64 * 1024)
-      const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
+it.live(
+  "rejects unknown variants and malformed uploads",
+  () =>
+    withApi(({ owner, visitor }) =>
+      Effect.gen(function* () {
+        const file = yield* paddedPng(64 * 1024)
+        const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
 
-      expect((yield* owner({ path: `/media/${media.id}/images/51` })).status).toBe(400)
-      expect((yield* owner({ path: `/media/${media.id}/audio/audio.m4a` })).status).toBe(404)
+        expect((yield* owner({ path: `/media/${media.id}/images/51` })).status).toBe(400)
+        expect((yield* owner({ path: `/media/${media.id}/audio/audio.m4a` })).status).toBe(404)
 
-      const twoFiles = uploadForm([
-        { bytes: file, name: "one.png" },
-        { bytes: file, name: "two.png" },
-      ])
-      expect((yield* owner({ path: "/media/upload", method: "POST", body: twoFiles })).status).toBe(
-        413,
-      )
+        const twoFiles = uploadForm([
+          { bytes: file, name: "one.png" },
+          { bytes: file, name: "two.png" },
+        ])
+        expect(
+          (yield* owner({ path: "/media/upload", method: "POST", body: twoFiles })).status,
+        ).toBe(413)
 
-      const missing = new FormData()
-      missing.append("other", "value")
-      expect((yield* owner({ path: "/media/upload", method: "POST", body: missing })).status).toBe(
-        400,
-      )
+        const missing = new FormData()
+        missing.append("other", "value")
+        expect(
+          (yield* owner({ path: "/media/upload", method: "POST", body: missing })).status,
+        ).toBe(400)
 
-      expect(
-        (yield* visitor({
-          path: "/media/upload",
-          method: "POST",
-          body: uploadForm([{ bytes: file, name: "plant.png" }]),
-          headers: { authorization: `Bearer ${ownerId}` },
-        })).status,
-      ).toBe(403)
-    }),
-  ),
+        expect(
+          (yield* visitor({
+            path: "/media/upload",
+            method: "POST",
+            body: uploadForm([{ bytes: file, name: "plant.png" }]),
+            headers: { authorization: `Bearer ${ownerId}` },
+          })).status,
+        ).toBe(403)
+      }),
+    ),
+  100_000,
 )
 
-it.live("resolves a playlist's relative segments through the media endpoint", () =>
-  withApi(({ owner, visitor, root, filesystem, path }) =>
-    Effect.gen(function* () {
-      const media = yield* upload({
-        request: owner,
-        bytes: yield* paddedPng(64 * 1024),
-        name: "clip.png",
-      })
-
-      yield* markAsVideo(media.id)
-      yield* filesystem.writeFileString(
-        path.join(root, media.id, "master.m3u8"),
-        "#EXTM3U\nsegment-0.ts\n",
-      )
-      yield* filesystem.writeFile(
-        path.join(root, media.id, "segment-0.ts"),
-        new Uint8Array([1, 2, 3]),
-      )
-
-      expect(
-        (yield* postJson({
+it.live(
+  "resolves a playlist's relative segments through the media endpoint",
+  () =>
+    withApi(({ owner, visitor, root, filesystem, path }) =>
+      Effect.gen(function* () {
+        const media = yield* upload({
           request: owner,
-          path: `/profiles/${ownerId}/publications`,
-          body: {
-            kind: "POST",
-            content: textToRichTextDocument("Public media"),
-            handle: "public-media",
-            visibility: "PUBLIC",
-            mediaIds: [media.id],
-          },
-        })).status,
-      ).toBe(200)
+          bytes: yield* paddedPng(64 * 1024),
+          name: "clip.png",
+        })
 
-      const playlistUrl = `/media/${media.id}/video/master.m3u8`
-      const playlist = yield* visitor({ path: playlistUrl })
-      expect(playlist.headers.get("content-type")).toBe("application/vnd.apple.mpegurl")
-      expect(yield* Effect.tryPromise(() => playlist.text())).toContain("segment-0.ts")
+        yield* markAsVideo(media.id)
+        yield* filesystem.writeFileString(
+          path.join(root, media.id, "master.m3u8"),
+          "#EXTM3U\nsegment-0.ts\n",
+        )
+        yield* filesystem.writeFile(
+          path.join(root, media.id, "segment-0.ts"),
+          new Uint8Array([1, 2, 3]),
+        )
 
-      const segment = yield* visitor({
-        path: new URL("segment-0.ts", `https://localhost:4443${playlistUrl}`).pathname,
-      })
-      expect(yield* bytesOf(segment)).toEqual(new Uint8Array([1, 2, 3]))
-    }),
-  ),
-)
-
-it.live("keeps a publication's kind when its content is updated", () =>
-  withApi(({ owner }) =>
-    Effect.gen(function* () {
-      const created = yield* Effect.forEach(
-        [
-          { kind: "POST", handle: "plain-post", extra: {} },
-          {
-            kind: "EVENT",
-            handle: "community-gathering",
-            extra: { startDate: "2026-10-09T12:00:00Z" },
-          },
-        ],
-        ({ kind, handle, extra }) =>
-          postJson({
+        expect(
+          (yield* postJson({
             request: owner,
             path: `/profiles/${ownerId}/publications`,
             body: {
-              kind,
-              content: textToRichTextDocument("Original publication"),
-              handle,
+              kind: "POST",
+              content: textToRichTextDocument("Public media"),
+              handle: "public-media",
               visibility: "PUBLIC",
-              ...extra,
+              mediaIds: [media.id],
             },
+          })).status,
+        ).toBe(200)
+
+        const playlistUrl = `/media/${media.id}/video/master.m3u8`
+        const playlist = yield* visitor({ path: playlistUrl })
+        expect(playlist.headers.get("content-type")).toBe("application/vnd.apple.mpegurl")
+        expect(yield* Effect.tryPromise(() => playlist.text())).toContain("segment-0.ts")
+
+        const segment = yield* visitor({
+          path: new URL("segment-0.ts", `https://localhost:4443${playlistUrl}`).pathname,
+        })
+        expect(yield* bytesOf(segment)).toEqual(new Uint8Array([1, 2, 3]))
+      }),
+    ),
+  100_000,
+)
+
+it.live(
+  "keeps a publication's kind when its content is updated",
+  () =>
+    withApi(({ owner }) =>
+      Effect.gen(function* () {
+        const created = yield* Effect.forEach(
+          [
+            { kind: "POST", handle: "plain-post", extra: {} },
+            {
+              kind: "EVENT",
+              handle: "community-gathering",
+              extra: { startDate: "2026-10-09T12:00:00Z" },
+            },
+          ],
+          ({ kind, handle, extra }) =>
+            postJson({
+              request: owner,
+              path: `/profiles/${ownerId}/publications`,
+              body: {
+                kind,
+                content: textToRichTextDocument("Original publication"),
+                handle,
+                visibility: "PUBLIC",
+                ...extra,
+              },
+            }),
+          { concurrency: 1 },
+        )
+
+        yield* Effect.forEach(
+          created,
+          Effect.fn(function* (response) {
+            expect(response.status).toBe(200)
+            const publication = yield* Schema.decodeUnknownEffect(ApiPublicationData)(
+              yield* Effect.tryPromise(() => response.json()),
+            )
+            const current = snapshotToLoroDoc(
+              Option.getOrThrow(yield* findPublicationCrdtSnapshotById(publication.id))
+                .crdtSnapshot,
+            )
+            const edited = current.fork()
+            yield* PublicationCrdt.applyEdit(edited, {
+              _tag: "SetPublicationSourceContent",
+              content: textToRichTextDocument("Updated publication"),
+            })
+
+            const updatedResponse = yield* owner({
+              path: `/publications/${publication.id}`,
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(
+                yield* Schema.encodeEffect(Schema.toCodecJson(ApiUpdatePublicationData))({
+                  crdtEdit: {
+                    expectedCurrentCrdtFrontier: publication.currentCrdtFrontier,
+                    crdtUpdate: LoroDocUpdate.make(
+                      edited.export({ from: current.version(), mode: "update" }),
+                    ),
+                  },
+                }),
+              ),
+            })
+
+            expect(updatedResponse.status).toBe(200)
+            const updated = yield* Schema.decodeUnknownEffect(ApiPublicationData)(
+              yield* Effect.tryPromise(() => updatedResponse.json()),
+            )
+            expect(updated.kind).toBe(publication.kind)
+            expect(updated.content).toEqual(textToRichTextDocument("Updated publication"))
           }),
-        { concurrency: 1 },
-      )
-
-      yield* Effect.forEach(
-        created,
-        Effect.fn(function* (response) {
-          expect(response.status).toBe(200)
-          const publication = yield* Schema.decodeUnknownEffect(ApiPublicationData)(
-            yield* Effect.tryPromise(() => response.json()),
-          )
-          const current = snapshotToLoroDoc(
-            Option.getOrThrow(yield* findPublicationCrdtSnapshotById(publication.id)).crdtSnapshot,
-          )
-          const edited = current.fork()
-          yield* PublicationCrdt.applyEdit(edited, {
-            _tag: "SetPublicationSourceContent",
-            content: textToRichTextDocument("Updated publication"),
-          })
-
-          const updatedResponse = yield* owner({
-            path: `/publications/${publication.id}`,
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(
-              yield* Schema.encodeEffect(Schema.toCodecJson(ApiUpdatePublicationData))({
-                crdtEdit: {
-                  expectedCurrentCrdtFrontier: publication.currentCrdtFrontier,
-                  crdtUpdate: LoroDocUpdate.make(
-                    edited.export({ from: current.version(), mode: "update" }),
-                  ),
-                },
-              }),
-            ),
-          })
-
-          expect(updatedResponse.status).toBe(200)
-          const updated = yield* Schema.decodeUnknownEffect(ApiPublicationData)(
-            yield* Effect.tryPromise(() => updatedResponse.json()),
-          )
-          expect(updated.kind).toBe(publication.kind)
-          expect(updated.content).toEqual(textToRichTextDocument("Updated publication"))
-        }),
-        { concurrency: 1, discard: true },
-      )
-    }),
-  ),
+          { concurrency: 1, discard: true },
+        )
+      }),
+    ),
+  100_000,
 )
 
 it.live(
@@ -487,4 +505,5 @@ it.live(
         ).toBe(404)
       }),
     ),
+  100_000,
 )

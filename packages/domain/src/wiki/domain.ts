@@ -244,6 +244,11 @@ export const WikiArticleRevisionInsertRow = WikiArticleRevisionRow.pipe(
   Schema.fieldsAssign({ createdById: PersonId }),
 )
 
+/** System processes' revisions, such as places created from the gazetteer, have no author. */
+export const WikiArticleSystemRevisionInsertRow = WikiArticleRevisionRow.pipe(
+  Schema.fieldsAssign({ createdById: Schema.Null }),
+)
+
 export const WikiArticleRevisionUpdateRow = WikiArticleRevisionRow.mapFields(
   Struct.omit(["createdAt", "createdById", "crdtUpdate", "fromCrdtFrontier", "wikiArticleId"]),
 )
