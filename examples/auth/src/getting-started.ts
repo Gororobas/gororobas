@@ -64,7 +64,7 @@ export const makeApplicationAuth = (configuration: {
   // Application code contains its own projection; auth owns request and cookie mechanics.
   const currentMember = Effect.fn("app.currentMember")(function* () {
     const auth = yield* AppAuth;
-    const session = yield* auth.requireSession();
+    const session = yield* auth.requireSession;
 
     return { subjectId: session.subjectId, name: session.claims.displayName };
   });
@@ -73,7 +73,7 @@ export const makeApplicationAuth = (configuration: {
   // const auth = yield* AppAuth;
   // yield* auth.signIn({ email, password });
   // yield* auth.signIn("phone", { phoneNumber });
-  // yield* auth.signOut();
+  // yield* auth.signOut;
 
   // Application composition:
   // const AuthDependenciesLive = Layer.mergeAll(PersistenceLive, AccountsLive, SmsLive);

@@ -1,6 +1,7 @@
 import type { SubjectId, TokenDigest } from "@yielded/auth/Schema";
 import type { PendingAuthenticationKind } from "@yielded/auth/Sessions";
-import { Cause, Effect } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
 
 import type { NativeSqlTables } from "./native-sql-table";
 import { makeNativeSessionPending } from "./session-native-pending";

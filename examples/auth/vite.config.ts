@@ -72,6 +72,11 @@ export default defineConfig({
         cache: false,
         dependsOn: ["build"],
       },
+      "example:discord": {
+        command: "bun src/discord-app.ts",
+        cache: false,
+        dependsOn: ["build"],
+      },
       "example:apple": {
         command: "bun src/apple-app.ts",
         cache: false,

@@ -28,7 +28,7 @@ HttpClient service and Effect Atom queries and mutations.
 Your application owns its accounts, identifiers, and authorization policy.
 Use managed auth tables, map an existing SQL schema, or implement storage services
 against another backend. The auth API stays the same when you change storage.
-Auth uses Effect and first-party crypto, JOSE, and OAuth packages. Applications select
+Auth uses Effect crypto and JOSE alongside the first-party OAuth package. Applications select
 crypto Layers; optional companions supply database, WebAuthn, and platform integrations.
 
 Start with [Auth in an Effect application](docs/src/content/docs/guide/effect.mdx)
@@ -96,7 +96,7 @@ const result = yield* auth.signIn({ email, password });
 ```
 
 The request context supplies credentials and cookie delivery. `auth.getSession()`,
-`auth.requireSession()`, and `auth.signOut()` use the same boundary. An
+`auth.requireSession`, and `auth.signOut` use the same boundary. An
 `Authenticated` sign-in result contains a session with typed `claims.displayName`.
 
 Create the client and its atoms from the same contract:
@@ -171,4 +171,4 @@ package exports, dependency purity, tests, and builds use Vite+.
 [MIT](LICENSE)
 
 See [third-party notices](THIRD_PARTY_NOTICES.md) for open-source credits and
-licenses accompanying the reusable crypto and JOSE packages.
+licenses accompanying the Workers and OAuth packages.

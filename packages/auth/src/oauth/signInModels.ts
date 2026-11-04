@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { returnTarget } from "../internal/return-target";
 import { RequestBindingCredential, RequestBindingFlowId } from "../operations/requestBinding";

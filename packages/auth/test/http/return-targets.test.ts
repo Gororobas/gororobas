@@ -1,6 +1,9 @@
 import { it } from "@effect/vitest";
 import { Email, OAuth } from "@yielded/auth";
-import { Effect, type Context, type Layer, type Unify } from "effect";
+import type * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import type * as Unify from "effect/Unify";
 import { expect } from "vite-plus/test";
 
 // Shared-domain task: exact return authority is independent of cookie/CSRF admission.
@@ -22,18 +25,18 @@ const checkReturnTargets = <I, E, Rejected>(
 ) => {
   it.effect(`${service.key} admits only exact routes on explicitly trusted origins`, () =>
     Effect.gen(function* () {
-      const resolve = (input: string) =>
-        Effect.gen(function* () {
+      const resolve = Effect.fnUntraced(
+        function* (input: string) {
           const targets = yield* service;
 
           return yield* targets.resolve(input);
-        }).pipe(
-          Effect.provide(
-            service.exactRoutes(["/", "https://agent.example.com/browser-use/"], {
-              trustedOrigins: ["https://agent.example.com"],
-            }),
-          ),
-        );
+        },
+        Effect.provide(
+          service.exactRoutes(["/", "https://agent.example.com/browser-use/"], {
+            trustedOrigins: ["https://agent.example.com"],
+          }),
+        ),
+      );
 
       expect(yield* resolve("/")).toBe("/");
       expect(yield* resolve("https://agent.example.com/browser-use/")).toBe(
@@ -52,9 +55,7 @@ const checkReturnTargets = <I, E, Rejected>(
   );
   it.effect(`${service.key} refuses an untrusted configured return origin`, () =>
     Effect.gen(function* () {
-      const result = yield* Effect.gen(function* () {
-        return yield* service;
-      }).pipe(
+      const result = yield* service.pipe(
         Effect.provide(
           service.exactRoutes(["https://evil.example.com/"], {
             trustedOrigins: ["https://agent.example.com"],

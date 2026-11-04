@@ -1,4 +1,7 @@
-import { Cause, type Duration, Effect, Exit } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 
 /** Cooperative cancellation still joins the child. Retain cleanup failures that
  * Effect's timeout race can otherwise replace with only the deadline result. */

@@ -1,6 +1,7 @@
 import type { AuthenticationEvidence } from "@yielded/auth/Sessions";
 import { SessionUnavailable } from "@yielded/auth/Sessions";
-import { DateTime, Effect } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
 
 import { PersistenceMappingError } from "./mapping-error";
 

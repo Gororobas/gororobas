@@ -1,7 +1,11 @@
 import { it } from "@effect/vitest";
 import { Password } from "@yielded/auth";
-import { Deferred, Effect, Fiber, Layer, Redacted } from "effect";
-import { TestClock } from "effect/testing";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as TestClock from "effect/testing/TestClock";
 import { expect } from "vite-plus/test";
 
 // Requested hardening: a stalled screening provider must fail closed and release its resources.
@@ -13,19 +17,19 @@ it.effect("times out stalled screening without retrying it", () =>
     let released = false;
 
     const screening = Layer.succeed(Password.CompromisedPasswords, {
-      check: () =>
-        Effect.gen(function* () {
+      check: Effect.fnUntraced(
+        function* () {
           calls++;
           yield* Deferred.succeed(started, undefined);
 
           return yield* Effect.never;
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              released = true;
-            }),
-          ),
+        },
+        Effect.ensuring(
+          Effect.sync(() => {
+            released = true;
+          }),
         ),
+      ),
     });
 
     const fiber = yield* Effect.flatMap(Password.NewPasswordCheck, (service) =>

@@ -1,4 +1,5 @@
-import { Cause, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Schema from "effect/Schema";
 
 export class PersistenceMappingError extends Schema.TaggedError<PersistenceMappingError>()(
   "PersistenceMappingError",

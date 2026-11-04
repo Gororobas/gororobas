@@ -1,5 +1,8 @@
-import { Effect, Schema, type Scope } from "effect";
-import { Base64 as Base64Encoding, Base64Url as Base64UrlEncoding } from "effect/encoding";
+import * as Effect from "effect/Effect";
+import * as Base64Encoding from "effect/encoding/Base64";
+import * as Base64UrlEncoding from "effect/encoding/Base64Url";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import type { PasswordHashingConfig } from "./configuration";
 import { PasswordVerifierInvalid } from "./errors";

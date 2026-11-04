@@ -1,8 +1,10 @@
-import type { Effect } from "effect";
-import { Schema, SchemaAST } from "effect";
-import type { Rpc } from "effect/rpc";
+import type * as Effect from "effect/Effect";
+import type * as Rpc from "effect/rpc/Rpc";
+import * as Schema from "effect/Schema";
+import * as SchemaAST from "effect/SchemaAST";
 
 import { HookDenied } from "../hooks/models";
+import type { SubjectId } from "../Schema";
 import { makeSessionContract } from "../sessions/contract";
 import { SessionError, SessionSignOutUnavailable } from "../sessions/errors";
 import { SessionReadOptions, SessionSignOut } from "../sessions/models";
@@ -34,7 +36,10 @@ export interface ActionOptions<
    * directly; it must validate the original state and private request binding. */
   readonly oauthCallback?: true;
   readonly subject?: {
-    fromSuccess(value: Success["Type"]): string | null | undefined;
+    fromSuccess(value: Success["Type"]): SubjectId | null | undefined;
+    /** Optional decoded public session for a completed authentication. Atom validates
+     * it against getSession before adopting it; undefined preserves pending flows. */
+    sessionFromSuccess?(value: Success["Type"]): unknown;
   };
 }
 
@@ -92,7 +97,7 @@ export const fromOperation = <
     readonly requestFields?: RequestFields &
       Record<Exclude<keyof RequestFields, Extract<keyof Fields, string>>, never>;
     readonly mode?: Mode;
-    readonly subject?: { fromSuccess(value: Success["Type"]): string | null | undefined };
+    readonly subject?: NonNullable<ActionOptions<Schema.Top, Success, Failure>["subject"]>;
   } = {},
 ) => {
   if (operation.exposure !== "public")
@@ -213,7 +218,7 @@ export interface AnyAuthAction {
   readonly strategy: string | undefined;
   readonly requestFields: Readonly<Record<string, CredentialSlot>>;
   readonly oauthCallback?: true | undefined;
-  readonly subject?: { fromSuccess(value: unknown): string | null | undefined } | undefined;
+  readonly subject?: ActionOptions<Schema.Top, Schema.Top, Schema.Top>["subject"];
 }
 
 export type AuthActions = Readonly<Record<string, AnyAuthAction>>;
@@ -240,7 +245,7 @@ export type BoundActions<Definitions extends ActionDefinitions> = {
 };
 
 const sessionActions = <
-  S extends Schema.Codec<{ readonly subjectId: string }, unknown, unknown, unknown>,
+  S extends Schema.Codec<{ readonly subjectId: SubjectId }, unknown, unknown, unknown>,
 >(
   session: S,
 ) => ({

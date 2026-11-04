@@ -1,6 +1,6 @@
 export { OAuthProxyPersistence } from "./internal/drizzle-sqlite-oauth-proxy";
 
-import type { D1Client } from "@effect/sql-d1/D1Client";
+import type * as D1Client from "@effect/sql-d1/D1Client";
 import type { AnyRelations } from "drizzle-orm";
 import { type EffectSQLiteD1Database, makeWithDefaults } from "drizzle-orm/effect-d1";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
@@ -72,7 +72,7 @@ export const makeIdentityServices = <
   mapping: D1GeneratedIdentityMapping<Subject, Identifier, External, Request, NativeId>,
 ) => makeD1IdentityServices(mapping);
 
-import { Layer } from "effect";
+import * as Layer from "effect/Layer";
 
 import { d1MigrationsLayer } from "./internal/drizzle-d1-migrations";
 import { sqlitePersistence } from "./internal/drizzle-sqlite";
@@ -92,7 +92,7 @@ import type { OAuthD1Mapping } from "./drizzle/oauth-model";
 import { makePasskeyTarget } from "./drizzle/passkey-drivers";
 import type { D1PasskeyMapping } from "./drizzle/passkey-model";
 
-type D1Database = EffectSQLiteD1Database<AnyRelations> & { readonly $client: D1Client };
+type D1Database = EffectSQLiteD1Database<AnyRelations> & { readonly $client: D1Client.D1Client };
 type D1Table = AnySQLiteTable<{ dialect: "sqlite" }>;
 
 export const {

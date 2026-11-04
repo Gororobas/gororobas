@@ -1,4 +1,9 @@
-import { Cause, DateTime, Effect, Layer, Redacted, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { hasCommitScope } from "../hooks/commit";
 import { credentialSlots } from "../http-operation/models";

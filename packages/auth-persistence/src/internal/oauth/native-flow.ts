@@ -4,9 +4,11 @@ import type {
   OAuthSignInTransactionContext,
 } from "@yielded/auth/OAuth";
 import type { SubjectId } from "@yielded/auth/Schema";
-import { Effect, Option, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import { SqlError } from "effect/sql/SqlError";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlError from "effect/sql/SqlError";
 
 import { sqlBatchAssertion } from "../d1-planning";
 import { PersistenceMappingError, isMappedConstraintConflict } from "../mapping-error";
@@ -158,7 +160,8 @@ export const makeOAuthNativeFlow = Effect.fnUntraced(function* <Flow extends OAu
       Effect.catchCauseIf(
         (cause) =>
           isMappedConstraintConflict(
-            (error) => Schema.is(SqlError)(error) && error.reason._tag === "UniqueViolation",
+            (error) =>
+              Schema.is(SqlError.SqlError)(error) && error.reason._tag === "UniqueViolation",
             cause,
           ),
         () => Effect.succeed(false),

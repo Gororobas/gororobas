@@ -1,5 +1,10 @@
-import { Cause, Context, Duration, Effect, Layer, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as RateLimiter from "effect/persistence/RateLimiter";
+import * as Schema from "effect/Schema";
 
 import { defaultLayer } from "../auth/defaults";
 import { boundedMemoryRateLimiter, localRateLimiter } from "../auth/rateLimiter";
@@ -53,8 +58,8 @@ export class PhoneAdmission extends Context.Service<
           });
 
         return PhoneAdmission.of({
-          admit: ({ moduleId, action, networkKey }) =>
-            Effect.gen(function* () {
+          admit: Effect.fnUntraced(
+            function* ({ moduleId, action, networkKey }) {
               yield* consume(
                 "network",
                 [moduleId, "network", action, networkKey],
@@ -64,16 +69,16 @@ export class PhoneAdmission extends Context.Service<
                 yield* consume("messages", [moduleId, "messages"], policy.maximumMessages);
 
               return true;
-            }).pipe(
-              Effect.catchCause((cause) =>
-                cause.reasons.every(
-                  (reason) =>
-                    Cause.isFailReason(reason) && reason.error.reason._tag === "RateLimitExceeded",
-                )
-                  ? Effect.succeed(false)
-                  : Effect.failCause(Cause.map(cause, () => PhoneOtpUnavailable.make({}))),
-              ),
+            },
+            Effect.catchCause((cause) =>
+              cause.reasons.every(
+                (reason) =>
+                  Cause.isFailReason(reason) && reason.error.reason._tag === "RateLimitExceeded",
+              )
+                ? Effect.succeed(false)
+                : Effect.failCause(Cause.map(cause, () => PhoneOtpUnavailable.make({}))),
             ),
+          ),
         });
       }),
     ).pipe(Layer.provide(boundedMemoryRateLimiter("reject")));

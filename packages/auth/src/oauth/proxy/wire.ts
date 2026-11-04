@@ -1,5 +1,10 @@
-import { Cause, Crypto, Effect, Schema, Stream } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { Rejected, Unavailable } from "./models";
 
@@ -10,7 +15,8 @@ export const noStore = {
 };
 
 export const secrets = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
+  const digests = yield* Digest.Digest;
 
   return {
     random: crypto.randomBytes(32).pipe(
@@ -24,7 +30,7 @@ export const secrets = Effect.gen(function* () {
       Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
     ),
     digest: (value: string) =>
-      crypto.digest("SHA-256", new TextEncoder().encode(value)).pipe(
+      digests.digest(Digest.sha256, new TextEncoder().encode(value)).pipe(
         Effect.map(Base64Url.encode),
         Effect.catchCause((cause) =>
           Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
@@ -33,25 +39,27 @@ export const secrets = Effect.gen(function* () {
   };
 });
 
-export const readText = <E, R>(stream: Stream.Stream<Uint8Array, E, R>, maximum: number) =>
-  Effect.gen(function* () {
-    let bytes = 0;
+export const readText = Effect.fnUntraced(function* <E, R>(
+  stream: Stream.Stream<Uint8Array, E, R>,
+  maximum: number,
+) {
+  let bytes = 0;
 
-    return yield* stream.pipe(
-      Stream.mapEffect((chunk) => {
-        bytes += chunk.byteLength;
+  return yield* stream.pipe(
+    Stream.mapEffect((chunk) => {
+      bytes += chunk.byteLength;
 
-        return bytes > maximum ? Effect.fail(Rejected.make({})) : Effect.succeed(chunk);
-      }),
-      Stream.decodeText(),
-      Stream.runFold(
-        () => "",
-        (text, chunk) => text + chunk,
+      return bytes > maximum ? Effect.fail(Rejected.make({})) : Effect.succeed(chunk);
+    }),
+    Stream.decodeText(),
+    Stream.runFold(
+      () => "",
+      (text, chunk) => text + chunk,
+    ),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, (error) => (Schema.is(Rejected)(error) ? error : Unavailable.make({}))),
       ),
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.map(cause, (error) => (Schema.is(Rejected)(error) ? error : Unavailable.make({}))),
-        ),
-      ),
-    );
-  });
+    ),
+  );
+});

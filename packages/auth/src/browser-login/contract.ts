@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { HookDenied } from "../hooks/models";
 import { make as httpContract, route } from "../http-operation/contract";

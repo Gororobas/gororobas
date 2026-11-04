@@ -4,7 +4,13 @@ import {
   snapshotPasskey,
 } from "@yielded/auth/Passkey";
 import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
-import { Cause, DateTime, Effect, Layer, Predicate, Redacted, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { Platform } from "react-native";
 import { Passkey, type PasskeyCreateRequest, type PasskeyGetRequest } from "react-native-passkey";
 
@@ -37,23 +43,24 @@ const redactDefects =
   <Failure>(failure: () => Failure) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.uninterruptibleMask((restore) =>
-      restore(effect).pipe(
-        Effect.catchCause((cause): Effect.Effect<never, E | Failure> =>
-          Cause.hasDies(cause)
-            ? reportAuthFailure("passkey-react-native", cause).pipe(
-                Effect.andThen(
-                  Effect.failCause(
-                    markAuthFailureReported(
-                      Cause.fromReasons<E | Failure>(
-                        cause.reasons.map((reason) =>
-                          Cause.isDieReason(reason) ? Cause.makeFailReason(failure()) : reason,
-                        ),
+      restore(effect).pipe((effect) =>
+        Effect.catchCauseIf(
+          effect,
+          (cause) => Cause.hasDies(cause),
+          (cause): Effect.Effect<never, E | Failure> =>
+            reportAuthFailure("passkey-react-native", cause).pipe(
+              Effect.andThen(
+                Effect.failCause(
+                  markAuthFailureReported(
+                    Cause.fromReasons<E | Failure>(
+                      cause.reasons.map((reason) =>
+                        Cause.isDieReason(reason) ? Cause.makeFailReason(failure()) : reason,
                       ),
                     ),
                   ),
                 ),
-              )
-            : Effect.failCause(cause),
+              ),
+            ),
         ),
       ),
     );
@@ -75,25 +82,23 @@ const authenticationInput = Schema.Struct({
   mediation: Schema.Literals(["required", "conditional"]),
 });
 
-const environment = Effect.sync(() => {
+const environment = Effect.gen(function* () {
   if (Platform.OS !== "ios") return { supported: false, exclusions: false };
 
   // The maintained helper only checks OS version (and includes iOS 15).
   // Decode platform metadata before applying this adapter's iOS 16 minimum.
-  // eslint-disable-next-line no-restricted-properties
-  const version = Schema.decodeSync(Schema.String.check(Schema.isPattern(/^\d+(?:\.\d+){0,2}$/)))(
-    Platform.Version,
-  );
+  const version = yield* Schema.decodeEffect(
+    Schema.String.check(Schema.isPattern(/^\d+(?:\.\d+){0,2}$/)),
+  )(Platform.Version);
 
   const [major = 0, minor = 0] = version.split(".").map(Number);
-  // eslint-disable-next-line no-restricted-properties
-  const supported = Schema.decodeSync(Schema.Boolean)(Passkey.isSupported());
+  const supported = yield* Schema.decodeEffect(Schema.Boolean)(Passkey.isSupported());
 
   return {
     supported: major >= 16 && supported,
     exclusions: major > 17 || (major === 17 && minor >= 4),
   };
-}).pipe(unexpected);
+}).pipe(Effect.orDie, unexpected);
 
 interface Lease {
   phase: "pre-native" | "native" | "settled";
@@ -128,7 +133,6 @@ const nativeFailure = (value: unknown): Effect.Effect<never, PasskeyReactNativeF
   Effect.suspend((): Effect.Effect<never, PasskeyReactNativeFailure> => {
     if (!Predicate.isObject(value)) return Effect.die(value);
     // Inspect only the normalized code; never copy message, native stack, or cause.
-    // eslint-disable-next-line no-restricted-properties
     const code = Schema.decodeUnknownOption(Schema.String)(value.error);
 
     if (code._tag === "None") return Effect.die(value);
@@ -235,121 +239,117 @@ const decodeResponse = <S extends Schema.Codec<unknown, unknown, never, never>>(
 ) =>
   // Peer declarations are not validation. Parse bounded base64url fields and
   // discard unknown fields before constructing the server's JSON envelope.
-  // eslint-disable-next-line no-restricted-properties
   Schema.decodeUnknownEffect(schema)(value).pipe(Effect.mapError(invalid), redactDefects(invalid));
 
 /** Creates the iOS adapter. Ceremonies own their scopes; construction performs no native I/O. */
-export const make = (): Effect.Effect<Native> =>
-  Effect.sync(() => {
-    const register = Effect.fnUntraced(function* (input: Parameters<Native["register"]>[0]) {
-      const started = yield* snapshotPasskey(registrationInput, input).pipe(
-        Effect.mapError(rejected),
-      );
+export const make: Effect.Effect<Native> = Effect.sync(() => {
+  const register = Effect.fnUntraced(function* (input: Parameters<Native["register"]>[0]) {
+    const started = yield* snapshotPasskey(registrationInput, input).pipe(
+      Effect.mapError(rejected),
+    );
 
-      const env = yield* environment;
+    const env = yield* environment;
 
-      if (
-        !env.supported ||
-        !started.options.pubKeyCredParams.some(({ alg }) => alg === -7) ||
-        (started.options.excludeCredentials.length > 0 && !env.exclusions)
-      )
-        return yield* PasskeyReactNativeUnsupported.make({});
+    if (
+      !env.supported ||
+      !started.options.pubKeyCredParams.some(({ alg }) => alg === -7) ||
+      (started.options.excludeCredentials.length > 0 && !env.exclusions)
+    )
+      return yield* PasskeyReactNativeUnsupported.make({});
 
-      return yield* runCeremony(started, (lease, deadline) =>
-        Effect.gen(function* () {
-          const options = started.options;
+    return yield* runCeremony(started, (lease, deadline) =>
+      Effect.gen(function* () {
+        const options = started.options;
 
-          const request: PasskeyCreateRequest = {
-            ...options,
-            rp: { ...options.rp },
-            user: { ...options.user },
-            authenticatorSelection: { ...options.authenticatorSelection },
-            pubKeyCredParams: options.pubKeyCredParams.map((value) => ({ ...value })),
-            excludeCredentials: options.excludeCredentials.map((value) => ({ ...value })),
-            timeout: yield* remaining(deadline),
-          };
+        const request: PasskeyCreateRequest = {
+          ...options,
+          rp: { ...options.rp },
+          user: { ...options.user },
+          authenticatorSelection: { ...options.authenticatorSelection },
+          pubKeyCredParams: options.pubKeyCredParams.map((value) => ({ ...value })),
+          excludeCredentials: options.excludeCredentials.map((value) => ({ ...value })),
+          timeout: yield* remaining(deadline),
+        };
 
-          // The platform path preserves the required attestation: "none" policy.
-          const credential = yield* decodeResponse(
-            nativeRegistration,
-            yield* native(lease, () => Passkey.createPlatformKey(request)),
-          );
+        // The platform path preserves the required attestation: "none" policy.
+        const credential = yield* decodeResponse(
+          nativeRegistration,
+          yield* native(lease, () => Passkey.createPlatformKey(request)),
+        );
 
-          const response = yield* Schema.encodeEffect(registrationWire)({
-            id: credential.id,
-            rawId: credential.rawId,
-            type: "public-key",
-            response: credential.response,
-            clientExtensionResults: {},
-          }).pipe(Effect.mapError(invalid));
+        const response = yield* Schema.encodeEffect(registrationWire)({
+          id: credential.id,
+          rawId: credential.rawId,
+          type: "public-key",
+          response: credential.response,
+          clientExtensionResults: {},
+        }).pipe(Effect.mapError(invalid));
 
-          yield* remaining(deadline);
+        yield* remaining(deadline);
 
-          return yield* snapshotPasskey(PasskeyReactNativeRegistration, {
-            flowId: started.flowId,
-            response: Redacted.make(response),
-          }).pipe(Effect.mapError(invalid));
-        }),
-      );
-    }, unexpected);
+        return yield* snapshotPasskey(PasskeyReactNativeRegistration, {
+          flowId: started.flowId,
+          response: Redacted.make(response),
+        }).pipe(Effect.mapError(invalid));
+      }),
+    );
+  }, unexpected);
 
-    const authenticate = Effect.fnUntraced(function* (
-      input: Parameters<Native["authenticate"]>[0],
-    ) {
-      const { started, mediation } = yield* snapshotPasskey(authenticationInput, input).pipe(
-        Effect.mapError(rejected),
-      );
+  const authenticate = Effect.fnUntraced(function* (input: Parameters<Native["authenticate"]>[0]) {
+    const { started, mediation } = yield* snapshotPasskey(authenticationInput, input).pipe(
+      Effect.mapError(rejected),
+    );
 
-      if (mediation === "conditional" || !(yield* environment).supported)
-        return yield* PasskeyReactNativeUnsupported.make({});
+    if (mediation === "conditional" || !(yield* environment).supported)
+      return yield* PasskeyReactNativeUnsupported.make({});
 
-      return yield* runCeremony(started, (lease, deadline) =>
-        Effect.gen(function* () {
-          const request: PasskeyGetRequest = {
-            ...started.options,
-            allowCredentials: started.options.allowCredentials.map((value) => ({ ...value })),
-            timeout: yield* remaining(deadline),
-          };
+    return yield* runCeremony(started, (lease, deadline) =>
+      Effect.gen(function* () {
+        const request: PasskeyGetRequest = {
+          ...started.options,
+          allowCredentials: started.options.allowCredentials.map((value) => ({ ...value })),
+          timeout: yield* remaining(deadline),
+        };
 
-          const credential = yield* decodeResponse(
-            nativeAuthentication,
-            yield* native(lease, () => Passkey.get(request)),
-          );
+        const credential = yield* decodeResponse(
+          nativeAuthentication,
+          yield* native(lease, () => Passkey.get(request)),
+        );
 
-          const { userHandle, ...responseFields } = credential.response;
+        const { userHandle, ...responseFields } = credential.response;
 
-          const response = yield* Schema.encodeEffect(authenticationWire)({
-            id: credential.id,
-            rawId: credential.rawId ?? credential.id,
-            type: "public-key",
-            response: {
-              ...responseFields,
-              ...(userHandle === null || userHandle === undefined ? {} : { userHandle }),
-            },
-            clientExtensionResults: {},
-          }).pipe(Effect.mapError(invalid));
+        const response = yield* Schema.encodeEffect(authenticationWire)({
+          id: credential.id,
+          rawId: credential.rawId ?? credential.id,
+          type: "public-key",
+          response: {
+            ...responseFields,
+            ...(userHandle === null || userHandle === undefined ? {} : { userHandle }),
+          },
+          clientExtensionResults: {},
+        }).pipe(Effect.mapError(invalid));
 
-          yield* remaining(deadline);
+        yield* remaining(deadline);
 
-          return yield* snapshotPasskey(PasskeyReactNativeAuthentication, {
-            flowId: started.flowId,
-            response: Redacted.make(response),
-          }).pipe(Effect.mapError(invalid));
-        }),
-      );
-    }, unexpected);
+        return yield* snapshotPasskey(PasskeyReactNativeAuthentication, {
+          flowId: started.flowId,
+          response: Redacted.make(response),
+        }).pipe(Effect.mapError(invalid));
+      }),
+    );
+  }, unexpected);
 
-    return PasskeyReactNative.of({
-      register,
-      authenticate,
-      capabilities: environment.pipe(
-        Effect.map(({ supported }) => ({
-          supported,
-          conditionalGet: "unsupported" as const,
-          cancellation: "unsupported" as const,
-        })),
-      ),
-    });
+  return PasskeyReactNative.of({
+    register,
+    authenticate,
+    capabilities: environment.pipe(
+      Effect.map(({ supported }) => ({
+        supported,
+        conditionalGet: "unsupported" as const,
+        cancellation: "unsupported" as const,
+      })),
+    ),
   });
+});
 
-export const layer: Layer.Layer<PasskeyReactNative> = Layer.effect(PasskeyReactNative, make());
+export const layer: Layer.Layer<PasskeyReactNative> = Layer.effect(PasskeyReactNative, make);

@@ -1,5 +1,8 @@
-import { Context, Effect, Layer, Schema } from "effect";
-import { Cookies } from "effect/http";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Cookies from "effect/http/Cookies";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { origin } from "../internal/origin";
 import type { CredentialSlot } from "../operations/credentials";

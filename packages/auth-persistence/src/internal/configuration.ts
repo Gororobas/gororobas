@@ -1,4 +1,4 @@
-import type { EmailAction, EmailAddressPersistence } from "@yielded/auth/Email";
+import type { EmailAction, EmailAddressPersistence, EmailSignInTargets } from "@yielded/auth/Email";
 import type { LoginIdentifier } from "@yielded/auth/Identity";
 import type {
   OAuthConnectedPersistence,
@@ -21,7 +21,13 @@ import type {
   PasswordPersistence,
   PasswordUnavailable,
 } from "@yielded/auth/Password";
-import type { PhoneSignInTargets } from "@yielded/auth/PhoneOtp";
+import type {
+  PhoneActionChallenge,
+  PhoneLifecyclePolicy,
+  PhoneOtpUnavailable,
+  PhonePersistence,
+  PhoneSignInTargets,
+} from "@yielded/auth/PhoneOtp";
 import type { ProofPersistence } from "@yielded/auth/Proofs";
 import type { SubjectId } from "@yielded/auth/Schema";
 import type {
@@ -29,8 +35,13 @@ import type {
   AuthenticationRequirement,
   make as makeSessions,
 } from "@yielded/auth/Sessions";
-import { type Context, type Crypto, type Effect, type Layer, Schema } from "effect";
-import type { SqlClient } from "effect/sql";
+import type * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import type * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import type { PersistenceMappingError } from "./mapping-error";
 import type { IdentityImports } from "./oauth/identity-import";
@@ -58,17 +69,29 @@ export interface OAuthFeature {
   readonly connected?: OAuthConnectedPolicy;
 }
 
+export interface PhoneFeature {
+  readonly kind: "phone";
+  readonly moduleId: string;
+  readonly lifecycle?: boolean;
+  readonly lifecyclePolicy?: PhoneLifecyclePolicy;
+}
+
 export interface Strategy {
   readonly strategy: object;
   /** Absent metadata leaves the strategy's persistence services application-supplied. */
   readonly persistence?:
     | PasskeyFeature
     | OAuthFeature
+    | PhoneFeature
     | {
-        readonly kind: "password" | "phone" | "email";
+        readonly kind: "password";
         readonly moduleId: string;
-        readonly lifecycle?: boolean;
         readonly management?: boolean;
+      }
+    | {
+        readonly kind: "email";
+        readonly moduleId: string;
+        readonly signIn?: boolean;
         readonly addresses?: boolean;
       };
   readonly RegistrationAuthority?: Context.Key<unknown, unknown>;
@@ -90,6 +113,19 @@ type Enabled<
 
 type ManagedPassword<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> =
   Extract<Enabled<A, "password">, { persistence: { management: true } }>;
+
+type ManagedPhone<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> = Extract<
+  Enabled<A, "phone">,
+  { persistence: { lifecycle: true } }
+>;
+
+type EmailSignIn<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> = Extract<
+  Enabled<A, "email">,
+  { persistence: { signIn: true } }
+>;
+
+type EmailAddresses<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> =
+  Extract<Enabled<A, "email">, { persistence: { addresses: true } }>;
 
 type ManagedPasskey<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> =
   Extract<Enabled<A, "passkey">, { persistence: { management: true } }>;
@@ -142,19 +178,34 @@ export type SubjectProvisioning<Registration> =
       input: SubjectProvisioningInput<Registration>,
     ) => Effect.Effect<SubjectId, PasswordUnavailable>);
 
+/** Prepare the complete application subject row after phone ownership is proved.
+ * Include the allocated native ID, active status, initial security revision and
+ * fields needed by subject policy. Do not write to storage or perform external
+ * side effects; the phone commit owner inserts these values with the credential.
+ * requestId identifies the redeemed proof, independently of completion retries.
+ */
+export interface PhoneSubjectProvisioning {
+  readonly values: (input: {
+    readonly requestId: string;
+    readonly identifier: LoginIdentifier;
+  }) => Effect.Effect<Readonly<Record<string, unknown>>, PhoneOtpUnavailable>;
+}
+
 export type Provisioning<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> = {
   readonly [
     K in keyof A["strategies"] as A["strategies"][K] extends {
-      persistence: { kind: "password"; management: true };
+      persistence: { kind: "password"; management: true } | { kind: "phone"; lifecycle: true };
     }
       ? K
       : never
-  ]: SubjectProvisioning<Registration<A["strategies"][K]>>;
+  ]: A["strategies"][K] extends { persistence: { kind: "phone" } }
+    ? PhoneSubjectProvisioning
+    : SubjectProvisioning<Registration<A["strategies"][K]>>;
 };
 
 export type ProvisioningRequirement<
   A extends { readonly namespace: string; readonly strategies: Readonly<Record<string, Strategy>> },
-> = ManagedPassword<A> extends never ? never : ProvisioningId<A["namespace"]>;
+> = ManagedPassword<A> | ManagedPhone<A> extends never ? never : ProvisioningId<A["namespace"]>;
 
 type ProofRoles = "proofs";
 
@@ -177,9 +228,11 @@ export type Ports<C extends ClaimsCodec, Id extends string, A extends Definition
   | KeyId<RegistrationKey<ManagedPassword<A>>>
   | (Enabled<A, "passkey"> extends never ? never : PasskeyPersistence | PasskeyCredentials)
   | (ManagedPasskey<A> extends never ? never : PasskeyManagementPersistence)
-  | (Enabled<A, "email"> extends never ? never : EmailAddressPersistence)
+  | (EmailSignIn<A> extends never ? never : EmailSignInTargets)
+  | (EmailAddresses<A> extends never ? never : EmailAddressPersistence)
   | (UsesProofs<A> extends never ? never : ProofPersistence)
   | (Enabled<A, "phone"> extends never ? never : PhoneSignInTargets)
+  | (ManagedPhone<A> extends never ? never : PhonePersistence)
   | (OAuthSignIn<A> extends never ? never : OAuthSignInPersistence | IdentityImports)
   | (OAuthConnected<A> extends never
       ? never
@@ -213,7 +266,11 @@ export interface SubjectOptions<T extends object, NativeId> {
   /** Defaults to sign-in requirements. Recovery can have a distinct application policy. */
   readonly actionRequirements?: (
     row: Readonly<Record<string, unknown>>,
-    action: PasswordAction | EmailAction | PasskeyActionChallenge["action"],
+    action:
+      | PasswordAction
+      | EmailAction
+      | PasskeyActionChallenge["action"]
+      | PhoneActionChallenge["action"],
   ) => Effect.Effect<AuthenticationRequirement, PersistenceMappingError>;
 }
 
@@ -271,13 +328,13 @@ export interface BoundPersistence<
     ) => Layer.Layer<ConfigId<A["namespace"]>>;
   };
   /** Supply subject values through `{ values }` on every driver, including D1.
-   * Interactive drivers also accept callbacks that insert through the owning
+   * For passwords, interactive drivers also accept callbacks that insert through the owning
    * SqlClient and return the new subject ID. Never open an independent transaction
    * or perform external side effects while preparing a subject.
    */
   readonly Provisioning: Context.Service<ProvisioningRequirement<A>, Provisioning<A>>;
-  /** Stateful sessions and OAuth-only stateless sessions are supported. Other session
-   * configurations fail acquisition with PersistenceConfigurationError.
+  /** Stateful sessions and stateless sessions with OAuth or email sign-in are supported.
+   * Other session configurations fail acquisition with PersistenceConfigurationError.
    * Capture dependencies at acquisition; validate SQL metadata and configure storage
    * once on the first service operation. The configured SQL client's acquirer can
    * resolve services from that operation's request context. Initialization failures become
@@ -290,7 +347,7 @@ export interface BoundPersistence<
   readonly layer: Layer.Layer<
     Ports<C, Id, A>,
     PersistenceConfigurationError,
-    | Crypto.Crypto
+    | (SecureRandom.SecureRandom | Digest.Digest)
     | ConfigId<A["namespace"]>
     | ProvisioningRequirement<A>
     | PasskeyRequirement<A>

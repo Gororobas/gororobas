@@ -1,5 +1,6 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { EmailDelivery, Hooks, Proofs, WebCrypto } from "@yielded/auth";
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
+import { EmailDelivery, Hooks, Proofs } from "@yielded/auth";
 import { Effect, Layer, Redacted } from "effect";
 import { Base64Url } from "effect/encoding";
 
@@ -22,7 +23,7 @@ const policy: Proofs.ProofPolicy = {
 };
 
 const base = Layer.mergeAll(
-  WebCrypto.layerWebCrypto,
+  BunCrypto.layer,
   Proofs.ProofDispatchScheduler.layerInline,
   Hooks.LifecycleHooks.empty,
   Proofs.ProofKeys.layer({

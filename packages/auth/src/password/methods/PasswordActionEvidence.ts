@@ -1,4 +1,6 @@
-import { Context, type Effect, type Redacted } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import type * as Redacted from "effect/Redacted";
 
 import type { AuthInvocation } from "../../operations/context";
 import type { ProofRedemptionInput } from "../../proofs/models";

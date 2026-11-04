@@ -1,6 +1,10 @@
 import { it } from "@effect/vitest";
 import { Operations, OperationHttp, OperationHttpServer } from "@yielded/auth";
-import { Cause, Effect, Exit, Logger, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Logger from "effect/Logger";
+import * as Schema from "effect/Schema";
 import { expect } from "vite-plus/test";
 
 class Rejected extends Schema.TaggedError<Rejected>()("Rejected", {}) {}

@@ -5,7 +5,8 @@ import {
   type NativePasskeyRegistrationMapping,
 } from "@yielded/auth-persistence/Adapter";
 import { PasskeyManagementPersistence } from "@yielded/auth/Passkey";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type { NativeDatabaseHandle } from "../native-database";
 import type { PasskeyMappingSource } from "../passkey-model";
@@ -27,39 +28,37 @@ export const passkeyManagementPersistenceLayer = <E, R>(
     Effect.map(services, (value) => value.passkeyManagementPersistence),
   );
 
-export const makeTargetPasskeyManagement = <M, R>(
+export const makeTargetPasskeyManagement = Effect.fnUntraced(function* <M, R>(
   source: PasskeyMappingSource<M, R>,
   configuration: PasskeyTargetConfiguration,
-) =>
-  Effect.gen(function* () {
-    const target = yield* makePasskeyMapped(source, configuration);
-    const base = yield* target.base();
+) {
+  const target = yield* makePasskeyMapped(source, configuration);
+  const base = yield* target.base();
 
-    return {
-      passkeyPersistence: base.passkeyPersistence,
-      ...makePasskeyNativeManagement(
-        base,
-        target.mapping as unknown as NativePasskeyManagementMapping,
-      ),
-    };
-  });
+  return {
+    passkeyPersistence: base.passkeyPersistence,
+    ...makePasskeyNativeManagement(
+      base,
+      target.mapping as unknown as NativePasskeyManagementMapping,
+    ),
+  };
+});
 
-export const makeTargetPasskeyRegistrationWriter = <M, Value, R>(
+export const makeTargetPasskeyRegistrationWriter = Effect.fnUntraced(function* <M, Value, R>(
   source: PasskeyMappingSource<M, R>,
   configuration: PasskeyTargetConfiguration,
-) =>
-  Effect.gen(function* () {
-    const target = yield* makePasskeyMapped(source, configuration);
-    const base = yield* target.base();
+) {
+  const target = yield* makePasskeyMapped(source, configuration);
+  const base = yield* target.base();
 
-    return {
-      passkeyPersistence: base.passkeyPersistence,
-      ...makePasskeyNativeRegistration(
-        base,
-        target.mapping as unknown as NativePasskeyRegistrationMapping<Value>,
-      ),
-    };
-  });
+  return {
+    passkeyPersistence: base.passkeyPersistence,
+    ...makePasskeyNativeRegistration(
+      base,
+      target.mapping as unknown as NativePasskeyRegistrationMapping<Value>,
+    ),
+  };
+});
 
 export const coordinateTargetPasskeyManagement = <M, RSetup, Transaction, A, E, R>(
   database: NativeDatabaseHandle,

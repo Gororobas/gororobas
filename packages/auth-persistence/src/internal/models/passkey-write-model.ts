@@ -17,7 +17,8 @@ import type {
 } from "@yielded/auth/Passkey";
 import type { TokenDigest } from "@yielded/auth/Schema";
 import type { SessionInvalidationWindow } from "@yielded/auth/Sessions";
-import type { Effect, Schema } from "effect";
+import type * as Effect from "effect/Effect";
+import type * as Schema from "effect/Schema";
 
 import type { TableModel as Table, SqlExpression } from "../table-model";
 import type { PersistenceMappingError } from "./common";

@@ -1,4 +1,7 @@
-import { Effect, Redacted, type Schema, type Scope } from "effect";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import type * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { OAuthUnavailable } from "../signInErrors";
 import { OAuthSealedTransaction, type OAuthTransactionSecrets } from "../signInModels";

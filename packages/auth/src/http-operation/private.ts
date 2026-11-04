@@ -1,4 +1,5 @@
-import { Redacted, Schema } from "effect";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import type { AuthCredentialCommand } from "../operations/credentials";
 import { AuthRevealCommand, type AuthRevealKind } from "../operations/reveals";

@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth",
-  "version": "0.1.0-beta.42",
+  "version": "0.1.0-beta.47",
   "description": "Composable authentication, sessions, and identity workflows for Effect.",
   "keywords": [
     "authentication",
@@ -54,6 +54,7 @@
     "./Auth0": "./src/Auth0.ts",
     "./Atlassian": "./src/Atlassian.ts",
     "./Cognito": "./src/Cognito.ts",
+    "./Discord": "./src/Discord.ts",
     "./Dropbox": "./src/Dropbox.ts",
     "./Figma": "./src/Figma.ts",
     "./Keycloak": "./src/Keycloak.ts",
@@ -69,8 +70,6 @@
     "./Schema": "./src/Schema.ts",
     "./OAuthScope": "./src/OAuthScope.ts",
     "./WebCrypto": "./src/WebCrypto.ts",
-    "./WorkerdServices": "./src/WorkerdServices.ts",
-    "./WorkerdPasswordlessServices": "./src/WorkerdPasswordlessServices.ts",
     "./Sessions": "./src/Sessions.ts",
     "./SessionContract": "./src/SessionContract.ts",
     "./Proofs": "./src/Proofs.ts",
@@ -90,19 +89,18 @@
     "./BrowserLogin": "./src/BrowserLogin.ts",
     "./BrowserLoginContract": "./src/BrowserLoginContract.ts",
     "./OpenIdConnect": "./src/OpenIdConnect.ts",
-    "./GitHub": "./src/GitHub.ts"
+    "./GitHub": "./src/GitHub.ts",
+    "./PasswordScrypt": "./src/PasswordScrypt.ts"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "vp pack",
-    "check": "tsc --noEmit -p tsconfig.json",
+    "check": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict",
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {
-    "@yielded/crypto": "workspace:*",
-    "@yielded/jose": "workspace:*",
     "@yielded/oauth": "workspace:*"
   },
   "devDependencies": {
@@ -116,6 +114,6 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.3"
+    "effect": "^4.1.2"
   }
 }

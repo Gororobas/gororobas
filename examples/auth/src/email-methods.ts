@@ -1,14 +1,6 @@
 import { BunRuntime } from "@effect/platform-bun";
-import {
-  Auth,
-  EmailDelivery,
-  Email,
-  Hooks,
-  Operations,
-  Proofs,
-  Sessions,
-  WebCrypto,
-} from "@yielded/auth";
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
+import { Auth, EmailDelivery, Email, Hooks, Operations, Proofs, Sessions } from "@yielded/auth";
 import { Effect, Layer, Redacted } from "effect";
 import { Base64Url } from "effect/encoding";
 import { HttpRouter, HttpServerResponse } from "effect/http";
@@ -33,11 +25,7 @@ const program = Effect.gen(function* () {
       Layer.provide(notify.layer.pipe(Layer.provide(notifier))),
     );
 
-    const base = Layer.mergeAll(
-      WebCrypto.layerWebCrypto,
-      hooks,
-      Proofs.ProofDispatchScheduler.layerInline,
-    );
+    const base = Layer.mergeAll(BunCrypto.layer, hooks, Proofs.ProofDispatchScheduler.layerInline);
 
     yield* Effect.gen(function* () {
       const model = yield* makeEmailConsumer;
@@ -57,23 +45,20 @@ const program = Effect.gen(function* () {
         },
       }).pipe(Layer.provide(base));
 
-      const stateless = sessions
-        .statelessLayer(sessionPolicy)
-        .pipe(
-          Layer.provide(
-            Layer.succeed(Sessions.SessionSigningKeys, {
-              activeKeyId: "session",
-              keys: [
-                {
-                  id: "session",
-                  // Demo-only key material. Production requires independently generated random keys.
-                  material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
-                },
-              ],
-            }),
-          ),
-        )
-        .pipe(Layer.provide(base));
+      const stateless = sessions.statelessLayer(sessionPolicy).pipe(
+        Layer.provide(
+          Layer.succeed(Sessions.SessionSigningKeys, {
+            activeKeyId: "session",
+            keys: [
+              {
+                id: "session",
+                material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
+              },
+            ],
+          }),
+        ),
+        Layer.provide(base),
+      );
 
       const stateful = sessions
         .statefulLayer(sessionPolicy)
@@ -404,8 +389,10 @@ const program = Effect.gen(function* () {
 
         const replay = yield* auth
           .completeEmailChange("addresses", changeInput)
-          .pipe(Effect.provideService(Auth.AuthRequest, { ...call, invocation: changeCaller }))
-          .pipe(Effect.result);
+          .pipe(
+            Effect.provideService(Auth.AuthRequest, { ...call, invocation: changeCaller }),
+            Effect.result,
+          );
 
         if (replay._tag !== "Failure" || notifications.length !== 1)
           return yield* Effect.die("address change replay/notification failed");

@@ -1,4 +1,9 @@
-import { Cause, Context, Effect, Option, Result, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { LifecycleHooks } from "./LifecycleHooks";
 import { HookConfigurationError, type LifecycleEvent, lifecycleEvent } from "./models";

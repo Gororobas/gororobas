@@ -10,7 +10,10 @@ import {
   type PasskeyManagementPolicy,
   type PasskeyRequirement,
 } from "@yielded/auth/Passkey";
-import { Crypto, DateTime, Effect, Schema } from "effect";
+import * as Digest from "effect/crypto/Digest";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 const invalidState = () => PasskeyUnavailable.make({});
 
@@ -43,8 +46,8 @@ export const passkeyKey = Effect.fnUntraced(function* (
     offset += 4 + bytes.length;
   }
 
-  const crypto = yield* Crypto.Crypto;
-  const hashed = yield* crypto.digest("SHA-256", packed);
+  const digests = yield* Digest.Digest;
+  const hashed = yield* digests.digest(Digest.sha256, packed);
 
   return "v1:" + Array.from(hashed, (value) => value.toString(16).padStart(2, "0")).join("");
 });

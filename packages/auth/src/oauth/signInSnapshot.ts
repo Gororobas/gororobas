@@ -1,4 +1,8 @@
-import { DateTime, Effect, Predicate, Result, Schema } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { OAuthUnavailable } from "./signInErrors";
 

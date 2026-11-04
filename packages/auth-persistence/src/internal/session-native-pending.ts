@@ -6,9 +6,10 @@ import {
   type PendingConsumption,
   PendingAuthenticationKind,
 } from "@yielded/auth/Sessions";
-import { Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import type { SubjectIdCodec } from "./models/common";
@@ -50,7 +51,7 @@ export const makeNativeSessionPending = Effect.fnUntraced(function* (
   batch = false,
 ) {
   const conditionalInsert = yield* makeConditionalSqlInsert();
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   const p = mapping.pending,
     table = tables(p.table),
@@ -116,7 +117,7 @@ export const makeNativeSessionPending = Effect.fnUntraced(function* (
     };
   });
 
-  const stage = Effect.fnUntraced(function* (statement: Fragment, expected?: number) {
+  const stage = Effect.fnUntraced(function* (statement: Statement.Fragment, expected?: number) {
     if (batch) {
       yield* appendSqlBatchStatement(sql`${statement}`);
       if (expected !== undefined)
@@ -135,7 +136,7 @@ export const makeNativeSessionPending = Effect.fnUntraced(function* (
 
   const insert = Effect.fnUntraced(function* (
     input: SessionPendingInsert<unknown>,
-    condition: Fragment = sql`1 = 1`,
+    condition: Statement.Fragment = sql`1 = 1`,
   ) {
     if (!(input.moduleId === mapping.moduleId)) return yield* invalidSessionState();
 
@@ -175,7 +176,7 @@ export const makeNativeSessionPending = Effect.fnUntraced(function* (
     kind: PendingAuthenticationKind,
     input: PendingConsumption,
     native: unknown,
-    condition: Fragment = sql`1 = 1`,
+    condition: Statement.Fragment = sql`1 = 1`,
   ) =>
     stage(
       sql`${table.update({ [p.consumed]: true })} where ${consumption(kind, input, native)} and ${condition}`,
@@ -215,14 +216,13 @@ export const makeNativeSessionPending = Effect.fnUntraced(function* (
   };
 });
 
-export const prepareNativeSession = <Value, A>(
+export const prepareNativeSession = Effect.fnUntraced(function* <Value, A>(
   value: Value,
   project: (value: Value, journal: CommitJournal) => PreparedCommit<A>,
-) =>
-  Effect.gen(function* () {
-    const receipt = project(value, yield* CurrentCommitJournal);
+) {
+  const receipt = project(value, yield* CurrentCommitJournal);
 
-    yield* registerSqlCommitReceipt(receipt);
+  yield* registerSqlCommitReceipt(receipt);
 
-    return receipt;
-  });
+  return receipt;
+});

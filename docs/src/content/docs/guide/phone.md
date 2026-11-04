@@ -1,13 +1,14 @@
 ---
 title: Phone codes
-description: Request an SMS code and sign in with a phone number.
+description: Sign in, register an account, or update a phone number with an SMS code.
 ---
 
-Use `PhoneOtp` to sign in existing accounts with an SMS code.
+Use `PhoneOtp` to sign in existing accounts with an SMS code. Enable lifecycle
+operations to register accounts, verify their numbers, or change them.
 
 For managed or application-declared SQL storage, the [composed persistence Layer](../reference/adapters#compose-persistence-once)
-supplies phone and proof services together. The explicit mappings below also cover
-number lifecycle operations and specialized storage layouts.
+supplies phone and proof services together, including enabled lifecycle operations.
+The explicit mappings below support specialized storage layouts.
 
 The snippets below are local calls inside existing Effect request handlers, with
 `AppAuth` and the HTTP request boundary provided. Publish selected methods through
@@ -177,7 +178,7 @@ and expiry as its second argument. Text stays private through delivery.
 </details>
 
 <details>
-<summary>Register or change phone numbers</summary>
+<summary>Register accounts or update phone numbers</summary>
 
 Enable lifecycle operations on the same strategy:
 
@@ -185,20 +186,36 @@ Enable lifecycle operations on the same strategy:
 phone: PhoneOtp.make({ lifecycle: true });
 ```
 
-Use a lifecycle policy object instead of `true` to customize its behavior.
+Use a lifecycle policy object instead of `true` to customize its behavior. With
+`Sessions.stateful()`, managed and mapped composition supplies the required
+`PhonePersistence` and `PhoneSignInTargets` without additional tables.
 
-These operations additionally require `PhonePersistence` and `PhoneActionEvidence`.
-The Drizzle Layer above already supplies `PhonePersistence`. Add independent
-authorization to `PhoneLive`:
+For account signup, supply `Persistence.Provisioning` under the phone strategy's
+name. Its `values({ requestId, identifier })` prepares the new account's native ID,
+active status, initial security revision, and required application fields.
+`identifier` contains the `phone` namespace and verified number. Preparation must
+not write to the database or perform external side effects; persistence commits
+the account, identifier, credential, and proof consumption together. See the
+[provisioning example](../reference/adapters#compose-persistence-once).
+
+Start signup with `auth.begin({ action: "register", ... })`, then pass the code,
+reference, original flow and command IDs, and private request binding to
+`auth.completeLifecycle(input)`. A `Registered` result contains `completion`;
+grant access only when that completion is `Authenticated`, as for sign-in.
+
+Verifying an existing account's number (`action: "verify"`) or replacing it
+(`action: "change"`, with `sourcePhoneNumber`) requires an authenticated caller
+and independent authorization. Add it to `PhoneLive`:
 
 ```ts
 Layer.succeed(PhoneOtp.PhoneActionEvidence, { verify: authorizePhoneChange });
 ```
 
-`authorizePhoneChange` is your application's check of independent evidence for
-a number change. Start with `auth.begin(input)` and finish with
-`auth.completeLifecycle(input)`. Supply `PhoneRequestContext`
-for each request, as for sign-in.
+`authorizePhoneChange` is your application's check of fresh, independent evidence;
+the SMS code alone cannot authorize these changes. Both use `auth.begin(input)`
+and `auth.completeLifecycle(input)`. Supply `PhoneRequestContext` for every
+lifecycle request, as for sign-in. Delivery and session claims remain
+application-owned.
 
 Changing a number permanently retires its old identifier; a later registration
 cannot adopt it. Reassignment requires independently authorized recovery, never

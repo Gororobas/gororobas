@@ -3,7 +3,7 @@ import {
   PasskeyAttestation,
   PasskeyAuthenticationStarted,
 } from "@yielded/auth/Passkey";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** OS availability only; does not attest to entitlements, linking, or a saved key. */
 export const PasskeyReactNativeCapabilities = Schema.Struct({

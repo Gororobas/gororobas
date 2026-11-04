@@ -12,7 +12,7 @@ use, autolink with CocoaPods, and rebuild the application.
 ## Passkeys
 
 Import `* as ReactNativePasskey` from this package and construct the adapter with
-`ReactNativePasskey.make()`, or provide `ReactNativePasskey.layer`.
+`ReactNativePasskey.make`, or provide `ReactNativePasskey.layer`.
 
 Install this package and its `react-native` and `react-native-passkey` peers only
 in the native application. `@yielded/auth` does not depend on React Native or
@@ -71,8 +71,8 @@ stable across restarts and allow no other writers. Storage is device-only,
 available while unlocked, and does not use biometric gating. Keychain data can
 survive app deletion.
 
-Your app also supplies `Crypto.Crypto` with cryptographically secure random bytes
-and SHA-256. React Native does not supply browser `SubtleCrypto`.
+Your app also supplies `SecureRandom.SecureRandom` and `Digest.Digest` from `effect/crypto`
+for cryptographically secure random bytes and SHA-256. React Native does not supply browser `SubtleCrypto`.
 With [`expo-crypto`](https://docs.expo.dev/versions/latest/sdk/crypto/), use
 `getRandomValues` and `digest`; `getRandomBytes` can fall back to `Math.random`
 in development.

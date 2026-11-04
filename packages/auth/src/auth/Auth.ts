@@ -1,4 +1,11 @@
-import { Context, Effect, Exit, Layer, Option, Schema, Scope, type Types } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
+import type * as Types from "effect/Types";
 
 import {
   make as makeContract,
@@ -28,25 +35,24 @@ import { makeSessionApi } from "./session";
 type Strategies = Readonly<Record<string, Strategy>>;
 type CompletionOf<S> = S extends { readonly completion: infer C } ? C : false;
 
-const withConstructionLayer = <A, E, R, Provided, E2, R2>(
+const withConstructionLayer = Effect.fnUntraced(function* <A, E, R, Provided, E2, R2>(
   create: Effect.Effect<A, E, R>,
   layer: Layer.Layer<Provided, E2, R2>,
-) =>
-  Effect.gen(function* () {
-    const current = yield* Effect.serviceOption(Layer.CurrentMemoMap);
-    const memoMap = Option.isSome(current) ? current.value : yield* Layer.makeMemoMap;
-    const scope = yield* Scope.fork(yield* Effect.scope);
+) {
+  const current = yield* Effect.serviceOption(Layer.CurrentMemoMap);
+  const memoMap = Option.isSome(current) ? current.value : yield* Layer.makeMemoMap;
+  const scope = yield* Scope.fork(yield* Effect.scope);
 
-    return yield* Effect.gen(function* () {
-      const services = yield* Layer.buildWithMemoMap(layer, memoMap, scope);
+  return yield* Effect.gen(function* () {
+    const services = yield* Layer.buildWithMemoMap(layer, memoMap, scope);
 
-      return yield* create.pipe(
-        Effect.provide(services),
-        Scope.provide(scope),
-        Effect.provideService(Layer.CurrentMemoMap, memoMap),
-      );
-    }).pipe(Effect.onError((cause) => Scope.close(scope, Exit.failCause(cause))));
-  });
+    return yield* create.pipe(
+      Effect.provide(services),
+      Scope.provide(scope),
+      Effect.provideService(Layer.CurrentMemoMap, memoMap),
+    );
+  }).pipe(Effect.onError((cause) => Scope.close(scope, Exit.failCause(cause))));
+});
 
 type Api<S extends Strategy> = Effect.Success<S["make"]>;
 type StrategyMethod<S extends Strategy> = S extends Strategy ? Api<S>[keyof Api<S>] : never;

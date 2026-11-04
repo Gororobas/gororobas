@@ -1,4 +1,4 @@
-import { D1Client } from "@effect/sql-d1/D1Client";
+import * as D1Client from "@effect/sql-d1/D1Client";
 import {
   PersistenceConfigurationError,
   PersistenceMappingError,
@@ -7,7 +7,12 @@ import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { formatToMillis, getMigrationsToRun } from "drizzle-orm/migrator.utils";
-import { Cause, Crypto, DateTime, Effect, Layer, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 const MigrationFiles = Schema.Record(Schema.String, Schema.NonEmptyString);
 const MigrationName = Schema.String.check(Schema.isPattern(/^\d{14}_.+$/));
@@ -41,8 +46,8 @@ export const d1MigrationsLayer = (options: {
   Layer.effectDiscard(
     Effect.gen(function* () {
       const files = yield* Schema.decodeEffect(MigrationFiles)(options.migrations);
-      const client = yield* D1Client;
-      const crypto = yield* Crypto.Crypto;
+      const client = yield* D1Client.D1Client;
+      const digests = yield* Digest.Digest;
       const appliedAt = DateTime.formatIso(yield* DateTime.now);
 
       const migrations = yield* Effect.forEach(
@@ -54,7 +59,7 @@ export const d1MigrationsLayer = (options: {
             formatToMillis(name.slice(0, 14)),
           );
 
-          const digest = yield* crypto.digest("SHA-256", new TextEncoder().encode(contents));
+          const digest = yield* digests.digest(Digest.sha256, new TextEncoder().encode(contents));
 
           return {
             name,
@@ -66,7 +71,7 @@ export const d1MigrationsLayer = (options: {
         }),
       );
 
-      yield* Effect.gen(function* () {
+      yield* (function* () {
         const db = drizzle(client.config.db);
         const name = options.migrationsTable ?? "__drizzle_migrations";
         const table = sql.identifier(name);
@@ -158,7 +163,7 @@ export const d1MigrationsLayer = (options: {
             try: () => db.batch([first, ...rest]),
             catch: migrationFailure,
           });
-      });
+      })();
     }).pipe(
       (effect) =>
         reportPersistenceFailure(effect, Schema.is(PersistenceConfigurationError), {

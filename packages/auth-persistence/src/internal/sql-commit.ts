@@ -8,15 +8,21 @@ import {
   hasCommitScope,
 } from "@yielded/auth/Hooks";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import { Cause, Context, Data, Effect, Option, Predicate, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { SqlError } from "effect/sql/SqlError";
-import type { Statement } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import type { PersistenceMappingError } from "./mapping-error";
 import { requireStandalone } from "./standalone";
 
-type SqlCommitError = PersistenceMappingError | Schema.SchemaError | SqlError;
+type SqlCommitError = PersistenceMappingError | Schema.SchemaError | SqlError.SqlError;
 
 export class SqlCommitOwnerError extends Schema.TaggedError<SqlCommitOwnerError>()(
   "SqlCommitOwnerError",
@@ -42,8 +48,8 @@ export class SqlBatchCommit extends Context.Service<
   | {
       readonly client: SqlClient.SqlClient;
       readonly execute: (
-        statements: ReadonlyArray<Statement<unknown>>,
-      ) => Effect.Effect<void, SqlError>;
+        statements: ReadonlyArray<Statement.Statement<unknown>>,
+      ) => Effect.Effect<void, SqlError.SqlError>;
     }
 >()("@yielded/auth-persistence/SqlBatchCommit") {}
 
@@ -70,10 +76,10 @@ export interface SqlCommitScope {
   readonly mode: SqlCommitMode;
   readonly origin: "operation" | "application";
   readonly postconditions: Array<
-    SqlPostcondition | { readonly name: string; readonly statement: Statement<unknown> }
+    SqlPostcondition | { readonly name: string; readonly statement: Statement.Statement<unknown> }
   >;
   readonly receipts: Array<Effect.Effect<void, CommitPending | CommitDiscarded>>;
-  readonly statements: Array<Statement<unknown>>;
+  readonly statements: Array<Statement.Statement<unknown>>;
   active: boolean;
   poisoned: boolean;
   inFlight: number;
@@ -106,7 +112,7 @@ export const registerSqlPostcondition = (
 /** D1 checks final semantic predicates after all application batch statements. */
 export const registerSqlBatchPostcondition = (condition: {
   readonly name: string;
-  readonly statement: Statement<unknown>;
+  readonly statement: Statement.Statement<unknown>;
 }): Effect.Effect<void, SqlCommitOwnerError, CurrentSqlCommit> =>
   Effect.flatMap(CurrentSqlCommit, (scope) => {
     if (!scope.active) return Effect.fail(closed());
@@ -134,7 +140,7 @@ export const registerSqlCommitReceipt = <A>(
   });
 
 export const appendSqlBatchStatement = (
-  statement: Statement<unknown>,
+  statement: Statement.Statement<unknown>,
 ): Effect.Effect<void, SqlCommitOwnerError, CurrentSqlCommit> =>
   Effect.flatMap(CurrentSqlCommit, (scope) => {
     if (!scope.active) return Effect.fail(closed());
@@ -427,22 +433,23 @@ export const makeSqlCommitExecutor = Effect.fnUntraced(function* <Failure>(
 
 /** Application statements join the same fixed batch and cannot escape it. */
 export interface SqlBatchCollector {
-  readonly append: (statement: Statement<unknown>) => Effect.Effect<void, SqlCommitOwnerError>;
+  readonly append: (
+    statement: Statement.Statement<unknown>,
+  ) => Effect.Effect<void, SqlCommitOwnerError>;
 }
 
 export const captureSqlBatchStatements: Effect.Effect<SqlBatchCollector, never, CurrentSqlCommit> =
   Effect.map(CurrentSqlCommit, (scope) => ({
-    append: (statement: Statement<unknown>) =>
-      Effect.gen(function* () {
-        const current = yield* Effect.serviceOption(CurrentSqlCommit);
+    append: Effect.fnUntraced(function* (statement: Statement.Statement<unknown>) {
+      const current = yield* Effect.serviceOption(CurrentSqlCommit);
 
-        if (
-          !scope.active ||
-          scope.mode !== "batch" ||
-          Option.isNone(current) ||
-          current.value !== scope
-        )
-          return yield* closed();
-        scope.statements.push(statement);
-      }),
+      if (
+        !scope.active ||
+        scope.mode !== "batch" ||
+        Option.isNone(current) ||
+        current.value !== scope
+      )
+        return yield* closed();
+      scope.statements.push(statement);
+    }),
   }));

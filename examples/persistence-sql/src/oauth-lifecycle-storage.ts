@@ -1,7 +1,8 @@
 import { OAuth, Sessions } from "@yielded/auth";
 import { PersistenceMappingError } from "@yielded/auth-persistence";
 import * as Mapping from "@yielded/auth-persistence/OAuthPersistence";
-import { Context, Crypto, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { SqlClient } from "effect/sql";
 
 import type { identities } from "../../shared/oauth/storage";
@@ -82,10 +83,10 @@ export const mutableAuthority = {
 
 /** Shared app-owned OAuth login mapping; callers select session and metadata policy. */
 export const makeAccountsMapping = Effect.fnUntraced(function* () {
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
 
   const uuid = crypto
-    .randomUUIDv4()
+    .uuidV4()
     .pipe(
       Effect.mapError((cause) =>
         PersistenceMappingError.make({ operation: "demo.allocate", cause }),
@@ -145,10 +146,10 @@ export const makeAccountsMapping = Effect.fnUntraced(function* () {
 /** App-owned migration and policy for this disposable CLI consumer only. */
 export const makeLifecycleStorage = Effect.gen(function* () {
   const client = yield* SqlClient.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
 
   const uuid = crypto
-    .randomUUIDv4()
+    .uuidV4()
     .pipe(
       Effect.mapError((cause) =>
         PersistenceMappingError.make({ operation: "demo.allocate", cause }),

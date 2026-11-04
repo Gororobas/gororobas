@@ -107,7 +107,7 @@ const runtime = Layer.unwrap(
 
             return yield* auth.verifySession(Redacted.make(cookie)).pipe(
               Effect.map((session) => session.subjectId),
-              Effect.catchTag("SessionInvalid", () => Effect.succeed(undefined)),
+              Effect.catchTag("SessionInvalid", () => Effect.as(Effect.void, undefined)),
               Effect.mapError(() => OAuthServer.Unavailable.make({})),
             );
           }),

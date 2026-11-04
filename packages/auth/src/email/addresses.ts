@@ -1,5 +1,12 @@
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
@@ -162,7 +169,8 @@ export const makeEmailAddresses = <
       const actionAuthority = yield* EmailActionEvidence;
       const verify = yield* verifyProof.Proofs;
       const change = yield* changeProof.Proofs;
-      const crypto = yield* Crypto.Crypto;
+      const crypto = yield* SecureRandom.SecureRandom;
+      const digests = yield* Digest.Digest;
       const hooks = yield* LifecycleHooks;
 
       const digest = Effect.fn("EmailAddresses.digest")(
@@ -170,7 +178,9 @@ export const makeEmailAddresses = <
           const message = yield* Schema.encodeEffect(tuple)(parts);
 
           return TokenDigest.make(
-            Base64Url.encode(yield* crypto.digest("SHA-256", new TextEncoder().encode(message))),
+            Base64Url.encode(
+              yield* digests.digest(Digest.sha256, new TextEncoder().encode(message)),
+            ),
           );
         },
         Effect.catchCause((cause) =>

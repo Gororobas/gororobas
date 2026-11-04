@@ -1,7 +1,14 @@
 import type * as OAuth from "@yielded/oauth/OAuth";
 import type * as Oidc from "@yielded/oauth/Oidc";
 import * as Pkce from "@yielded/oauth/Pkce";
-import { Cause, Crypto, DateTime, Effect, Redacted, Schema, type Scope } from "effect";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { reportAuthDiagnostic, withoutObservability } from "../../../../internal/diagnostics";
 import { makeScopedOperation } from "../../../../internal/scoped-operation";
@@ -29,7 +36,7 @@ import {
   type OpenIdConnectConfigurationError,
 } from "../models";
 import { PrivateKeyClientSecret } from "../privateKeyJwt";
-import { decodeOidcProfile } from "../profile";
+import { decodeOidcProfile, mergeUserInfo } from "../profile";
 import { ProviderRevocation } from "../ProviderRevocation";
 import { tokens } from "../receipt";
 import { subjectInTenant } from "../tenantSubject";
@@ -144,10 +151,16 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
 ): Effect.fn.Return<
   OAuthConnectedProtocol["Service"],
   OpenIdConnectConfigurationError | OAuthUnavailable,
-  R | Setup | ProviderRevocation | Crypto.Crypto | PrivateKeyClientSecret | Scope.Scope
+  | R
+  | Setup
+  | ProviderRevocation
+  | (SecureRandom.SecureRandom | Digest.Digest)
+  | PrivateKeyClientSecret
+  | Scope.Scope
 > {
   const decoderContext = (yield* Effect.context<R>()).pipe(withoutObservability);
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
+  const digests = yield* Digest.Digest;
   const clientSecrets = yield* PrivateKeyClientSecret;
   const providerRevocation = yield* ProviderRevocation;
   // Provider-owned revocation bypasses the generic OAuth client's transport.
@@ -378,13 +391,15 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
     if (!entry || !callback || request.profile.issuance !== "active") return yield* rejected();
 
     const state = yield* Pkce.random().pipe(
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(SecureRandom.SecureRandom, crypto),
+      Effect.provideService(Digest.Digest, digests),
       Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
     );
 
     const pkce = entry.provider.pkceS256
       ? yield* Pkce.make().pipe(
-          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.provideService(SecureRandom.SecureRandom, crypto),
+          Effect.provideService(Digest.Digest, digests),
           Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
         )
       : undefined;
@@ -392,7 +407,8 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
     const nonce =
       entry.provider.protocol === "oidc"
         ? yield* Pkce.random().pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(SecureRandom.SecureRandom, crypto),
+            Effect.provideService(Digest.Digest, digests),
             Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
           )
         : undefined;
@@ -528,7 +544,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
 
           const claims =
             provider.userInfo === "merge"
-              ? yield* Effect.gen(function* () {
+              ? yield* (function* () {
                   const userInfo = yield* entry.client
                     .fetchProfile(grant.accessToken)
                     .pipe(
@@ -541,8 +557,8 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
 
                   if (subject.sub !== verified.subject) return yield* unavailable();
 
-                  return { ...userInfo, ...Redacted.value(verified.claims) };
-                })
+                  return mergeUserInfo(userInfo, Redacted.value(verified.claims));
+                })()
               : undefined;
 
           return yield* oidcIdentity(
@@ -838,7 +854,7 @@ export const makeOpenIdConnectConnectedProtocol = <R, Setup>(
 ): Effect.Effect<
   OAuthConnectedProtocol["Service"],
   OpenIdConnectConfigurationError | OAuthUnavailable,
-  R | Setup | Crypto.Crypto | PrivateKeyClientSecret | Scope.Scope
+  R | Setup | (SecureRandom.SecureRandom | Digest.Digest) | PrivateKeyClientSecret | Scope.Scope
 > =>
   makeConnectedProtocolWithCompatibility(installation).pipe(
     Effect.provide(ProviderRevocation.layerUnsupported),

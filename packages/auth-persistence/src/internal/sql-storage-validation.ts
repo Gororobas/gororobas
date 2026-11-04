@@ -1,6 +1,8 @@
 import { reportAuthDiagnostic } from "@yielded/auth/Persistence";
-import { Cause, Effect, Result } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { PersistenceMappingError } from "./mapping-error";
 import { Table } from "./sql-table";

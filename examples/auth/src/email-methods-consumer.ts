@@ -7,7 +7,8 @@ import {
   Schema as AuthSchema,
   Sessions,
 } from "@yielded/auth";
-import { Crypto, DateTime, Effect, Layer, Option, Schema, Redacted } from "effect";
+import { DateTime, Effect, Layer, Option, Schema, Redacted } from "effect";
+import * as Digest from "effect/crypto/Digest";
 import { Base64Url } from "effect/encoding";
 
 import {
@@ -131,7 +132,7 @@ const clone = (s: State): State => ({
  */
 export const makeEmailConsumer = Effect.gen(function* () {
   const hooks = yield* Hooks.LifecycleHooks;
-  const crypto = yield* Crypto.Crypto;
+  const digests = yield* Digest.Digest;
 
   let state: State = {
     subjects: new Map(),
@@ -143,35 +144,34 @@ export const makeEmailConsumer = Effect.gen(function* () {
   let sequence = 0;
   const consumedFactors = new Set<string>();
 
-  const own = <A, E>(
+  const own = Effect.fnUntraced(function* <A, E>(
     body: (s: State, journal: Hooks.CommitJournal, now: number) => Effect.fn.Return<A, E>,
-  ) =>
-    Effect.gen(function* () {
-      if (yield* Hooks.hasCommitScope) return yield* Email.EmailUnavailable.make({});
+  ) {
+    if (yield* Hooks.hasCommitScope) return yield* Email.EmailUnavailable.make({});
 
-      return yield* Hooks.coordinateCommit((journal) =>
-        Effect.gen(function* () {
-          const now = DateTime.toEpochMillis(yield* DateTime.now);
+    return yield* Hooks.coordinateCommit((journal) =>
+      Effect.gen(function* () {
+        const now = DateTime.toEpochMillis(yield* DateTime.now);
 
-          const next = yield* Effect.try({
-            try: () => clone(state),
-            catch: () => Email.EmailUnavailable.make({}),
-          });
+        const next = yield* Effect.try({
+          try: () => clone(state),
+          catch: () => Email.EmailUnavailable.make({}),
+        });
 
-          const value = yield* Effect.gen(() => body(next, journal, now)).pipe(
-            Effect.catchDefect(() => Effect.fail(Email.EmailUnavailable.make({}))),
-          );
+        const value = yield* Effect.gen(() => body(next, journal, now)).pipe(
+          Effect.catchDefect(() => Effect.fail(Email.EmailUnavailable.make({}))),
+        );
 
-          state = next;
+        state = next;
 
-          return value;
-        }),
-      ).pipe(
-        Effect.map((result) => result.value),
-        Effect.mapError(() => Email.EmailUnavailable.make({})),
-        Effect.provideService(Hooks.LifecycleHooks, hooks),
-      );
-    });
+        return value;
+      }),
+    ).pipe(
+      Effect.map((result) => result.value),
+      Effect.mapError(() => Email.EmailUnavailable.make({})),
+      Effect.provideService(Hooks.LifecycleHooks, hooks),
+    );
+  });
 
   const current = (s: State, r: Sessions.AuthenticationRevision) =>
     s.subjects.get(r.subjectId)?.security === r.securityRevision &&
@@ -380,59 +380,57 @@ export const makeEmailConsumer = Effect.gen(function* () {
   });
 
   const actions = Email.EmailActionEvidence.of({
-    verify: (input) =>
-      Effect.gen(function* () {
-        if (!current(state, input.challenge.revision) || input.proof === undefined)
-          return yield* Email.EmailActionRequired.make({});
-        const token = Redacted.value(input.proof);
+    verify: Effect.fnUntraced(function* (input) {
+      if (!current(state, input.challenge.revision) || input.proof === undefined)
+        return yield* Email.EmailActionRequired.make({});
+      const token = Redacted.value(input.proof);
 
-        if (!token.startsWith("fixture:") || consumedFactors.has(token))
-          return yield* Email.EmailActionRequired.make({});
-        consumedFactors.add(token);
+      if (!token.startsWith("fixture:") || consumedFactors.has(token))
+        return yield* Email.EmailActionRequired.make({});
+      consumedFactors.add(token);
 
-        const evidence: Sessions.AuthenticationEvidence = {
-          flowId: Sessions.AuthenticationFlowId.make(input.challenge.commandId),
-          bindingDigest: input.challenge.bindingDigest,
-          revision: {
-            ...input.challenge.revision,
-            credentials: [
-              ...input.challenge.revision.credentials,
-              { credentialId: "fixture-factor", revision: Sessions.SecurityRevision.make("1") },
-            ],
-          },
-          proofs: [
-            {
-              method: "fixture-factor",
-              credentialId: "fixture-factor",
-              factors: ["possession"],
-              userVerified: false,
-              phishingResistant: false,
-              verifiedAt: yield* DateTime.now,
-            },
+      const evidence: Sessions.AuthenticationEvidence = {
+        flowId: Sessions.AuthenticationFlowId.make(input.challenge.commandId),
+        bindingDigest: input.challenge.bindingDigest,
+        revision: {
+          ...input.challenge.revision,
+          credentials: [
+            ...input.challenge.revision.credentials,
+            { credentialId: "fixture-factor", revision: Sessions.SecurityRevision.make("1") },
           ],
-        };
+        },
+        proofs: [
+          {
+            method: "fixture-factor",
+            credentialId: "fixture-factor",
+            factors: ["possession"],
+            userVerified: false,
+            phishingResistant: false,
+            verifiedAt: yield* DateTime.now,
+          },
+        ],
+      };
 
-        return { evidence, requirement };
-      }),
+      return { evidence, requirement };
+    }),
   });
 
   const registrations = registration.RegistrationAuthority.of({
-    inspect: Effect.fn("ExampleEmail.registrationIntent")(function* (input) {
-      const text = yield* Schema.encodeEffect(
-        Schema.fromJsonString(Schema.Tuple([Schema.String, Schema.Finite])),
-      )([input.registration.team, input.registration.number]).pipe(
-        Effect.mapError(() => Email.EmailUnavailable.make({})),
-      );
+    inspect: Effect.fn("ExampleEmail.registrationIntent")(
+      function* (input) {
+        const text = yield* Schema.encodeEffect(
+          Schema.fromJsonString(Schema.Tuple([Schema.String, Schema.Finite])),
+        )([input.registration.team, input.registration.number]);
 
-      const digest = yield* crypto
-        .digest("SHA-256", new TextEncoder().encode(text))
-        .pipe(Effect.mapError(() => Email.EmailUnavailable.make({})));
+        const digest = yield* digests.digest(Digest.sha256, new TextEncoder().encode(text));
 
-      return {
-        fingerprint: AuthSchema.TokenDigest.make(Base64Url.encode(digest)),
-        eligible: !state.identifiers.has(input.identifier.value),
-      };
-    }),
+        return {
+          fingerprint: AuthSchema.TokenDigest.make(Base64Url.encode(digest)),
+          eligible: !state.identifiers.has(input.identifier.value),
+        };
+      },
+      Effect.mapError(() => Email.EmailUnavailable.make({})),
+    ),
     registerWithProof: (input, prepare) =>
       own(function* (s, journal, now) {
         const valid =
@@ -557,21 +555,19 @@ export const makeEmailConsumer = Effect.gen(function* () {
           }),
       }),
     ),
-    requireMfaFixture: (id: AuthSchema.SubjectId) =>
-      Effect.gen(function* () {
-        const row = state.subjects.get(id);
+    requireMfaFixture: Effect.fnUntraced(function* (id: AuthSchema.SubjectId) {
+      const row = state.subjects.get(id);
 
-        if (!row) return yield* Email.EmailUnavailable.make({});
-        row.mfa = true;
-        row.security = String(Number(row.security) + 1);
-      }),
-    snapshotFixture: (address: string) =>
-      Effect.gen(function* () {
-        const row = state.identifiers.get(address);
+      if (!row) return yield* Email.EmailUnavailable.make({});
+      row.mfa = true;
+      row.security = String(Number(row.security) + 1);
+    }),
+    snapshotFixture: Effect.fnUntraced(function* (address: string) {
+      const row = state.identifiers.get(address);
 
-        if (!row) return yield* Email.EmailUnavailable.make({});
+      if (!row) return yield* Email.EmailUnavailable.make({});
 
-        return snapshot(state, row);
-      }),
+      return snapshot(state, row);
+    }),
   };
 });

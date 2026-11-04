@@ -36,9 +36,14 @@ import {
   snapshotPasskey,
 } from "@yielded/auth/Passkey";
 import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
-import type { Context } from "effect";
-import { Cause, DateTime, Effect, Layer, Redacted, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import type * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { captureSimpleWebAuthnProfiles, validateSimpleWebAuthnProfile } from "./configuration";
 import type { SimpleWebAuthnPasskeyProtocolOptions } from "./models";
@@ -50,23 +55,24 @@ const unavailable = () => PasskeyUnavailable.make({});
 
 const unexpected = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.uninterruptibleMask((restore) =>
-    restore(effect).pipe(
-      Effect.catchCause((cause): Effect.Effect<never, E | PasskeyUnavailable> =>
-        Cause.hasDies(cause)
-          ? reportAuthFailure("passkey-protocol", cause).pipe(
-              Effect.andThen(
-                Effect.failCause(
-                  markAuthFailureReported(
-                    Cause.fromReasons<E | PasskeyUnavailable>(
-                      cause.reasons.map((reason) =>
-                        Cause.isDieReason(reason) ? Cause.makeFailReason(unavailable()) : reason,
-                      ),
+    restore(effect).pipe((effect) =>
+      Effect.catchCauseIf(
+        effect,
+        (cause) => Cause.hasDies(cause),
+        (cause): Effect.Effect<never, E | PasskeyUnavailable> =>
+          reportAuthFailure("passkey-protocol", cause).pipe(
+            Effect.andThen(
+              Effect.failCause(
+                markAuthFailureReported(
+                  Cause.fromReasons<E | PasskeyUnavailable>(
+                    cause.reasons.map((reason) =>
+                      Cause.isDieReason(reason) ? Cause.makeFailReason(unavailable()) : reason,
                     ),
                   ),
                 ),
               ),
-            )
-          : Effect.failCause(cause),
+            ),
+          ),
       ),
     ),
   );

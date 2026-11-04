@@ -90,13 +90,13 @@ import { AppAuth } from "./auth";
 
 export const currentMember = Effect.fn("app.currentMember")(function* () {
   const auth = yield* AppAuth;
-  const session = yield* auth.requireSession();
+  const session = yield* auth.requireSession;
 
   return session.claims.displayName;
 });
 ```
 
-`requireSession()` returns the typed session or fails. It uses credentials from
+The `requireSession` Effect yields the typed session or fails. It uses credentials from
 the current request context, supplied by the [HTTP middleware](./http-and-client#application-routes).
 It makes no HTTP call. Continue the same Effect with your own application
 services to load data or check permission for an action.

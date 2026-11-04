@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export const Athlete = Schema.Struct({
   id: Schema.Int.check(Schema.isGreaterThan(0)),

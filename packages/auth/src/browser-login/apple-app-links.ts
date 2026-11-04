@@ -1,4 +1,5 @@
-import { Effect, Schema } from "effect";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { type Client, Clients, ConfigurationError, HttpsReturnUrl } from "./models";
 

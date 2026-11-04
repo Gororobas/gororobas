@@ -1,10 +1,11 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { it } from "@effect/vitest";
 import { LifecycleHooks } from "@yielded/auth/Hooks";
 import { makeWithDefaults } from "drizzle-orm/effect-sqlite-node";
-import { Effect, Layer } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
 
 import * as SqliteNode from "../src/SqliteNode";
@@ -16,7 +17,7 @@ it.effect(
   "rejects a declared key missing from the captured database before acquisition or coordination",
   () =>
     Effect.gen(function* () {
-      const client = yield* SqlClient;
+      const client = yield* SqlClient.SqlClient;
 
       yield* migrate;
       yield* client`drop table totp_example_factors`;

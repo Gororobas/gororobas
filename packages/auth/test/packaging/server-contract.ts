@@ -1,5 +1,5 @@
 import * as AuthContract from "@yielded/auth/AuthContract";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export const AuthApi = AuthContract.make("consumer/Auth", {
   claims: Schema.Struct({ displayName: Schema.String }),

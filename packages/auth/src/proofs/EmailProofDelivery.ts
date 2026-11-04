@@ -1,4 +1,8 @@
-import { Cause, Context, Effect, Layer, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { makeEmailLink } from "../email-delivery/link";
 import { EmailRenderer } from "../email-delivery/render";
@@ -54,21 +58,22 @@ export const emailProofDeliveryLayer = (options: {
             // Provider exceptions can contain cleartext bodies and capability URLs.
             Effect.withTracerEnabled(false),
             Effect.as({ _tag: "Accepted" } as const),
-            Effect.catchCause((cause) => {
-              if (Cause.hasDies(cause) || Cause.hasInterrupts(cause))
-                return Effect.failCause(cause);
-
-              return reportAuthFailure("proof-delivery", cause).pipe(
-                Effect.as(
-                  cause.reasons.every(
-                    (reason) =>
-                      Cause.isFailReason(reason) && reason.error._tag === "EmailNotAccepted",
-                  )
-                    ? ({ _tag: "DefiniteFailure", reason: "unavailable" } as const)
-                    : ({ _tag: "Ambiguous" } as const),
-                ),
-              );
-            }),
+            (work) =>
+              Effect.catchCauseIf(
+                work,
+                (cause) => !Cause.hasDies(cause) && !Cause.hasInterrupts(cause),
+                (cause) =>
+                  reportAuthFailure("proof-delivery", cause).pipe(
+                    Effect.as(
+                      cause.reasons.every(
+                        (reason) =>
+                          Cause.isFailReason(reason) && reason.error._tag === "EmailNotAccepted",
+                      )
+                        ? ({ _tag: "DefiniteFailure", reason: "unavailable" } as const)
+                        : ({ _tag: "Ambiguous" } as const),
+                    ),
+                  ),
+              ),
           );
         }),
       );

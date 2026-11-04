@@ -6,10 +6,18 @@
 import { createHash } from "node:crypto";
 
 import { it } from "@effect/vitest";
-import { Signature } from "@yielded/crypto/Signature";
-import { Cause, DateTime, Deferred, Effect, Fiber, Redacted, Scope, Exit, Struct } from "effect";
-import { HttpClient } from "effect/http";
-import { TestClock } from "effect/testing";
+import * as Cause from "effect/Cause";
+import * as Signature from "effect/crypto/Signature";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as HttpClient from "effect/http/HttpClient";
+import * as Redacted from "effect/Redacted";
+import * as Scope from "effect/Scope";
+import * as Struct from "effect/Struct";
+import * as TestClock from "effect/testing/TestClock";
 import * as jose from "jose";
 import { expect } from "vite-plus/test";
 
@@ -421,7 +429,7 @@ for (const termination of ["owner closure", "caller interruption"] as const) {
         ),
       );
 
-      const signatures = yield* Signature;
+      const signatures = yield* Signature.Signature;
       const entered = yield* Deferred.make<void>();
       const cleanupStarted = yield* Deferred.make<void>();
       const allowCleanup = yield* Deferred.make<void>();
@@ -430,10 +438,10 @@ for (const termination of ["owner closure", "caller interruption"] as const) {
 
       yield* Effect.addFinalizer(() => Deferred.succeed(allowCleanup, undefined));
 
-      const gated = Signature.of({
+      const gated = Signature.Signature.of({
         ...signatures,
-        verify: (input) =>
-          signatures.verify(input).pipe(
+        verify: (key, signature, data) =>
+          signatures.verify(key, signature, data).pipe(
             Effect.tap(() => Deferred.succeed(entered, undefined)),
             Effect.andThen(Effect.never),
             Effect.ensuring(
@@ -450,7 +458,7 @@ for (const termination of ["owner closure", "caller interruption"] as const) {
 
       const active = yield* verifier
         .verify(token, verification)
-        .pipe(Effect.provideService(Signature, gated), Effect.forkChild);
+        .pipe(Effect.provideService(Signature.Signature, gated), Effect.forkChild);
 
       yield* Deferred.await(entered);
 

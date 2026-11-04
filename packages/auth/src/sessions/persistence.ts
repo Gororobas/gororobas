@@ -1,4 +1,5 @@
-import type { DateTime, Effect } from "effect";
+import type * as DateTime from "effect/DateTime";
+import type * as Effect from "effect/Effect";
 
 import type { PreparedCommit } from "../hooks/commit";
 import type { CleanupLimit, CleanupResult } from "../persistence/cleanup";

@@ -131,9 +131,6 @@ jobs:
       - name: Install dependencies (frozen, scripts suppressed)
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Patch Effect TypeScript-Go
-        run: ./node_modules/.bin/vp run patch:tsgo
-
       - name: Upgrade npm for trusted publishing
         run: npm install --global npm@12.0.2
 

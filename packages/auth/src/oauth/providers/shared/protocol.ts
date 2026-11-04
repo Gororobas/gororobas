@@ -1,5 +1,12 @@
 import * as Pkce from "@yielded/oauth/Pkce";
-import { Cause, Crypto, DateTime, Effect, Redacted, Schema, type Scope } from "effect";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
 import { reportAuthDiagnostic, withoutObservability } from "../../../internal/diagnostics";
 import { makeScopedOperation } from "../../../internal/scoped-operation";
@@ -30,7 +37,7 @@ import {
   type OpenIdConnectConfigurationError,
 } from "./models";
 import { PrivateKeyClientSecret } from "./privateKeyJwt";
-import { decodeOidcProfile, mergeAppleCallbackUser } from "./profile";
+import { decodeOidcProfile, mergeAppleCallbackUser, mergeUserInfo } from "./profile";
 import { tokens } from "./receipt";
 import { subjectInTenant } from "./tenantSubject";
 
@@ -74,10 +81,11 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
   ): Effect.fn.Return<
     OAuthProtocol["Service"],
     OpenIdConnectConfigurationError | OAuthUnavailable,
-    R | Setup | Crypto.Crypto | PrivateKeyClientSecret | Scope.Scope
+    R | Setup | (SecureRandom.SecureRandom | Digest.Digest) | PrivateKeyClientSecret | Scope.Scope
   > {
     const context = (yield* Effect.context<R>()).pipe(withoutObservability);
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
+    const digests = yield* Digest.Digest;
     const clientSecrets = yield* PrivateKeyClientSecret;
     // Own application decoding as well as the native client's individual requests.
     const run = yield* makeScopedOperation(unavailable);
@@ -112,13 +120,15 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
         return yield* OAuthRejected.make({});
 
       const state = yield* Pkce.random().pipe(
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(SecureRandom.SecureRandom, crypto),
+        Effect.provideService(Digest.Digest, digests),
         Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
       );
 
       const pkce = provider.pkceS256
         ? yield* Pkce.make().pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(SecureRandom.SecureRandom, crypto),
+            Effect.provideService(Digest.Digest, digests),
             Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
           )
         : undefined;
@@ -126,7 +136,8 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
       const nonce =
         provider.protocol === "oidc"
           ? yield* Pkce.random().pipe(
-              Effect.provideService(Crypto.Crypto, crypto),
+              Effect.provideService(SecureRandom.SecureRandom, crypto),
+              Effect.provideService(Digest.Digest, digests),
               Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
             )
           : undefined;
@@ -281,7 +292,7 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
 
           const claims =
             provider.userInfo === "merge"
-              ? yield* Effect.gen(function* () {
+              ? yield* (function* () {
                   const userInfo = yield* entry.client
                     .fetchProfile(grant.accessToken)
                     .pipe(
@@ -294,8 +305,8 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
 
                   if (subject.sub !== verified.subject) return yield* rejected();
 
-                  return { ...userInfo, ...Redacted.value(verified.claims) };
-                })
+                  return mergeUserInfo(userInfo, Redacted.value(verified.claims));
+                })()
               : Redacted.value(verified.claims);
 
           const profile = yield* decodeOidcProfile(

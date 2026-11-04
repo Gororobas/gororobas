@@ -1,8 +1,11 @@
 import { it } from "@effect/vitest";
 import { Auth, Email, Password, Proofs, Sessions } from "@yielded/auth";
-import { Effect, Layer, Redacted, Schema } from "effect";
-import { RateLimiter } from "effect/persistence";
-import { TestClock } from "effect/testing";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as RateLimiter from "effect/persistence/RateLimiter";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { expect } from "vite-plus/test";
 
 export const app = Auth.make("test/proof-ingress", {
@@ -46,17 +49,16 @@ it.effect(
       const handlers = yield* Layer.build(Request.handlerLayer(() => handler));
 
       const limiter = Proofs.HostIngressLimiter.of({
-        check: (input) =>
-          Effect.gen(function* () {
-            const network = Redacted.value(input.networkKey);
+        check: Effect.fnUntraced(function* (input) {
+          const network = Redacted.value(input.networkKey);
 
-            seen.push({
-              action: input.action,
-              network,
-              device: input.deviceKey === undefined ? undefined : Redacted.value(input.deviceKey),
-            });
-            if (network === "blocked") return yield* Proofs.ProofIngressDenied.make({});
-          }),
+          seen.push({
+            action: input.action,
+            network,
+            device: input.deviceKey === undefined ? undefined : Redacted.value(input.deviceKey),
+          });
+          if (network === "blocked") return yield* Proofs.ProofIngressDenied.make({});
+        }),
       });
 
       const denied = yield* Request.invoke(guest, request).pipe(
@@ -128,16 +130,15 @@ it.effect(
       );
 
       const limiter = Proofs.HostIngressLimiter.of({
-        check: ({ networkKey }) =>
-          Effect.gen(function* () {
-            const network = Redacted.value(networkKey);
+        check: Effect.fnUntraced(function* ({ networkKey }) {
+          const network = Redacted.value(networkKey);
 
-            seen.push(network);
+          seen.push(network);
 
-            return yield* network === "blocked"
-              ? Proofs.ProofIngressDenied.make({})
-              : Proofs.ProofUnavailable.make({});
-          }),
+          return yield* network === "blocked"
+            ? Proofs.ProofIngressDenied.make({})
+            : Proofs.ProofUnavailable.make({});
+        }),
       });
 
       const denied = yield* RequestReset.invoke(guest, request).pipe(

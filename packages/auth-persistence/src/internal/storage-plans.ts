@@ -1,4 +1,6 @@
-import { Predicate, Result, Schema } from "effect";
+import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { PersistenceMappingError } from "./mapping-error";
 

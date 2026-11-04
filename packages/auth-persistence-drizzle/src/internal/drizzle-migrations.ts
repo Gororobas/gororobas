@@ -3,7 +3,10 @@ import {
   PersistenceMappingError,
 } from "@yielded/auth-persistence/Adapter";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import { Cause, Effect, Layer, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 /** Run Drizzle Kit output through the matching Drizzle driver. Loading files and
  * acquiring the database are deferred until the Layer is built. Drizzle owns the

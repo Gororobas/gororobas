@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { HookDenied } from "../hooks/models";
 import { ProofInvalid, ProofIngressDenied, ProofCapabilityUnsupported } from "../proofs/errors";

@@ -1,4 +1,4 @@
-import { EmailAddressPersistence, EmailUnavailable } from "@yielded/auth/Email";
+import { EmailAddressPersistence, EmailSignInTargets, EmailUnavailable } from "@yielded/auth/Email";
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { CurrentCommitJournal, hasCommitScope } from "@yielded/auth/Hooks";
 import {
@@ -20,11 +20,18 @@ import {
   reportAuthDiagnostic,
   reportPersistenceFailure,
 } from "@yielded/auth/Persistence";
-import { PhoneSignInTargets, PhoneOtpUnavailable } from "@yielded/auth/PhoneOtp";
+import { PhonePersistence, PhoneSignInTargets, PhoneOtpUnavailable } from "@yielded/auth/PhoneOtp";
 import { ProofPersistence, ProofUnavailable } from "@yielded/auth/Proofs";
 import { AuthenticationAuthority, SessionUnavailable } from "@yielded/auth/Sessions";
-import { Cause, Context, type Crypto, Effect, Layer, Ref, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import {
   PersistenceConfigurationError,
@@ -43,14 +50,14 @@ import {
   type PasskeyRequirement,
   type OAuthFeature,
 } from "./configuration";
-import { makeNativeEmailAddressServices } from "./email-native";
+import { makeNativeEmailAddressServices, makeNativeEmailSignInServices } from "./email-native";
 import { PersistenceMappingError } from "./mapping-error";
 import type { NativeSqlTables } from "./native-sql-table";
 import { makeManagedOAuth } from "./oauth-managed";
 import { IdentityImport, IdentityImports } from "./oauth/identity-import";
 import { makeManagedPasskeys } from "./passkey-managed";
 import { makeNativePasswordServices } from "./password-native";
-import { makeComposedPhoneTargets } from "./phone-composed";
+import { makeComposedPhoneServices } from "./phone-composed";
 import { makeNativeProofServices } from "./proof-native";
 import { makeRegistrationAuthority } from "./registration";
 import type { PasswordRegistrationAuthority } from "./registration-contract";
@@ -123,7 +130,12 @@ export const createPersistence = <T extends object, R, Database extends object =
       strategy.persistence === undefined ? [] : [strategy.persistence],
     );
 
-    const phone = features.some((feature) => feature.kind === "phone");
+    const phones = Object.entries(auth.strategies).flatMap(([name, strategy]) =>
+      strategy.persistence?.kind === "phone" ? [{ name, feature: strategy.persistence }] : [],
+    );
+
+    const phone = phones.length > 0;
+    const phoneLifecycle = phones.some(({ feature }) => feature.lifecycle);
     const password = features.some((feature) => feature.kind === "password");
 
     const passkeys = features.filter(
@@ -138,13 +150,23 @@ export const createPersistence = <T extends object, R, Database extends object =
     const stateless =
       auth.sessionMode === "stateless" &&
       features.length > 0 &&
-      features.every((feature) => feature?.kind === "oauth");
+      features.every(
+        (feature) =>
+          feature.kind === "oauth" ||
+          (feature.kind === "email" && feature.signIn && !feature.addresses),
+      );
 
     const management = features.some(
       (feature) => feature.kind === "password" && feature.management,
     );
 
-    const email = features.some((feature) => feature.kind === "email" && feature.addresses);
+    const emailSignIn = features.some((feature) => feature.kind === "email" && feature.signIn);
+
+    const emailAddresses = features.some(
+      (feature) => feature.kind === "email" && feature.addresses,
+    );
+
+    const email = emailSignIn || emailAddresses;
     const proofs = phone || management || email;
 
     const roles: StorageRole[] = ["identifiers", "credentials"];
@@ -318,9 +340,7 @@ export const createPersistence = <T extends object, R, Database extends object =
             return yield* configError("Use an explicit adapter for this SQL dialect");
           if (
             features.some(
-              (feature) =>
-                ("lifecycle" in feature && feature.lifecycle) ||
-                (feature.kind === "email" && !feature.addresses),
+              (feature) => feature.kind === "email" && !feature.signIn && !feature.addresses,
             )
           )
             return yield* configError(
@@ -468,28 +488,37 @@ export const createPersistence = <T extends object, R, Database extends object =
 
             context = Context.add(context, key, registration);
           }
-          if (email)
-            context = Context.add(
-              context,
-              EmailAddressPersistence,
-              (yield* makeNativeEmailAddressServices(
-                backend.nativeTables(database),
-                yield* mappings.emails(),
-                proofMapping,
-              )).emailAddressPersistence,
+          if (email) {
+            const mapping = yield* mappings.emails();
+
+            if (emailSignIn)
+              context = Context.add(
+                context,
+                EmailSignInTargets,
+                (yield* makeNativeEmailSignInServices(nativeTables, mapping)).emailSignInTargets,
+              );
+            if (emailAddresses)
+              context = Context.add(
+                context,
+                EmailAddressPersistence,
+                (yield* makeNativeEmailAddressServices(nativeTables, mapping, proofMapping))
+                  .emailAddressPersistence,
+              );
+          }
+
+          if (phone) {
+            const services = yield* makeComposedPhoneServices(
+              backend.nativeTables(database),
+              storage,
+              yield* mappings.proofs(),
+              phones,
+              ProvisioningKey,
             );
 
-          if (phone)
-            context = Context.add(
-              context,
-              PhoneSignInTargets,
-              yield* makeComposedPhoneTargets(
-                backend.nativeTables(database),
-                storage,
-                yield* mappings.proofs(),
-                features.flatMap((feature) => (feature.kind === "phone" ? [feature.moduleId] : [])),
-              ),
-            );
+            context = Context.add(context, PhoneSignInTargets, services.phoneSignInTargets);
+            if (phoneLifecycle)
+              context = Context.add(context, PhonePersistence, services.phonePersistence);
+          }
 
           if (passkeys.length > 0) {
             // This existential definition has lost its strategy types. The checked passkey
@@ -510,7 +539,7 @@ export const createPersistence = <T extends object, R, Database extends object =
               Context.Context<never>,
               PersistenceConfigurationError,
               | PasskeyRequirement<A>
-              | Crypto.Crypto
+              | (SecureRandom.SecureRandom | Digest.Digest)
               | LifecycleHooks
               | SqlClient.SqlClient
               | SqlBatchCommit
@@ -533,11 +562,11 @@ export const createPersistence = <T extends object, R, Database extends object =
         if (!stateful && !stateless) {
           if (auth.sessionMode === "stateless")
             return yield* configError(
-              "Composed stateless sessions support only OAuth strategies; use explicit persistence for other strategies",
+              "Composed stateless sessions support only OAuth and email sign-in strategies; use explicit persistence for other strategies",
             );
 
           return yield* configError(
-            "Composed persistence supports stateful or OAuth-only stateless sessions; state-assisted validity and other session modes require explicit persistence",
+            "Composed persistence supports stateful or OAuth/email sign-in stateless sessions; state-assisted validity and other session modes require explicit persistence",
           );
         }
         const scope = yield* Effect.scope;
@@ -554,7 +583,7 @@ export const createPersistence = <T extends object, R, Database extends object =
         const initialize = yield* Effect.cached(
           Effect.flatMap(Ref.getAndSet(started, true), (alreadyStarted) =>
             alreadyStarted
-              ? Effect.succeed(undefined)
+              ? Effect.void
               : Layer.buildWithScope(services, scope).pipe(
                   Effect.updateContext((current: Context.Context<never>) =>
                     Context.merge(
@@ -740,7 +769,14 @@ export const createPersistence = <T extends object, R, Database extends object =
               Effect.flatMap(registration, (s) => s.register(input, prepare)),
           } satisfies PasswordRegistrationAuthority<unknown>);
         }
-        if (email) {
+        if (emailSignIn) {
+          const targets = service(EmailSignInTargets, () => EmailUnavailable.make({}));
+
+          context = Context.add(context, EmailSignInTargets, {
+            lookup: (input) => Effect.flatMap(targets, (s) => s.lookup(input)),
+          });
+        }
+        if (emailAddresses) {
           const persistence = service(EmailAddressPersistence, () => EmailUnavailable.make({}));
 
           context = Context.add(context, EmailAddressPersistence, {
@@ -760,6 +796,15 @@ export const createPersistence = <T extends object, R, Database extends object =
               lookup: (input) => Effect.flatMap(targets, (s) => s.lookup(input)),
             }),
           );
+          if (phoneLifecycle) {
+            const persistence = service(PhonePersistence, unavailable);
+
+            context = Context.add(context, PhonePersistence, {
+              target: (input) => Effect.flatMap(persistence, (s) => s.target(input)),
+              mutate: (input, prepare) =>
+                Effect.flatMap(persistence, (s) => s.mutate(input, prepare)),
+            });
+          }
         }
         if (passkeys.length > 0) {
           const unavailable = () => PasskeyUnavailable.make({});

@@ -1,34 +1,30 @@
-import type { KdfBusy } from "@yielded/crypto/Errors";
-import { Kdf } from "@yielded/crypto/Kdf";
-import { KdfAdmission } from "@yielded/crypto/KdfAdmission";
-import { Cause, Crypto, Effect, Redacted, Schema, type Scope } from "effect";
+import * as Cause from "effect/Cause";
+import * as Digest from "effect/crypto/Digest";
+import * as Kdf from "effect/crypto/Kdf";
+import * as Mac from "effect/crypto/Mac";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 
-import { equalBytes } from "../internal/equalBytes";
 import {
   defaultPasswordHashingConfig,
   validatePasswordHashingConfig,
   type PasswordHashingConfig,
 } from "./configuration";
+import type { PasswordKdfBusy } from "./errors";
 import {
   PasswordHashingUnavailable,
   PasswordInputInvalid,
-  PasswordKdfBusy,
   PasswordVerifierInvalid,
 } from "./errors";
+import { KdfAdmission } from "./KdfAdmission";
 import { EncodedPasswordHash } from "./models";
 import { parsePasswordHash, phcBase64 } from "./password-encoding";
+import { Scrypt } from "./Scrypt";
 
 const encoder = new TextEncoder();
-
-const isPasswordFailure = <
-  E extends
-    | PasswordHashingUnavailable
-    | PasswordInputInvalid
-    | PasswordKdfBusy
-    | PasswordVerifierInvalid,
->(
-  error: E | KdfBusy,
-): error is E => error._tag !== "CryptoKdfBusy";
 
 const ownBytes = <E, R>(acquire: Effect.Effect<Uint8Array, E, R>) =>
   Effect.acquireRelease(acquire, (bytes) => Effect.sync(() => bytes.fill(0)), {
@@ -44,8 +40,9 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
   return Effect.gen(function* () {
     const config = yield* validatePasswordHashingConfig(snapshot);
     const admission = yield* KdfAdmission;
-    const kdf = yield* Kdf;
-    const crypto = yield* Crypto.Crypto;
+    const kdf = yield* Kdf.Kdf;
+    const scrypt = yield* Scrypt;
+    const crypto = yield* SecureRandom.SecureRandom;
 
     const passwordBytes = Effect.fn("PasswordHashing.passwordBytes")(function* (
       password: Redacted.Redacted<string>,
@@ -71,11 +68,6 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
       return buffer.subarray(0, encoded.written);
     });
 
-    const failure = (error: Effect.Error<ReturnType<typeof kdf.argon2id>>) =>
-      error._tag === "CryptoKdfBusy"
-        ? PasswordKdfBusy.make({})
-        : PasswordHashingUnavailable.make({});
-
     const derive = (
       password: Uint8Array,
       salt: Uint8Array,
@@ -85,17 +77,14 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
       length: number,
     ) =>
       kdf
-        .argon2id({
-          password: Redacted.make(password),
+        .derive(Kdf.argon2id({ memory: memoryKiB, passes, parallelism }), password, {
           salt,
-          memoryKiB,
-          passes,
-          parallelism,
           length,
         })
         .pipe(
-          Effect.map(Redacted.value),
-          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => PasswordHashingUnavailable.make({}))),
+          ),
         );
 
     const deriveScrypt = (
@@ -106,11 +95,20 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
       parallelism: number,
       length: number,
     ) =>
-      kdf
-        .scrypt({ password: Redacted.make(password), salt, cost, blockSize, parallelism, length })
+      scrypt
+        .derive({
+          password,
+          salt,
+          cost,
+          blockSize,
+          parallelism,
+          length,
+          maximumMemoryBytes: config.maximumMemoryKiB * 1024,
+        })
         .pipe(
-          Effect.map(Redacted.value),
-          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => PasswordHashingUnavailable.make({}))),
+          ),
         );
 
     const deriveCurrent = (password: Uint8Array, salt: Uint8Array) =>
@@ -143,28 +141,16 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
       prepare: Effect.Effect<P, E2, Scope.Scope>,
       body: (bytes: Uint8Array, prepared: P) => Effect.Effect<A, E, Scope.Scope>,
     ) =>
-      admission
-        .run(
-          Effect.scoped(
-            Effect.gen(function* () {
-              const prepared = yield* prepare;
-              const bytes = yield* passwordBytes(password);
+      admission.run(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const prepared = yield* prepare;
+            const bytes = yield* passwordBytes(password);
 
-              return yield* body(bytes, prepared);
-            }),
-          ),
-        )
-        .pipe(
-          Effect.catchCause((cause) =>
-            Effect.failCause(
-              Cause.map(cause, (error) =>
-                isPasswordFailure<E | E2 | PasswordHashingUnavailable | PasswordInputInvalid>(error)
-                  ? error
-                  : PasswordKdfBusy.make({}),
-              ),
-            ),
-          ),
-        );
+            return yield* body(bytes, prepared);
+          }),
+        ),
+      );
 
     return {
       hash: (password: Redacted.Redacted<string>) =>
@@ -225,20 +211,27 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
                       parsed.expected.length,
                     )
                   : kdf
-                      .pbkdf2({
-                        password: Redacted.make(bytes),
-                        salt: parsed.salt,
-                        iterations: parsed.iterations,
-                        length: 32,
-                      })
+                      .derive(
+                        Kdf.pbkdf2({ hash: Digest.sha256, iterations: parsed.iterations }),
+                        bytes,
+                        {
+                          salt: parsed.salt,
+                          length: 32,
+                        },
+                      )
                       .pipe(
-                        Effect.map(Redacted.value),
-                        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
+                        // WebCrypto cannot cancel deriveBits. Retain buffers and admission until completion.
+                        Effect.uninterruptible,
+                        Effect.catchCause((cause) =>
+                          Effect.failCause(
+                            Cause.map(cause, () => PasswordHashingUnavailable.make({})),
+                          ),
+                        ),
                       ),
             );
 
             // Fixed-length byte comparison; JavaScript/JIT gives no hard timing guarantee.
-            const matches = equalBytes(output, parsed.expected);
+            const matches = Mac.timingSafeEqual(output, parsed.expected);
 
             const upgrade =
               parsed._tag === "LegacyPbkdf2" ||

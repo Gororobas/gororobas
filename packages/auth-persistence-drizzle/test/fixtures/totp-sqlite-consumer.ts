@@ -18,8 +18,10 @@ import {
 } from "@yielded/auth/Totp";
 import { sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { DateTime, Effect, Redacted } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { requiredTotpConstraints, type TotpMapping } from "../../src/drizzle/totp-model";
 
@@ -108,7 +110,7 @@ export const mapping = {
 } satisfies TotpMapping<typeof subjects, typeof factors, typeof credentials, string>;
 
 export const migrate = Effect.gen(function* () {
-  const client = yield* SqlClient;
+  const client = yield* SqlClient.SqlClient;
 
   yield* client`create table totp_example_subjects (id text primary key, revision text not null, active integer not null, totpEnabled integer not null)`;
   yield* client`create table totp_example_factors (scope text primary key, state text not null, version text not null)`;
@@ -195,7 +197,7 @@ export const useAuthenticator = Effect.gen(function* () {
     change: Parameters<TotpPersistence["Service"]["mutate"]>[0]["action"],
     management?: typeof TotpActionChallenge.Type.action,
   ) {
-    const commandId = yield* randomId(),
+    const commandId = yield* randomId,
       authorization =
         management === undefined ? undefined : yield* action(snapshot, management, commandId);
 
@@ -216,10 +218,10 @@ export const useAuthenticator = Effect.gen(function* () {
 
   const initial = yield* current(),
     now = DateTime.toEpochMillis(yield* DateTime.now),
-    secret = yield* generateSecret(),
-    credentialId = yield* randomId(),
-    revision = yield* randomId(),
-    enrollmentId = yield* randomId();
+    secret = yield* generateSecret,
+    credentialId = yield* randomId,
+    revision = yield* randomId,
+    enrollmentId = yield* randomId;
 
   const envelope = yield* encryptSecret({ moduleId, subjectId, credentialId, revision }, secret);
 
@@ -228,7 +230,7 @@ export const useAuthenticator = Effect.gen(function* () {
     subjectId,
     credentialId,
     revision,
-    version: yield* randomId(),
+    version: yield* randomId,
     secret: null,
     pending: {
       revision,

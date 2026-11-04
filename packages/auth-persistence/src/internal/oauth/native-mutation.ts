@@ -1,8 +1,10 @@
 import type { OAuthAccountRevision, OAuthExternalIdentity } from "@yielded/auth/OAuth";
-import { Cause, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import { SqlError } from "effect/sql/SqlError";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlError from "effect/sql/SqlError";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "../d1-planning";
 import { PersistenceMappingError } from "../mapping-error";
@@ -41,7 +43,7 @@ export const makeOAuthNativeMutation = Effect.fnUntraced(function* (
   const exact = (key: string, value: unknown) =>
     exactSqlText(sql, ownership.column(key), ownership.value(key, value));
 
-  const assert = Effect.fnUntraced(function* (condition: Fragment) {
+  const assert = Effect.fnUntraced(function* (condition: Statement.Fragment) {
     if (batch) yield* appendSqlBatchStatement(sqlBatchAssertion(sql, condition));
     else {
       const rows = yield* sql`select 1 where ${condition}`;
@@ -50,7 +52,7 @@ export const makeOAuthNativeMutation = Effect.fnUntraced(function* (
     }
   });
 
-  const change = Effect.fnUntraced(function* (statement: Fragment, expected = 1) {
+  const change = Effect.fnUntraced(function* (statement: Statement.Fragment, expected = 1) {
     if (batch) {
       yield* appendSqlBatchStatement(sql`${statement}`);
       yield* appendSqlBatchStatement(sqlBatchAssertion(sql, sql`changes() = ${expected}`));
@@ -61,7 +63,7 @@ export const makeOAuthNativeMutation = Effect.fnUntraced(function* (
     return yield* executeSqlChange(sql, statement);
   });
 
-  const finish = (name: string, condition: Fragment) =>
+  const finish = (name: string, condition: Statement.Fragment) =>
     batch
       ? registerSqlBatchPostcondition({ name, statement: sqlBatchAssertion(sql, condition) })
       : registerSqlPostcondition({
@@ -121,18 +123,19 @@ export const makeOAuthNativeMutation = Effect.fnUntraced(function* (
       sql`${ownership.column(o.subjectId)} = ${ownership.value(o.subjectId, nativeId)}`,
     ]);
 
-  const insertUnique = (statement: Fragment) =>
-    change(statement).pipe(
-      Effect.catchCause((cause) =>
-        cause.reasons.length > 0 &&
-        cause.reasons.every(
-          (reason) =>
-            Cause.isFailReason(reason) &&
-            Schema.is(SqlError)(reason.error) &&
-            reason.error.reason._tag === "UniqueViolation",
-        )
-          ? Effect.succeed(0)
-          : Effect.failCause(cause),
+  const insertUnique = (statement: Statement.Fragment) =>
+    change(statement).pipe((effect) =>
+      Effect.catchCauseIf(
+        effect,
+        (cause) =>
+          cause.reasons.length > 0 &&
+          cause.reasons.every(
+            (reason) =>
+              Cause.isFailReason(reason) &&
+              Schema.is(SqlError.SqlError)(reason.error) &&
+              reason.error.reason._tag === "UniqueViolation",
+          ),
+        () => Effect.succeed(0),
       ),
     );
 
@@ -207,12 +210,16 @@ export const makeOAuthNativeMutation = Effect.fnUntraced(function* (
       : undefined;
   });
 
-  const execute = (statement: Fragment) =>
+  const execute = (statement: Statement.Fragment) =>
     batch
       ? appendSqlBatchStatement(sql`${statement}`)
       : executeSqlChange(sql, statement).pipe(Effect.asVoid);
 
-  const releaseOwnership = (identityKey: string, nativeId: unknown, referenced: Fragment) =>
+  const releaseOwnership = (
+    identityKey: string,
+    nativeId: unknown,
+    referenced: Statement.Fragment,
+  ) =>
     execute(
       sql`delete from ${ownership.name} where ${ownerCondition(identityKey, nativeId)} and not (${referenced})`,
     );

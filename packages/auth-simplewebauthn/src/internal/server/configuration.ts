@@ -6,7 +6,8 @@ import {
   snapshotPasskey,
 } from "@yielded/auth/Passkey";
 import { reportAuthFailure } from "@yielded/auth/Persistence";
-import { Cause, Effect } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
 import { parse } from "tldts";
 
 import { SimpleWebAuthnPasskeyProtocolOptions } from "./models";
@@ -102,11 +103,13 @@ export const captureSimpleWebAuthnProfiles = Effect.fn("captureSimpleWebAuthnPro
       return profile;
     });
   },
-  Effect.catchCause((cause) =>
-    Cause.hasDies(cause)
-      ? reportAuthFailure("passkey-protocol", cause).pipe(
+  (effect) =>
+    Effect.catchCauseIf(
+      effect,
+      (cause) => Cause.hasDies(cause),
+      (cause) =>
+        reportAuthFailure("passkey-protocol", cause).pipe(
           Effect.andThen(Effect.fail(PasskeyConfigurationError.make({}))),
-        )
-      : Effect.failCause(cause),
-  ),
+        ),
+    ),
 );

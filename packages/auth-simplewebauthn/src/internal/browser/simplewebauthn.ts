@@ -12,8 +12,16 @@ import {
   snapshotPasskey,
 } from "@yielded/auth/Passkey";
 import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
-import type { Context } from "effect";
-import { Cause, DateTime, Effect, Layer, Predicate, Redacted, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 
 import {
   PasskeyBrowserAuthentication,
@@ -206,7 +214,8 @@ const capabilities = Effect.gen(function* () {
 
 interface Lease {
   readonly container: CredentialsContainer;
-  readonly controller: AbortController;
+  readonly signal: AbortSignal;
+  readonly scope: Scope.Closeable;
   phase: "pre-native" | "native" | "settled";
 }
 // One installed module coordinates its instances. No third-party/global cancel.
@@ -222,29 +231,30 @@ const acquire = Effect.gen(function* () {
 
   if (!env.webAuthn || env.container === undefined)
     return yield* PasskeyBrowserUnsupported.make({});
-  if (leases.has(env.container)) return yield* PasskeyBrowserBusy.make({});
+  const scope = yield* Scope.fork(yield* Effect.scope);
+  const signal = yield* Scope.provide(Effect.abortSignal, scope);
+  const container = env.container;
 
-  const lease: Lease = {
-    container: env.container,
-    controller: new AbortController(),
-    phase: "pre-native",
-  };
+  return yield* Effect.suspend(() => {
+    if (leases.has(container)) return Effect.fail(PasskeyBrowserBusy.make({}));
 
-  leases.set(env.container, lease);
+    const lease: Lease = { container, signal, scope, phase: "pre-native" };
 
-  return lease;
+    leases.set(container, lease);
+
+    return Effect.succeed(lease);
+  });
 });
 
 const release = (lease: Lease) =>
-  Effect.sync(() => {
-    if (lease.phase === "settled") return;
-    // Abort requests cancellation; only raw native settlement releases a started call.
-    try {
-      lease.controller.abort();
-    } finally {
-      if (lease.phase === "pre-native") settle(lease);
-    }
-  });
+  Scope.close(lease.scope, Exit.void).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        // Raw native settlement still owns the guard after cancellation starts.
+        if (lease.phase === "pre-native") settle(lease);
+      }),
+    ),
+  );
 
 const nativeFailure = (value: unknown): Effect.Effect<never, PasskeyBrowserNotCompleted> => {
   try {
@@ -290,7 +300,7 @@ const native = (lease: Lease, request: NativeRequest) =>
     (resume, signal) => {
       if (
         signal.aborted ||
-        lease.controller.signal.aborted ||
+        lease.signal.aborted ||
         lease.phase !== "pre-native" ||
         leases.get(lease.container) !== lease
       ) {
@@ -304,12 +314,12 @@ const native = (lease: Lease, request: NativeRequest) =>
           request._tag === "Create"
             ? lease.container.create({
                 publicKey: request.publicKey,
-                signal: lease.controller.signal,
+                signal: lease.signal,
               })
             : lease.container.get({
                 publicKey: request.publicKey,
                 mediation: request.mediation,
-                signal: lease.controller.signal,
+                signal: lease.signal,
               });
 
         // Both handlers always settle and never throw, including after interruption.
@@ -317,8 +327,7 @@ const native = (lease: Lease, request: NativeRequest) =>
           (value) => {
             try {
               settle(lease);
-              if (!signal.aborted && !lease.controller.signal.aborted)
-                resume(Effect.succeed(value));
+              if (!signal.aborted && !lease.signal.aborted) resume(Effect.succeed(value));
             } catch {
               /* Detached handlers cannot reject. */
             }
@@ -326,7 +335,7 @@ const native = (lease: Lease, request: NativeRequest) =>
           (error) => {
             try {
               settle(lease);
-              if (!signal.aborted && !lease.controller.signal.aborted) resume(nativeFailure(error));
+              if (!signal.aborted && !lease.signal.aborted) resume(nativeFailure(error));
             } catch {
               /* Detached handlers cannot reject. */
             }
@@ -368,7 +377,7 @@ const runCeremony = Effect.fn("passkeyBrowserRunCeremony")(function* <A>(
       }),
     release,
   );
-});
+}, Effect.scoped);
 
 const nativeEnvelope = {
   id: PasskeyProtocolCredentialId,

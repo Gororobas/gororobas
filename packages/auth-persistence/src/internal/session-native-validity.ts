@@ -5,9 +5,12 @@ import {
   StaleAuthentication,
   type SignedSessionValidity,
 } from "@yielded/auth/Sessions";
-import { Cause, DateTime, Effect, Option } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import { PersistenceMappingError } from "./mapping-error";
@@ -44,12 +47,12 @@ export const makeNativeSignedSessionValidityServices = Effect.fnUntraced(functio
 ): Effect.fn.Return<
   { readonly signedSessionValidity: SignedSessionValidity },
   never,
-  SqlClient | LifecycleHooks | SqlBatchCommit
+  SqlClient.SqlClient | LifecycleHooks | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
   const { futureToleranceMillis } = yield* AuthenticationClock;
 
-  const sql = (yield* SqlClient).withoutTransforms(),
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms(),
     executor = yield* makeSqlCommitExecutor(sessionUnavailable);
 
   const external = yield* Effect.serviceOption(CurrentSqlCommit);
@@ -80,7 +83,7 @@ export const makeNativeSignedSessionValidityServices = Effect.fnUntraced(functio
           .operationBatch(normalizeSessionOperation(work))
           .pipe(Effect.provideService(SqlBatchCommit, batch));
 
-  const stage = Effect.fnUntraced(function* (statement: Fragment, expected?: number) {
+  const stage = Effect.fnUntraced(function* (statement: Statement.Fragment, expected?: number) {
     if (batch !== undefined) {
       yield* appendSqlBatchStatement(sql`${statement}`);
       if (expected !== undefined)
@@ -92,7 +95,7 @@ export const makeNativeSignedSessionValidityServices = Effect.fnUntraced(functio
     return yield* executeSqlChange(sql, statement);
   });
 
-  const final = Effect.fnUntraced(function* (name: string, condition: Fragment) {
+  const final = Effect.fnUntraced(function* (name: string, condition: Statement.Fragment) {
     if (batch !== undefined)
       yield* registerSqlBatchPostcondition({ name, statement: sqlBatchAssertion(sql, condition) });
     else if (Option.isSome(external))

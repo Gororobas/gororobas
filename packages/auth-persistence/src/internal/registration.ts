@@ -2,8 +2,14 @@ import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { PasswordUnavailable } from "@yielded/auth/Password";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { type Context, Crypto, Effect, Schema, Option, Cause } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Cause from "effect/Cause";
+import type * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { PersistenceConfigurationError, type SubjectProvisioning } from "./configuration";
 import { randomId } from "./crypto";
@@ -29,10 +35,15 @@ export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
 ): Effect.fn.Return<
   PasswordRegistrationAuthority<unknown>,
   PersistenceConfigurationError,
-  LifecycleHooks | SqlClient | Crypto.Crypto | SqlBatchCommit | R
+  | LifecycleHooks
+  | SqlClient.SqlClient
+  | (SecureRandom.SecureRandom | Digest.Digest)
+  | SqlBatchCommit
+  | R
 > {
-  const sql = (yield* SqlClient).withoutTransforms();
-  const crypto = yield* Crypto.Crypto;
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
+  const crypto = yield* SecureRandom.SecureRandom;
+  const digests = yield* Digest.Digest;
   const executor = yield* makeSqlCommitExecutor(() => PasswordUnavailable.make({}));
   const parent = yield* Effect.serviceOption(CurrentSqlCommit);
   const batch = yield* SqlBatchCommit;
@@ -64,13 +75,14 @@ export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
               reportPersistenceFailure(
                 work,
                 (error) =>
-                  error instanceof PasswordIdentifierTaken || Schema.is(PasswordUnavailable)(error),
+                  Schema.is(PasswordIdentifierTaken)(error) ||
+                  Schema.is(PasswordUnavailable)(error),
                 { markReported: true },
               ).pipe(
                 Effect.catchCause((cause) =>
                   Effect.failCause(
                     Cause.map(cause, (error) =>
-                      error instanceof PasswordIdentifierTaken
+                      Schema.is(PasswordIdentifierTaken)(error)
                         ? error
                         : PasswordUnavailable.make({}),
                     ),
@@ -79,15 +91,18 @@ export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
               ),
             )
             .pipe(
-              Effect.catchCause((cause) =>
-                cause.reasons.length > 0 &&
-                cause.reasons.every(
-                  (reason) =>
-                    Cause.isFailReason(reason) && reason.error instanceof PasswordIdentifierTaken,
-                )
-                  ? executor.run(suppressed, "statement")
-                  : Effect.failCause(cause),
-              ),
+              (effect) =>
+                Effect.catchCauseIf(
+                  effect,
+                  (cause) =>
+                    cause.reasons.length > 0 &&
+                    cause.reasons.every(
+                      (reason) =>
+                        Cause.isFailReason(reason) &&
+                        Schema.is(PasswordIdentifierTaken)(reason.error),
+                    ),
+                  () => executor.run(suppressed, "statement"),
+                ),
               Effect.catchCause((cause) =>
                 Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
               ),
@@ -107,7 +122,7 @@ export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
                     registration: input.registration,
                   };
 
-                  const row = yield* Effect.gen(function* () {
+                  const row = yield* (function* () {
                     if (typeof createSubject !== "function")
                       return yield* createSubject
                         .values(provisioningInput)
@@ -121,7 +136,7 @@ export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
                     if (rows.length !== 1) return yield* PasswordUnavailable.make({});
 
                     return subject.decode(rows[0]!, "registration_subject_");
-                  });
+                  })();
 
                   if (!s.isActiveStatus(row[s.status])) return yield* PasswordUnavailable.make({});
                   const subjectId = yield* mapping.subjectId.toSubject(row[s.id]);
@@ -149,7 +164,10 @@ export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
                   });
 
                   return yield* store.prepare({ _tag: "Created", subjectId }, project);
-                }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+                }).pipe(
+                  Effect.provideService(SecureRandom.SecureRandom, crypto),
+                  Effect.provideService(Digest.Digest, digests),
+                ),
                 store.prepare({ _tag: "Suppressed" }, project),
               ),
         ),

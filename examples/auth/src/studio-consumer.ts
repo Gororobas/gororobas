@@ -388,8 +388,8 @@ export const studioStorage = Layer.unwrap(
       ),
       Layer.succeed(Totp.TotpPersistence, totp.totpPersistence),
       Layer.succeed(StudioAuth.strategies.passkey.SessionClaims, {
-        resolve: ({ subjectId }) =>
-          Effect.gen(function* () {
+        resolve: Effect.fnUntraced(
+          function* ({ subjectId }) {
             const [member] = yield* db
               .select()
               .from(Studio.subject)
@@ -402,7 +402,9 @@ export const studioStorage = Layer.unwrap(
               organization: member.organization,
               permissions: ["design:edit"] as const,
             };
-          }).pipe(Effect.mapError(() => Passkey.PasskeyUnavailable.make({}))),
+          },
+          Effect.mapError(() => Passkey.PasskeyUnavailable.make({})),
+        ),
       }),
     );
   }),
@@ -417,19 +419,19 @@ export const makeStudioLive = (binding: Operations.RequestBindingConfiguration) 
       const hookLayer = Hooks.composeHooks(hook).pipe(
         Layer.provide(
           hook.layer({
-            after: (event) =>
-              event.snapshot.action === "registration"
-                ? db
-                    .insert(registrationEvents)
-                    .values({
-                      id: event.id,
-                      snapshot: Schema.encodeSync(Schema.fromJsonString(Hooks.LifecycleSnapshot))(
-                        event.snapshot,
-                      ),
-                    })
-                    .onConflictDoNothing()
-                    .pipe(Effect.asVoid)
-                : Effect.void,
+            after: Effect.fnUntraced(function* (event) {
+              if (event.snapshot.action !== "registration") return;
+
+              yield* db
+                .insert(registrationEvents)
+                .values({
+                  id: event.id,
+                  snapshot: yield* Schema.encodeEffect(
+                    Schema.fromJsonString(Hooks.LifecycleSnapshot),
+                  )(event.snapshot).pipe(Effect.orDie),
+                })
+                .onConflictDoNothing();
+            }),
           }),
         ),
       );

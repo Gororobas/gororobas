@@ -5,17 +5,15 @@ import { OperationHttpError } from "@yielded/auth/OperationHttp";
 import type { NativeCredentials } from "@yielded/auth/OperationHttpClient";
 import type { CredentialSlot } from "@yielded/auth/Operations";
 import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
-import {
-  Cause,
-  DateTime,
-  Effect,
-  FileSystem,
-  Layer,
-  Path,
-  type Redacted,
-  Schema,
-  Semaphore,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
+import type * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { app, safeStorage } from "electron";
 
 const recordSchema = BrowserLogin.VaultRecord;
@@ -91,17 +89,16 @@ export const layerVault = (options: { readonly path: string }) =>
       const readRecord = Effect.gen(function* () {
         yield* checkEncryption;
 
-        const stat = yield* fs
-          .stat(destination)
-          .pipe(
-            Effect.catchCause((cause) =>
+        const stat = yield* fs.stat(destination).pipe((effect) =>
+          Effect.catchCauseIf(
+            effect,
+            (cause) =>
               cause.reasons.every(
                 (reason) => Cause.isFailReason(reason) && reason.error.reason._tag === "NotFound",
-              )
-                ? Effect.void
-                : Effect.failCause(cause),
-            ),
-          );
+              ),
+            () => Effect.void,
+          ),
+        );
 
         if (stat === undefined) return { credentials: {} } satisfies typeof recordSchema.Type;
         if (stat.type !== "File" || stat.size > 1048576) return yield* failure();

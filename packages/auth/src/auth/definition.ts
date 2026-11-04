@@ -1,4 +1,6 @@
-import type { Effect, HKT, Schema } from "effect";
+import type * as Effect from "effect/Effect";
+import type * as HKT from "effect/HKT";
+import type * as Schema from "effect/Schema";
 
 import type { makeSessionModule } from "../sessions/module";
 

@@ -6,7 +6,7 @@ import type {
   PasswordRegistrationDecision,
   PreparePasswordCommit,
 } from "@yielded/auth/Password";
-import type { Effect } from "effect";
+import type * as Effect from "effect/Effect";
 
 export interface PasswordRegistrationAuthority<Registration> {
   readonly register: <A>(

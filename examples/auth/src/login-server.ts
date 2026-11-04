@@ -68,19 +68,18 @@ export const makeServer = (config: {
       },
       // Registration UI belongs to the app. Only public correlation enters this
       // URL; the registration credential and request binder stay in HttpOnly cookies.
-      respond: (value, { flowId }) =>
-        Effect.gen(function* () {
-          const result = yield* Schema.decodeUnknownEffect(
-            LoginApi.actions.completeSignIn.route.operation.rpc.successSchema,
-          )(value).pipe(Effect.orDie);
+      respond: Effect.fnUntraced(function* (value, { flowId }) {
+        const result = yield* Schema.decodeUnknownEffect(
+          LoginApi.actions.completeSignIn.route.operation.rpc.successSchema,
+        )(value).pipe(Effect.orDie);
 
-          const target =
-            "_tag" in result && result._tag === "RegistrationRequired"
-              ? `/register?${new URLSearchParams({ flowId, reference: result.reference })}`
-              : result.returnTarget;
+        const target =
+          "_tag" in result && result._tag === "RegistrationRequired"
+            ? `/register?${new URLSearchParams({ flowId, reference: result.reference })}`
+            : result.returnTarget;
 
-          return new Response(null, { status: 303, headers: { location: target } });
-        }),
+        return new Response(null, { status: 303, headers: { location: target } });
+      }),
     },
   });
 
@@ -89,7 +88,7 @@ export const makeServer = (config: {
     "/account",
     Effect.gen(function* () {
       const auth = yield* AppAuth;
-      const session = yield* auth.requireSession();
+      const session = yield* auth.requireSession;
 
       return yield* HttpServerResponse.json({
         subjectId: session.subjectId,

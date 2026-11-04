@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { it } from "@effect/vitest";
 import { AppleUserProfile } from "@yielded/auth/Apple";
 import {
@@ -7,13 +8,16 @@ import {
 } from "@yielded/auth/OAuth";
 import * as OpenIdConnect from "@yielded/auth/OpenIdConnect";
 import { RequestBindingFlowId } from "@yielded/auth/Operations";
-import { layerWebCrypto } from "@yielded/auth/WebCrypto";
-import * as Admission from "@yielded/crypto/KdfAdmission";
-import * as Portable from "@yielded/crypto/Portable";
-import { Jwk, Jwt } from "@yielded/jose";
-import { Context, DateTime, Effect, Layer, Redacted, Schema } from "effect";
-import { FetchHttpClient } from "effect/http";
-import { TestClock } from "effect/testing";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Jwk from "effect/jose/Jwk";
+import * as Jwt from "effect/jose/Jwt";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { describe, expect } from "vite-plus/test";
 
 import { discoveryProfile } from "../../src/oauth/providers/shared/discovery";
@@ -22,18 +26,14 @@ const seconds = 1_700_000_000;
 
 const json = (body: unknown) => Response.json(body);
 
-const platform = Layer.mergeAll(
-  FetchHttpClient.layer,
-  layerWebCrypto,
-  Portable.layer(globalThis.crypto.subtle).pipe(Layer.provide(Admission.layer())),
-);
+const platform = Layer.mergeAll(FetchHttpClient.layer, NodeCrypto.layer);
 
 const IdToken = Schema.Struct({
   iss: Schema.String,
   sub: Schema.String,
   aud: Schema.String,
-  iat: Schema.Number,
-  exp: Schema.Number,
+  iat: Schema.Finite,
+  exp: Schema.Finite,
   nonce: Schema.String,
   email: Schema.String,
 });
@@ -162,7 +162,7 @@ describe("OIDC callback user field", () => {
             email: "ada@example.com",
           },
           signing,
-          { alg: "ES256", kid: "key" },
+          { kid: "key" },
         ).pipe(Effect.map(Redacted.value));
 
       const workspace = yield* protocol.prepareAuthorization({
@@ -283,7 +283,7 @@ describe("Apple string verification flags", () => {
             email_verified: emailVerified,
           },
           signing,
-          { alg: "ES256", kid: "key" },
+          { kid: "key" },
         ).pipe(Effect.map(Redacted.value));
 
       idToken = yield* sign("true");

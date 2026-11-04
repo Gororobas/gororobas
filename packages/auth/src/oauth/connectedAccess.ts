@@ -1,16 +1,14 @@
-import {
-  Result,
-  Cause,
-  Context,
-  Crypto,
-  DateTime,
-  Effect,
-  Exit,
-  Layer,
-  Redacted,
-  Schema,
-} from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { markAuthFailureReported, reportAuthFailure } from "../internal/diagnostics";
@@ -49,13 +47,14 @@ export type OAuthConnectedAccessFailure = typeof OAuthConnectedAccessFailure.Typ
  * owned defects once while retaining the complete private Cause for callers. */
 export const reportConnectedFailure = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.uninterruptibleMask((restore) =>
-    restore(effect).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasDies(cause)
-          ? reportAuthFailure("oauth-connected", cause).pipe(
-              Effect.andThen(Effect.failCause(markAuthFailureReported(cause))),
-            )
-          : Effect.failCause(cause),
+    restore(effect).pipe((effect) =>
+      Effect.catchCauseIf(
+        effect,
+        (cause) => Cause.hasDies(cause),
+        (cause) =>
+          reportAuthFailure("oauth-connected", cause).pipe(
+            Effect.andThen(Effect.failCause(markAuthFailureReported(cause))),
+          ),
       ),
     ),
   );
@@ -283,7 +282,7 @@ export const makeOAuthConnectedAccess = <const Id extends string>(
 
       const { refreshGrant } = yield* OAuthConnectedProtocol;
       const { seal, open } = yield* OAuthConnectedTokenProtector;
-      const { randomBytes } = yield* Crypto.Crypto;
+      const { randomBytes } = yield* SecureRandom.SecureRandom;
 
       const random = Effect.fn("OAuthConnectedAccess.random")(function* () {
         const bytes = yield* randomBytes(32).pipe(

@@ -1,4 +1,8 @@
-import { Context, DateTime, Effect, Redacted, Schema } from "effect";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { ProofInstant, ProofPurpose } from "../proofs/models";
 import { Locale } from "../Schema";

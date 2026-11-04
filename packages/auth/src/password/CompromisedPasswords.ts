@@ -1,4 +1,7 @@
-import { Context, type Effect, Schema, type Redacted } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import type * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import type { PasswordCheckUnavailable } from "./errors";
 

@@ -3,7 +3,13 @@ import { OperationHttpError } from "@yielded/auth/OperationHttp";
 import type { NativeCredentials } from "@yielded/auth/OperationHttpClient";
 import type { CredentialSlot } from "@yielded/auth/Operations";
 import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
-import { Cause, DateTime, Effect, Layer, type Redacted, Schema, Semaphore } from "effect";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
@@ -130,8 +136,9 @@ const acquireBrowser = Effect.sync(() => {
 
   return lease;
 }).pipe(
-  Effect.flatMap((lease) =>
-    lease === undefined ? Effect.fail(failure("busy")) : Effect.succeed(lease),
+  Effect.filterOrFail(
+    (lease) => !(lease === undefined),
+    () => failure("busy"),
   ),
 );
 

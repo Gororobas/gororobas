@@ -64,7 +64,10 @@ export const RegisterInput = Schema.Struct({
 export const RegisterResult = Schema.TaggedStruct("RegistrationAccepted", {});
 
 type Completion =
-  | { readonly _tag: "Authenticated"; readonly session: { readonly subjectId: string } }
+  | {
+      readonly _tag: "Authenticated";
+      readonly session: { readonly subjectId: AuthSchema.SubjectId };
+    }
   | { readonly _tag: "PendingAuthentication" };
 
 // Reuse the actions with the caller's session schemas, including any additional claims.
@@ -92,6 +95,8 @@ export const accountActions = <
       subject: {
         fromSuccess: (result) =>
           result._tag === "Authenticated" ? result.session.subjectId : undefined,
+        sessionFromSuccess: (result) =>
+          result._tag === "Authenticated" ? result.session : undefined,
       },
     },
   ),

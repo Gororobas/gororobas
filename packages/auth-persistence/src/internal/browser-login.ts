@@ -1,6 +1,8 @@
 import { Persistence, Record, Unavailable } from "@yielded/auth/BrowserLogin";
-import { Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { makeNativeSqlTables } from "./native-sql-table";
 import { exactSqlText } from "./sql-change";

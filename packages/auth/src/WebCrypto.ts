@@ -1,16 +1,16 @@
-import { Result } from "effect";
-import { Base64 } from "effect/encoding";
+import * as Aead from "effect/crypto/Aead";
+import * as Digest from "effect/crypto/Digest";
+import * as Mac from "effect/crypto/Mac";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Signature from "effect/crypto/Signature";
+import * as Layer from "effect/Layer";
 
-/** Web platform Layers live in the crypto package; these exports preserve Auth composition. */
-export { layerCryptoWeb, layerWebCrypto } from "@yielded/crypto/WebCrypto";
-
-/** Decode a PEM body's base64 payload into its DER bytes. */
-export const decodePem = (pem: string): Uint8Array | undefined =>
-  Result.getOrUndefined(
-    Base64.decode(
-      pem
-        .replace(/\\r\\n|\\n/g, "\n")
-        .replace(/-----[A-Z ]+-----/g, "")
-        .replace(/\s/g, ""),
-    ),
-  );
+/** Portable crypto: secure randomness, digests, HMAC, authenticated encryption,
+ * and signatures. Applications supply keys, password hashing, and HTTP separately.
+ */
+export const layer = Layer.mergeAll(
+  Digest.layerWebCrypto,
+  Mac.layerWebCrypto,
+  Aead.layerWebCrypto,
+  Signature.layerWebCrypto,
+).pipe(Layer.provideMerge(SecureRandom.layerWebCrypto));

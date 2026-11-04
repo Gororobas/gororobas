@@ -1,4 +1,5 @@
-import { DateTime, Effect } from "effect";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
 
 import { AuthenticationClock } from "../operations/clock";
 import type { AuthInvocation } from "../operations/context";

@@ -1,7 +1,7 @@
 import type { PhoneLifecyclePolicy, PhoneNumber } from "@yielded/auth/PhoneOtp";
 import type { SubjectId } from "@yielded/auth/Schema";
 import type { AuthenticationRequirement } from "@yielded/auth/Sessions";
-import type { Effect } from "effect";
+import type * as Effect from "effect/Effect";
 
 import type { AnyTableModel, TableModel as Table, SqlExpression } from "../table-model";
 import type { PersistenceMappingError } from "./common";

@@ -1,10 +1,12 @@
-import { NodeCrypto } from "@effect/platform-node";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { it } from "@effect/vitest";
 import { Auth, PhoneOtp, Proofs, Sessions } from "@yielded/auth";
 import { SubjectId, TokenDigest } from "@yielded/auth/Schema";
-import { Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
 
 import { AuthPersistence } from "../src/index";

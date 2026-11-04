@@ -106,7 +106,7 @@ once to the application Layer. It includes password hashing and its runtime depe
 Storage, claims, account creation, screening, and change authorization remain application-owned.
 
 For manual composition on other runtimes, supply `Password.PasswordHashing.layer()`
-with a crypto backend, bounded KDF admission, and Effect Crypto for entropy:
+with a crypto backend, bounded KDF admission, and Effect `SecureRandom` for entropy:
 
 ```ts title="apps/server/password-live.ts"
 import { Layer } from "effect";
@@ -144,16 +144,17 @@ For sign-in-only `Password.make()`, supply hashing, password persistence, and cl
 alongside those shared services. Keep normalization stable for stored credentials.
 
 [`CryptoLive`](../reference/crypto#use-with-auth) selects your crypto backend.
-Share one `KdfAdmission.layer()` from `@yielded/crypto/KdfAdmission` across backends
-and password hashers in each runtime. Size it for the host's memory and CPU budget;
+Share one `Password.KdfAdmission.layer()` across password hashers in each runtime. Size it for the host's memory and CPU budget;
 queue exhaustion or an expired wait returns `PasswordKdfBusy`. See
-[KDF resource limits](../reference/crypto#backends-and-resource-limits) for options.
+[KDF resource limits](../reference/crypto#password-resource-limits) for options.
 
 `PasswordHashing.layer()` and `WorkerdServices.layer` default to Argon2id.
 Workers requires `nodejs_compat`; Wrangler includes the bundled Wasm without a
 compiler or separate asset hosting.
 
-To select native scrypt on Node, Bun, or Workers:
+To select native scrypt, include `PasswordScrypt.layer` from
+`@yielded/auth/PasswordScrypt` in `CryptoLive` on Node or Bun.
+`WorkerdServices` includes it for Workers:
 
 ```ts
 Password.PasswordHashing.layer(Password.defaultScryptPasswordHashingConfig).pipe(

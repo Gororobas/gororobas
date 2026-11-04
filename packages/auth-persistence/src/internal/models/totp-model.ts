@@ -1,7 +1,7 @@
 import type { SubjectId } from "@yielded/auth/Schema";
 import type { AuthenticationRequirement } from "@yielded/auth/Sessions";
 import type { TotpPolicy } from "@yielded/auth/Totp";
-import type { Effect } from "effect";
+import type * as Effect from "effect/Effect";
 
 import type { PersistenceMappingError } from "../mapping-error";
 import type { TableModel, SqlExpression } from "../table-model";

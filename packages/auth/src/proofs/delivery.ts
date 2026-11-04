@@ -1,4 +1,9 @@
-import { Cause, Effect, Layer, type Context, type Redacted, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import type * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import type { LoginIdentifier } from "../identity/models";
 import { reportAuthFailure } from "../internal/diagnostics";

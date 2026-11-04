@@ -1,5 +1,5 @@
 import * as M from "@yielded/auth/Passkey";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 import type { PasskeyCeremonyMapping } from "./models/passkey-model";
 import type { NativeSqlTables } from "./native-sql-table";

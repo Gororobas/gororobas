@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import type { SessionCapabilities } from "./models";
 import type { SessionPolicy } from "./policy";

@@ -2,8 +2,8 @@ import { Auth, Sessions } from "@yielded/auth";
 import type { ProofKeys } from "@yielded/auth/Proofs";
 import type { SmsDelivery } from "@yielded/auth/SmsDelivery";
 import { Email, OAuth, Passkey, Password, PhoneOtp, Totp } from "@yielded/auth/strategies";
-import type { Layer } from "effect";
-import { Schema } from "effect";
+import type * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import { expectTypeOf } from "vite-plus/test";
 
 // Compile-only proof of requirements inferred through Auth.make and its strategies.

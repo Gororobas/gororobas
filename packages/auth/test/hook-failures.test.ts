@@ -1,7 +1,11 @@
 import { it } from "@effect/vitest";
 import { Hooks } from "@yielded/auth";
-import { Cause, Effect, Exit, Layer, Logger } from "effect";
-import { ConnectionError, SqlError } from "effect/sql/SqlError";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as SqlError from "effect/sql/SqlError";
 import { expect } from "vite-plus/test";
 
 const event = Hooks.lifecycleEvent({
@@ -17,8 +21,10 @@ it.effect("reports the original hook failure once using the invocation logger", 
     const hook = Hooks.hookContribution("test/failure");
     const captured: Cause.Cause<unknown>[] = [];
 
-    const failure = SqlError.make({
-      reason: ConnectionError.make({ cause: { code: "ECONNRESET", message: "private-hook" } }),
+    const failure = SqlError.SqlError.make({
+      reason: SqlError.ConnectionError.make({
+        cause: { code: "ECONNRESET", message: "private-hook" },
+      }),
     });
 
     const services = yield* Layer.build(

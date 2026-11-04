@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { SubjectId, TokenDigest } from "../Schema";
 import { SessionInvalidationWindow } from "../sessions/invalidation";

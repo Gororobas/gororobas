@@ -1,4 +1,8 @@
-import { type Effect, Predicate, Redacted, Result, Schema } from "effect";
+import type * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
 import { OperationOutputError } from "./errors";
 

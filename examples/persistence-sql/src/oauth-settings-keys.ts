@@ -1,5 +1,6 @@
 import { Auth, OAuth, Sessions } from "@yielded/auth";
-import { Config, Crypto, Effect, FileSystem, Layer, Path, Redacted, Schema } from "effect";
+import { Config, Effect, FileSystem, Layer, Path, Redacted, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { Base64Url } from "effect/encoding";
 
 const material = Schema.RedactedFromValue(
@@ -32,7 +33,7 @@ export const SettingsKeysLive = Layer.unwrap(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
 
     const directory = yield* Config.String("AUTH_DATA_DIR").pipe(
       Config.withDefault(new URL("../.data/", import.meta.url).pathname),

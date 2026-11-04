@@ -35,7 +35,7 @@ allows a recovery code to finish a pending sign-in; the default is
 
 Your `AuthenticationAuthority` decides which accounts require two factors.
 Provide `Totp.TotpCryptography.layer` with application-owned `TotpSecretKeys`,
-Effect `Crypto`, and the `Aead` and `Hmac` services from `@yielded/crypto`.
+Effect `SecureRandom` and `Digest`, and the `Aead` and `Mac` services from `effect/crypto`.
 The [shared crypto Layer](../reference/crypto#use-with-auth) supplies those primitives;
 merge your key Layer with it when providing `TotpCryptography`. The workflow also needs
 `TotpPersistence`, `TotpActionEvidence`, and stateful sessions with

@@ -1,7 +1,9 @@
 import { CurrentCommitJournal, type LifecycleHooks } from "@yielded/auth/Hooks";
 import * as M from "@yielded/auth/OAuth";
-import { Crypto, Effect } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import type { NativeSqlTables } from "../native-sql-table";
 import { makeSqlCommitExecutor, registerSqlCommitReceipt, SqlBatchCommit } from "../sql-commit";
@@ -9,21 +11,20 @@ import { makeOAuthNativeFlow } from "./native-flow";
 import { makeOAuthNativeState, type OAuthNativeReadMapping } from "./native-state";
 import { invalidState, unavailable } from "./state";
 
-export const prepareOAuthNative = <Value, A>(
+export const prepareOAuthNative = Effect.fnUntraced(function* <Value, A>(
   value: Value,
   prepare: M.PrepareOAuthCommit<Value, A>,
-) =>
-  Effect.gen(function* () {
-    const journal = yield* CurrentCommitJournal;
+) {
+  const journal = yield* CurrentCommitJournal;
 
-    const receipt = prepare(value, journal);
+  const receipt = prepare(value, journal);
 
-    if (!(receipt?._tag === "PreparedCommit" && Effect.isEffect(receipt.read)))
-      return yield* invalidState();
-    yield* registerSqlCommitReceipt(receipt);
+  if (!(receipt?._tag === "PreparedCommit" && Effect.isEffect(receipt.read)))
+    return yield* invalidState();
+  yield* registerSqlCommitReceipt(receipt);
 
-    return receipt;
-  });
+  return receipt;
+});
 
 /** Both physical adapters bind the same native SQL operations. */
 export const makeNativeOAuthSignInServices = Effect.fnUntraced(function* (
@@ -33,10 +34,11 @@ export const makeNativeOAuthSignInServices = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   { readonly oauthSignInPersistence: M.OAuthSignInPersistence["Service"] },
   M.OAuthUnavailable,
-  SqlClient | LifecycleHooks | Crypto.Crypto
+  SqlClient.SqlClient | LifecycleHooks | (SecureRandom.SecureRandom | Digest.Digest)
 > {
   const executor = yield* makeSqlCommitExecutor(unavailable);
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
+  const digests = yield* Digest.Digest;
   const state = yield* makeOAuthNativeState(tables, mapping);
 
   const flow = yield* makeOAuthNativeFlow(
@@ -92,7 +94,10 @@ export const makeNativeOAuthSignInServices = Effect.fnUntraced(function* (
             input.moduleId,
             M.snapshotOAuthSync(M.OAuthExternalIdentity, input.identity),
           ),
-        ).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+        ).pipe(
+          Effect.provideService(SecureRandom.SecureRandom, crypto),
+          Effect.provideService(Digest.Digest, digests),
+        ),
       ),
     cleanup: (original, prepare) =>
       run(

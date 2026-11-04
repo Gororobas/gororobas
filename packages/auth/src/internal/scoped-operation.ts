@@ -1,4 +1,7 @@
-import { Cause, Effect, Exit, Fiber } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 
 /** Capture the factory Scope once and join each operation before returning to its caller.
  * Caller cancellation must inspect the joined Exit as well as interrupt it. */

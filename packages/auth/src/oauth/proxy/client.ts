@@ -1,5 +1,15 @@
-import { Cause, type Crypto, Effect, Redacted, Result, Schema, type Scope, Tracer } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import * as Cause from "effect/Cause";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
+import * as Tracer from "effect/Tracer";
 
 import { makeScopedOperation } from "../../internal/scoped-operation";
 import { timeoutOrElseWithCause } from "../../internal/timeout";
@@ -38,7 +48,10 @@ export type Options = typeof Options.Type;
  */
 export const provider = (
   options: Options,
-): ProviderDefinition<ConfigurationError, Crypto.Crypto | HttpClient.HttpClient | Scope.Scope> => {
+): ProviderDefinition<
+  ConfigurationError,
+  (SecureRandom.SecureRandom | Digest.Digest) | HttpClient.HttpClient | Scope.Scope
+> => {
   const saved = snapshotOptions
     .result(options)
     .pipe(Result.mapError(() => ConfigurationError.make({})));

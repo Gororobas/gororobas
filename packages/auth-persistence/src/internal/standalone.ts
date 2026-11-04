@@ -1,4 +1,5 @@
-import { type Context, Effect } from "effect";
+import type * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import type * as SqlClient from "effect/sql/SqlClient";
 
 /** Standalone operations must observe their own durable commit. */

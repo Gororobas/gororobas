@@ -14,7 +14,9 @@ import type { SubjectId } from "@yielded/auth/Schema";
 import { and, eq } from "drizzle-orm";
 import type { EffectPgDatabase as PgDatabase } from "drizzle-orm/effect-postgres";
 import { type AnyPgTable, type PgColumn } from "drizzle-orm/pg-core";
-import { Cause, Effect, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import {
   column,
@@ -129,26 +131,24 @@ export const makePgSubjectProvisioningServices = Effect.fnUntraced(function* <
       }),
     );
 
-    const nativeId = yield* attempt.pipe(
-      Effect.catchCause(
-        (
-          cause,
-        ): Effect.Effect<
-          NativeId,
-          | Effect.Error<typeof attempt>
-          | Effect.Error<ReturnType<typeof findReceipt>>
-          | IdentityConflict
-        > => {
-          if (
+    const nativeId = yield* attempt.pipe((effect) =>
+      Effect.catchCauseIf(
+        effect,
+        (cause) =>
+          !(
             cause.reasons.length === 0 ||
             !cause.reasons.every(
               (reason) =>
                 Cause.isFailReason(reason) &&
                 isMappedConstraintConflict(mapping.isConstraintConflict, reason.error),
             )
-          )
-            return Effect.failCause(cause);
-
+          ),
+        (): Effect.Effect<
+          NativeId,
+          | Effect.Error<typeof attempt>
+          | Effect.Error<ReturnType<typeof findReceipt>>
+          | IdentityConflict
+        > => {
           return findReceipt(input.requestId).pipe(
             Effect.flatMap((receipt) => {
               if (receipt !== undefined && receipt.fingerprint === fingerprint) {
@@ -248,38 +248,40 @@ export const makePgExternalIdentityServices = Effect.fnUntraced(function* <
           return { _tag: "bound" } as const;
         }),
       )
-      .pipe(
-        Effect.catchCause((cause) => {
-          if (
-            cause.reasons.length === 0 ||
-            !cause.reasons.every(
-              (reason) =>
-                Cause.isFailReason(reason) &&
-                isMappedConstraintConflict(mapping.isConstraintConflict, reason.error),
-            )
-          )
-            return Effect.failCause(cause);
-
-          return db
-            .select({ subjectId: externalSubjectIdColumn })
-            .from(externalTable as any)
-            .where(
-              and(
-                eq(externalProviderColumn, identity.provider),
-                eq(externalIssuerColumn, identity.issuer),
-                eq(externalSubjectColumn, identity.subject),
-              ),
-            )
-            .limit(1)
-            .pipe(
-              Effect.map((rows) =>
-                rows[0] !== undefined &&
-                mapping.subjectId.equals(rows[0].subjectId as NativeId, nativeId)
-                  ? ({ _tag: "bound" } as const)
-                  : ({ _tag: "conflict" } as const),
-              ),
-            );
-        }),
+      .pipe((effect) =>
+        Effect.catchCauseIf(
+          effect,
+          (cause) =>
+            !(
+              cause.reasons.length === 0 ||
+              !cause.reasons.every(
+                (reason) =>
+                  Cause.isFailReason(reason) &&
+                  isMappedConstraintConflict(mapping.isConstraintConflict, reason.error),
+              )
+            ),
+          () => {
+            return db
+              .select({ subjectId: externalSubjectIdColumn })
+              .from(externalTable as any)
+              .where(
+                and(
+                  eq(externalProviderColumn, identity.provider),
+                  eq(externalIssuerColumn, identity.issuer),
+                  eq(externalSubjectColumn, identity.subject),
+                ),
+              )
+              .limit(1)
+              .pipe(
+                Effect.map((rows) =>
+                  rows[0] !== undefined &&
+                  mapping.subjectId.equals(rows[0].subjectId as NativeId, nativeId)
+                    ? ({ _tag: "bound" } as const)
+                    : ({ _tag: "conflict" } as const),
+                ),
+              );
+          },
+        ),
       );
 
     if (decision._tag === "conflict") return yield* IdentityConflict.make();

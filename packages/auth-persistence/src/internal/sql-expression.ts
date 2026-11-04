@@ -1,4 +1,4 @@
-import type { SqlClient } from "effect/sql/SqlClient";
+import type * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
 
 import { PersistenceMappingError } from "./mapping-error";
@@ -7,10 +7,10 @@ import { Column, identifier, Table } from "./sql-table";
 /** Pure mapped SQL. Compilation binds values through the executing client's
  * dialect; expressions neither acquire a client nor execute a query. */
 export class SqlExpression {
-  constructor(readonly compile: (client: SqlClient) => Statement.Fragment) {}
+  constructor(readonly compile: (client: SqlClient.SqlClient) => Statement.Fragment) {}
 }
 
-const quoted = (client: SqlClient, name: string) => {
+const quoted = (client: SqlClient.SqlClient, name: string) => {
   if (name.includes("\0"))
     // oxlint-disable-next-line effect/no-untyped-throw -- SQL expression compilation must synchronously return a Fragment; workflow adapters capture mapping failures.
     throw PersistenceMappingError.make({ operation: "mapping", cause: "NUL in SQL identifier" });
@@ -18,12 +18,12 @@ const quoted = (client: SqlClient, name: string) => {
   return client.literal(identifier(name));
 };
 
-const tableName = (client: SqlClient, name: string, schema?: string) =>
+const tableName = (client: SqlClient.SqlClient, name: string, schema?: string) =>
   schema === undefined
     ? quoted(client, name)
     : client`${quoted(client, schema)}.${quoted(client, name)}`;
 
-const value = (client: SqlClient, input: unknown): Statement.Fragment => {
+const value = (client: SqlClient.SqlClient, input: unknown): Statement.Fragment => {
   if (Statement.isFragment(input)) return input;
   if (input instanceof SqlExpression) return input.compile(client);
   if (input instanceof Table) return tableName(client, input.name, input.schema);
@@ -41,7 +41,7 @@ const value = (client: SqlClient, input: unknown): Statement.Fragment => {
 
 /** Reject foreign expression handles at the metadata boundary. */
 export const compileSqlExpression = (
-  client: SqlClient,
+  client: SqlClient.SqlClient,
   expression: unknown,
 ): Statement.Fragment => {
   if (

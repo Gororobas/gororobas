@@ -1,7 +1,12 @@
 import { it } from "@effect/vitest";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import { Cause, Console, Context, Effect, Exit, Logger } from "effect";
-import { AuthenticationError, ConnectionError, SqlError } from "effect/sql/SqlError";
+import * as Cause from "effect/Cause";
+import * as Console from "effect/Console";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Logger from "effect/Logger";
+import * as SqlError from "effect/sql/SqlError";
 import { expect } from "vite-plus/test";
 
 // Regression in 525916648e47ad1807aef1adba58783e525b6d33: SQL failures lose
@@ -11,16 +16,16 @@ it.effect("retains SQL diagnostics without exposing private values or changing a
   Effect.gen(function* () {
     const expected = { _tag: "ExpectedRejection", message: "private-expected" } as const;
 
-    const connection = SqlError.make({
-      reason: ConnectionError.make({
+    const connection = SqlError.SqlError.make({
+      reason: SqlError.ConnectionError.make({
         cause: { code: "ECONNRESET", message: "private-driver", query: "private-query" },
         message: "private-message",
         operation: "private-operation",
       }),
     });
 
-    const authentication = SqlError.make({
-      reason: AuthenticationError.make({ cause: { code: "private-code" } }),
+    const authentication = SqlError.SqlError.make({
+      reason: SqlError.AuthenticationError.make({ cause: { code: "private-code" } }),
     });
 
     const hostile = {
@@ -41,7 +46,7 @@ it.effect("retains SQL diagnostics without exposing private values or changing a
 
     const annotation = Context.Service<string>("private-annotation");
 
-    const original = Cause.fromReasons<typeof expected | SqlError>([
+    const original = Cause.fromReasons<typeof expected | SqlError.SqlError>([
       Cause.makeFailReason(expected),
       Cause.makeFailReason(connection).annotate(Context.make(annotation, "private-value")),
       Cause.makeDieReason(authentication),

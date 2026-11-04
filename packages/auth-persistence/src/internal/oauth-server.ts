@@ -1,7 +1,10 @@
 import { AssertionReceipt, Persistence, Record, Unavailable } from "@yielded/auth/OAuthServer";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import { Cause, Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { requireStandalone } from "./standalone";
 

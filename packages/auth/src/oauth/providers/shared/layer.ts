@@ -1,4 +1,5 @@
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import { OAuthProtocol } from "../../OAuthProtocol";
 import { type ProviderDefinition } from "../../providerDefinition";
@@ -80,8 +81,8 @@ const resolve = <R>(providers: ReadonlyArray<Provider<R>>) =>
 export const provider = <R = never>(
   options: ProviderOptions<R>,
 ): ProviderDefinition<OpenIdConnectConfigurationError | OAuthUnavailable, R | Requirements> => ({
-  configure: (binding) =>
-    Effect.gen(function* () {
+  configure: Effect.fnUntraced(
+    function* (binding) {
       const registrations = yield* resolveOptions(() =>
         resolve(
           ("registrations" in options ? options.registrations : [options]).map((registration) => ({
@@ -116,7 +117,9 @@ export const provider = <R = never>(
       ).pipe(Effect.provideServiceEffect(PrivateKeyClientSecret, PrivateKeyClientSecret.make));
 
       return { ...protocol, connected };
-    }).pipe(Effect.provideServiceEffect(ProviderDiscovery, ProviderDiscovery.make)),
+    },
+    Effect.provideServiceEffect(ProviderDiscovery, ProviderDiscovery.make),
+  ),
 });
 
 /** One protocol Layer for all OAuth/OIDC hosts. Each provider defaults to

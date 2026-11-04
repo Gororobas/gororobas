@@ -1,9 +1,13 @@
-import { Aead } from "@yielded/crypto/Aead";
-import { Hmac, type Key } from "@yielded/crypto/Hmac";
-import { Cause, Crypto, Effect, Redacted, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Aead from "effect/crypto/Aead";
+import * as Digest from "effect/crypto/Digest";
+import * as Mac from "effect/crypto/Mac";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
-import { equalBytes } from "../internal/equalBytes";
 import { TokenDigest } from "../Schema";
 import { TotpUnavailable } from "./errors";
 import { TotpSecretBinding, TotpSecretEnvelope } from "./models";
@@ -39,12 +43,11 @@ export const codeAt = Effect.fn("Totp.codeAt")(function* (
   step: number,
   digits = 6,
 ) {
-  const hmac = yield* Hmac;
+  const hmac = yield* Mac.Mac;
   const counter = yield* Effect.try({ try: () => counterAt(step), catch: fail });
 
-  const mac = yield* hmac
-    .sign({ algorithm: "SHA-1", key: Redacted.make(secret), data: counter })
-    .pipe(Effect.mapError(fail));
+  const key = yield* Mac.key(Mac.hmacSha1, secret).pipe(Effect.mapError(fail));
+  const mac = yield* hmac.sign(key, counter).pipe(Effect.mapError(fail));
 
   try {
     return codeFromMac(mac, digits);
@@ -54,9 +57,10 @@ export const codeAt = Effect.fn("Totp.codeAt")(function* (
 });
 
 export const make = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const aead = yield* Aead;
-  const hmac = yield* Hmac;
+  const crypto = yield* SecureRandom.SecureRandom;
+  const digests = yield* Digest.Digest;
+  const aead = yield* Aead.Aead;
+  const hmac = yield* Mac.Mac;
   const keys = yield* TotpSecretKeys;
 
   const random = (size: number) =>
@@ -65,7 +69,7 @@ export const make = Effect.gen(function* () {
       .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))));
 
   const digest = (value: string) =>
-    crypto.digest("SHA-256", encoder.encode(value)).pipe(
+    digests.digest(Digest.sha256, encoder.encode(value)).pipe(
       Effect.map((bytes) => TokenDigest.make(Base64Url.encode(bytes))),
       Effect.mapError(fail),
     );
@@ -76,10 +80,10 @@ export const make = Effect.gen(function* () {
     );
 
   return {
-    randomId: () => random(32).pipe(Effect.map(Base64Url.encode)),
+    randomId: Effect.suspend(() => random(32)).pipe(Effect.map(Base64Url.encode)),
     digest,
     recoveryDigest,
-    generateSecret: () => random(20),
+    generateSecret: Effect.suspend(() => random(20)),
     matchCode: Effect.fn("Totp.matchCode")(function* (
       secret: Uint8Array,
       code: string,
@@ -88,7 +92,7 @@ export const make = Effect.gen(function* () {
     ) {
       const current = Math.floor(nowMillis / 30000);
       let matched: number | null = null;
-      let key: Key | undefined;
+      let key: Mac.Key | undefined;
 
       for (let delta = -skew; delta <= skew; delta++) {
         const step = current + delta;
@@ -96,17 +100,18 @@ export const make = Effect.gen(function* () {
         if (step >= 0) {
           // The native key belongs only to this match window, including failure
           // and interruption. Do not retain decrypted secrets across requests.
-          key ??= yield* hmac
-            .importKey({ algorithm: "SHA-1", key: Redacted.make(secret) })
-            .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))));
+          key ??= yield* Mac.key(Mac.hmacSha1, secret).pipe(
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))),
+          );
           const counter = yield* Effect.try({ try: () => counterAt(step), catch: fail });
 
-          const mac = yield* key
-            .sign(counter)
+          const mac = yield* hmac
+            .sign(key, counter)
             .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))));
 
           try {
-            if (equalBytes(encoder.encode(codeFromMac(mac)), encoder.encode(code))) matched = step;
+            if (Mac.timingSafeEqual(encoder.encode(codeFromMac(mac)), encoder.encode(code)))
+              matched = step;
           } finally {
             mac.fill(0);
           }
@@ -152,14 +157,13 @@ export const make = Effect.gen(function* () {
         Effect.mapError(fail),
       );
 
+      const key = yield* Effect.try({ try: () => Redacted.value(selected.key), catch: fail }).pipe(
+        Effect.flatMap((bytes) => Aead.key(Aead.aes256Gcm, bytes)),
+        Effect.mapError(fail),
+      );
+
       const ciphertext = yield* aead
-        .encrypt({
-          algorithm: "AES-256-GCM",
-          key: selected.key,
-          nonce,
-          additionalData,
-          plaintext: Redacted.make(secret),
-        })
+        .encrypt(key, secret, { nonce, aad: additionalData })
         .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))));
 
       return yield* Schema.decodeEffect(TotpSecretEnvelope)({
@@ -190,11 +194,14 @@ export const make = Effect.gen(function* () {
         Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))),
       );
 
-      const wrapped = yield* aead
-        .decrypt({ algorithm: "AES-256-GCM", key, nonce, additionalData, ciphertext })
-        .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))));
+      const imported = yield* Effect.try({ try: () => Redacted.value(key), catch: fail }).pipe(
+        Effect.flatMap((bytes) => Aead.key(Aead.aes256Gcm, bytes)),
+        Effect.mapError(fail),
+      );
 
-      const secret = Redacted.value(wrapped);
+      const secret = yield* aead
+        .decrypt(imported, ciphertext, { nonce, aad: additionalData })
+        .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))));
 
       if (secret.length !== 20) {
         secret.fill(0);

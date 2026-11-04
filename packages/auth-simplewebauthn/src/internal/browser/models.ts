@@ -1,6 +1,6 @@
 import { RequestBindingFlowId } from "@yielded/auth/Operations";
 import { PasskeyAssertion, PasskeyAttestation } from "@yielded/auth/Passkey";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 export const PasskeyBrowserCapability = Schema.Literals(["supported", "unsupported", "unknown"]);
 export type PasskeyBrowserCapability = typeof PasskeyBrowserCapability.Type;

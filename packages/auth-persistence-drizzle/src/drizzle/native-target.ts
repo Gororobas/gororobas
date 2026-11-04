@@ -7,8 +7,9 @@ import {
 } from "@yielded/auth-persistence/Adapter";
 import { hasCommitScope, type LifecycleHooks } from "@yielded/auth/Hooks";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import { Cause, Effect } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { D1BatchStatements } from "./D1BatchStatements";
 import { NativeDatabase, type NativeDatabaseHandle } from "./native-database";

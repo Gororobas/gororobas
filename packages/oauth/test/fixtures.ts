@@ -1,16 +1,14 @@
-import { NodeCrypto } from "@effect/platform-node";
-import * as KdfAdmission from "@yielded/crypto/KdfAdmission";
-import * as PlatformCrypto from "@yielded/crypto/platform-node";
-import { Effect, Layer, Redacted } from "effect";
-import { HttpClient, HttpClientResponse, type HttpClientRequest } from "effect/http";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Redacted from "effect/Redacted";
 import { expect } from "vite-plus/test";
 
 import type { OAuth } from "../src/index";
 
-export const cryptoLayer = Layer.merge(
-  NodeCrypto.layer,
-  PlatformCrypto.layer().pipe(Layer.provide(KdfAdmission.layer())),
-);
+export const cryptoLayer = NodeCrypto.layer;
 
 export const metadata: OAuth.Metadata = {
   issuer: "https://issuer.example/tenant/",

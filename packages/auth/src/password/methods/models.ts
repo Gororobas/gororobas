@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { LoginIdentifier } from "../../identity/models";
 import { TokenDigest } from "../../Schema";

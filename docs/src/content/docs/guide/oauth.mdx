@@ -111,7 +111,7 @@ Under the HTTP middleware, use the regular Auth API:
 
 ```ts
 const auth = yield* AppAuth;
-const session = yield* auth.requireSession();
+const session = yield* auth.requireSession;
 const connections = yield* auth.listAccountConnections({ limit: 20 });
 ```
 
@@ -256,8 +256,12 @@ Inside handlers, require `oauth.CurrentAccess` and apply your application
 permissions. Resolve provider connections from trusted storage when tools need
 upstream API access.
 
-Clients can be pre-registered or use a
-[Client ID Metadata Document](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration).
+An `HttpApi` resource annotates its shared groups with `OAuthScope.Required`, attaches
+`OAuthScope.RequireAccess`, and provides `oauth.securityLayer(Api)` on the server; see
+[protecting resources](../reference/oauth#protecting-resources).
+
+Clients can be pre-registered, stored by your application behind `oauth.Clients`,
+or use a [Client ID Metadata Document](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration).
 For metadata discovery, configure `clientMetadata.allowedOrigins` and an HTTP client
 that restricts network destinations. See the [server reference](../reference/oauth#authorization-server)
 for options and supported protocol behavior, and the
@@ -270,6 +274,7 @@ First-party OpenID presets share discovery and ID-token verification:
 
 - [Apple](./apple)
 - [Okta, Auth0, Keycloak, Zitadel, and Cognito](./enterprise-oidc)
+- [Discord](./discord)
 - [Google](./google)
 - [GitLab](./gitlab), including self-hosted issuers
 - [Hugging Face](./huggingface)

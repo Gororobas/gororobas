@@ -1,13 +1,6 @@
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
 import { it } from "@effect/vitest";
-import {
-  Auth,
-  EmailDelivery,
-  Hooks,
-  Operations,
-  Password,
-  Sessions,
-  WebCrypto,
-} from "@yielded/auth";
+import { Auth, EmailDelivery, Hooks, Operations, Password, Sessions } from "@yielded/auth";
 import { Effect, Layer, Redacted } from "effect";
 import { expect } from "vite-plus/test";
 
@@ -20,7 +13,7 @@ import {
 } from "../src/password-method-consumer";
 
 const base = Layer.mergeAll(
-  WebCrypto.layerWebCrypto,
+  BunCrypto.layer,
   Hooks.LifecycleHooks.empty,
   Password.PasswordHashing.layer().pipe(Layer.provide(CryptoLive)),
 );

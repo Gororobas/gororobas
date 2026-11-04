@@ -1,5 +1,7 @@
 import * as OAuth from "@yielded/oauth/OAuth";
-import { Cause, Effect, Redacted } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 
 import { OAuthProtocolRejected, OAuthUnavailable } from "../../signInErrors";
 import { type TokenCompatibility } from "./compatibility";

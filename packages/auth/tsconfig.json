@@ -4,5 +4,5 @@
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "../crypto/src/internal/wasm.d.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts"]
 }

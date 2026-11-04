@@ -1,6 +1,9 @@
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import { Cause, Context, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql/SqlClient";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { PersistenceConfigurationError } from "./configuration";
 import type { PhysicalTextColumn } from "./native-sql-table";
@@ -45,7 +48,7 @@ const MysqlIndexes = Schema.Array(
     relation: Schema.String,
     name: Schema.String,
     columnName: Schema.NullOr(Schema.String),
-    prefix: Schema.NullOr(Schema.Number),
+    prefix: Schema.NullOr(Schema.Finite),
   }),
 );
 
@@ -87,7 +90,7 @@ const validateKeys = Effect.fnUntraced(function* (
 
 interface MetadataCache {
   active: boolean;
-  readonly clients: Map<SqlClient, Map<string, typeof Metadata.Type>>;
+  readonly clients: Map<SqlClient.SqlClient, Map<string, typeof Metadata.Type>>;
 }
 
 const CurrentMetadata = Context.Reference<MetadataCache | undefined>(
@@ -137,7 +140,7 @@ const readStorageMetadata = Effect.fnUntraced(
       return yield* PersistenceConfigurationError.make({
         reason: "SQLite storage must belong to the main database",
       });
-    const captured = yield* SqlClient;
+    const captured = yield* SqlClient.SqlClient;
     const client = captured.withoutTransforms();
     const cache = yield* CurrentMetadata;
 
@@ -331,7 +334,7 @@ export const canJoinTextColumns = Effect.fnUntraced(function* (
   const candidates = columns.filter((column) => column !== undefined);
 
   if (candidates.length !== columns.length || candidates.length === 0) return false;
-  const client = yield* SqlClient;
+  const client = yield* SqlClient.SqlClient;
 
   const dialect = client.onDialectOrElse({
     pg: () => "pg" as const,
@@ -385,7 +388,7 @@ export const hasManagedSqliteCleanupKey = Effect.fnUntraced(function* (
   const column = table.columns[key];
 
   if (column === undefined) return false;
-  const sql = (yield* SqlClient).withoutTransforms();
+  const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   const rows = yield* sql`
     select 1 as valid

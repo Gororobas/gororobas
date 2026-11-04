@@ -48,17 +48,16 @@ export const makeHost = Effect.fnUntraced(function* (hostedUrl: string) {
   const session = Effect.gen(function* () {
     if ((yield* vault.read).session === undefined) return null;
 
-    return yield* transport
-      .call(nativeSession.routes.session, {})
-      .pipe(
-        Effect.catchCause((cause) =>
+    return yield* transport.call(nativeSession.routes.session, {}).pipe((effect) =>
+      Effect.catchCauseIf(
+        effect,
+        (cause) =>
           cause.reasons.every(
             (reason) => Cause.isFailReason(reason) && reason.error._tag === "SessionInvalid",
-          )
-            ? Effect.succeed(null)
-            : Effect.failCause(cause),
-        ),
-      );
+          ),
+        () => Effect.succeed(null),
+      ),
+    );
   });
 
   const snapshot = Effect.gen(function* (): Effect.fn.Return<

@@ -1,6 +1,6 @@
 export { OAuthProxyPersistence } from "./internal/drizzle-sqlite-oauth-proxy";
 
-import { SqliteClient } from "@effect/sql-sqlite-do/SqliteClient";
+import * as SqliteClient from "@effect/sql-sqlite-do/SqliteClient";
 import { PersistenceConfigurationError } from "@yielded/auth-persistence/Adapter";
 import type { AnyRelations } from "drizzle-orm";
 import { makeWithDefaults } from "drizzle-orm/effect-sqlite-do";
@@ -13,7 +13,9 @@ import {
 } from "./drizzle/sqlite-do-database";
 export { type DatabaseValue, type Transaction, makeDatabase } from "./drizzle/sqlite-do-database";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
-import { Context, Effect, Layer } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 /** The application-owned Drizzle queries with Effect SQL transaction ownership. */
 export class Database extends Context.Service<Database, DatabaseValue<AnyRelations>>()(
@@ -24,7 +26,7 @@ export class Database extends Context.Service<Database, DatabaseValue<AnyRelatio
 export const databaseLayer = Layer.effect(
   Database,
   Effect.gen(function* () {
-    const client = yield* SqliteClient;
+    const client = yield* SqliteClient.SqliteClient;
     const storage = client.config.storage;
 
     if (storage === undefined)
@@ -32,7 +34,7 @@ export const databaseLayer = Layer.effect(
         reason: "SqliteDo requires a SQL client configured with Durable Object storage",
       });
 
-    return yield* makeDatabase(yield* makeWithDefaults({ storage }));
+    return yield* makeDatabase(yield* makeWithDefaults({}));
   }),
 );
 

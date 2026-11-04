@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { it } from "@effect/vitest";
 import type { Operations } from "@yielded/auth";
 import { Auth, Password, Sessions } from "@yielded/auth";
@@ -36,7 +37,10 @@ const options = {
   }),
 };
 
-const services = Testing.services({ seed: "in-memory-example" });
+const services = Testing.services({ seed: "in-memory-example" }).pipe(
+  Layer.provide(NodeCrypto.layerKdf),
+);
+
 const memory = Testing.layer(App, options);
 
 const live = App.layer.pipe(
@@ -88,18 +92,19 @@ it.effect(
         expect((yield* auth.verifySession(original)).subjectId).toBe("reader");
 
         yield* TestClock.adjust("5 minutes");
-        yield* auth.renewSession().pipe(Effect.provideService(Auth.AuthRequest, call(original)));
+        yield* auth.renewSession.pipe(Effect.provideService(Auth.AuthRequest, call(original)));
         expect((yield* auth.verifySession(original).pipe(Effect.flip))._tag).toBe("SessionInvalid");
         expect(
-          (yield* auth
-            .renewSession()
-            .pipe(Effect.provideService(Auth.AuthRequest, call(original)), Effect.flip))._tag,
+          (yield* auth.renewSession.pipe(
+            Effect.provideService(Auth.AuthRequest, call(original)),
+            Effect.flip,
+          ))._tag,
         ).toBe("SessionInvalid");
         const renewed = credential;
 
         if (renewed === undefined) return yield* Effect.die("Missing renewed credential");
         expect(
-          yield* auth.signOut().pipe(Effect.provideService(Auth.AuthRequest, call(renewed))),
+          yield* auth.signOut.pipe(Effect.provideService(Auth.AuthRequest, call(renewed))),
         ).toMatchObject({ invalidation: "revoked" });
         expect((yield* auth.verifySession(renewed).pipe(Effect.flip))._tag).toBe("SessionInvalid");
 

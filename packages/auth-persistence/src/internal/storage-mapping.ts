@@ -15,8 +15,14 @@ import {
   SessionCredentialVersion,
   type StatefulSessionRecord,
 } from "@yielded/auth/Sessions";
-import { Cause, Crypto, DateTime, Effect, Redacted, Schema, Struct } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as Struct from "effect/Struct";
 
 import type { MappingInput } from "./configuration";
 import { randomId } from "./crypto";
@@ -44,7 +50,7 @@ const decode = <S extends Schema.Codec<unknown, unknown>>(schema: S, value: unkn
 const string = (value: unknown) => Schema.decodeUnknownSync(Schema.String)(value);
 
 /** Derive shared row mappings from a managed or custom storage layout.
- * Acquire Effect Crypto once; the returned allocators retain that implementation.
+ * Acquire Effect SecureRandom once; the returned allocators retain that implementation.
  * Each factory returns an Effect that fails with PersistenceMappingError when
  * its role tables are missing. Supplying native tables derives
  * batch commit predicates and subject policy columns. Adapter authors may refine
@@ -54,11 +60,11 @@ export const makeMappings = Effect.fnUntraced(function* (
   input: MappingInput,
   tables?: NativeSqlTables,
 ) {
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
 
   const allocate = randomId.pipe(
-    Effect.provideService(Crypto.Crypto, crypto),
+    Effect.provideService(SecureRandom.SecureRandom, crypto),
     Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
   );
 
@@ -210,38 +216,37 @@ export const makeMappings = Effect.fnUntraced(function* (
           verifierVersion,
         }),
         encodeReplacement: ({ replacement, ...row }) => ({ ...row, ...verifier(replacement) }),
-        decode: ({ moduleId, subject: row, identifier, credential }) =>
-          Effect.gen(function* () {
-            const id = yield* s.toSubject(row[s.id]);
-            const hash = yield* decode(EncodedPasswordHash, credential.verifier);
+        decode: Effect.fnUntraced(function* ({ moduleId, subject: row, identifier, credential }) {
+          const id = yield* s.toSubject(row[s.id]);
+          const hash = yield* decode(EncodedPasswordHash, credential.verifier);
 
-            return yield* decode(PasswordCredentialSnapshot, {
-              moduleId,
-              revision: {
-                subjectId: id,
-                securityRevision: row[s.securityRevision],
-                credentials: [
-                  {
-                    credentialId: credential.credentialId,
-                    revision: credential.credentialRevision,
-                  },
-                ],
-              },
-              credentialId: credential.credentialId,
-              credentialRevision: credential.credentialRevision,
-              verifierVersion: credential.verifierVersion,
-              verifier: hash,
-              normalization: credential.normalization,
-              identifier: yield* decode(LoginIdentifier, {
-                namespace: identifier.namespace,
-                value: identifier.value,
-              }),
-              identifierBindingRevision: identifier.revision,
-              ...(identifier.verifiedAt === null
-                ? {}
-                : { identifierVerifiedAtMillis: yield* readInstant(identifier.verifiedAt) }),
-            });
-          }),
+          return yield* decode(PasswordCredentialSnapshot, {
+            moduleId,
+            revision: {
+              subjectId: id,
+              securityRevision: row[s.securityRevision],
+              credentials: [
+                {
+                  credentialId: credential.credentialId,
+                  revision: credential.credentialRevision,
+                },
+              ],
+            },
+            credentialId: credential.credentialId,
+            credentialRevision: credential.credentialRevision,
+            verifierVersion: credential.verifierVersion,
+            verifier: hash,
+            normalization: credential.normalization,
+            identifier: yield* decode(LoginIdentifier, {
+              namespace: identifier.namespace,
+              value: identifier.value,
+            }),
+            identifierBindingRevision: identifier.revision,
+            ...(identifier.verifiedAt === null
+              ? {}
+              : { identifierVerifiedAtMillis: yield* readInstant(identifier.verifiedAt) }),
+          });
+        }),
       },
       clock,
     };
@@ -325,30 +330,29 @@ export const makeMappings = Effect.fnUntraced(function* (
           active: true,
         }),
         encodeRetirement: ({ credentialRevision }) => ({ credentialRevision, active: false }),
-        decode: ({ moduleId, subject: row, identifier, credential }) =>
-          Effect.gen(function* () {
-            return yield* decode(
-              Schema.Struct(Struct.omit(EmailCredentialSnapshot.fields, ["requirement"])),
-              {
-                moduleId,
-                identifier: { namespace: identifier.namespace, value: identifier.value },
-                identifierRevision: identifier.revision,
-                verifiedAtMillis: yield* readInstant(identifier.verifiedAt),
-                credentialId: credential.credentialId,
-                credentialRevision: credential.credentialRevision,
-                revision: {
-                  subjectId: yield* s.toSubject(row[s.id]),
-                  securityRevision: row[s.securityRevision],
-                  credentials: [
-                    {
-                      credentialId: credential.credentialId,
-                      revision: credential.credentialRevision,
-                    },
-                  ],
-                },
+        decode: Effect.fnUntraced(function* ({ moduleId, subject: row, identifier, credential }) {
+          return yield* decode(
+            Schema.Struct(Struct.omit(EmailCredentialSnapshot.fields, ["requirement"])),
+            {
+              moduleId,
+              identifier: { namespace: identifier.namespace, value: identifier.value },
+              identifierRevision: identifier.revision,
+              verifiedAtMillis: yield* readInstant(identifier.verifiedAt),
+              credentialId: credential.credentialId,
+              credentialRevision: credential.credentialRevision,
+              revision: {
+                subjectId: yield* s.toSubject(row[s.id]),
+                securityRevision: row[s.securityRevision],
+                credentials: [
+                  {
+                    credentialId: credential.credentialId,
+                    revision: credential.credentialRevision,
+                  },
+                ],
               },
-            );
-          }),
+            },
+          );
+        }),
       },
     };
   });
@@ -489,17 +493,16 @@ export const makeMappings = Effect.fnUntraced(function* (
         allocateId: allocate,
         encodeInsert: (value, ids) => ({ ...encodeRow(value), ...ids }),
         encodeRotation: encodeRow,
-        decode: (row) =>
-          Effect.gen(function* () {
-            const saved = yield* decode(record, row.record),
-              decodedClaims = yield* decode(claims, saved.claims);
+        decode: Effect.fnUntraced(function* (row) {
+          const saved = yield* decode(record, row.record),
+            decodedClaims = yield* decode(claims, saved.claims);
 
-            return {
-              ...saved,
-              issuedAt: DateTime.makeUnsafe(yield* readInstant(row.issuedAt)),
-              claims: decodedClaims,
-            };
-          }),
+          return {
+            ...saved,
+            issuedAt: DateTime.makeUnsafe(yield* readInstant(row.issuedAt)),
+            claims: decodedClaims,
+          };
+        }),
       },
     };
   });

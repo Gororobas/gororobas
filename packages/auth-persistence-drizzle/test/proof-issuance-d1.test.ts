@@ -1,8 +1,9 @@
 import { it } from "@effect/vitest";
 import { Hooks, Proofs } from "@yielded/auth";
 import { TokenDigest } from "@yielded/auth/Schema";
-import { Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
 
 import { makeProofPersistenceServices } from "../src/D1";
@@ -80,9 +81,9 @@ it.effect("D1 rejects a planned reissue when another live binding wins before ba
     // A different binding won the series after the advisory planning read.
     const replacement = record("replacement", "replacement");
 
-    const binding = Schema.encodeSync(Schema.fromJsonString(Proofs.ProofBinding))(
+    const binding = yield* Schema.encodeEffect(Schema.fromJsonString(Proofs.ProofBinding))(
       replacement.binding,
-    );
+    ).pipe(Effect.orDie);
 
     yield* sql`update proof_test_proofs set proof_id = ${replacement.proofId}, binding = ${binding}, verifier_digest = ${replacement.verifier.digest}`;
   });

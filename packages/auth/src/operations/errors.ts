@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** Invalid static composition; never a wire failure or an authentication rejection. */
 export class OperationConfigurationError extends Schema.TaggedError<OperationConfigurationError>()(

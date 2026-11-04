@@ -71,8 +71,8 @@ export const PasswordsLive = Layer.effectContext(
     const store = yield* AccountStore;
 
     const passwords = Password.PasswordPersistence.of({
-      findCredential: (input) =>
-        Effect.gen(function* () {
+      findCredential: Effect.fnUntraced(
+        function* (input) {
           if (yield* Hooks.hasCommitScope) return yield* Password.PasswordUnavailable.make({});
           if (input.moduleId !== moduleId) return yield* Password.PasswordUnavailable.make({});
           const identifier = { ...input.identifier };
@@ -97,7 +97,9 @@ export const PasswordsLive = Layer.effectContext(
                 : Option.some(yield* Password.snapshotPasswordCredential(candidate));
             }),
           );
-        }).pipe(Effect.catchTag("StoreUnavailable", () => Password.PasswordUnavailable.make({}))),
+        },
+        Effect.catchTag("StoreUnavailable", () => Password.PasswordUnavailable.make({})),
+      ),
       rehashIfCurrent: (input) =>
         store
           .transaction((state, journal) =>

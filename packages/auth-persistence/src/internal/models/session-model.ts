@@ -7,7 +7,8 @@ import type {
   PendingAuthenticationRecord,
   StatefulSessionRecord,
 } from "@yielded/auth/Sessions";
-import type { DateTime, Effect } from "effect";
+import type * as DateTime from "effect/DateTime";
+import type * as Effect from "effect/Effect";
 
 import type { TableModel as Table, SqlExpression } from "../table-model";
 import type { PersistenceMappingError, SubjectIdCodec } from "./common";

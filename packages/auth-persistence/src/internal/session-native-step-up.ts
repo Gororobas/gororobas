@@ -9,9 +9,12 @@ import {
   type StatefulSessionRecord,
   type SessionUnavailable,
 } from "@yielded/auth/Sessions";
-import { Cause, DateTime, Effect, Option } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import type * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import { sqlBatchAssertion } from "./d1-planning";
 import { PersistenceMappingError, isMappedConstraintConflict } from "./mapping-error";
@@ -64,7 +67,7 @@ export const makeNativeSessionStepUpServices = Effect.fnUntraced(function* <Clai
 ): Effect.fn.Return<
   { readonly sessionStepUpPersistence: SessionStepUpPersistence<Claims> },
   SessionUnavailable,
-  SqlClient | LifecycleHooks | SqlBatchCommit
+  SqlClient.SqlClient | LifecycleHooks | SqlBatchCommit
 > {
   const batch = yield* SqlBatchCommit;
 
@@ -173,7 +176,7 @@ export const makeNativeSessionStepUpServices = Effect.fnUntraced(function* <Clai
     return { record: undefined, condition: sql`1 = 1` };
   });
 
-  const final = Effect.fnUntraced(function* (name: string, condition: Fragment) {
+  const final = Effect.fnUntraced(function* (name: string, condition: Statement.Fragment) {
     if (batch !== undefined)
       yield* registerSqlBatchPostcondition({ name, statement: sqlBatchAssertion(sql, condition) });
     else if (Option.isSome(external))
@@ -287,10 +290,9 @@ export const makeNativeSessionStepUpServices = Effect.fnUntraced(function* <Clai
         )
         .pipe(
           Effect.provideService(AuthenticationClock, state.clockPolicy),
-          Effect.flatMap((value) =>
-            value === undefined
-              ? Effect.fail(SessionStepUpInvalid.make({}))
-              : Effect.succeed(value),
+          Effect.filterOrFail(
+            (value) => !(value === undefined),
+            () => SessionStepUpInvalid.make({}),
           ),
         ),
     reject: ({ digest }, project) =>
@@ -367,7 +369,7 @@ export const makeNativeSessionStepUpServices = Effect.fnUntraced(function* <Clai
             current.native,
             sql`${snapshotCondition(intent, snapshot)} and ${authority} and ${original.condition}`,
           );
-          let replacementCondition: Fragment = sql`1 = 1`;
+          let replacementCondition: Statement.Fragment = sql`1 = 1`;
           let replacementRecord: StatefulSessionRecord<Claims> | undefined;
 
           if (replacement._tag === "Stateful" && mapping.source.kind === "Stateful") {

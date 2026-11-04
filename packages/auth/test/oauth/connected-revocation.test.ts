@@ -1,5 +1,9 @@
 import { it } from "@effect/vitest";
-import { Effect, Exit, Redacted, Schema, Scope } from "effect";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import { expect } from "vite-plus/test";
 
 import { OAuthConnectedProfile } from "../../src/oauth/permissionProfile";
@@ -61,7 +65,7 @@ it.effect("erases a separate revocation private key when the provider scope clos
           ],
           clientRegistrationId: "registration",
           profiles: [
-            Schema.decodeSync(OAuthConnectedProfile)({
+            yield* Schema.decodeEffect(OAuthConnectedProfile)({
               key: "profile",
               generation: 1,
               issuance: "active",
@@ -74,7 +78,7 @@ it.effect("erases a separate revocation private key when the provider scope clos
               refreshAheadMillis: 0,
               refresh: "unsupported",
               revocation: "provider",
-            }),
+            }).pipe(Effect.orDie),
           ],
           resourceIndicators: "unsupported",
           refreshExpiry: "unreported",

@@ -1,14 +1,13 @@
-import {
-  Cause,
-  Context,
-  Crypto,
-  Effect,
-  Layer,
-  Option,
-  Redacted,
-  Schema,
-  type Types,
-} from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import { makeAuthStrategy } from "../../auth/AuthStrategy";
 import { defaultLayer, hooksLayer } from "../../auth/defaults";
@@ -309,7 +308,8 @@ const makePasswordWithManagement = <
       const completion = yield* sessions.AuthenticationCompletion;
       const proofs = yield* reset.Proofs;
       const hooks = yield* LifecycleHooks;
-      const crypto = yield* Crypto.Crypto;
+      const crypto = yield* SecureRandom.SecureRandom;
+      const digests = yield* Digest.Digest;
 
       const services = yield* Effect.context<
         Registration["DecodingServices"] | Registration["EncodingServices"]
@@ -323,7 +323,8 @@ const makePasswordWithManagement = <
         Context.add(NewPasswordCheck, checker),
         Context.add(AuthenticationAuthority, authority),
         Context.add(LifecycleHooks, hooks),
-        Context.add(Crypto.Crypto, crypto),
+        Context.add(SecureRandom.SecureRandom, crypto),
+        Context.add(Digest.Digest, digests),
       );
 
       const preparation = makePasswordPreparation({ moduleId, policy });
@@ -354,7 +355,7 @@ const makePasswordWithManagement = <
             Effect.flatMap((value) =>
               Option.isNone(value)
                 ? Effect.succeed(Option.none<PasswordCredentialSnapshot>())
-                : snapshotPasswordCredential(value.value).pipe(Effect.map(Option.some)),
+                : snapshotPasswordCredential(value.value).pipe(Effect.asSome),
             ),
           );
 
@@ -880,10 +881,10 @@ const makePasswordWithManagement = <
           invocation: AuthInvocation,
           request: Omit<typeof SignInInput.Encoded, "flowId">,
         ) {
-          const crypto = yield* Crypto.Crypto;
+          const crypto = yield* SecureRandom.SecureRandom;
 
           const flowId = yield* crypto
-            .randomUUIDv4()
+            .uuidV4()
             .pipe(
               Effect.catchCause((cause) =>
                 Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
@@ -903,7 +904,12 @@ const makePasswordWithManagement = <
         Layer.provide(defaultLayer(Passwords, layer)),
         Layer.provide(defaultLayer(reset.Proofs, reset.emailLayer)),
         Layer.provide([newPasswordLayer, hooksLayer]),
-        Layer.merge(Layer.effect(Crypto.Crypto, Crypto.Crypto)),
+        Layer.merge(
+          Layer.merge(
+            Layer.effect(SecureRandom.SecureRandom, SecureRandom.SecureRandom),
+            Layer.effect(Digest.Digest, Digest.Digest),
+          ),
+        ),
         Layer.merge(defaultIngressLayer),
       ),
       { completion: true },

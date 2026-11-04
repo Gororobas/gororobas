@@ -1,4 +1,4 @@
-import type { D1Client } from "@effect/sql-d1/D1Client";
+import type * as D1Client from "@effect/sql-d1/D1Client";
 import { withStorageValidation } from "@yielded/auth-persistence/Adapter";
 import {
   ExternalIdentityMutation,
@@ -24,7 +24,9 @@ import {
 } from "drizzle-orm";
 import type { EffectSQLiteD1Database } from "drizzle-orm/effect-d1";
 import type { AnySQLiteTable, SQLiteColumn } from "drizzle-orm/sqlite-core";
-import { Cause, Effect, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { Database as DatabaseService } from "./d1-database";
 import {
@@ -38,7 +40,7 @@ import {
 import { NativeDatabase, nativeDatabase } from "./native-database";
 import { validateDrizzleStorage } from "./storage-validation";
 
-type RuntimeDatabase = EffectSQLiteD1Database<any> & { readonly $client: D1Client };
+type RuntimeDatabase = EffectSQLiteD1Database<any> & { readonly $client: D1Client.D1Client };
 const unavailable = () => IdentityUnavailable.make();
 const isIdentityFailure = Schema.is(Schema.Union([IdentityConflict, IdentityUnavailable]));
 
@@ -223,26 +225,24 @@ export const makeD1SubjectProvisioningServices = Effect.fnUntraced(function* <
     }
     const attempt = db.$client.batch(statements);
 
-    yield* attempt.pipe(
-      Effect.catchCause(
-        (
-          cause,
-        ): Effect.Effect<
-          void,
-          | Effect.Error<typeof attempt>
-          | Effect.Error<ReturnType<typeof findReceipt>>
-          | IdentityConflict
-        > => {
-          if (
+    yield* attempt.pipe((effect) =>
+      Effect.catchCauseIf(
+        effect,
+        (cause) =>
+          !(
             cause.reasons.length === 0 ||
             !cause.reasons.every(
               (reason) =>
                 Cause.isFailReason(reason) &&
                 isMappedConstraintConflict(mapping.isConstraintConflict, reason.error),
             )
-          )
-            return Effect.failCause(cause);
-
+          ),
+        (): Effect.Effect<
+          void,
+          | Effect.Error<typeof attempt>
+          | Effect.Error<ReturnType<typeof findReceipt>>
+          | IdentityConflict
+        > => {
           return findReceipt(input.requestId).pipe(
             Effect.flatMap((receipt) =>
               receipt !== undefined && receipt.fingerprint === fingerprint
@@ -330,38 +330,40 @@ export const makeD1ExternalIdentityServices = Effect.fnUntraced(function* <
           ) as any,
       )
       .returning({ subjectId: externalSubjectIdColumn })
-      .pipe(
-        Effect.catchCause((cause) => {
-          if (
-            cause.reasons.length === 0 ||
-            !cause.reasons.every(
-              (reason) =>
-                Cause.isFailReason(reason) &&
-                isMappedConstraintConflict(mapping.isConstraintConflict, reason.error),
-            )
-          )
-            return Effect.failCause(cause);
-
-          return db
-            .select({ subjectId: externalSubjectIdColumn })
-            .from(externalTable as any)
-            .innerJoin(
-              mapping.subject.table as any,
-              and(
-                eq(externalSubjectIdColumn, subjectIdColumn),
-                eq(subjectStatusColumn, mapping.d1.activeStatusValue),
-              ),
-            )
-            .where(
-              and(
-                eq(externalProviderColumn, identity.provider),
-                eq(externalIssuerColumn, identity.issuer),
-                eq(externalSubjectColumn, identity.subject),
-                eq(externalSubjectIdColumn, nativeId),
-              ),
-            )
-            .limit(1);
-        }),
+      .pipe((effect) =>
+        Effect.catchCauseIf(
+          effect,
+          (cause) =>
+            !(
+              cause.reasons.length === 0 ||
+              !cause.reasons.every(
+                (reason) =>
+                  Cause.isFailReason(reason) &&
+                  isMappedConstraintConflict(mapping.isConstraintConflict, reason.error),
+              )
+            ),
+          () => {
+            return db
+              .select({ subjectId: externalSubjectIdColumn })
+              .from(externalTable as any)
+              .innerJoin(
+                mapping.subject.table as any,
+                and(
+                  eq(externalSubjectIdColumn, subjectIdColumn),
+                  eq(subjectStatusColumn, mapping.d1.activeStatusValue),
+                ),
+              )
+              .where(
+                and(
+                  eq(externalProviderColumn, identity.provider),
+                  eq(externalIssuerColumn, identity.issuer),
+                  eq(externalSubjectColumn, identity.subject),
+                  eq(externalSubjectIdColumn, nativeId),
+                ),
+              )
+              .limit(1);
+          },
+        ),
       );
 
     const row = inserted[0];

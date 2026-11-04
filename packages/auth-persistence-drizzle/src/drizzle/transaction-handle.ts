@@ -1,5 +1,6 @@
 import { PasskeyConfigurationError } from "@yielded/auth/Passkey";
-import { Effect, Predicate } from "effect";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
 
 /** Only foreign constructor types are erased; this creates Drizzle's actual
  * transaction handle while the shared SqlClient owner holds the transaction. */

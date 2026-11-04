@@ -1,6 +1,7 @@
 import { Passkey, Password, Schema as AuthSchema, Sessions } from "@yielded/auth";
 import { layer as layerSimpleWebAuthnPasskeyProtocol } from "@yielded/auth-simplewebauthn/Server";
-import { Crypto, Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
+import { SecureRandom } from "effect/crypto";
 import { SqlClient } from "effect/sql";
 
 import { AppAuth, sessionConfiguration } from "../../shared/account/auth";
@@ -20,14 +21,14 @@ const ProvisioningLive = Layer.effect(
   Persistence.Provisioning,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
     const active = sql.onDialectOrElse({ pg: () => true, orElse: () => 1 });
 
     return {
       password: Effect.fn("Customers.create")(
         function* ({ registration }) {
-          const id = yield* crypto.randomUUIDv4();
-          const revision = yield* crypto.randomUUIDv4();
+          const id = yield* crypto.uuidV4();
+          const revision = yield* crypto.uuidV4();
 
           // The same SqlClient joins AuthPersistence's registration transaction.
           yield* sql`insert into customers (customer_key, enabled, auth_revision, display_name)

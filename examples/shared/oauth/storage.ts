@@ -449,220 +449,218 @@ export const identityKey = Effect.fn("OAuthStorage.identityKey")(function* (
  * pending authentication is not installed. Existing authority rows are never
  * reactivated or reassigned. Supply LifecycleHooks (empty is suitable here).
  */
-export const makeMappings = (options: StorageOptions) =>
-  Effect.gen(function* () {
-    const moduleId = yield* Schema.decodeEffect(OAuth.OAuthModuleId)(options.moduleId);
-    const localSubject = yield* Schema.decodeEffect(SubjectId)(options.subjectId);
+export const makeMappings = Effect.fnUntraced(function* (options: StorageOptions) {
+  const moduleId = yield* Schema.decodeEffect(OAuth.OAuthModuleId)(options.moduleId);
+  const localSubject = yield* Schema.decodeEffect(SubjectId)(options.subjectId);
 
-    const identity = yield* Schema.decodeEffect(OAuth.OAuthExternalIdentity)({
-      provider: options.provider,
-      issuer: options.issuer,
-      subject: options.externalSubject,
-    });
+  const identity = yield* Schema.decodeEffect(OAuth.OAuthExternalIdentity)({
+    provider: options.provider,
+    issuer: options.issuer,
+    subject: options.externalSubject,
+  });
 
-    const key = yield* identityKey(identity);
-    const credentialId = `oauth:${key}`;
-    const sqlClient = yield* SqlClient.SqlClient;
-    const postgres = sqlClient.onDialectOrElse({ pg: () => true, orElse: () => false });
+  const key = yield* identityKey(identity);
+  const credentialId = `oauth:${key}`;
+  const sqlClient = yield* SqlClient.SqlClient;
+  const postgres = sqlClient.onDialectOrElse({ pg: () => true, orElse: () => false });
 
-    yield* sqlClient.withTransaction(
-      Effect.gen(function* () {
-        for (const statement of migrations)
-          yield* sqlClient.unsafe(postgres ? statement.replaceAll("INTEGER", "BIGINT") : statement);
+  yield* sqlClient.withTransaction(
+    Effect.gen(function* () {
+      for (const statement of migrations)
+        yield* sqlClient.unsafe(postgres ? statement.replaceAll("INTEGER", "BIGINT") : statement);
 
-        const created = yield* sqlClient`INSERT INTO oauth_subject (id, status, "securityRevision")
+      const created = yield* sqlClient`INSERT INTO oauth_subject (id, status, "securityRevision")
             VALUES (${localSubject}, 'active', 'initial') ON CONFLICT DO NOTHING RETURNING id`;
 
-        if (options.provisionOnce && created.length === 0) return;
-        yield* sqlClient`INSERT INTO oauth_identity
+      if (options.provisionOnce && created.length === 0) return;
+      yield* sqlClient`INSERT INTO oauth_identity
             ("identityKey", provider, issuer, "externalSubject", "subjectId")
             VALUES (${key}, ${identity.provider}, ${identity.issuer}, ${identity.subject},
               ${localSubject}) ON CONFLICT DO NOTHING`;
-        yield* sqlClient`INSERT INTO oauth_login
+      yield* sqlClient`INSERT INTO oauth_login
             ("moduleId", "credentialId", "subjectId", "identityKey", "credentialRevision", status)
             VALUES (${moduleId}, ${credentialId}, ${localSubject}, ${key}, 'initial', 'active')
             ON CONFLICT DO NOTHING`;
-        yield* sqlClient`INSERT INTO oauth_authority_credential
+      yield* sqlClient`INSERT INTO oauth_authority_credential
             ("subjectId", "credentialId", revision, status)
             VALUES (${localSubject}, ${credentialId}, 'initial', 'active') ON CONFLICT DO NOTHING`;
 
-        const [owner] = yield* sqlClient`SELECT * FROM oauth_identity WHERE "identityKey" = ${key}`;
-        const [login] = yield* sqlClient`SELECT * FROM oauth_login WHERE "identityKey" = ${key}`;
+      const [owner] = yield* sqlClient`SELECT * FROM oauth_identity WHERE "identityKey" = ${key}`;
+      const [login] = yield* sqlClient`SELECT * FROM oauth_login WHERE "identityKey" = ${key}`;
 
-        const [factor] = yield* sqlClient`SELECT * FROM oauth_authority_credential
+      const [factor] = yield* sqlClient`SELECT * FROM oauth_authority_credential
             WHERE "subjectId" = ${localSubject} AND "credentialId" = ${credentialId}`;
 
-        if (
-          owner === undefined ||
-          owner.subjectId !== localSubject ||
-          owner.provider !== identity.provider ||
-          owner.issuer !== identity.issuer ||
-          owner.externalSubject !== identity.subject ||
-          login === undefined ||
-          login.moduleId !== moduleId ||
-          login.subjectId !== localSubject ||
-          login.credentialId !== credentialId ||
-          factor === undefined ||
-          factor.revision !== login.credentialRevision
-        ) {
-          return yield* PersistenceMappingError.make({
-            operation: "oauth-storage.provision-conflict",
-            cause: undefined,
-          });
-        }
-      }),
-    );
+      if (
+        owner === undefined ||
+        owner.subjectId !== localSubject ||
+        owner.provider !== identity.provider ||
+        owner.issuer !== identity.issuer ||
+        owner.externalSubject !== identity.subject ||
+        login === undefined ||
+        login.moduleId !== moduleId ||
+        login.subjectId !== localSubject ||
+        login.credentialId !== credentialId ||
+        factor === undefined ||
+        factor.revision !== login.credentialRevision
+      ) {
+        return yield* PersistenceMappingError.make({
+          operation: "oauth-storage.provision-conflict",
+          cause: undefined,
+        });
+      }
+    }),
+  );
 
-    const common = { subject, authority, subjectId, clock: options.clock ?? Mapping.clock };
+  const common = { subject, authority, subjectId, clock: options.clock ?? Mapping.clock };
 
-    const signIn = {
-      ...common,
-      ownership,
-      credential,
-      flow: signInFlow,
-      constraints: Mapping.requiredOAuthSignInConstraints,
-    } satisfies Mapping.OAuthSignInMapping<
-      typeof subjects,
-      typeof identities,
-      typeof logins,
-      typeof credentials,
-      typeof signInFlows,
-      string
-    >;
+  const signIn = {
+    ...common,
+    ownership,
+    credential,
+    flow: signInFlow,
+    constraints: Mapping.requiredOAuthSignInConstraints,
+  } satisfies Mapping.OAuthSignInMapping<
+    typeof subjects,
+    typeof identities,
+    typeof logins,
+    typeof credentials,
+    typeof signInFlows,
+    string
+  >;
 
-    const connected = {
-      ...common,
-      ownership,
-      flow: connectedFlow,
-      grant,
-      credential,
-      constraints: Mapping.requiredOAuthConnectedConstraints,
-      revocation: {
-        mode: "provider",
-        job,
-        retentionMillis: 86_400_000,
-        constraints: Mapping.requiredOAuthConnectedRevocationConstraints,
-      },
-      policy: {
-        condition: (input) => {
-          const configuration = input.grant?.configuration;
-
-          const requestedModule =
-            input.kind === "sign-in"
-              ? input.credential.moduleId
-              : input.kind === "action"
-                ? input.authorization.challenge.moduleId
-                : input.authorization.moduleId;
-
-          if (
-            input.subjectId !== localSubject ||
-            requestedModule !== moduleId ||
-            ((input.kind === "metadata" || input.kind === "use") &&
-              input.authorization.policyRevision !== policyRevision) ||
-            (configuration !== undefined &&
-              (configuration.provider !== identity.provider ||
-                configuration.issuer !== identity.issuer)) ||
-            (input.grant !== undefined &&
-              (input.grant.identity.provider !== identity.provider ||
-                input.grant.identity.issuer !== identity.issuer ||
-                input.grant.identity.subject !== identity.subject))
-          )
-            return sql`false`;
-
-          return sql`exists(select 1 from ${identities} where ${identities.columns.identityKey} = ${key} and ${identities.columns.subjectId} = ${localSubject})`;
-        },
-      },
-      otherReferences: ({ identityKey, subjectId }) =>
-        sql`exists(select 1 from ${logins} where ${eq(logins.columns.identityKey, identityKey)} and ${eq(logins.columns.subjectId, subjectId)})`,
-    } satisfies Mapping.OAuthConnectedMapping<
-      typeof subjects,
-      typeof credentials,
-      typeof identities,
-      typeof connectedFlows,
-      typeof grants,
-      string,
-      typeof revocations
-    >;
-
-    return { signIn, connected, moduleId, localSubject, credentialId };
-  });
-
-export const makeServices = (mappings: Effect.Success<ReturnType<typeof makeMappings>>) =>
-  Effect.gen(function* () {
-    const { signIn, connected, moduleId, localSubject, credentialId } = mappings;
-    const signInServices = yield* Mapping.makeOAuthSignInServices(signIn);
-    const connectedServices = yield* Mapping.makeOAuthConnectedServices(connected);
-
-    const revocationServices = yield* Mapping.makeOAuthConnectedRevocationServices({
-      ...connected,
+  const connected = {
+    ...common,
+    ownership,
+    flow: connectedFlow,
+    grant,
+    credential,
+    constraints: Mapping.requiredOAuthConnectedConstraints,
+    revocation: {
+      mode: "provider",
       job,
+      retentionMillis: 86_400_000,
       constraints: Mapping.requiredOAuthConnectedRevocationConstraints,
-    });
+    },
+    policy: {
+      condition: (input) => {
+        const configuration = input.grant?.configuration;
 
-    const sessionServices = yield* Mapping.makeAuthenticationAuthorityServices({
-      moduleId,
-      clock: signIn.clock,
-      subjectId,
-      subject: {
-        ...subject,
-        activeStatusValue: "active",
-        requirementColumns: [],
-        decodeRequirement: () => Effect.succeed(requirement),
+        const requestedModule =
+          input.kind === "sign-in"
+            ? input.credential.moduleId
+            : input.kind === "action"
+              ? input.authorization.challenge.moduleId
+              : input.authorization.moduleId;
+
+        if (
+          input.subjectId !== localSubject ||
+          requestedModule !== moduleId ||
+          ((input.kind === "metadata" || input.kind === "use") &&
+            input.authorization.policyRevision !== policyRevision) ||
+          (configuration !== undefined &&
+            (configuration.provider !== identity.provider ||
+              configuration.issuer !== identity.issuer)) ||
+          (input.grant !== undefined &&
+            (input.grant.identity.provider !== identity.provider ||
+              input.grant.identity.issuer !== identity.issuer ||
+              input.grant.identity.subject !== identity.subject))
+        )
+          return sql`false`;
+
+        return sql`exists(select 1 from ${identities} where ${identities.columns.identityKey} = ${key} and ${identities.columns.subjectId} = ${localSubject})`;
       },
-      credential: { ...authority, activeStatusValue: "active" },
-      isConstraintConflict: () => false,
-    });
+    },
+    otherReferences: ({ identityKey, subjectId }) =>
+      sql`exists(select 1 from ${logins} where ${eq(logins.columns.identityKey, identityKey)} and ${eq(logins.columns.subjectId, subjectId)})`,
+  } satisfies Mapping.OAuthConnectedMapping<
+    typeof subjects,
+    typeof credentials,
+    typeof identities,
+    typeof connectedFlows,
+    typeof grants,
+    string,
+    typeof revocations
+  >;
 
-    const useAuthority = OAuth.OAuthConnectedUseAuthority.of({
-      authorize: Effect.fn("OAuthStorage.authorizeUse")(function* (input) {
-        if (
-          input.invocation._tag !== "Authenticated" ||
-          input.invocation.subjectId !== localSubject ||
-          input.moduleId !== moduleId
-        )
-          return yield* OAuth.OAuthRejected.make({});
+  return { signIn, connected, moduleId, localSubject, credentialId };
+});
 
-        const current =
-          input.purpose === "use"
-            ? input.captured
-            : yield* connectedServices.oauthConnectedPersistence.read({
-                moduleId,
-                subjectId: localSubject,
-              });
+export const makeServices = Effect.fnUntraced(function* (
+  mappings: Effect.Success<ReturnType<typeof makeMappings>>,
+) {
+  const { signIn, connected, moduleId, localSubject, credentialId } = mappings;
+  const signInServices = yield* Mapping.makeOAuthSignInServices(signIn);
+  const connectedServices = yield* Mapping.makeOAuthConnectedServices(connected);
 
-        if (
-          current === undefined ||
-          !current.revision.credentials.some(
-            (credential) => credential.credentialId === credentialId,
-          )
-        )
-          return yield* OAuth.OAuthRejected.make({});
-        const revision = current.revision;
-
-        return {
-          moduleId,
-          revision,
-          policyRevision,
-          expiresAtMillis: DateTime.toEpochMillis(yield* DateTime.now) + 30_000,
-          purpose: input.purpose,
-          ...(input.grantId === undefined ? {} : { grantId: input.grantId }),
-          ...(input.profileKey === undefined ? {} : { profileKey: input.profileKey }),
-        };
-      }),
-    });
-
-    return Context.make(OAuth.OAuthSignInPersistence, signInServices.oauthSignInPersistence).pipe(
-      Context.add(OAuth.OAuthConnectedPersistence, connectedServices.oauthConnectedPersistence),
-      Context.add(OAuth.OAuthConnectedRevocations, revocationServices.oauthConnectedRevocations),
-      Context.add(Sessions.AuthenticationAuthority, sessionServices.authenticationAuthority),
-      Context.add(OAuth.OAuthConnectedUseAuthority, useAuthority),
-      // Connection management requires an application verifier for the exact
-      // action challenge. Session assurance alone cannot authorize disconnect.
-      Context.add(OAuth.OAuthConnectedActionEvidence, {
-        verify: () => Effect.fail(OAuth.OAuthConnectedActionRequired.make({})),
-      }),
-    );
+  const revocationServices = yield* Mapping.makeOAuthConnectedRevocationServices({
+    ...connected,
+    job,
+    constraints: Mapping.requiredOAuthConnectedRevocationConstraints,
   });
+
+  const sessionServices = yield* Mapping.makeAuthenticationAuthorityServices({
+    moduleId,
+    clock: signIn.clock,
+    subjectId,
+    subject: {
+      ...subject,
+      activeStatusValue: "active",
+      requirementColumns: [],
+      decodeRequirement: () => Effect.succeed(requirement),
+    },
+    credential: { ...authority, activeStatusValue: "active" },
+    isConstraintConflict: () => false,
+  });
+
+  const useAuthority = OAuth.OAuthConnectedUseAuthority.of({
+    authorize: Effect.fn("OAuthStorage.authorizeUse")(function* (input) {
+      if (
+        input.invocation._tag !== "Authenticated" ||
+        input.invocation.subjectId !== localSubject ||
+        input.moduleId !== moduleId
+      )
+        return yield* OAuth.OAuthRejected.make({});
+
+      const current =
+        input.purpose === "use"
+          ? input.captured
+          : yield* connectedServices.oauthConnectedPersistence.read({
+              moduleId,
+              subjectId: localSubject,
+            });
+
+      if (
+        current === undefined ||
+        !current.revision.credentials.some((credential) => credential.credentialId === credentialId)
+      )
+        return yield* OAuth.OAuthRejected.make({});
+      const revision = current.revision;
+
+      return {
+        moduleId,
+        revision,
+        policyRevision,
+        expiresAtMillis: DateTime.toEpochMillis(yield* DateTime.now) + 30_000,
+        purpose: input.purpose,
+        ...(input.grantId === undefined ? {} : { grantId: input.grantId }),
+        ...(input.profileKey === undefined ? {} : { profileKey: input.profileKey }),
+      };
+    }),
+  });
+
+  return Context.make(OAuth.OAuthSignInPersistence, signInServices.oauthSignInPersistence).pipe(
+    Context.add(OAuth.OAuthConnectedPersistence, connectedServices.oauthConnectedPersistence),
+    Context.add(OAuth.OAuthConnectedRevocations, revocationServices.oauthConnectedRevocations),
+    Context.add(Sessions.AuthenticationAuthority, sessionServices.authenticationAuthority),
+    Context.add(OAuth.OAuthConnectedUseAuthority, useAuthority),
+    // Connection management requires an application verifier for the exact
+    // action challenge. Session assurance alone cannot authorize disconnect.
+    Context.add(OAuth.OAuthConnectedActionEvidence, {
+      verify: () => Effect.fail(OAuth.OAuthConnectedActionRequired.make({})),
+    }),
+  );
+});
 
 export const makeStorage = (options: StorageOptions) =>
   Layer.effectContext(makeMappings(options).pipe(Effect.flatMap(makeServices)));

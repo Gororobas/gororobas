@@ -1,7 +1,10 @@
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { ProofPersistence, type ProofUnavailable } from "@yielded/auth/Proofs";
 import type { Table } from "drizzle-orm";
-import { type Context, Effect, type Crypto } from "effect";
+import type * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
 
 import type { NativeDriverDatabase, NativeDriverTransaction } from "./driver-types";
 import { NativeDatabase, nativeDatabase } from "./native-database";
@@ -40,7 +43,7 @@ export const makeProofTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | ProofUnavailable,
-    Exclude<R, ProofPersistence> | DR | LifecycleHooks | Crypto.Crypto
+    Exclude<R, ProofPersistence> | DR | LifecycleHooks | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinateProofPersistence<
     Database extends D,
@@ -68,7 +71,10 @@ export const makeProofTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | ProofUnavailable,
-    Exclude<R, ProofPersistence | TxId> | DR | LifecycleHooks | Crypto.Crypto
+    | Exclude<R, ProofPersistence | TxId>
+    | DR
+    | LifecycleHooks
+    | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinateProofPersistence<
     Database extends D,

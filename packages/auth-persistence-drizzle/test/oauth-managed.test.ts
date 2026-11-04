@@ -3,11 +3,14 @@ import { Auth, OAuth, Operations, Sessions } from "@yielded/auth";
 import { OAuthPersistence } from "@yielded/auth-persistence";
 import type { CommitJournal, PreparedCommit } from "@yielded/auth/Hooks";
 import { SubjectId } from "@yielded/auth/Schema";
-import * as KdfAdmission from "@yielded/crypto/KdfAdmission";
-import * as Portable from "@yielded/crypto/Portable";
 import { getTableName } from "drizzle-orm";
-import { Context, DateTime, Effect, Layer, Redacted, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
 
 import {
@@ -42,13 +45,12 @@ it.live.each(["sqlite", "d1"] as const)(
         ...identity,
       });
 
-      const rejected = (value: typeof input) =>
-        Effect.gen(function* () {
-          expect(yield* importer.importIdentity(value).pipe(Effect.result)).toMatchObject({
-            _tag: "Failure",
-            failure: { _tag: "OAuthUnavailable" },
-          });
+      const rejected = Effect.fnUntraced(function* (value: typeof input) {
+        expect(yield* importer.importIdentity(value).pipe(Effect.result)).toMatchObject({
+          _tag: "Failure",
+          failure: { _tag: "OAuthUnavailable" },
         });
+      });
 
       yield* rejected({ ...input, subjectId: SubjectId.make("missing") });
       yield* rejected({ ...input, moduleId: OAuth.OAuthModuleId.make("disabled") });
@@ -162,12 +164,7 @@ it.live.each([
         OAuth.OAuthReturnTargets.exactRoutes(["/activities"]),
         OAuth.OAuthTransactionProtector.layer(keyring),
         Auth.RequestBindingConfig.layer({ generation: 1, lifetimeMillis: 300_000, keyring }),
-      ).pipe(
-        Layer.provideMerge(
-          Portable.layer(globalThis.crypto.subtle).pipe(Layer.provide(KdfAdmission.layer())),
-        ),
-        Layer.provideMerge(Layer.succeedContext(fixture.context)),
-      );
+      ).pipe(Layer.provideMerge(Layer.succeedContext(fixture.context)));
 
       const services = yield* Layer.build(dependencies);
       const auth = yield* app.make.pipe(Effect.provide(services));
@@ -361,12 +358,7 @@ it.live.each(backends)(
         OAuth.OAuthConnectedTokenProtector.layer({
           activeKeyId: "test",
           keys: [{ id: "test", material: Redacted.make("B".repeat(42) + "A") }],
-        }).pipe(
-          Layer.provideMerge(
-            Portable.layer(globalThis.crypto.subtle).pipe(Layer.provide(KdfAdmission.layer())),
-          ),
-          Layer.provide(Layer.succeedContext(fixture.context)),
-        ),
+        }).pipe(Layer.provide(Layer.succeedContext(fixture.context))),
       );
 
       const protector = Context.get(tokenServices, OAuth.OAuthConnectedTokenProtector);

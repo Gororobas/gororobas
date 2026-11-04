@@ -1,4 +1,7 @@
-import { Context, type Effect, type Schema, type Types } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import type * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import type { SubjectId } from "../Schema";
 import type { PhoneCredentialSnapshot, PhoneOtpUnavailable } from "./models";

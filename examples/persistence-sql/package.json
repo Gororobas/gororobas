@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vp build",
-    "check": "tsc --noEmit -p tsconfig.json"
+    "check": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict"
   },
   "dependencies": {
     "@effect/atom-react": "catalog:",
@@ -19,7 +19,6 @@
     "@yielded/auth": "workspace:*",
     "@yielded/auth-persistence": "workspace:*",
     "@yielded/auth-simplewebauthn": "workspace:*",
-    "@yielded/crypto": "workspace:*",
     "effect": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

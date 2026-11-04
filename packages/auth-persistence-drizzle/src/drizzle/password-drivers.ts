@@ -2,7 +2,10 @@ import type { PasswordRegistrationAuthority } from "@yielded/auth-persistence/Ad
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { PasswordPersistence, type PasswordUnavailable } from "@yielded/auth/Password";
 import type { Table } from "drizzle-orm";
-import { type Context, Effect, type Crypto } from "effect";
+import type * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
 
 import type { NativeDriverDatabase, NativeDriverTransaction } from "./driver-types";
 import { NativeDatabase, nativeDatabase } from "./native-database";
@@ -57,7 +60,10 @@ export const makePasswordTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | PasswordUnavailable,
-    Exclude<R, PasswordPersistence> | DR | LifecycleHooks | Crypto.Crypto
+    | Exclude<R, PasswordPersistence>
+    | DR
+    | LifecycleHooks
+    | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinatePasswordPersistence<
     Database extends D,
@@ -90,7 +96,10 @@ export const makePasswordTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | PasswordUnavailable,
-    Exclude<R, PasswordPersistence | TxId> | DR | LifecycleHooks | Crypto.Crypto
+    | Exclude<R, PasswordPersistence | TxId>
+    | DR
+    | LifecycleHooks
+    | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinatePasswordPersistence<
     Database extends D,
@@ -170,7 +179,7 @@ export const makePasswordTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | PasswordUnavailable,
-    Exclude<R, TargetId> | DR | LifecycleHooks | Crypto.Crypto
+    Exclude<R, TargetId> | DR | LifecycleHooks | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinatePasswordRegistration<
     TargetId,
@@ -203,7 +212,7 @@ export const makePasswordTarget = <DatabaseId, D extends NativeDriverDatabase>(
   ): Effect.Effect<
     A,
     E | DE | PasswordUnavailable,
-    Exclude<R, TargetId | TxId> | DR | LifecycleHooks | Crypto.Crypto
+    Exclude<R, TargetId | TxId> | DR | LifecycleHooks | (SecureRandom.SecureRandom | Digest.Digest)
   >;
   function coordinatePasswordRegistration<
     TargetId,

@@ -1,5 +1,5 @@
 import type { SubjectId } from "@yielded/auth/Schema";
-import type { Effect } from "effect";
+import type * as Effect from "effect/Effect";
 
 import type { PersistenceMappingError } from "../mapping-error";
 export type { PersistenceMappingError } from "../mapping-error";

@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth-persistence-drizzle",
-  "version": "0.1.0-beta.42",
+  "version": "0.1.0-beta.47",
   "description": "Drizzle persistence, table mappings, and migration adapters for Yielded Auth.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {
@@ -35,7 +35,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "check": "tsc --noEmit -p tsconfig.json",
+    "check": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict",
     "test": "vp test --passWithNoTests",
     "example:totp": "bun test/fixtures/totp-sqlite-bun.ts"
   },
@@ -56,7 +56,6 @@
     "@effect/sql-sqlite-node": "catalog:",
     "@effect/sql-sqlite-wasm": "catalog:",
     "@effect/vitest": "catalog:",
-    "@yielded/crypto": "workspace:*",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
     "typescript": "catalog:",
@@ -65,17 +64,17 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "@effect/sql-d1": ">=4.0.0",
-    "@effect/sql-libsql": ">=4.0.0",
-    "@effect/sql-mysql2": ">=4.0.0",
-    "@effect/sql-pg": ">=4.0.0",
-    "@effect/sql-pglite": ">=4.0.0",
-    "@effect/sql-sqlite-bun": ">=4.0.0",
-    "@effect/sql-sqlite-do": ">=4.0.0",
-    "@effect/sql-sqlite-node": ">=4.0.0",
-    "@effect/sql-sqlite-wasm": ">=4.0.0",
-    "drizzle-orm": ">=1.0.0-rc.4",
-    "effect": "^4.0.3"
+    "@effect/sql-d1": ">=4.1.0",
+    "@effect/sql-libsql": ">=4.1.0",
+    "@effect/sql-mysql2": ">=4.1.0",
+    "@effect/sql-pg": ">=4.1.0",
+    "@effect/sql-pglite": ">=4.1.0",
+    "@effect/sql-sqlite-bun": ">=4.1.0",
+    "@effect/sql-sqlite-do": ">=4.1.0",
+    "@effect/sql-sqlite-node": ">=4.1.0",
+    "@effect/sql-sqlite-wasm": ">=4.1.0",
+    "drizzle-orm": ">=1.0.0-rc.5",
+    "effect": "^4.1.2"
   },
   "peerDependenciesMeta": {
     "@effect/sql-d1": {

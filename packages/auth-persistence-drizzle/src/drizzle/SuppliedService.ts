@@ -1,4 +1,4 @@
-import type { Context } from "effect";
+import type * as Context from "effect/Context";
 
 /** The strict function property also checks class-style keys: the adapter's
  * constructed value must satisfy the selected service, including native relations. */

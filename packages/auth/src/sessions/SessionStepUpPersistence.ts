@@ -1,4 +1,6 @@
-import { type DateTime, type Effect, Schema } from "effect";
+import type * as DateTime from "effect/DateTime";
+import type * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { PreparedCommit } from "../hooks/commit";
 import { TokenDigest } from "../Schema";

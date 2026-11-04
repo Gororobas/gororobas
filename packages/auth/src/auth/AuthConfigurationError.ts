@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 /** Invalid auth composition, separate from an authentication failure. */
 export class AuthConfigurationError extends Schema.TaggedError<AuthConfigurationError>()(

@@ -1,4 +1,6 @@
-import { Context, type DateTime, type Effect } from "effect";
+import * as Context from "effect/Context";
+import type * as DateTime from "effect/DateTime";
+import type * as Effect from "effect/Effect";
 
 import type { PreparedCommit } from "../hooks/commit";
 import type { SubjectId } from "../Schema";

@@ -4,8 +4,11 @@ import { makeStorageMappings } from "@yielded/auth-persistence/Adapter";
 import { TokenDigest } from "@yielded/auth/Schema";
 import { getTableColumns, sql } from "drizzle-orm";
 import { type SQLiteTable } from "drizzle-orm/sqlite-core";
-import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
 
 import * as D1 from "../src/D1";

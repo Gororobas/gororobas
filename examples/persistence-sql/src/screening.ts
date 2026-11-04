@@ -1,5 +1,7 @@
-import { Password, WebCrypto } from "@yielded/auth";
-import { Crypto, Effect, Layer, Redacted, Schema } from "effect";
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
+import { Password } from "@yielded/auth";
+import { Effect, Layer, Redacted, Schema } from "effect";
+import * as Digest from "effect/crypto/Digest";
 import { Hex } from "effect/encoding";
 import { HttpClient } from "effect/http";
 
@@ -10,7 +12,7 @@ const Suffixes = Schema.Array(Schema.String.check(Schema.isPattern(/^[A-F0-9]{35
 export const ScreeningLive = Layer.effect(
   Password.CompromisedPasswords,
   Effect.gen(function* () {
-    const crypto = yield* Crypto.Crypto;
+    const digests = yield* Digest.Digest;
     const client = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
 
     return Password.CompromisedPasswords.of({
@@ -28,7 +30,7 @@ export const ScreeningLive = Layer.effect(
             return { _tag: "Rejected", reason: "contextual" } as const;
 
           const hash = Hex.encode(
-            yield* crypto.digest("SHA-1", new TextEncoder().encode(value)),
+            yield* digests.digest(Digest.sha1, new TextEncoder().encode(value)),
           ).toUpperCase();
 
           const response = yield* client.get(
@@ -57,4 +59,4 @@ export const ScreeningLive = Layer.effect(
       ),
     });
   }),
-).pipe(Layer.provide(WebCrypto.layerWebCrypto));
+).pipe(Layer.provide(BunCrypto.layer));

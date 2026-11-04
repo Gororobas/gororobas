@@ -1,7 +1,16 @@
-import { Context, Effect, Schema, type Types } from "effect";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import type * as Types from "effect/Types";
 
 import * as OAuthScope from "../../OAuthScope";
-import { AccessClaims, type Authentication, Scope, type Unavailable } from "./models";
+import {
+  AccessClaims,
+  type Authentication,
+  Scope,
+  maximumScopes,
+  type Unavailable,
+} from "./models";
 
 export const standardOpenIdScopes = [
   OAuthScope.make("openid"),
@@ -15,7 +24,8 @@ const makeResultSchema = <Scope extends OAuthScope.OAuthScope>(
   scope: Schema.Codec<Scope, string>,
 ) =>
   Schema.Struct({
-    scopes: Schema.Array(scope).check(Schema.isMaxLength(32)),
+    // The server then requires a unique subset of the requested scopes.
+    scopes: Schema.Array(scope).check(Schema.isMaxLength(maximumScopes)),
     claims: Schema.optionalKey(AccessClaims),
   });
 

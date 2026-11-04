@@ -1,6 +1,8 @@
 import { snapshotOAuth } from "@yielded/auth/OAuth";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Crypto, Effect } from "effect";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
 
 import type {
   OAuthAuthorityTable,
@@ -30,7 +32,8 @@ export const makeNativeOAuthIdentityImports = Effect.fnUntraced(function* (
   const batch = yield* SqlBatchCommit;
   const executor = yield* makeSqlCommitExecutor(unavailable);
   const conditionalInsert = yield* makeConditionalSqlInsert();
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* SecureRandom.SecureRandom;
+  const digests = yield* Digest.Digest;
   const state = yield* makeOAuthNativeState(tables, mapping);
   const mutation = yield* makeOAuthNativeMutation(tables, mapping, batch !== undefined);
   const { sql, subject, authority } = mutation;
@@ -127,7 +130,10 @@ export const makeNativeOAuthIdentityImports = Effect.fnUntraced(function* (
         return yield* unavailable();
 
       return yield* snapshotOAuth(ImportedIdentity, { credentialId, credentialRevision });
-    }).pipe(Effect.provideService(Crypto.Crypto, crypto));
+    }).pipe(
+      Effect.provideService(SecureRandom.SecureRandom, crypto),
+      Effect.provideService(Digest.Digest, digests),
+    );
 
     return batch === undefined
       ? executor.run(work)

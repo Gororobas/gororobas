@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 
 import { AuthenticationAssurance, AuthenticationFactor } from "../operations/context";
 import { SubjectId, TokenDigest } from "../Schema";

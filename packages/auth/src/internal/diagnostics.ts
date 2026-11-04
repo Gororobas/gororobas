@@ -1,5 +1,12 @@
-import { Cause, Console, Context, Effect, Predicate, References, Schema, Tracer } from "effect";
+import * as Cause from "effect/Cause";
+import * as Console from "effect/Console";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
+import * as References from "effect/References";
+import * as Schema from "effect/Schema";
 import * as SqlError from "effect/sql/SqlError";
+import * as Tracer from "effect/Tracer";
 
 export const AuthDiagnostic = Schema.Struct({
   stage: Schema.Literals([
@@ -36,7 +43,7 @@ export const reportAuthDiagnostic = Effect.fnUntraced(
 
     yield* Effect.logDebug("Auth diagnostic", diagnostic);
   },
-  Effect.catch(() => Effect.void),
+  Effect.ignore({}),
   Effect.catchDefect(() => Effect.void),
 );
 
@@ -200,14 +207,14 @@ export const reportAuthFailure = Effect.fn("AuthDiagnostics.reportFailure")(func
       return false;
     if (!Cause.isDieReason(reason)) return true;
     try {
-      return !(reason.defect instanceof ReportedOperationDefect);
+      return !Schema.is(ReportedOperationDefect)(reason.defect);
     } catch {
       // Foreign defects can be proxies with throwing prototype traps.
       return true;
     }
   });
 
-  if (unreported.length === 0 || unreported.every(Cause.isInterruptReason)) return;
+  if (unreported.every(Cause.isInterruptReason)) return;
 
   const diagnostic = Cause.fromReasons(
     unreported.map((reason) => {

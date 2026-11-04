@@ -4,8 +4,15 @@
 // MIT notices in ../THIRD_PARTY_NOTICES.md.
 // Cancellation seam adapted from the existing Auth adapter protocol.test.ts.
 import { it } from "@effect/vitest";
-import { DateTime, Deferred, Effect, Exit, Fiber, Redacted, Scope } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/http";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import * as Redacted from "effect/Redacted";
+import * as Scope from "effect/Scope";
 import { expect } from "vite-plus/test";
 
 import { OAuth, Oidc, Pkce } from "../src/index";

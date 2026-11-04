@@ -168,35 +168,34 @@ export const makePasswordConsumer = Effect.gen(function* () {
       : { identifierVerifiedAtMillis: row.password.identifierVerifiedAtMillis }),
   });
 
-  const own = <A, E>(
+  const own = Effect.fnUntraced(function* <A, E>(
     body: (s: State, journal: Hooks.CommitJournal, now: number) => Effect.fn.Return<A, E>,
-  ) =>
-    Effect.gen(function* () {
-      if (yield* Hooks.hasCommitScope) return yield* Password.PasswordUnavailable.make({});
+  ) {
+    if (yield* Hooks.hasCommitScope) return yield* Password.PasswordUnavailable.make({});
 
-      return yield* Hooks.coordinateCommit((journal) =>
-        Effect.gen(function* () {
-          const now = DateTime.toEpochMillis(yield* DateTime.now);
+    return yield* Hooks.coordinateCommit((journal) =>
+      Effect.gen(function* () {
+        const now = DateTime.toEpochMillis(yield* DateTime.now);
 
-          const next = yield* Effect.try({
-            try: () => clone(state),
-            catch: () => Password.PasswordUnavailable.make({}),
-          });
+        const next = yield* Effect.try({
+          try: () => clone(state),
+          catch: () => Password.PasswordUnavailable.make({}),
+        });
 
-          const value = yield* Effect.gen(() => body(next, journal, now)).pipe(
-            Effect.catchDefect(() => Effect.fail(Password.PasswordUnavailable.make({}))),
-          );
+        const value = yield* Effect.gen(() => body(next, journal, now)).pipe(
+          Effect.catchDefect(() => Effect.fail(Password.PasswordUnavailable.make({}))),
+        );
 
-          state = next;
+        state = next;
 
-          return value;
-        }),
-      ).pipe(
-        Effect.map((result) => result.value),
-        Effect.mapError(() => Password.PasswordUnavailable.make({})),
-        Effect.provideService(Hooks.LifecycleHooks, hooks),
-      );
-    });
+        return value;
+      }),
+    ).pipe(
+      Effect.map((result) => result.value),
+      Effect.mapError(() => Password.PasswordUnavailable.make({})),
+      Effect.provideService(Hooks.LifecycleHooks, hooks),
+    );
+  });
 
   const mutationAllowed = (s: State, input: Password.PasswordMutationInput, now: number) => {
     const row = find(s, input.expectedRevision.subjectId);
@@ -231,23 +230,22 @@ export const makePasswordConsumer = Effect.gen(function* () {
   });
 
   const store = Password.PasswordPersistence.of({
-    findCredential: (input) =>
-      Effect.gen(function* () {
-        if (yield* Hooks.hasCommitScope) return yield* Password.PasswordUnavailable.make({});
-        if (input.moduleId !== "example/password")
-          return yield* Password.PasswordUnavailable.make({});
-        const row = state.subjects.get(input.identifier.value);
+    findCredential: Effect.fnUntraced(function* (input) {
+      if (yield* Hooks.hasCommitScope) return yield* Password.PasswordUnavailable.make({});
+      if (input.moduleId !== "example/password")
+        return yield* Password.PasswordUnavailable.make({});
+      const row = state.subjects.get(input.identifier.value);
 
-        const candidate =
-          row?.identifier.namespace === input.identifier.namespace &&
-          (input.subjectId === undefined || row.id === input.subjectId)
-            ? row.password
-            : undefined;
+      const candidate =
+        row?.identifier.namespace === input.identifier.namespace &&
+        (input.subjectId === undefined || row.id === input.subjectId)
+          ? row.password
+          : undefined;
 
-        return candidate === undefined
-          ? Option.none()
-          : Option.some(yield* Password.snapshotPasswordCredential(candidate));
-      }),
+      return candidate === undefined
+        ? Option.none()
+        : Option.some(yield* Password.snapshotPasswordCredential(candidate));
+    }),
     rehashIfCurrent: (input) =>
       own(function* (s, journal) {
         const row = find(s, input.credential.revision.subjectId);
@@ -343,16 +341,15 @@ export const makePasswordConsumer = Effect.gen(function* () {
       }).pipe(Effect.mapError(() => Proofs.ProofUnavailable.make({}))),
   });
 
-  const checkEvidence = (evidence: Sessions.AuthenticationEvidence) =>
-    Effect.gen(function* () {
-      if (!current(state, evidence.revision)) return yield* Sessions.StaleAuthentication.make({});
+  const checkEvidence = Effect.fnUntraced(function* (evidence: Sessions.AuthenticationEvidence) {
+    if (!current(state, evidence.revision)) return yield* Sessions.StaleAuthentication.make({});
 
-      const assessed = yield* Sessions.assessAuthentication(evidence, requirement).pipe(
-        Effect.mapError(() => Sessions.StaleAuthentication.make({})),
-      );
+    const assessed = yield* Sessions.assessAuthentication(evidence, requirement).pipe(
+      Effect.mapError(() => Sessions.StaleAuthentication.make({})),
+    );
 
-      if (!assessed.satisfied) return yield* Sessions.StaleAuthentication.make({});
-    });
+    if (!assessed.satisfied) return yield* Sessions.StaleAuthentication.make({});
+  });
 
   const currentRequirement = (subjectId: string): Sessions.AuthenticationRequirement =>
     find(state, subjectId)?.mfa
@@ -427,57 +424,54 @@ export const makePasswordConsumer = Effect.gen(function* () {
   });
 
   const factor = Password.PasswordActionEvidence.of({
-    verify: (input) =>
-      Effect.gen(function* () {
-        const row = find(state, input.challenge.revision.subjectId);
+    verify: Effect.fnUntraced(function* (input) {
+      const row = find(state, input.challenge.revision.subjectId);
 
-        if (!row || !current(state, input.challenge.revision))
-          return yield* Password.PasswordActionRequired.make({});
-        const proof = input.proof === undefined ? undefined : Redacted.value(input.proof);
-        const useFactor = row.mfa || input.challenge.action === "add-password";
+      if (!row || !current(state, input.challenge.revision))
+        return yield* Password.PasswordActionRequired.make({});
+      const proof = input.proof === undefined ? undefined : Redacted.value(input.proof);
+      const useFactor = row.mfa || input.challenge.action === "add-password";
 
-        if (
-          useFactor &&
-          (proof === undefined ||
-            !proof.startsWith("fixture-factor:") ||
-            consumedFactors.has(proof))
-        )
-          return yield* Password.PasswordActionRequired.make({});
-        if (useFactor) consumedFactors.add(proof!); // Independent fixture authority. NEVER refunded by password owner.
-        if (!useFactor && !input.currentPasswordEvidence && !input.recovery)
-          return yield* Password.PasswordActionRequired.make({});
+      if (
+        useFactor &&
+        (proof === undefined || !proof.startsWith("fixture-factor:") || consumedFactors.has(proof))
+      )
+        return yield* Password.PasswordActionRequired.make({});
+      if (useFactor) consumedFactors.add(proof!); // Independent fixture authority. NEVER refunded by password owner.
+      if (!useFactor && !input.currentPasswordEvidence && !input.recovery)
+        return yield* Password.PasswordActionRequired.make({});
 
-        const revision = input.challenge.revision;
+      const revision = input.challenge.revision;
 
-        const evidence: Sessions.AuthenticationEvidence = {
-          flowId: Sessions.AuthenticationFlowId.make(input.challenge.commandId),
-          bindingDigest: input.challenge.bindingDigest,
-          revision,
-          proofs: [
+      const evidence: Sessions.AuthenticationEvidence = {
+        flowId: Sessions.AuthenticationFlowId.make(input.challenge.commandId),
+        bindingDigest: input.challenge.bindingDigest,
+        revision,
+        proofs: [
+          {
+            method: useFactor ? "fixture-factor" : "password",
+            credentialId: useFactor ? "example-factor" : revision.credentials[0]!.credentialId,
+            factors: useFactor ? ["possession"] : ["knowledge"],
+            userVerified: false,
+            phishingResistant: false,
+            verifiedAt: yield* DateTime.now,
+          },
+        ],
+      };
+
+      return {
+        evidence,
+        requirement: {
+          ...requirement,
+          alternatives: [
             {
-              method: useFactor ? "fixture-factor" : "password",
-              credentialId: useFactor ? "example-factor" : revision.credentials[0]!.credentialId,
+              ...requirement.alternatives[0],
               factors: useFactor ? ["possession"] : ["knowledge"],
-              userVerified: false,
-              phishingResistant: false,
-              verifiedAt: yield* DateTime.now,
             },
           ],
-        };
-
-        return {
-          evidence,
-          requirement: {
-            ...requirement,
-            alternatives: [
-              {
-                ...requirement.alternatives[0],
-                factors: useFactor ? ["possession"] : ["knowledge"],
-              },
-            ],
-          },
-        };
-      }),
+        },
+      };
+    }),
   });
 
   const registration = passwords.RegistrationAuthority.of({
@@ -520,23 +514,21 @@ export const makePasswordConsumer = Effect.gen(function* () {
           }),
       }),
     ),
-    verifyEmailFixture: (email: string) =>
-      Effect.gen(function* () {
-        const row = state.subjects.get(email);
+    verifyEmailFixture: Effect.fnUntraced(function* (email: string) {
+      const row = state.subjects.get(email);
 
-        if (!row?.password) return yield* Password.PasswordUnavailable.make({});
-        row.security = String(Number(row.security) + 1);
-        row.password = { ...snapshot(row, row.password), identifierVerifiedAtMillis: 1 };
-      }),
-    requireMfaFixture: (email: string) =>
-      Effect.gen(function* () {
-        const row = state.subjects.get(email);
+      if (!row?.password) return yield* Password.PasswordUnavailable.make({});
+      row.security = String(Number(row.security) + 1);
+      row.password = { ...snapshot(row, row.password), identifierVerifiedAtMillis: 1 };
+    }),
+    requireMfaFixture: Effect.fnUntraced(function* (email: string) {
+      const row = state.subjects.get(email);
 
-        if (!row) return yield* Password.PasswordUnavailable.make({});
-        row.mfa = true;
-        row.security = String(Number(row.security) + 1);
-        if (row.password) row.password = snapshot(row, row.password);
-      }),
+      if (!row) return yield* Password.PasswordUnavailable.make({});
+      row.mfa = true;
+      row.security = String(Number(row.security) + 1);
+      if (row.password) row.password = snapshot(row, row.password);
+    }),
     failNextMutationFixture: Effect.sync(() => {
       failNextMutation = true;
     }),

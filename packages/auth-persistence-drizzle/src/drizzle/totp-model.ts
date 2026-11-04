@@ -1,7 +1,8 @@
 import type * as Shared from "@yielded/auth-persistence/Adapter";
 import { TotpPersistence } from "@yielded/auth/Totp";
 import type { SQL, Table } from "drizzle-orm";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type { DrizzleTableModel } from "./table-model";
 export { requiredTotpConstraints, type TotpMappingSource } from "@yielded/auth-persistence/Adapter";

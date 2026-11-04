@@ -1,5 +1,50 @@
 # @yielded/auth-persistence
 
+## 0.1.0-beta.47
+
+### Patch Changes
+
+- [#279](https://github.com/yielded-dev/auth/pull/279) [`197ddba`](https://github.com/yielded-dev/auth/commit/197ddba9395e4622c0d4dd0b8cb769b8d6364a78) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Compose email code and magic-link sign-in with managed or mapped persistence, including proof storage and verified-email lookup. Support stateless sessions for email sign-in alongside OAuth.
+
+  BEHAVIOR CHANGE: Definitions with email sign-in now require `emailCredentials` and `proofs` in managed migrations or mapped tables.
+
+- [#288](https://github.com/yielded-dev/auth/pull/288) [`109c420`](https://github.com/yielded-dev/auth/commit/109c4201e63637c8e9c23039c5a248b872fddca0) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Use Effect crypto and one `WebCrypto.layer` preset, and move Workers password hashing to `@yielded/auth-platform-workerd`. BEHAVIOR CHANGE: require Effect 4.1 and matching SQL drivers; replace `@yielded/crypto` and Auth's Workers subpaths with Effect crypto Layers or the Workers package, supply HTTP and the Kdf for `Testing.services()` separately, and use `Password.KdfAdmission.layer()`, optional `PasswordScrypt.layer`, and opaque Effect keys for JOSE.
+- Updated dependencies [[`197ddba`](https://github.com/yielded-dev/auth/commit/197ddba9395e4622c0d4dd0b8cb769b8d6364a78), [`1dd5bbe`](https://github.com/yielded-dev/auth/commit/1dd5bbe219733a0f09614c2e3b2520f62bdb421f), [`b0b5df2`](https://github.com/yielded-dev/auth/commit/b0b5df2d405bcbc70a04b4391763f16aed10f9e1), [`109c420`](https://github.com/yielded-dev/auth/commit/109c4201e63637c8e9c23039c5a248b872fddca0)]:
+  - @yielded/auth@0.1.0-beta.47
+
+## 0.1.0-beta.46
+
+### Patch Changes
+
+- Updated dependencies [[`c38c0f0`](https://github.com/yielded-dev/auth/commit/c38c0f0a3298f53938d18289d12e9d510ef6b525), [`6d219e8`](https://github.com/yielded-dev/auth/commit/6d219e89989e72793ba627e37b3a349745cd9f72)]:
+  - @yielded/auth@0.1.0-beta.46
+  - @yielded/crypto@0.1.0-beta.46
+
+## 0.1.0-beta.45
+
+### Patch Changes
+
+- [#272](https://github.com/yielded-dev/auth/pull/272) [`267b2f4`](https://github.com/yielded-dev/auth/commit/267b2f4118de57829f98421e64e210a5df927db3) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Enable managed and mapped phone registration through `Persistence.Provisioning`, using application-supplied account values and the existing phone lifecycle.
+- Updated dependencies [[`267b2f4`](https://github.com/yielded-dev/auth/commit/267b2f4118de57829f98421e64e210a5df927db3), [`3f063b5`](https://github.com/yielded-dev/auth/commit/3f063b51533c64b118ee3325efd7795c26e66ddc), [`12c4b81`](https://github.com/yielded-dev/auth/commit/12c4b812aa09f2898573da0d41fae8af886055b8)]:
+  - @yielded/auth@0.1.0-beta.45
+  - @yielded/crypto@0.1.0-beta.45
+
+## 0.1.0-beta.44
+
+### Patch Changes
+
+- Updated dependencies [[`11e04fb`](https://github.com/yielded-dev/auth/commit/11e04fb14edbc0d409b88540cd1538fbddf2ab74), [`81d27d1`](https://github.com/yielded-dev/auth/commit/81d27d14918acdd48ac2e51c5f34a6af246ea983)]:
+  - @yielded/auth@0.1.0-beta.44
+  - @yielded/crypto@0.1.0-beta.44
+
+## 0.1.0-beta.43
+
+### Patch Changes
+
+- Updated dependencies [[`d29041b`](https://github.com/yielded-dev/auth/commit/d29041b595fe2c04a6c23dc974e3a40b49f8b307)]:
+  - @yielded/auth@0.1.0-beta.43
+  - @yielded/crypto@0.1.0-beta.43
+
 ## 0.1.0-beta.42
 
 ### Patch Changes

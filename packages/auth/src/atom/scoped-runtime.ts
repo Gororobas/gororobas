@@ -1,5 +1,8 @@
-import { Cause, type Context } from "effect";
-import { AsyncResult, Atom, type AtomRegistry } from "effect/reactivity";
+import * as Cause from "effect/Cause";
+import type * as Context from "effect/Context";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Atom from "effect/reactivity/Atom";
+import type * as AtomRegistry from "effect/reactivity/AtomRegistry";
 
 import type { AuthAtomLifetime, AuthSubjectLifetime } from "./AuthAtomLifetime";
 

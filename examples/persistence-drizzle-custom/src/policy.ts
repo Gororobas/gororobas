@@ -1,4 +1,5 @@
-import { Auth, Email, Hooks, Passkey, Password, Sessions, WebCrypto } from "@yielded/auth";
+import * as BunCrypto from "@effect/platform-bun/BunCrypto";
+import { Auth, Email, Hooks, Passkey, Password, Sessions } from "@yielded/auth";
 import { and, eq, getTableColumns } from "drizzle-orm";
 import * as Drizzle from "drizzle-orm/effect-sqlite-bun";
 import { DateTime, Effect, Layer, Option, Schema } from "effect";
@@ -15,7 +16,7 @@ import { authSchema } from "./schema";
 
 const SessionReader = AppAuth.sessions
   .statefulLayer(sessionConfiguration.policy(AppAuth.sessions.moduleId))
-  .pipe(Layer.provide([WebCrypto.layerWebCrypto, Hooks.LifecycleHooks.empty]));
+  .pipe(Layer.provide([BunCrypto.layer, Hooks.LifecycleHooks.empty]));
 
 const EmailActions = Layer.effect(
   Email.EmailActionEvidence,

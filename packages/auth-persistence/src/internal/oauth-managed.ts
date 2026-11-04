@@ -2,9 +2,15 @@ import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import * as M from "@yielded/auth/OAuth";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { AuthenticationFlowId } from "@yielded/auth/Sessions";
-import { Cause, Context, type Crypto, DateTime, Effect, Schema } from "effect";
-import { SqlClient } from "effect/sql";
-import type { Fragment } from "effect/sql/Statement";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type * as Statement from "effect/sql/Statement";
 
 import {
   PersistenceConfigurationError,
@@ -46,7 +52,10 @@ export const makeManagedOAuth = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   Context.Context<never>,
   PersistenceConfigurationError,
-  Crypto.Crypto | LifecycleHooks | SqlClient.SqlClient | SqlBatchCommit
+  | (SecureRandom.SecureRandom | Digest.Digest)
+  | LifecycleHooks
+  | SqlClient.SqlClient
+  | SqlBatchCommit
 > {
   const sql = (yield* SqlClient.SqlClient).withoutTransforms();
   const batch = yield* SqlBatchCommit;
@@ -126,7 +135,7 @@ export const makeManagedOAuth = Effect.fnUntraced(function* (
     clock,
   };
 
-  function policyCondition(input: OAuthConnectedPolicyInput<unknown>): Fragment {
+  function policyCondition(input: OAuthConnectedPolicyInput<unknown>): Statement.Fragment {
     let moduleId: string;
 
     switch (input.kind) {

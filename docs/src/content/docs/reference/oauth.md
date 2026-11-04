@@ -7,30 +7,34 @@ Start with the [OAuth guide](../guide/oauth) for the flow and choice of API.
 
 ## Authorization server
 
-`OAuthServer.make(id, { scopes })` provides `Identity`, `Service`, `routes`,
-`middleware(requiredScopes)`, and `paths`. It supports authorization code with PKCE
-for MCP clients, including static registrations and Client ID Metadata Documents
-(CIMD). Use the [OpenID profile](#shared-openid-sign-in) for shared browser sign-in.
+`OAuthServer.make(id, { scopes })` provides `Identity`, `Clients`, `Service`, `routes`,
+`middleware(requiredScopes)`, `securityLayer(api)`, and `paths`. It supports
+authorization code with PKCE for MCP clients, including static registrations,
+registrations stored by your application, and Client ID Metadata Documents (CIMD).
+Use the [OpenID profile](#shared-openid-sign-in) for shared browser sign-in.
 
 Declare scopes with `OAuthScope.make("documents:read")` from `@yielded/auth`. The result
 is a branded `OAuthScope.OAuthScope<"documents:read">` value. Pass these values in `scopes`;
 middleware, authorization, and verified access retain their literal types. Plain
 strings are not accepted as scope declarations. `OAuthScope.OAuthScope` is the Effect schema
-for decoding scope strings at external boundaries.
+for decoding scope strings at external boundaries. Declare at most 1024 scopes whose names
+fit 8192 characters joined by spaces, or 4096 with JWT access tokens, so a client can
+request all of them at once.
 
 Provide these to `oauth.layer`:
 
 | Input            | Purpose                                                              |
 | ---------------- | -------------------------------------------------------------------- |
 | `origin`         | Public issuer origin                                                 |
-| `resource`       | Exact MCP resource URL on that origin                                |
-| `clients`        | Static client registrations; may be empty with CIMD                  |
+| `resource`       | Exact protected resource URL on that origin                          |
+| `clients`        | Static registrations; may be empty with CIMD or `oauth.Clients`      |
 | `clientMetadata` | Optional `{ allowedOrigins }` policy for metadata and JWKS discovery |
 | `loginPath`      | Login route that returns to `oauth.paths.authorize`                  |
 | `keys`           | Signing keyring; use separate random material from session keys      |
 | `oauth.Identity` | Verify the current application session                               |
+| `oauth.Clients`  | Optional client registrations from your storage                      |
 
-Provide durable `OAuthServer.Persistence` plus `HttpClient`, `Crypto`, `Hmac`, and
+Provide durable `OAuthServer.Persistence` plus `HttpClient`, `SecureRandom`, `Digest`, `Mac`, and
 `Signature`.
 
 `Identity.current` returns the verified `SubjectId` or `undefined`; dependency
@@ -53,17 +57,27 @@ returns 401 with a challenge, and unavailable dependencies return 503.
 ### Clients and metadata discovery
 
 Static clients configure `clientId`, `name`, and `redirectUris`. Add a redacted
-`clientSecret` for Basic/form-secret authentication, or `clientAssertion: { jwks }`
-or `{ jwksUri }` for `private_key_jwt`. Configure one authentication method.
-`grantTypes` permits `authorization_code` and/or `refresh_token`.
+`clientSecret` or its `clientSecretDigest` for Basic/form-secret authentication, or
+`clientAssertion: { jwks }` or `{ jwksUri }` for `private_key_jwt`. Configure one
+authentication method. `grantTypes` permits `authorization_code` and/or `refresh_token`.
 
 Callbacks match exactly. A native client's loopback callback may vary its port;
 the selected callback remains bound to the authorization code.
 
+Provide `oauth.Clients` to resolve registrations your application stores, such as
+clients from your registration endpoint. `get(clientId)` returns exactly the static
+client fields for that ID, omitting absent fields, or `undefined`, including for IDs
+your storage cannot represent. Store only `clientSecretDigest`, the unpadded base64url
+SHA-256 of a generated secret with at least 256 random bits. Stored `private_key_jwt`
+clients use inline `jwks`. Registrations reload on each request, so edits and deletion apply to the
+next request. Stored callbacks are untrusted: authorization errors show a confirmation
+page and `prompt=none` is refused.
+
 Set `clientMetadata.allowedOrigins` to enable trusted HTTPS metadata discovery.
 A document declares its exact URL as `client_id`, a `client_name`, and
 `redirect_uris`. It can declare public authentication or `private_key_jwt` with a
-public key source. Static registrations take precedence.
+public key source. Static registrations take precedence over stored ones, and both
+over metadata documents.
 
 Use an HTTP client and network policy that reject private, loopback, and link-local
 destinations after DNS resolution. Disable redirects and ambient credentials.
@@ -91,17 +105,46 @@ Each assertion is single-use across server instances. A lost acknowledgment need
 a fresh assertion; an uncertain token-issuance outcome still requires a new
 authorization flow.
 
-### Protecting MCP routes
+### Protecting resources
 
-Provide `oauth.middleware(scopes).layer` to protected routes. It verifies the bearer
-grant and supplies `oauth.CurrentAccess` with the declared scope union for that request.
-The shared `OAuthServer.CurrentAccess` remains available with string scopes. Require
-a defined value and apply your application's account and operation permissions.
+Provide `oauth.middleware(scopes).layer` to protected router routes such as MCP; access
+must hold every listed scope. It verifies the bearer grant and supplies
+`oauth.CurrentAccess` with the declared scope union for that request. The shared
+`OAuthServer.CurrentAccess` remains available with string scopes. Require a defined
+value and apply your application's account and operation permissions.
+
+For an `HttpApi`, annotate groups or endpoints with `OAuthScope.Required` and attach
+`OAuthScope.RequireAccess` after adding their endpoints; generated clients need no
+middleware. Provide `oauth.securityLayer(Api)` to the group handler Layers, which read
+the same `CurrentAccess`. These endpoints share the server's `resource` and tokens; serve
+them under that URL so challenge metadata matches.
+
+```ts
+const Read = OAuthScope.make("documents:read");
+const Documents = OAuthScope.make("documents");
+
+export const DocumentGroup = HttpApiGroup.make("documents")
+  .add(HttpApiEndpoint.get("list", "/documents", { success: DocumentList }))
+  .annotate(OAuthScope.Required, {
+    anyOf: [{ name: Read, description: "Read your documents" }, Documents],
+  })
+  .middleware(OAuthScope.RequireAccess);
+```
+
+Access must hold every `allOf` scope and, when given, one `anyOf` scope; `{ allOf: [] }`
+accepts any valid access. An endpoint's requirement replaces its group's.
+`securityLayer` fails with `ConfigurationError` when a protected endpoint has no
+requirement, an annotated endpoint lacks the middleware, a requirement names an
+undeclared scope, or the `HttpApi` itself is annotated. `OAuthScope.catalog(Api)` lists
+described scopes for consent and scope pages; escape descriptions when rendering.
 
 Missing or invalid credentials return 401 with discovery information; insufficient
-scope returns 403; unavailable storage returns 503. Configure CORS for the MCP,
-token, metadata, and revocation routes, exposing `WWW-Authenticate` as needed.
-Keep the consent endpoint under its same-origin policy.
+scope returns 403; unavailable storage returns 503. HttpApi clients receive these as
+`HttpApiError.Unauthorized`, `Forbidden`, and `ServiceUnavailable`. HttpApi challenges
+advertise the `allOf` scopes and the first `anyOf` scope, so list the narrowest
+alternative first. Configure CORS for the protected, token, metadata, and revocation
+routes, exposing `WWW-Authenticate` as needed. Keep the consent endpoint under its
+same-origin policy.
 
 ### Token lifecycle and storage
 
@@ -169,7 +212,8 @@ Optional OpenID server options are:
 | `POST /oauth/identity/revoke`           | Grant revocation                     |
 
 Request `openid`, optionally `profile` and `email`. Supported prompts are `login`,
-`select_account`, `consent`, and `none`; `max_age` requires recent authentication.
+`select_account`, `consent`, and, for static clients, `none`; `max_age` requires
+recent authentication.
 The default consent policy requires interaction. Supply `OAuthServer.OpenIdConsent`
 to recognize application-approved clients, callbacks, and claims.
 
@@ -179,8 +223,9 @@ by the original session expiry. Refresh checks `Identity.active` and application
 authorization without reading a browser session or contacting its upstream
 provider. It retains the original `auth_time`, rotates the refresh token, and can
 only retain or reduce granted scopes. Reusing a consumed refresh token revokes
-its grant. Applications own local logout; dynamic clients and coordinated browser
-logout are unsupported. Retain public verification keys through token expiry.
+its grant. Applications own local logout and any client registration endpoint;
+coordinated browser logout is unsupported. Retain public verification keys through
+token expiry.
 
 ### Application authorization and resource access
 
@@ -219,15 +264,18 @@ claims only. When `resource` differs from UserInfo, discovery omits UserInfo and
 the UserInfo route rejects those access tokens.
 
 For a resource server, construct `OAuthServer.makeAccessTokenVerifierWithKeySet({
-issuer, resource })` and supply `Jwks.Jwks` from `@yielded/jose` plus
-`@yielded/crypto/Signature`. Its `verify(Redacted.make(token))` Effect checks RS256,
+issuer, resource })` and supply `Jwks.Jwks` from `effect/jose` plus
+`effect/crypto/Signature`. Its `verify(Redacted.make(token))` Effect checks RS256,
 the `at+jwt` type, issuer, audience, expiry, and scope encoding, then returns
 `OAuthServer.Access` with the subject, client, grant, resource, scopes, and optional
 application claims. It captures the two services while using the caller's clock.
 
 For remote keys, build `Jwks.layerRemote({ url: "https://issuer.example/keys" })`
 once in the application's runtime and provide an Effect HttpClient. The configured
-URL is trusted application policy; tokens cannot select it. JOSE owns the
+URL is trusted application policy; tokens cannot select it. Supply a client that
+does not follow redirects; with FetchHttpClient, provide
+`FetchHttpClient.RequestInit` as `{ redirect: "manual", credentials: "omit" }`
+on its Layer. Effect owns the
 [bounded cache and refresh](./jose.mdx#local-and-remote-public-key-sets).
 Keep its Scope open while using the verifier. Remote-key failures return
 `OAuthServer.Unavailable`; invalid credentials return `OAuthServer.InvalidToken`.
@@ -237,7 +285,7 @@ On Workers, register the bounded verification's `runPromiseExit` promise with
 Do not abort that retained verification on client disconnect: other requests may
 still need its refresh. Keep the refresh deadline within the platform's lifetime
 extension; the default is five seconds. The
-[minimal Worker fixture](https://github.com/yielded-dev/auth/blob/main/packages/auth/test/fixtures/workers-access-token.ts)
+[minimal Worker fixture](https://github.com/yielded-dev/auth/blob/main/packages/auth-platform-workerd/test/fixtures/workers-access-token.ts)
 shows the composition. Cookies, application claims and permissions stay with the host.
 
 For preloaded keys, `OAuthServer.makeAccessTokenVerifier({ issuer, resource,
@@ -255,7 +303,8 @@ checks current session authority and the durable grant version.
 
 Both server profiles accept `OAuthServer.ConsentRenderer`. A custom renderer must
 escape displayed values and preserve the supplied POST action, CSRF field, and
-decision. See the [shared sign-in example](https://github.com/yielded-dev/auth/tree/main/examples/persistence-sql#hosted-yielded-sign-in).
+decision. `registered` is false only for metadata-document clients; stored client
+names are self-asserted. See the [shared sign-in example](https://github.com/yielded-dev/auth/tree/main/examples/persistence-sql#hosted-yielded-sign-in).
 
 ## Retained access
 
@@ -410,12 +459,10 @@ export const Routes = AuthRoutes.pipe(
 
 The [runnable application](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/oauth-application.ts)
 supplies those application Layers. Native providers require HTTP and crypto services;
-OpenID Connect also requires `Signature`. Protectors require `Aead` and `Crypto`.
-Their Layers check for XChaCha20-Poly1305 support and fail with
-`OAuthConfigurationError` (`reason: "crypto"`) when it is absent. On Workers,
-provide `WorkerdPasswordlessServices.layer` from
-`@yielded/auth/WorkerdPasswordlessServices` for HTTP and crypto without Wasm.
-Use `WorkerdServices` when the application also hashes passwords; see
+OpenID Connect also requires Effect `Signature`. Protectors require Effect
+`Aead` and `SecureRandom`; Effect supplies XChaCha20-Poly1305. On Workers,
+provide `WebCrypto.layer` from `@yielded/auth/WebCrypto` and an HTTP client such as
+`FetchHttpClient.layer`. Use `WorkerdServices` for crypto when the application also hashes passwords; see
 [runtime composition](./crypto.md#use-with-auth).
 Keep the resulting Layer alive for the application's lifetime.
 
@@ -445,7 +492,7 @@ and commit scopes. After a lost acknowledgement, retry the same input. Concurren
 conflicts may fail and can be retried after the competing import completes.
 
 For application-owned persistence, `OAuthPersistence.identityKey(identity)` returns
-the same stable key used by sign-in and requires Effect `Crypto`. It validates the
+the same stable key used by sign-in and requires Effect `Digest`. It validates the
 exact provider/issuer/subject tuple, rejects malformed Unicode with
 `OAuthUnavailable`, and excludes the OAuth module from ownership. Use it inside
 your own atomic import; the key alone does not create login authority. See the
@@ -538,6 +585,7 @@ expired-row cleanup and ingress limits.
 | Atlassian          | [`Atlassian.provider`](../guide/atlassian)                             |
 | Auth0              | [`Auth0.provider`](../guide/enterprise-oidc)                           |
 | Cognito            | [`Cognito.provider`](../guide/enterprise-oidc)                         |
+| Discord            | [`Discord.provider`](../guide/discord)                                 |
 | Dropbox            | [`Dropbox.provider`](../guide/dropbox)                                 |
 | Figma              | [`Figma.provider`](../guide/figma)                                     |
 | GitHub             | [`GitHub.provider`](../guide/github)                                   |
@@ -611,8 +659,9 @@ the provider configuration and are independent of sign-in scopes.
 
 Keep S256 PKCE and issuer-response validation enabled for providers that support
 them. `pkceS256: false` and `responseIssuerMode: "unsupported"` are explicit provider
-configuration choices. `userInfo: "merge"` fills missing ID-token claims after
-checking the same subject; ID-token claims take precedence. Discovery accepts a
+configuration choices. `userInfo: "merge"` fills missing ID-token claims after checking
+the same subject; ID-token claims take precedence. Null standard profile claims are
+omitted; custom claims are preserved for `profileSchema`. Discovery accepts a
 `{tenantid}` path segment when it matches the configured authority; verification
 substitutes the signed `tid` and checks the selected signing key's issuer. A
 concrete GUID authority discovered from that template keeps its own issuer, and
@@ -661,7 +710,7 @@ opt-in verified email fields. Google exposes verified `hd` for
 [workspace policy](../guide/slack#identity-and-workspace-policy). LINE keeps
 optional `amr`. Roblox keeps optional `type` and `created_at` and preserves the
 trailing-slash issuer. Railway merges UserInfo because its ID token omits name,
-email, and picture. `Microsoft.provider` keeps `oid` and `tid`. The durable
+email, and picture. Discord merges UserInfo; its `nickname` is the display name. `Microsoft.provider` keeps `oid` and `tid`. The durable
 subject is `oid:tid` when the token issuer equals the configured authority, and
 `tid:oid:tid` when it does not. `Apple.provider` decodes string
 `email_verified` and `is_private_email` flags and merges the first-consent name.

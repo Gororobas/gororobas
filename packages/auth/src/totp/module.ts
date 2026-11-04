@@ -1,4 +1,10 @@
-import { Cause, Context, DateTime, Effect, Layer, Redacted, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
@@ -102,10 +108,10 @@ export const makeTotpModule = <
   options: TotpPolicy,
   sessions: ReturnType<typeof makeSessionModule<SessionId, Claims>>,
 ) => {
-  const policySource = Effect.try({
-    try: () => Object.freeze(Schema.decodeSync(TotpPolicy)({ ...options })),
-    catch: () => TotpConfigurationError.make({}),
-  });
+  const policySource = Effect.suspend(() => Schema.decodeEffect(TotpPolicy)({ ...options })).pipe(
+    Effect.map((policy) => Object.freeze(policy)),
+    Effect.mapError(() => TotpConfigurationError.make({})),
+  );
 
   const make = Effect.gen(function* () {
     const policy = yield* policySource,
@@ -245,7 +251,7 @@ export const makeTotpModule = <
       captured: TotpSnapshot,
       commandId: string,
       action: Parameters<TotpPersistence["Service"]["mutate"]>[0]["action"],
-      authorization?: typeof TotpActionAuthorization.Type,
+      authorization?: TotpActionAuthorization,
     ) {
       const event = yield* lifecycleEventEffect({
         id: LifecycleEventId.make(`totp/${moduleId}/${commandId}`),
@@ -393,11 +399,11 @@ export const makeTotpModule = <
 
         const now = DateTime.toEpochMillis(yield* DateTime.now);
 
-        const enrollmentId = yield* randomId(),
-          revision = yield* randomId(),
-          credentialId = captured.record?.credentialId ?? (yield* randomId());
+        const enrollmentId = yield* randomId,
+          revision = yield* randomId,
+          credentialId = captured.record?.credentialId ?? (yield* randomId);
 
-        const secret = yield* generateSecret(),
+        const secret = yield* generateSecret,
           manualKey = base32(secret);
 
         const envelope = yield* encryptSecret(
@@ -418,7 +424,7 @@ export const makeTotpModule = <
                 subjectId: captured.revision.subjectId,
                 credentialId,
                 revision,
-                version: yield* randomId(),
+                version: yield* randomId,
                 secret: null,
                 recoveryDigests: [],
                 acceptedStep: -1,
@@ -541,7 +547,7 @@ export const makeTotpModule = <
           captured = yield* snapshot(target.revision.subjectId),
           evidence = yield* evidenceFor(captured, target, "totp");
 
-        yield* commit(captured, yield* randomId(), {
+        yield* commit(captured, yield* randomId, {
           _tag: "Verify",
           matchedStep: yield* matched(captured, Redacted.value(input.code)),
         });
@@ -576,7 +582,7 @@ export const makeTotpModule = <
         const captured = yield* snapshot(invocation.subjectId),
           evidence = yield* evidenceFor(captured, target, "totp");
 
-        yield* commit(captured, yield* randomId(), {
+        yield* commit(captured, yield* randomId, {
           _tag: "Verify",
           matchedStep: yield* matched(captured, Redacted.value(input.code)),
         });
@@ -612,7 +618,7 @@ export const makeTotpModule = <
           captured = yield* snapshot(target.revision.subjectId),
           evidence = yield* evidenceFor(captured, target, "recovery-code");
 
-        yield* commit(captured, yield* randomId(), {
+        yield* commit(captured, yield* randomId, {
           _tag: "Recovery",
           digest: yield* recoveryDigest(
             moduleId,
@@ -647,7 +653,7 @@ export const makeTotpModule = <
           captured = yield* snapshot(target.revision.subjectId);
 
         yield* evidenceFor(captured, target, "recovery-code");
-        yield* commit(captured, yield* randomId(), {
+        yield* commit(captured, yield* randomId, {
           _tag: "Recovery",
           digest: yield* recoveryDigest(
             moduleId,

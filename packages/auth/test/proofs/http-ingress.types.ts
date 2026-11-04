@@ -1,6 +1,7 @@
 import type { OperationHttpServer, Proofs } from "@yielded/auth";
-import type { Effect, Layer } from "effect";
-import type { HttpRouter } from "effect/http";
+import type * as Effect from "effect/Effect";
+import type * as HttpRouter from "effect/http/HttpRouter";
+import type * as Layer from "effect/Layer";
 import { expectTypeOf } from "vite-plus/test";
 
 import type { makeHttp, operationServer } from "./http-ingress.test";

@@ -1,5 +1,5 @@
-import { Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Schema from "effect/Schema";
 
 import { RequestBindingCredential, RequestBindingFlowId } from "../operations/requestBindingModels";
 import { SubjectId, TokenDigest } from "../Schema";

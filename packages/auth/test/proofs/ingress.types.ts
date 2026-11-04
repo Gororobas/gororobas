@@ -1,5 +1,6 @@
 import type { Auth, Proofs } from "@yielded/auth";
-import type { Effect, Layer } from "effect";
+import type * as Effect from "effect/Effect";
+import type * as Layer from "effect/Layer";
 import { expectTypeOf } from "vite-plus/test";
 
 import type { app } from "./ingress.test";

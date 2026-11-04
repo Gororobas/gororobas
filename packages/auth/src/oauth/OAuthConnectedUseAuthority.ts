@@ -1,4 +1,5 @@
-import { Context, type Effect } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
 
 import type { AuthInvocation } from "../operations/context";
 import type { OAuthAccountRevision } from "./accountsModels";

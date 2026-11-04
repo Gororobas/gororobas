@@ -7,8 +7,11 @@ import { ConfigurationError, Persistence } from "@yielded/auth/OAuthProxy";
 import { getTableColumns, is, type Table } from "drizzle-orm";
 import { getTableConfig as pgConfig, PgTable } from "drizzle-orm/pg-core";
 import { getTableConfig as sqliteConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
-import { Cause, Effect, Layer, Result } from "effect";
-import { SqlClient } from "effect/sql";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
+import * as SqlClient from "effect/sql/SqlClient";
 
 /** Override logical column keys when using an application-owned table. */
 export type OAuthProxyColumns<T extends Table> = Partial<{

@@ -1,4 +1,5 @@
-import { Effect, Redacted } from "effect";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 
 import {
   type OAuthConnectedGrantResponse,

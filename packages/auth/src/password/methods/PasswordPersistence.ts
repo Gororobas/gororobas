@@ -1,4 +1,7 @@
-import { Context, type Effect, type Option, type Redacted } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
+import type * as Option from "effect/Option";
+import type * as Redacted from "effect/Redacted";
 
 import type { CommitJournal, PreparedCommit } from "../../hooks/commit";
 import type { LoginIdentifier } from "../../identity/models";

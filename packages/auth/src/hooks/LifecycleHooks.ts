@@ -1,4 +1,8 @@
-import { Cause, Context, Effect, Layer } from "effect";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import {
   reportAuthFailure,
@@ -35,7 +39,7 @@ class ReportedHookDeliveryFailed extends HookDeliveryFailed.extend<ReportedHookD
 
 const isReportedHookFailure = (error: unknown): boolean => {
   try {
-    return error instanceof ReportedHookDeliveryFailed;
+    return Schema.is(ReportedHookDeliveryFailed)(error);
   } catch {
     return false;
   }

@@ -1,4 +1,4 @@
-import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun";
+import { BunCrypto, BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun";
 import { Http } from "@yielded/auth";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/http";
@@ -44,7 +44,7 @@ const PageRoutes = Layer.unwrap(
 
 const ApplicationLive = AuthLive.pipe(
   Layer.provide([DatabaseLive, KeysLive, DeliveryLive, ScreeningLive]),
-  Layer.provide([FetchHttpClient.layer, BunServices.layer]),
+  Layer.provide([FetchHttpClient.layer, BunServices.layer, BunCrypto.layerSecureRandom]),
 );
 
 const Routes = Layer.merge(http.routes(), PageRoutes).pipe(Layer.provide(ApplicationLive));

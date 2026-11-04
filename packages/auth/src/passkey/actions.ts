@@ -1,16 +1,14 @@
-import {
-  Cause,
-  Context,
-  Crypto,
-  DateTime,
-  Duration,
-  Effect,
-  Layer,
-  Redacted,
-  Schema,
-} from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
 import * as RateLimiter from "effect/persistence/RateLimiter";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { boundedMemoryRateLimiter, localRateLimiter } from "../auth/rateLimiter";
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
@@ -149,7 +147,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
     const protocol = yield* PasskeyProtocol;
     const persistence = yield* PasskeyPersistence;
     const binder = yield* binding.RequestBinding;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
     const hooks = yield* LifecycleHooks;
     const shared = yield* RateLimiter.RateLimiter;
     const local = yield* PasskeyModuleLimiter;

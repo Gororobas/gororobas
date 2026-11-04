@@ -10,13 +10,13 @@ bun add @yielded/auth@beta effect
 The package owns authentication workflows and OAuth/OIDC verification.
 Applications own identity, persistence, keys, policy, private delivery, and crypto
 backend selection. Resources live in the caller's Scope; credentials stay outside
-public results and telemetry. Runtime dependencies are Effect and the first-party
-`@yielded/crypto`, `@yielded/jose`, and `@yielded/oauth` packages.
+public results and telemetry. Runtime dependencies are Effect and `@yielded/oauth`.
+General cryptographic operations use `effect/crypto`. `WebCrypto.layer` from
+`@yielded/auth/WebCrypto` supplies a portable preset for randomness, digests,
+HMAC, encryption, and signatures.
 
-On Cloudflare Workers, provide `WorkerdPasswordlessServices.layer` from
-`@yielded/auth/WorkerdPasswordlessServices` for runtime crypto and HTTP without Wasm.
-Use `@yielded/auth/WorkerdServices` to include password hashing and bounded KDF
-admission. Other runtimes can compose crypto Layers explicitly. Supply keys separately;
+On Cloudflare Workers, use `@yielded/auth-platform-workerd` for crypto,
+password hashing, and bounded KDF admission. Supply keys and HTTP clients separately;
 see [runtime setup](https://yielded.dev/auth/reference/crypto/#use-with-auth).
 
 OAuth providers require an explicit nonretrying, nonredirecting Effect `HttpClient`.

@@ -1,5 +1,5 @@
-import { Effect } from "effect";
-import type { SqlClient } from "effect/sql/SqlClient";
+import * as Effect from "effect/Effect";
+import type * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
 
 import { PersistenceMappingError } from "./mapping-error";
@@ -65,7 +65,7 @@ export const nativeSqlAlias = (prefix: string, index: number): string => {
   return `${prefix}${index}`;
 };
 
-const directTable = (client: SqlClient, physical: object): SqlTable => {
+const directTable = (client: SqlClient.SqlClient, physical: object): SqlTable => {
   if (!(physical instanceof Table))
     // oxlint-disable-next-line effect/no-untyped-throw -- NativeSqlTables compiles and decodes synchronously; workflow executors capture these mapping failures.
     throw PersistenceMappingError.make({ operation: "mapping", cause: "Expected a SQL table" });
@@ -192,8 +192,8 @@ const directTable = (client: SqlClient, physical: object): SqlTable => {
 /** Cache physical metadata only; insert/update materialize values and hooks at
  * each call. Construction acquires no client and owns no transaction. */
 export const makeNativeSqlTables = (
-  client: SqlClient,
-  convert: (client: SqlClient, table: object) => SqlTable = directTable,
+  client: SqlClient.SqlClient,
+  convert: (client: SqlClient.SqlClient, table: object) => SqlTable = directTable,
   expression: NativeSqlTables["expression"] = (value) => compileSqlExpression(client, value),
 ): NativeSqlTables => {
   const tables = new WeakMap<object, SqlTable>();

@@ -1,4 +1,6 @@
-import { Array, Effect, Schema } from "effect";
+import * as Array from "effect/Array";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { LoginIdentifier } from "../../identity/models";
 import type { AuthenticationRevision } from "../../sessions/models";

@@ -1,6 +1,8 @@
-import type { Redacted } from "effect";
-import { Crypto, DateTime, Effect } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import type * as Redacted from "effect/Redacted";
 
 import { LifecycleHooks } from "../../hooks/LifecycleHooks";
 import {
@@ -53,7 +55,7 @@ export const makePasswordPreparation = ({
     subjectId?: SubjectId,
   ) {
     const hooks = yield* LifecycleHooks;
-    const crypto = yield* Crypto.Crypto;
+    const crypto = yield* SecureRandom.SecureRandom;
 
     const snapshot = yield* lifecycleSnapshotEffect({
       action,

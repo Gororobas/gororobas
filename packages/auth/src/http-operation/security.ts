@@ -1,5 +1,7 @@
-import { Effect, Redacted, Schema } from "effect";
-import { Cookies } from "effect/http";
+import * as Effect from "effect/Effect";
+import * as Cookies from "effect/http/Cookies";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 
 import { origin } from "../internal/origin";
 import type { CredentialSlot } from "../operations/credentials";

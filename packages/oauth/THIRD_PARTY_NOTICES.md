@@ -1,7 +1,7 @@
 # Third-party notices
 
 Selected OAuth/OIDC contracts were adapted into Effect tests from the pinned
-upstream snapshots below. The native runtime uses Effect and owned JOSE, and
+upstream snapshots below. The native runtime uses Effect, including its bundled JOSE, and
 includes the attributed form-encoding adaptation below. Neither upstream SDK is
 a runtime dependency.
 

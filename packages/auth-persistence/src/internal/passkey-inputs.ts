@@ -2,7 +2,7 @@ import * as M from "@yielded/auth/Passkey";
 import { CleanupLimit } from "@yielded/auth/Persistence";
 import { SubjectId } from "@yielded/auth/Schema";
 import { SessionInvalidationWindow } from "@yielded/auth/Sessions";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
 const metadata = { moduleId: M.PasskeyModuleId, subjectId: SubjectId };
 
 const identity = {

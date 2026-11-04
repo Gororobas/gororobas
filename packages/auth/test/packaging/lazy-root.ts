@@ -1,5 +1,5 @@
 import { AuthContract } from "@yielded/auth";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 export const make = AuthContract.make;
 

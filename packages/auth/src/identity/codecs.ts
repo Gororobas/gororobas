@@ -1,4 +1,6 @@
-import { Cause, Effect, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import { SubjectId } from "../Schema";
 

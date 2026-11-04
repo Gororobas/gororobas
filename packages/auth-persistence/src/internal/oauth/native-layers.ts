@@ -5,7 +5,9 @@ import {
   OAuthConnectedPersistence,
   OAuthConnectedRevocations,
 } from "@yielded/auth/OAuth";
-import { type Context, Effect, Layer } from "effect";
+import type * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type { OAuthRegistrationAuthority } from "../models/oauth-model";
 

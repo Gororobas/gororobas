@@ -1,6 +1,9 @@
 import * as BrowserLogin from "@yielded/auth/BrowserLogin";
 import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
-import { Cause, Effect, Layer, Schema } from "effect";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import { app, shell, type Event } from "electron";
 
 const unavailable = () => BrowserLogin.PlatformError.make({ reason: "unavailable" });
@@ -9,22 +12,26 @@ const redactDefects =
   <Failure>(project: () => Cause.Reason<Failure>) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.uninterruptibleMask((restore) =>
-      restore(effect).pipe(
-        Effect.catchCause((cause) => {
-          if (!Cause.hasDies(cause)) return Effect.failCause(cause);
-
-          return reportAuthFailure("browser-login", cause).pipe(
-            Effect.andThen(
-              Effect.failCause(
-                markAuthFailureReported(
-                  Cause.fromReasons<E | Failure>(
-                    cause.reasons.map((reason) => (Cause.isDieReason(reason) ? project() : reason)),
+      restore(effect).pipe((effect) =>
+        Effect.catchCauseIf(
+          effect,
+          (cause) => !!Cause.hasDies(cause),
+          (cause) => {
+            return reportAuthFailure("browser-login", cause).pipe(
+              Effect.andThen(
+                Effect.failCause(
+                  markAuthFailureReported(
+                    Cause.fromReasons<E | Failure>(
+                      cause.reasons.map((reason) =>
+                        Cause.isDieReason(reason) ? project() : reason,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          },
+        ),
       ),
     );
 

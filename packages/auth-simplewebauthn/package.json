@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth-simplewebauthn",
-  "version": "0.1.0-beta.42",
+  "version": "0.1.0-beta.47",
   "description": "SimpleWebAuthn browser ceremonies and server verification for Yielded Auth.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {
@@ -27,7 +27,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "check": "tsc --noEmit -p tsconfig.json",
+    "check": "effect-tsrs diagnostics --project tsconfig.json --type-check --strict",
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {
@@ -45,7 +45,7 @@
   "peerDependencies": {
     "@simplewebauthn/browser": ">=14.0.0 <15",
     "@simplewebauthn/server": ">=14.0.1 <15",
-    "effect": "^4.0.3"
+    "effect": "^4.1.2"
   },
   "peerDependenciesMeta": {
     "@simplewebauthn/browser": {

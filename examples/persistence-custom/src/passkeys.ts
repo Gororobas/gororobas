@@ -1,5 +1,6 @@
 import { Passkey, Schema as AuthSchema, Sessions } from "@yielded/auth";
-import { Context, Crypto, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
+import * as Digest from "effect/crypto/Digest";
 import { Base64Url } from "effect/encoding";
 
 import { requirement } from "../../shared/account/auth";
@@ -48,7 +49,7 @@ const credentialFor = (state: Readonly<State>, rpId: string, protocolId: string)
 export const PasskeysLive = Layer.effectContext(
   Effect.gen(function* () {
     const store = yield* AccountStore;
-    const crypto = yield* Crypto.Crypto;
+    const digests = yield* Digest.Digest;
 
     const digest = Effect.fn("Customers.passkeyDigest")(function* <
       S extends Schema.Codec<unknown, unknown, never, never>,
@@ -58,7 +59,7 @@ export const PasskeysLive = Layer.effectContext(
       )(value);
 
       return AuthSchema.TokenDigest.make(
-        Base64Url.encode(yield* crypto.digest("SHA-256", new TextEncoder().encode(encoded))),
+        Base64Url.encode(yield* digests.digest(Digest.sha256, new TextEncoder().encode(encoded))),
       );
     });
 

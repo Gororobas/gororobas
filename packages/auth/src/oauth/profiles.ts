@@ -1,4 +1,5 @@
-import { Schema, Struct } from "effect";
+import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import { OAuthDisplayProfile, OAuthVerifiedExternalIdentity } from "./signInModels";
 

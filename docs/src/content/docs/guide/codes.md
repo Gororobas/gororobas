@@ -27,7 +27,7 @@ export const AppAuth = Auth.make("app/Auth", {
 ```
 
 Codes default to six digits and five minutes. Override `digits` or `policy` when
-needed. Supply shared `ProofKeys` through [AuthDependencies](../reference/adapters#compose-the-application-layer).
+needed. Supply shared `ProofKeys` through your [key configuration](../reference/adapters#compose-the-application-layer).
 
 ## Start the flow and send a code
 
@@ -127,23 +127,26 @@ recover an earlier receipt or delivery.
 
 ## Supply the services
 
-Your application supplies lookup, claims, storage, delivery, and
+For SQL, `AuthPersistence.make(AppAuth)` supplies verified-email lookup, proof
+storage, and session authority through [managed or mapped tables](./storage).
+Your application supplies claims, delivery, keys, and
 [crypto Layers](../reference/crypto#use-with-auth). The return-target allowlist
 restricts where sign-in can send the user:
 
 ```ts title="apps/server/email-live.ts"
 import { Layer } from "effect";
-import { Email } from "@yielded/auth";
+import { Auth, Email, Proofs } from "@yielded/auth";
 
 import { AppAuth } from "./auth";
-import { AuthDependencies } from "./auth-dependencies";
-import { lookupEmail, resolveEmailClaims } from "./auth-accounts";
-import { ProofPersistenceLive } from "./auth-persistence";
+import { requestBinding, proofKeys } from "./auth-config";
+import { resolveEmailClaims } from "./auth-accounts";
+import { Persistence, storage } from "./auth-persistence";
+import { CryptoLive } from "./crypto-live";
+import { DatabaseLive } from "./database";
 import { EmailLive } from "./email";
 
 export const EmailServicesLive = Layer.mergeAll(
-  ProofPersistenceLive,
-  Layer.succeed(Email.EmailSignInTargets, { lookup: lookupEmail }),
+  Persistence.layer.pipe(Layer.provide(Persistence.Config.layer(storage))),
   Layer.succeed(AppAuth.strategies.email.SessionClaims, { resolve: resolveEmailClaims }),
   Email.EmailReturnTargets.exactRoutes(["/account"]),
   EmailLive,
@@ -151,17 +154,23 @@ export const EmailServicesLive = Layer.mergeAll(
 
 export const AuthLive = AppAuth.layer.pipe(
   Layer.provide(EmailServicesLive),
-  Layer.provide(AuthDependencies),
+  Layer.provide(Auth.RequestBindingConfig.layer(requestBinding)),
+  Layer.provide(Proofs.ProofKeys.layer(proofKeys)),
+  Layer.provide(DatabaseLive),
+  Layer.provide(CryptoLive),
 );
 ```
 
 For sibling apps, configure [cross-origin return targets](./http-and-client#sharing-sessions-across-apps).
 
-The relative imports are your application modules. `EmailLive` implements
+The relative imports are your application modules. `DatabaseLive` supplies the
+Effect SQL client; apply the [storage migrations](../reference/adapters#compose-persistence-once)
+before starting Auth. `EmailLive` implements
 [email delivery](./email-delivery); build Auth in a scope that outlives requests
-so its delivery worker can finish. `AuthDependencies` supplies shared
-[session, account, and key configuration](../reference/adapters#compose-the-application-layer).
-For database-backed lookup, use [the email adapter](../reference/adapters#email).
+so its delivery worker can finish.
+Sign-in uses existing, verified email identities; add [registration](#register-a-mailbox-owner)
+to create accounts. For custom persistence, supply `EmailSignInTargets` and
+`ProofPersistence` explicitly; see [the email adapter](../reference/adapters#email).
 
 HTTP derives the network key for request admission from the socket peer. See
 [HTTP admission](./http-and-client#proof-request-admission) for proxy configuration
@@ -177,10 +186,11 @@ and [server](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/log
 show both strategies and their private request-binding cookie.
 
 Provide `RegistrationAuthority` with your Drizzle adapter's
-`makeEmailRegistrationServices`, plus `makeProofPersistenceServices` using the
-same proof mapping for issuance and redemption. `AuthPersistence.layer` does not
-install guest email-registration services automatically. Provisioning is
-synchronous and must be idempotent by the authority's stable `requestId`.
+`makeEmailRegistrationServices`, using the same proof mapping as sign-in.
+`AuthPersistence.layer` supplies shared proof storage but leaves registration
+authority explicit. For fully explicit composition, also provide
+`makeProofPersistenceServices`. Provisioning is synchronous and must be idempotent
+by the authority's stable `requestId`.
 
 When your policy allows it, mailbox proof can reclaim an unverified email
 reservation for a new account. It never transfers the earlier account's data or

@@ -1,7 +1,16 @@
-import { Hmac, type Key } from "@yielded/crypto/Hmac";
-import { Cause, Context, Crypto, Effect, Layer, Redacted, Result, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
+import * as Mac from "effect/crypto/Mac";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 
+import { makeScopedOperation } from "../internal/scoped-operation";
 import { TokenDigest } from "../Schema";
 import { ProofConfigurationError, ProofUnavailable } from "./errors";
 import { ProofBinding, type ProofId, type ProofPurpose, type ProofDigest } from "./models";
@@ -51,7 +60,7 @@ type KeyRequirement<Secret extends ProofSecretPolicy> =
 export const proofKeysFor = <Secret extends ProofSecretPolicy>(secret: Secret) =>
   // The policy discriminant excludes ProofKeys exactly for Token, matching KeyRequirement<Secret>.
   // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
-  (secret._tag === "Token" ? Effect.succeed(undefined) : ProofKeys) as Effect.Effect<
+  (secret._tag === "Token" ? Effect.void : ProofKeys) as Effect.Effect<
     ProofKeyring | undefined,
     never,
     KeyRequirement<Secret>
@@ -146,8 +155,17 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
     Effect.mapError(() => ProofConfigurationError.make({ reason: "policy" })),
   );
 
-  const crypto = yield* Crypto.Crypto;
-  const keys = new Map<string, Key>();
+  const crypto = yield* SecureRandom.SecureRandom;
+
+  const digests = yield* Digest.Digest;
+  const keys = new Map<string, Mac.Key>();
+
+  const run =
+    policy._tag === "NumericCode"
+      ? yield* makeScopedOperation(() => ProofUnavailable.make({}))
+      : <A, E, R>(work: Effect.Effect<A, E, R>) => work;
+
+  const hmac = policy._tag === "NumericCode" ? yield* Mac.Mac : undefined;
   let activeKeyId = "token";
 
   if (policy._tag === "NumericCode") {
@@ -157,8 +175,6 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
     const keyring = yield* Schema.decodeEffect(Keyring)(configuredKeys).pipe(
       Effect.mapError(() => ProofConfigurationError.make({ reason: "keyring" })),
     );
-
-    const hmac = yield* Hmac;
 
     for (const entry of keyring.keys) {
       const material = Result.getOrUndefined(Base64Url.decode(Redacted.value(entry.material)));
@@ -171,16 +187,14 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
       )
         return yield* ProofConfigurationError.make({ reason: "keyring" });
 
-      const key = yield* hmac
-        .importKey({ algorithm: "SHA-256", key: Redacted.make(material) })
-        .pipe(
-          Effect.catchCause((cause) =>
-            Effect.failCause(
-              Cause.map(cause, () => ProofConfigurationError.make({ reason: "keyring" })),
-            ),
+      const key = yield* Mac.key(Mac.hmacSha256, material).pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, () => ProofConfigurationError.make({ reason: "keyring" })),
           ),
-          Effect.ensuring(Effect.sync(() => material.fill(0))),
-        );
+        ),
+        Effect.ensuring(Effect.sync(() => material.fill(0))),
+      );
 
       keys.set(entry.id, key);
     }
@@ -255,16 +269,16 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
     if (encoder.encode(message).byteLength > 16384) return yield* ProofUnavailable.make({});
 
     const bytes =
-      key === undefined
-        ? yield* crypto
-            .digest("SHA-256", encoder.encode(message))
+      key === undefined || hmac === undefined
+        ? yield* digests
+            .digest(Digest.sha256, encoder.encode(message))
             .pipe(
               Effect.catchCause((cause) =>
                 Effect.failCause(Cause.map(cause, () => ProofUnavailable.make({}))),
               ),
             )
-        : yield* key
-            .sign(encoder.encode(message))
+        : yield* hmac
+            .sign(key, encoder.encode(message))
             .pipe(
               Effect.catchCause((cause) =>
                 Effect.failCause(Cause.map(cause, () => ProofUnavailable.make({}))),
@@ -272,7 +286,7 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
             );
 
     return { keyId, digest: TokenDigest.make(Base64Url.encode(bytes)) };
-  });
+  }, run);
 
   return Object.freeze({
     activeKeyId,
@@ -292,7 +306,7 @@ export function makeProofCrypto(
 ): Effect.Effect<
   Effect.Success<ReturnType<typeof makeCrypto>>,
   ProofConfigurationError,
-  Crypto.Crypto
+  SecureRandom.SecureRandom | Digest.Digest
 >;
 
 export function makeProofCrypto(
