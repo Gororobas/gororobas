@@ -1,9 +1,7 @@
-import type { MediaAssetId } from "@gororobas/domain/common/ids"
 import { Recipe, Style, When } from "@pleat/core"
 import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
-import { imageUrl } from "../../media-urls"
 import * as Icons from "../icons"
 import { styledAttributes } from "../pleat-attributes"
 import { tones } from "../theme"
@@ -37,21 +35,22 @@ const thumbnailStyle = Recipe.make({
 /** A square image, or a sprout when the content has none. */
 export const view = <Message>(
   config: Readonly<{
-    maybeMediaAssetId: Option.Option<MediaAssetId>
+    /** At least 300px wide, such as `imageUrl(id, 300)`. */
+    maybeSrc: Option.Option<string>
     alt: string
     size?: "xs" | "sm" | "md" | "lg"
   }>,
   h: HtmlBuilder<Message>,
 ): Html =>
-  Option.match(config.maybeMediaAssetId, {
+  Option.match(config.maybeSrc, {
     onNone: () =>
       h.div(styledAttributes([h.AriaHidden(true)], thumbnailStyle({ size: config.size ?? "md" })), [
         Icons.sprout({ size: "lg" }),
       ]),
-    onSome: (id) =>
+    onSome: (src) =>
       h.img(
         styledAttributes(
-          [h.Src(imageUrl(id, 300)), h.Alt(config.alt), h.Attribute("loading", "lazy")],
+          [h.Src(src), h.Alt(config.alt), h.Attribute("loading", "lazy")],
           thumbnailStyle({ size: config.size ?? "md" }),
         ),
       ),

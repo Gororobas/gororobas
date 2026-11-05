@@ -2,7 +2,7 @@ import type { Block } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
 import { AuthenticationBlock } from "../blocks/authentication"
-import { ExternalDataObservationsBlock } from "../blocks/external-data-observations"
+import { ExternalDataAdminDashboardBlock } from "../blocks/external-data-admin-dashboard"
 import { ProfileLocationsEditorBlock } from "../blocks/profile-locations-editor"
 import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
@@ -46,14 +46,14 @@ export const WikiArticleDebugBinding = ApplicationBlock.makeBinding(WikiArticleD
   subscriptions: { when: (model, wikiArticleId) => isDebugRouteFor(model.route, wikiArticleId) },
 })
 
-export const ExternalDataObservationsBinding = ApplicationBlock.makeBinding(
-  ExternalDataObservationsBlock,
+export const ExternalDataAdminDashboardBinding = ApplicationBlock.makeBinding(
+  ExternalDataAdminDashboardBlock,
   {
-    field: "maybeExternalDataObservations",
+    field: "maybeExternalDataAdminDashboard",
     key: "queryKey",
     childField: "model",
     delivery: {
-      when: (model) => ApplicationRoute.guards.ExternalDataObservations(model.route),
+      when: (model) => ApplicationRoute.guards.ExternalDataAdminDashboard(model.route),
     },
   },
 )
@@ -85,7 +85,7 @@ export const ApplicationComposition = ApplicationBlock.makeComposition({
     WikiArticleBinding,
     WikiArticleDebugBinding,
     ProfileLocationsEditorBinding,
-    ExternalDataObservationsBinding,
+    ExternalDataAdminDashboardBinding,
   ],
 })
 

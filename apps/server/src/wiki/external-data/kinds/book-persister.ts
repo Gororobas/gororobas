@@ -7,7 +7,8 @@ import {
 import { Effect, Result, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
-import { clearProviderExternalData, persist, recordProviderObservation } from "../persist-utils.js"
+import { recordProviderObservation } from "../observations.js"
+import { clearProviderExternalData, persist } from "../projections.js"
 
 const insertEdition = SqlSchema.void({
   Request: BookEdition.mapFields(Struct.omit(["languages"])).mapFields(

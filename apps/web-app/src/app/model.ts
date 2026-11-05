@@ -2,7 +2,7 @@ import { WikiArticleId } from "@gororobas/domain/common/ids"
 import { Schema } from "effect"
 
 import { AuthenticationBlock } from "../blocks/authentication"
-import { ExternalDataObservationsBlock } from "../blocks/external-data-observations"
+import { ExternalDataAdminDashboardBlock } from "../blocks/external-data-admin-dashboard"
 import { ProfileLocationsEditorBlock } from "../blocks/profile-locations-editor"
 import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
@@ -21,10 +21,10 @@ export const WikiArticleInstance = Schema.Struct({
   model: WikiArticleBlock.Model,
 })
 
-export const ExternalDataObservationsInstance = Schema.Struct({
+export const ExternalDataAdminDashboardInstance = Schema.Struct({
   /** The log's URL, so changing a filter loads it afresh. */
   queryKey: Schema.String,
-  model: ExternalDataObservationsBlock.Model,
+  model: ExternalDataAdminDashboardBlock.Model,
 })
 
 export const Model = Schema.Struct({
@@ -38,7 +38,7 @@ export const Model = Schema.Struct({
   maybeWikiArticle: Schema.Option(WikiArticleInstance),
   maybeWikiArticleDebug: Schema.Option(WikiArticleDebugInstance),
   maybeProfileLocationsEditor: Schema.Option(ProfileLocationsEditorBlock.Model),
-  maybeExternalDataObservations: Schema.Option(ExternalDataObservationsInstance),
+  maybeExternalDataAdminDashboard: Schema.Option(ExternalDataAdminDashboardInstance),
   /** Set by the app shell's search link, whose click arrives before the navigation it starts:
    *  the search page focuses its field once it renders. */
   isSearchFieldFocusPending: Schema.Boolean,

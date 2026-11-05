@@ -1,10 +1,8 @@
-import { PopoverBlock } from "@foldkit/ui"
 import { BookmarkState, PublicationKind } from "@gororobas/domain/common/enums"
 import { ApiPublicationCardData } from "@gororobas/domain/publications/domain"
 import {
   ExternalDataProvider,
   RelatedWikiArticle,
-  WikiArticleExternalData,
   WikiArticleBookmarker,
   WikiArticleContributor,
   WikiArticleKind,
@@ -19,7 +17,7 @@ import { defineTaggedUnion } from "foldkit/schema"
 
 import { ClientFailure } from "../../lib/client-failure"
 import { ViewerBookmarks } from "../../lib/viewer-bookmarks"
-import { DrawerBlock } from "../../ui/drawer/drawer"
+import { PopoverDrawerBlock } from "../../ui/popover-drawer"
 
 export const PageResult = AsyncData.Schema(WikiArticleQueriedPageData, ClientFailure)
 export const RelatedResults = AsyncData.Schema(Schema.Array(RelatedWikiArticle), ClientFailure)
@@ -42,18 +40,13 @@ export const PublicationResults = AsyncData.Schema(
   ClientFailure,
 )
 
-/** Plants and books only; other kinds fetch nothing from providers. */
-export const ExternalDataResults = AsyncData.Schema(WikiArticleExternalData, ClientFailure)
+/** Sections showing provider data, each crediting its provider. */
+export const AttributedSection = Schema.Literals(["Wikipedia", "Editions"])
+export type AttributedSection = typeof AttributedSection.Type
 
-/** Each section showing provider data credits it in its own popover. */
-export const ExternalDataSection = Schema.Literals(["Taxonomy", "Media", "Wikipedia", "Editions"])
-export type ExternalDataSection = typeof ExternalDataSection.Type
-
-export const externalDataSectionProviders: Readonly<
-  Record<ExternalDataSection, typeof ExternalDataProvider.Type>
+export const attributedSectionProviders: Readonly<
+  Record<AttributedSection, typeof ExternalDataProvider.Type>
 > = {
-  Taxonomy: "GBIF",
-  Media: "GBIF",
   Wikipedia: "WIKIDATA",
   Editions: "GOOGLE_BOOKS",
 }
@@ -75,12 +68,11 @@ export const Model = Schema.Struct({
   /** Places only; other kinds start with none. */
   childPlacesAsyncData: ChildPlaceResults.schema,
   publicationsAsyncData: PublicationResults.schema,
-  externalDataAsyncData: ExternalDataResults.schema,
-  attributionPopovers: Schema.Array(PopoverBlock.Model),
+  attributions: Schema.Array(PopoverDrawerBlock.Model),
   viewerBookmarks: ViewerBookmarks,
   bookmarkSaving: BookmarkSaving,
-  bookmarkPopover: PopoverBlock.Model,
-  bookmarkDrawer: DrawerBlock.Model,
+  bookmarkPicker: PopoverDrawerBlock.Model,
+  classification: PopoverDrawerBlock.Model,
   maybeBookmarkerFilter: Schema.Option(BookmarkState),
   maybeRelatedKindFilter: Schema.Option(WikiArticleKind),
   maybePhotoCategoryFilter: Schema.Option(Schema.String),

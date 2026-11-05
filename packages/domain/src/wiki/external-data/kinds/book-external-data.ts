@@ -3,21 +3,8 @@ import { Schema, Struct } from "effect"
 import { GoogleBooksVolumeId } from "../../../common/external-identifiers.js"
 import { UrlAsString } from "../../../common/primitives.js"
 import { WikiBookArticle } from "../../kinds/book.js"
-import { Observation } from "../common.js"
+import { BookEdition, Observation } from "../common.js"
 import { ExternalDataFetchError } from "../error.js"
-
-export const BookEdition = Schema.Struct({
-  externalId: Schema.String,
-  title: Schema.String,
-  publisher: Schema.NullOr(Schema.String),
-  publicationDate: Schema.NullOr(Schema.String),
-  pageCount: Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-  languages: Schema.Array(Schema.String),
-  isbn: Schema.Array(Schema.String),
-  sourceUrl: UrlAsString,
-})
-
-export type BookEdition = typeof BookEdition.Type
 
 export const BookResult = Schema.Struct({
   observations: Schema.Array(Observation),

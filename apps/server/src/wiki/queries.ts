@@ -1,5 +1,9 @@
 import {
   BookmarkState,
+  CreditedMediaAssetRow,
+  CreditedProfile,
+  UrlAsString,
+  WikiArticleExternalData,
   PersonId,
   SupportedLanguage,
   MediaAssetRow,
@@ -40,6 +44,7 @@ import {
 } from "../db/full-text-search.js"
 import { orderByLanguagePreference } from "../db/language-preference.js"
 import { latestPublicProfileLocationJson } from "../profiles/location-sql.js"
+import { findExternalData } from "./external-data/queries.js"
 
 /**
  * Article projections with their status, which only `wiki_article_sources` stores: approval and
@@ -263,7 +268,8 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
         attributes: Schema.fromJsonString(member.fields.attributes),
         commonNames: Schema.fromJsonString(member.fields.commonNames),
         content: OptionalColumn(Schema.fromJsonString(TiptapDocument)),
-        mediaAssets: Schema.Array(Schema.toType(MediaAssetRow)),
+        mediaAssets: Schema.Array(Schema.toType(CreditedMediaAssetRow)),
+        externalData: Schema.toType(WikiArticleExternalData),
       }),
     ),
   ).pipe(Schema.decodeTo(Schema.toType(WikiArticleQueriedPageRow))),
@@ -285,8 +291,16 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
             (row) =>
               // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL values need validation before querying media by article ID.
               Schema.decodeUnknownEffect(WikiArticleId)(row.id).pipe(
-                Effect.flatMap(listWikiArticleMedia),
-                Effect.map((mediaAssets) => ({ ...row, mediaAssets })),
+                Effect.flatMap((wikiArticleId) =>
+                  Effect.all(
+                    {
+                      mediaAssets: listCreditedWikiArticleMedia(wikiArticleId),
+                      externalData: findExternalData(wikiArticleId),
+                    },
+                    { concurrency: 1 },
+                  ),
+                ),
+                Effect.map((related) => ({ ...row, ...related })),
               ),
             { concurrency: 1 },
           ),
@@ -304,6 +318,60 @@ export const listWikiArticleMedia = SqlSchema.findAll({
     SELECT m.* FROM media_assets m JOIN wiki_article_media_assets a ON a.media_asset_id = m.id
     WHERE a.wiki_article_id = ${id} AND m.moderation_status <> 'CENSORED' ORDER BY m.id`,
     ),
+})
+
+/** Public, active profiles as `CreditedProfile` JSON; null for anyone else. */
+const creditedProfileJson = (sql: SqlClient, profileIdColumn: string) => sql`
+  (SELECT json_object('id', p.id, 'handle', p.handle, 'name', p.name, 'photoId', photo.id)
+    FROM profiles p
+    LEFT JOIN media_assets photo ON photo.id = p.photo_id AND photo.moderation_status <> 'CENSORED'
+    WHERE p.id = ${sql.literal(profileIdColumn)} AND p.visibility = 'PUBLIC'
+      AND NOT EXISTS (SELECT 1 FROM auth_subjects s WHERE s.id = p.id AND s.active = 0))
+`
+
+const MediaCreditRow = Schema.Struct({
+  mediaAssetId: MediaAssetId,
+  profile: Schema.NullOr(Schema.fromJsonString(CreditedProfile)),
+  creditLine: Schema.NullOr(Schema.String),
+  creditUrl: Schema.NullOr(Schema.String),
+})
+
+/** Each media's credits in order. Media without credits of its own credits whoever uploaded it. */
+const listMediaCredits = SqlSchema.findAll({
+  Request: Schema.Array(MediaAssetId),
+  Result: MediaCreditRow,
+  execute: (mediaAssetIds) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT media_asset_id, profile, credit_line, credit_url FROM (
+      SELECT c.media_asset_id, ${creditedProfileJson(sql, "c.person_id")} AS profile,
+        c.credit_line, c.credit_url, c.order_index
+      FROM media_asset_credits c WHERE ${sql.in("c.media_asset_id", mediaAssetIds)}
+      UNION ALL
+      SELECT m.id, ${creditedProfileJson(sql, "m.owner_profile_id")}, NULL, NULL, 0
+      FROM media_assets m
+      WHERE ${sql.in("m.id", mediaAssetIds)}
+        AND NOT EXISTS (SELECT 1 FROM media_asset_credits c WHERE c.media_asset_id = m.id)
+    )
+    ORDER BY media_asset_id, order_index`,
+    ),
+})
+
+/** An article's media with whom to credit for each; credits naming no one readable are left out. */
+export const listCreditedWikiArticleMedia = Effect.fn(function* (wikiArticleId: WikiArticleId) {
+  const media = yield* listWikiArticleMedia(wikiArticleId)
+  const credits = EffectArray.isReadonlyArrayNonEmpty(media)
+    ? yield* listMediaCredits(media.map((asset) => asset.id))
+    : []
+
+  return media.map((asset): CreditedMediaAssetRow => ({
+    ...asset,
+    credits: credits.flatMap(({ mediaAssetId, ...credit }) =>
+      mediaAssetId === asset.id && (credit.profile !== null || credit.creditLine !== null)
+        ? [credit]
+        : [],
+    ),
+  }))
 })
 
 export const listPublishedCultivars = SqlSchema.findAll({
@@ -362,6 +430,7 @@ const QueriedCardRow = Schema.Struct({
   scientificNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.scientificNames),
   parentPlantName: OptionalColumn(Schema.fromJsonString(WikiArticleCommonName)),
   thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
+  externalThumbnailUrl: OptionalColumn(UrlAsString),
 })
 
 /** Cards of published articles, each in its translation that best matches `language`. */
@@ -377,7 +446,9 @@ const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql
     (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
       ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
     (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
-      WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
+      WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id,
+    (SELECT e.media_url FROM wiki_article_external_media e WHERE e.wiki_article_id = a.id
+      ORDER BY e.order_index LIMIT 1) AS external_thumbnail_url
   FROM ${wikiArticleProjectionsWithStatus(sql)} a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
   WHERE a.status = 'PUBLISHED' AND t.language = (
     SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id

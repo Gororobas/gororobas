@@ -6,8 +6,8 @@ import { HttpApiBuilder } from "effect/http-api"
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
 import { requestLocale } from "../common/request-locale.js"
 import { getWikiArticleDebug } from "./debug.js"
+import { getObservation, listObservations } from "./external-data/admin-dashboard.js"
 import { GoogleBooks, GoogleBooksLive } from "./external-data/services/google-books.js"
-import { getArticleExternalData, getObservation, listObservations } from "./external-data/views.js"
 import { WikiArticlesService } from "./service.js"
 
 export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers) =>
@@ -161,19 +161,6 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
       .handle("listWikiArticleChildPlaces", ({ params, query }) =>
         WikiArticlesService.use((service) => service.listChildPlaces({ ...params, ...query })).pipe(
           withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleChildPlaces" }),
-        ),
-      )
-      .handle("getWikiArticleExternalData", ({ params }) =>
-        WikiArticlesService.use((service) =>
-          Effect.gen(function* () {
-            const article = yield* service.findPage({
-              ...params,
-              language: (yield* requestLocale).language,
-            })
-            return yield* getArticleExternalData(article.id)
-          }),
-        ).pipe(
-          withApiInfrastructureErrors({ group: "wiki", endpoint: "getWikiArticleExternalData" }),
         ),
       )
       .handle("listExternalDataObservations", ({ query }) =>

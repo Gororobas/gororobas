@@ -41,8 +41,7 @@ import {
   ExternalDataObservationDetail,
   ExternalDataObservationLogPage,
   ExternalDataObservationLogQuery,
-  WikiArticleExternalData,
-} from "./external-data/views.js"
+} from "./external-data/observation-log.js"
 import { WikiArticleRevisionRow } from "./wiki-article.js"
 
 export class WikiApiGroup extends HttpApiGroup.make("wiki")
@@ -182,13 +181,6 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
       error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
       params: WikiArticleLookup,
       query: WikiChildPlacesParams,
-    }),
-  )
-  .add(
-    HttpApiEndpoint.get("getWikiArticleExternalData", "/wiki/:kind/:handle/external-data", {
-      success: WikiArticleExternalData,
-      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
-      params: WikiArticleLookup,
     }),
   )
   .add(

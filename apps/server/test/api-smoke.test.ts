@@ -289,10 +289,6 @@ const requests = ({
         params: { kind: targets.article.kind, handle: targets.article.handle },
         query: { language: "pt", pageSize: 12, currentPage: 0 },
       }),
-    "wiki.getWikiArticleExternalData": () =>
-      client.wiki.getWikiArticleExternalData({
-        params: { kind: targets.article.kind, handle: targets.article.handle },
-      }),
     "wiki.listExternalDataObservations": () =>
       client.wiki.listExternalDataObservations({ query: { outcome: "Success" } }),
     "wiki.getExternalDataObservation": () =>

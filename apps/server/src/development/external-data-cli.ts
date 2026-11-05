@@ -30,7 +30,7 @@ import { WorkflowEngine } from "effect/workflow"
 
 import { IdGenLive } from "../id-gen-live.js"
 import { makeAppSql } from "../sql.js"
-import { buildExternalDataRequest } from "../wiki/external-data/persist-utils.js"
+import { buildExternalDataRequest } from "../wiki/external-data/inputs.js"
 import { ExternalDataReport, reportExternalData } from "../wiki/external-data/report.js"
 import { ExternalDataProvidersLive } from "../wiki/external-data/services/external-data-providers-live.js"
 import {

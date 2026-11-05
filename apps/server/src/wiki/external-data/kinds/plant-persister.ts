@@ -7,10 +7,11 @@ import {
   type ExternalDataFetchRequest,
   type PlantExternalDataResult,
 } from "@gororobas/domain"
-import { Effect, Result, Struct } from "effect"
+import { Effect, Result, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
-import { clearProviderExternalData, persist, recordProviderObservation } from "../persist-utils.js"
+import { recordProviderObservation } from "../observations.js"
+import { clearProviderExternalData, persist } from "../projections.js"
 
 const insertExternalLink = SqlSchema.void({
   Request: ExternalLink.mapFields(Struct.assign({ wikiArticleId: WikiArticleId })),
@@ -42,7 +43,9 @@ const insertTaxonomyClassification = SqlSchema.void({
 })
 
 const insertExternalMedia = SqlSchema.void({
-  Request: ExternalMedia.mapFields(Struct.assign({ wikiArticleId: WikiArticleId })),
+  Request: ExternalMedia.mapFields(
+    Struct.assign({ wikiArticleId: WikiArticleId, orderIndex: Schema.Int }),
+  ),
   execute: (media) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
@@ -109,7 +112,7 @@ export const persistPlant = (request: ExternalDataFetchRequest, data: PlantExter
 
       yield* Effect.forEach(
         taxon.media,
-        (media) => insertExternalMedia({ wikiArticleId, ...media }),
+        (media, orderIndex) => insertExternalMedia({ wikiArticleId, orderIndex, ...media }),
         { discard: true, concurrency: 1 },
       )
 

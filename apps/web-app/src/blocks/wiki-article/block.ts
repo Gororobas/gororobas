@@ -1,13 +1,8 @@
-import { layer as PopoverLayer } from "@foldkit/ui/popover"
 import { Effect, Layer } from "effect"
 
-import { layer as DrawerLayer } from "../../ui/drawer"
+import { layer as PopoverDrawerLayer } from "../../ui/popover-drawer"
 import { CommandsLayer } from "./command"
-import {
-  AttributionPopoversBinding,
-  BookmarkDrawerBinding,
-  BookmarkPopoverBinding,
-} from "./composition"
+import { AttributionsBinding, BookmarkPickerBinding, ClassificationBinding } from "./composition"
 import { WikiArticleBlock } from "./definition"
 import { init } from "./init"
 import { subscriptions } from "./subscription"
@@ -16,12 +11,12 @@ import { view } from "./view/view"
 
 export const layer = WikiArticleBlock.makeLayer(
   Effect.gen(function* () {
-    const bookmarkPopover = yield* BookmarkPopoverBinding
-    const bookmarkDrawer = yield* BookmarkDrawerBinding
-    const attributionPopovers = yield* AttributionPopoversBinding
+    const bookmarkPicker = yield* BookmarkPickerBinding
+    const classification = yield* ClassificationBinding
+    const attributions = yield* AttributionsBinding
 
     return {
-      children: [bookmarkPopover, bookmarkDrawer, attributionPopovers],
+      children: [bookmarkPicker, classification, attributions],
       init,
       update,
       view,
@@ -29,6 +24,6 @@ export const layer = WikiArticleBlock.makeLayer(
       EffectsLayer: Layer.mergeAll(CommandsLayer, subscriptions.layer),
     }
   }),
-).pipe(Layer.provide(Layer.mergeAll(DrawerLayer, PopoverLayer)))
+).pipe(Layer.provide(PopoverDrawerLayer))
 
 export { WikiArticleBlock } from "./definition"

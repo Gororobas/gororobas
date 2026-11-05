@@ -6,7 +6,7 @@ import { type Html, type HtmlBuilder } from "foldkit/html"
 import { styledAttributes } from "../pleat-attributes"
 import { controlSize, radius } from "../theme"
 
-export type ProfileAvatarSize = "compact" | "standard" | "large" | "profile"
+export type ProfileAvatarSize = "inline" | "compact" | "standard" | "large" | "profile"
 
 const avatarStyle = Recipe.make({
   base: {
@@ -18,6 +18,8 @@ const avatarStyle = Recipe.make({
   },
   variants: {
     size: {
+      /** Beside a line of text, such as a photo's credit. */
+      inline: { inlineSize: "1.5em" },
       compact: { inlineSize: controlSize.sm },
       standard: { inlineSize: controlSize.lg },
       large: { inlineSize: "5rem" },

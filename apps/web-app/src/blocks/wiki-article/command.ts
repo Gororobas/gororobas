@@ -143,22 +143,6 @@ export const LoadPublications = WikiArticleBlock.makeCommand("LoadPublications",
   },
 })
 
-export const LoadExternalData = WikiArticleBlock.makeCommand("LoadExternalData", {
-  args: { lookup: WikiArticleLookup },
-  messages: [Message.SucceededLoadExternalData, Message.FailedLoadExternalData],
-  handler: function* () {
-    const api = yield* GororobasApiClient
-
-    return ({ lookup }) =>
-      api.wiki.getWikiArticleExternalData({ params: lookup }).pipe(
-        Effect.match({
-          onFailure: (error) => Message.FailedLoadExternalData({ error: { cause: error } }),
-          onSuccess: (externalData) => Message.SucceededLoadExternalData({ externalData }),
-        }),
-      )
-  },
-})
-
 export const SaveBookmark = WikiArticleBlock.makeCommand("SaveBookmark", {
   args: { lookup: WikiArticleLookup, maybeState: Schema.Option(BookmarkState) },
   messages: [Message.SucceededSaveBookmark, Message.FailedSaveBookmark],
@@ -187,6 +171,5 @@ export const CommandsLayer = Layer.mergeAll(
   LoadCultivars.layer,
   LoadChildPlaces.layer,
   LoadPublications.layer,
-  LoadExternalData.layer,
   SaveBookmark.layer,
 )

@@ -3,8 +3,9 @@ import { Schema, SchemaAST } from "effect"
 import { WikiArticleId } from "../../common/ids.js"
 import { Handle, OptionalColumn, TimestampedStruct } from "../../common/primitives.js"
 import { LoroDocFrontier } from "../../crdts/domain.js"
-import { MediaAssetRow } from "../../media-assets/domain.js"
+import { CreditedMediaAssetRow } from "../../media-assets/domain.js"
 import { TiptapDocument } from "../../rich-text/domain.js"
+import { WikiArticleExternalData } from "../external-data/page-data.js"
 import { WikiArticleCommonName } from "../wiki-article-common-name.js"
 import {
   WikiArticleEditableTranslation,
@@ -96,7 +97,9 @@ export const defineKind = <
       commonNames: Schema.Array(WikiArticleCommonName),
       content: OptionalColumn(TiptapDocument),
       handle: Handle,
-      mediaAssets: Schema.Array(MediaAssetRow),
+      mediaAssets: Schema.Array(CreditedMediaAssetRow),
+      /** Empty for kinds providers know nothing about. */
+      externalData: WikiArticleExternalData,
     }),
   }
 }

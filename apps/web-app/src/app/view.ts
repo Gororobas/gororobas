@@ -12,7 +12,7 @@ import {
   ApplicationComposition,
   type ApplicationViewBuilder,
   AuthenticationBinding,
-  ExternalDataObservationsBinding,
+  ExternalDataAdminDashboardBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
@@ -177,14 +177,14 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
             }),
           ),
       }),
-    ExternalDataObservations: () =>
-      Option.match(model.maybeExternalDataObservations, {
+    ExternalDataAdminDashboard: () =>
+      Option.match(model.maybeExternalDataAdminDashboard, {
         onNone: () => h.empty,
         onSome: (log) =>
           h.block(
-            ExternalDataObservationsBinding.embedView({
+            ExternalDataAdminDashboardBinding.embedView({
               key: log.queryKey,
-              slotId: "external-data-observations",
+              slotId: "external-data-admin-dashboard",
               model: log.model,
             }),
           ),
@@ -199,7 +199,7 @@ const title = (route: ApplicationRoute): string =>
     WikiArticleDebug: () => "Depuração | Gororobas",
     Login: () => "Entrar | Gororobas",
     MyPlaces: () => "Meus lugares | Gororobas",
-    ExternalDataObservations: () => "Dados externos | Gororobas",
+    ExternalDataAdminDashboard: () => "Dados externos | Gororobas",
     NotFound: () => "Página não encontrada | Gororobas",
   })
 

@@ -584,8 +584,11 @@ CREATE TABLE wiki_plant_taxonomy_classification (
 
 CREATE INDEX idx_plant_classification ON wiki_plant_taxonomy_classification (taxon_rank, scientific_name);
 
+-- Photos providers have of what an article is about. The first stands in for the article's own
+-- main photo while it has none.
 CREATE TABLE wiki_article_external_media (
   wiki_article_id text NOT NULL REFERENCES wiki_article_sources (id) ON DELETE CASCADE,
+  order_index integer NOT NULL, -- the provider's order
   media_url text NOT NULL,
   source_url text NOT NULL,
   credit_line text NOT NULL,

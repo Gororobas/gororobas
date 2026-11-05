@@ -9,11 +9,11 @@ import { Effect, Layer, Match, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 import { Activity, Workflow } from "effect/workflow"
 
+import { type ExternalDataArticle, buildExternalDataRequest } from "./inputs.js"
 import { fetchBook } from "./kinds/book-fetcher.js"
 import { persistBook } from "./kinds/book-persister.js"
 import { fetchPlant } from "./kinds/plant-fetcher.js"
 import { persistPlant } from "./kinds/plant-persister.js"
-import { type ExternalDataArticle, buildExternalDataRequest } from "./persist-utils.js"
 
 export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v3", {
   payload: ExternalDataFetchRequest.fields,

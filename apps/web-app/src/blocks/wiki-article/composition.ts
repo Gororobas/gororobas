@@ -1,55 +1,38 @@
-import { PopoverBlock } from "@foldkit/ui"
 import type { Block } from "foldkit"
 
-import { DrawerBlock } from "../../ui/drawer/drawer"
-import { WikiArticleBlock, makeNoopStep } from "./definition"
-import { ExternalDataSection } from "./model"
+import { PopoverDrawerBlock } from "../../ui/popover-drawer"
+import { WikiArticleBlock } from "./definition"
+import { AttributedSection } from "./model"
 
-/** Wide screens choose a bookmark state in a popover; phones in a drawer. */
-export const BookmarkPopoverBinding = WikiArticleBlock.makeBinding(PopoverBlock, {
-  field: "bookmarkPopover",
-  init: { contextToArgs: () => [{ id: "wiki-article-bookmark", isAnimated: true }] },
-}).withOutMessagePolicy({
-  fold: WikiArticleBlock.makeOutMessageFold(PopoverBlock, {
-    Opened: makeNoopStep,
-    Closed: makeNoopStep,
-  }),
+/** Someone's own relationship to the article. */
+export const BookmarkPickerBinding = WikiArticleBlock.makeBinding(PopoverDrawerBlock, {
+  field: "bookmarkPicker",
+  init: { contextToArgs: () => [{ id: "wiki-article-bookmark" }] },
 })
 
-export const BookmarkDrawerBinding = WikiArticleBlock.makeBinding(DrawerBlock, {
-  field: "bookmarkDrawer",
-  init: { contextToArgs: () => [{ id: "wiki-article-bookmark-drawer", isAnimated: true }] },
-}).withOutMessagePolicy({
-  fold: WikiArticleBlock.makeOutMessageFold(DrawerBlock, {
-    Opened: makeNoopStep,
-    Closed: makeNoopStep,
-  }),
+/** A plant's whole classification, behind its one-line breadcrumb. */
+export const ClassificationBinding = WikiArticleBlock.makeBinding(PopoverDrawerBlock, {
+  field: "classification",
+  init: { contextToArgs: () => [{ id: "wiki-article-classification" }] },
 })
 
-export const attributionPopoverId = (section: ExternalDataSection) =>
-  `wiki-article-attribution-${section}`
+export const attributionId = (section: AttributedSection) => `wiki-article-attribution-${section}`
 
-/** One popover per section of provider data, crediting where it came from. */
-export const AttributionPopoversBinding = WikiArticleBlock.makeBinding(PopoverBlock, {
-  field: "attributionPopovers",
+/** One per section of provider data, crediting where it came from. */
+export const AttributionsBinding = WikiArticleBlock.makeBinding(PopoverDrawerBlock, {
+  field: "attributions",
   key: "id",
   init: {
     instances: () =>
-      ExternalDataSection.literals.map((section) => ({
-        key: attributionPopoverId(section),
-        args: [{ id: attributionPopoverId(section) }],
+      AttributedSection.literals.map((section) => ({
+        key: attributionId(section),
+        args: [{ id: attributionId(section) }],
       })),
-    toItem: (_occurrence, popover) => popover,
+    toItem: (_occurrence, attribution) => attribution,
   },
-}).withOutMessagePolicy({
-  fold: (_popoverId, outMessage) =>
-    WikiArticleBlock.makeOutMessageFold(PopoverBlock, {
-      Opened: makeNoopStep,
-      Closed: makeNoopStep,
-    })(outMessage),
 })
 
 export const WikiArticleComposition = WikiArticleBlock.makeComposition({
-  bindings: [BookmarkPopoverBinding, BookmarkDrawerBinding, AttributionPopoversBinding],
+  bindings: [BookmarkPickerBinding, ClassificationBinding, AttributionsBinding],
 })
 export type WikiArticleViewBuilder = Block.ViewBuilderFor<typeof WikiArticleComposition>

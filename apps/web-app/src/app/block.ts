@@ -1,7 +1,7 @@
 import { Effect, Layer } from "effect"
 
 import * as Authentication from "../blocks/authentication"
-import * as ExternalDataObservations from "../blocks/external-data-observations"
+import * as ExternalDataAdminDashboard from "../blocks/external-data-admin-dashboard"
 import * as ProfileLocationsEditor from "../blocks/profile-locations-editor"
 import * as Search from "../blocks/search"
 import * as WikiArticle from "../blocks/wiki-article"
@@ -9,7 +9,7 @@ import * as WikiArticleDebug from "../blocks/wiki-article-debug"
 import { EffectsLayer } from "./command"
 import {
   AuthenticationBinding,
-  ExternalDataObservationsBinding,
+  ExternalDataAdminDashboardBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
@@ -27,7 +27,7 @@ export const layer = ApplicationBlock.makeLayer(
     const wikiArticle = yield* WikiArticleBinding
     const wikiArticleDebug = yield* WikiArticleDebugBinding
     const profileLocationsEditor = yield* ProfileLocationsEditorBinding
-    const externalDataObservations = yield* ExternalDataObservationsBinding
+    const externalDataAdminDashboard = yield* ExternalDataAdminDashboardBinding
 
     return {
       children: [
@@ -36,7 +36,7 @@ export const layer = ApplicationBlock.makeLayer(
         wikiArticle,
         wikiArticleDebug,
         profileLocationsEditor,
-        externalDataObservations,
+        externalDataAdminDashboard,
       ],
       init,
       update,
@@ -52,7 +52,7 @@ export const layer = ApplicationBlock.makeLayer(
       WikiArticle.layer,
       WikiArticleDebug.layer,
       ProfileLocationsEditor.layer,
-      ExternalDataObservations.layer,
+      ExternalDataAdminDashboard.layer,
     ),
   ),
 )

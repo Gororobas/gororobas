@@ -3,7 +3,7 @@ import { Duration, Schema } from "effect"
 
 import { ModerationStatus } from "../common/enums.js"
 import { MediaAssetId, PersonId, ProfileId } from "../common/ids.js"
-import { IntNonNegative, PositiveInteger, TimestampedStruct } from "../common/primitives.js"
+import { Handle, IntNonNegative, PositiveInteger, TimestampedStruct } from "../common/primitives.js"
 import { MediaAssetDescriptions } from "./attachments.js"
 
 // JSON stores milliseconds; reject durations that cannot round-trip through that representation.
@@ -93,6 +93,37 @@ export const MediaAssetCredit = Schema.Struct({
 })
 
 export type MediaAssetCredit = typeof MediaAssetCredit.Type
+
+/** A profile credited for media, with what an avatar needs. */
+export const CreditedProfile = Schema.Struct({
+  id: ProfileId,
+  handle: Handle,
+  name: Schema.String,
+  photoId: Schema.NullOr(MediaAssetId),
+})
+
+export type CreditedProfile = typeof CreditedProfile.Type
+
+/**
+ * Who to credit for media, as readers see it: a profile in the app, or free text with an optional
+ * link. Media without credits of its own credits whoever uploaded it.
+ */
+export const DisplayedMediaCredit = Schema.Struct({
+  profile: Schema.NullOr(CreditedProfile),
+  creditLine: Schema.NullOr(Schema.String),
+  creditUrl: Schema.NullOr(Schema.String),
+})
+
+export type DisplayedMediaCredit = typeof DisplayedMediaCredit.Type
+
+/** Media as an article's page shows it: with the people to credit for it. */
+export const CreditedMediaAssetRow = MediaAssetRow.mapMembers((members) =>
+  members.map((member) =>
+    Schema.Struct({ ...member.fields, credits: Schema.Array(DisplayedMediaCredit) }),
+  ),
+).pipe(Schema.toTaggedUnion("format"))
+
+export type CreditedMediaAssetRow = typeof CreditedMediaAssetRow.Type
 
 export const TransformedImageWidthBreakpoints = Schema.Literals([50, 300, 1280, 2400])
 

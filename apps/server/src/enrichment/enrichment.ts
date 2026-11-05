@@ -23,7 +23,7 @@ import { requestWikiArticleLinkInference } from "../link-inference/wiki-article-
 import { PublicationsRepository } from "../publications/repository.js"
 import { PublicationCommentTranslationWorkflow } from "../translation/publication-comment-translation-workflow.js"
 import { PublicationTranslationWorkflow } from "../translation/publication-translation-workflow.js"
-import type { ExternalDataArticle } from "../wiki/external-data/persist-utils.js"
+import type { ExternalDataArticle } from "../wiki/external-data/inputs.js"
 import { requestExternalDataFetch } from "../wiki/external-data/workflow.js"
 
 export interface EnrichmentRequest<E> {

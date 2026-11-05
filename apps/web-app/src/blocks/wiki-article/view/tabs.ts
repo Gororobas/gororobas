@@ -4,9 +4,9 @@ import type { Html } from "foldkit/html"
 
 import { publicationKindLabels } from "../../../lib/vocabulary"
 import { aboutName, ofName } from "../../../lib/wiki-article-names"
-import { imageUrl } from "../../../media-urls"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
+import { MediaCredit } from "../../../ui/media-credit"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { PublicationCard } from "../../../ui/publication-card"
 import { SectionCard } from "../../../ui/section-card"
@@ -14,14 +14,12 @@ import { radius, space } from "../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
 import { contributorList } from "./about"
+import { type ArticlePhoto, articlePhotos } from "./photos"
 import {
-  type ImageAsset,
   type ArticleState,
   asyncView,
-  caption,
   emptyState,
   filterChips,
-  images,
   listStyle,
   sectionsStyle,
 } from "./shared"
@@ -46,37 +44,42 @@ const masonryItemStyle = Style.make({
 
 const masonryImageStyle = Style.make({ inlineSize: "100%", borderRadius: radius.md })
 
+const figcaptionStyle = Style.make({ display: "grid", rowGap: space[1] })
+
 const photoFigure = (
   {
     photo,
     imageStyle,
     figureStyle,
   }: Readonly<{
-    photo: ImageAsset
+    photo: ArticlePhoto
     imageStyle: Style.Style
     figureStyle: Style.Style
   }>,
   h: WikiArticleViewBuilder,
 ): Html =>
-  h.keyed("figure")(photo.id, styledAttributes([], figureStyle), [
+  h.keyed("figure")(photo.key, styledAttributes([], figureStyle), [
     h.img(
       styledAttributes(
         [
-          h.Src(imageUrl(photo.id, 1280)),
-          h.Alt(Option.getOrElse(caption(photo), () => "")),
+          h.Src(photo.src(1280)),
+          h.Alt(Option.getOrElse(photo.maybeCaption, () => "")),
           h.Attribute("loading", "lazy"),
         ],
         imageStyle,
       ),
     ),
-    ...EffectArray.fromOption(
-      Option.map(caption(photo), (text) =>
-        h.figcaption(
-          [],
-          [AppText.view({ element: "span", appearance: "footnote", children: [text] }, h)],
+    h.figcaption(styledAttributes([], figcaptionStyle), [
+      ...EffectArray.fromOption(
+        Option.map(photo.maybeCaption, (text) =>
+          AppText.view({ element: "span", appearance: "footnote", children: [text] }, h),
         ),
       ),
-    ),
+      MediaCredit.view(
+        { credits: photo.credits, maybeLicenseUrl: photo.maybeLicenseUrl, appearance: "caption" },
+        h,
+      ),
+    ]),
   ])
 
 export const publications = (
@@ -137,15 +140,15 @@ export const publications = (
   ])
 
 export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): Html => {
-  const all = images(page)
+  const all = articlePhotos(page)
   const categories = EffectArray.dedupe(
-    EffectArray.getSomes(all.map((photo) => Option.fromNullishOr(photo.category))),
+    EffectArray.getSomes(all.map((photo) => photo.maybeCategory)),
   )
 
   const shown = all.filter((photo) =>
     Option.match(model.maybePhotoCategoryFilter, {
       onNone: () => true,
-      onSome: (category) => photo.category === category,
+      onSome: (category) => Option.contains(photo.maybeCategory, category),
     }),
   )
 

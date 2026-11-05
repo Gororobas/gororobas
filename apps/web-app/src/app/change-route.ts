@@ -8,7 +8,7 @@ import type { Url } from "foldkit/url"
 import { FocusSearchField } from "./command"
 import {
   AuthenticationBinding,
-  ExternalDataObservationsBinding,
+  ExternalDataAdminDashboardBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
@@ -28,17 +28,17 @@ const clearPagesStep = makeFieldsStep(() => ({
   maybeWikiArticle: () => Option.none(),
   maybeWikiArticleDebug: () => Option.none(),
   maybeProfileLocationsEditor: () => Option.none(),
-  maybeExternalDataObservations: () => Option.none(),
+  maybeExternalDataAdminDashboard: () => Option.none(),
 }))
 
 /** Each filter combination is its own URL, so the log loads afresh when one changes. */
-const showExternalDataObservationsStep = (query: ObservationLogQuery) => {
+const showExternalDataAdminDashboardStep = (query: ObservationLogQuery) => {
   const queryKey = observationLogUrl(query)
 
   return makeStep((model) =>
-    Option.exists(model.maybeExternalDataObservations, (log) => log.queryKey === queryKey)
+    Option.exists(model.maybeExternalDataAdminDashboard, (log) => log.queryKey === queryKey)
       ? { model }
-      : ExternalDataObservationsBinding.init({
+      : ExternalDataAdminDashboardBinding.init({
           key: queryKey,
           args: [query],
           toParentModel: (child) =>
@@ -46,7 +46,7 @@ const showExternalDataObservationsStep = (query: ObservationLogQuery) => {
               maybeWikiArticle: () => Option.none(),
               maybeWikiArticleDebug: () => Option.none(),
               maybeProfileLocationsEditor: () => Option.none(),
-              maybeExternalDataObservations: () => Option.some({ queryKey, model: child }),
+              maybeExternalDataAdminDashboard: () => Option.some({ queryKey, model: child }),
             }),
         }),
   )
@@ -110,8 +110,8 @@ export const enterRouteStep = (route: ApplicationRoute) =>
       Update.combineSteps([clearPagesStep, SearchBinding.informQueryChange({ query })]),
     WikiArticle: ({ kind, handle }) => showWikiArticleStep({ kind, handle }),
     MyPlaces: () => showProfileLocationsEditorStep,
-    ExternalDataObservations: (route) =>
-      showExternalDataObservationsStep(observationLogQueryOf(route)),
+    ExternalDataAdminDashboard: (route) =>
+      showExternalDataAdminDashboardStep(observationLogQueryOf(route)),
     NotFound: () => clearPagesStep,
   })
 

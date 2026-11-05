@@ -3,7 +3,7 @@ import { Config, DateTime, Duration, Effect, Layer, Option, Schedule, Schema } f
 import { SqlClient, SqlSchema } from "effect/sql"
 
 import { findDatabaseRowById, wikiArticleProjectionsWithStatus } from "../queries.js"
-import { buildExternalDataRequest } from "./persist-utils.js"
+import { buildExternalDataRequest } from "./inputs.js"
 import { FetchArticleExternalData } from "./workflow.js"
 
 export const EXTERNAL_DATA_REFRESH_TIME = Duration.days(14)

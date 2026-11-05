@@ -9,11 +9,7 @@ import {
   LoadPublications,
   SaveBookmark,
 } from "./command"
-import {
-  BookmarkDrawerBinding,
-  BookmarkPopoverBinding,
-  WikiArticleComposition,
-} from "./composition"
+import { BookmarkPickerBinding, WikiArticleComposition } from "./composition"
 import { makeFieldsStep, makeStep } from "./definition"
 import {
   BookmarkSaving,
@@ -21,7 +17,6 @@ import {
   ChildPlaceResults,
   ContributorResults,
   CultivarResults,
-  ExternalDataResults,
   PageResult,
   PublicationResults,
   RelatedResults,
@@ -105,17 +100,10 @@ export const update = WikiArticleComposition.makeUpdate({
   FailedLoadPublications: makeFieldsStep.fromMessage(({ error }) => ({
     publicationsAsyncData: () => PublicationResults.Failure({ error }),
   })),
-  SucceededLoadExternalData: makeFieldsStep.fromMessage(({ externalData }) => ({
-    externalDataAsyncData: () => ExternalDataResults.Success({ data: externalData }),
-  })),
-  FailedLoadExternalData: makeFieldsStep.fromMessage(({ error }) => ({
-    externalDataAsyncData: () => ExternalDataResults.Failure({ error }),
-  })),
   UpdatedViewerBookmarks: makeFieldsStep.fromMessage(({ bookmarks }) => ({
     viewerBookmarks: () => bookmarks,
   })),
-  ClickedOpenBookmarkDrawer: BookmarkDrawerBinding.requestOpen(),
-  // Choosing closes whichever of the popover or drawer offered the choice.
+  // Choosing closes the popover or drawer that offered the choice.
   SelectedBookmarkState: (model, { maybeState }) =>
     Update.combineSteps(
       BookmarkSaving.guards.Saving(model.bookmarkSaving)
@@ -125,8 +113,7 @@ export const update = WikiArticleComposition.makeUpdate({
               model: modifyFields(current, { bookmarkSaving: () => BookmarkSaving.Saving() }),
               commands: [SaveBookmark({ lookup: current.lookup, maybeState })],
             })),
-            BookmarkPopoverBinding.requestClose(),
-            BookmarkDrawerBinding.requestClose(),
+            BookmarkPickerBinding.requestClose(),
           ],
     )(model),
   SucceededSaveBookmark: (model, { maybeState }) => ({

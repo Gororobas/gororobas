@@ -2,7 +2,7 @@ import { Schema, Struct } from "effect"
 
 import { GbifDeprecatedSpeciesId, GbifTaxonId } from "../../../common/external-identifiers.js"
 import { WikiPlantArticle } from "../../kinds/plant.js"
-import { ExternalLink, ExternalMedia, Observation } from "../common.js"
+import { ExternalLink, ExternalMedia, GbifClassification, Observation } from "../common.js"
 import { ExternalDataFetchError } from "../error.js"
 
 export const GbifIdentifier = Schema.Union([
@@ -17,12 +17,6 @@ export const WikidataResult = Schema.Struct({
   /** The item's taxon name (P225), for matching taxa whose GBIF ID is outdated. */
   taxonName: Schema.NullOr(Schema.String),
   wikipediaLinks: Schema.Array(ExternalLink),
-})
-
-export const GbifClassification = Schema.Struct({
-  taxonId: Schema.String,
-  scientificName: Schema.String,
-  taxonRank: Schema.String,
 })
 
 export const GbifPlantResult = Schema.Struct({

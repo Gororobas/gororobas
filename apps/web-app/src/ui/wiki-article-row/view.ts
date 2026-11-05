@@ -7,7 +7,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { wikiArticleUrl } from "../../app/route"
 import { bookmarkVocabularies, wikiKindLabels } from "../../lib/vocabulary"
 import { ofName, primaryName } from "../../lib/wiki-article-names"
-import { imageUrl } from "../../media-urls"
+import { externalImageUrl, imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import * as Icons from "../icons"
 import { iconSizeProperty } from "../icons/icon-size"
@@ -146,6 +146,13 @@ const bookmarkLabel = (config: WikiArticleRowConfig): Option.Option<string> =>
     (state) => bookmarkVocabularies[config.article.kind].states[state],
   )
 
+/** The article's main photo, or a provider's while it has none. */
+const thumbnailSrc = (article: WikiArticleQueriedCardData): Option.Option<string> =>
+  Option.orElse(
+    Option.map(article.thumbnailMediaAssetId, (id) => imageUrl(id, 300)),
+    () => Option.map(article.externalThumbnailUrl, (url) => externalImageUrl(url, 300)),
+  )
+
 /** One article in a results grid. Without a photo, its kind's icon stands in. */
 const card = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Message>): Html => {
   const { article } = config
@@ -153,15 +160,15 @@ const card = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Message>): H
 
   return h.a(styledAttributes([h.Href(wikiArticleUrl(article))], cardStyle), [
     h.div(styledAttributes([], cardMediaStyle), [
-      Option.match(article.thumbnailMediaAssetId, {
+      Option.match(thumbnailSrc(article), {
         onNone: () =>
           h.div(styledAttributes([h.AriaHidden(true)], cardFallbackStyle), [
             wikiKindIcons[article.kind]({ mode: "duotone", size: "lg" }),
           ]),
-        onSome: (id) =>
+        onSome: (src) =>
           h.img(
             styledAttributes(
-              [h.Src(imageUrl(id, 300)), h.Alt(name), h.Attribute("loading", "lazy")],
+              [h.Src(src), h.Alt(name), h.Attribute("loading", "lazy")],
               cardImageStyle,
             ),
           ),
@@ -222,7 +229,7 @@ export const view = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Messa
   )
 
   return h.a(styledAttributes([h.Href(wikiArticleUrl(article))], rowStyle), [
-    Thumbnail.view({ maybeMediaAssetId: article.thumbnailMediaAssetId, alt: name }, h),
+    Thumbnail.view({ maybeSrc: thumbnailSrc(article), alt: name }, h),
     h.div(styledAttributes([], textStyle), [
       AppText.view({ appearance: "caption", isMuted: true, children: [kindLabel(article)] }, h),
       AppText.view(

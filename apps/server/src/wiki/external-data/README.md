@@ -1,5 +1,21 @@
 # Wiki external data
 
+## Layout
+
+- `workflow.ts` and `refresh.ts`: when fetches run. `inputs.ts` builds a fetch request from an
+  article's identifiers.
+- `kinds/`: per kind, a fetcher (calls `services/`) and a persister.
+- `observations.ts`: records each provider's outcome. It owns the stored JSON format: outcomes
+  are written with the schema's JSON codec, `{ "_tag": "Success", "success": [...] }` or
+  `{ "_tag": "Failure", "failure": {...} }`, which SQL filters with `json_extract` rely on.
+- `projections.ts`: the frontier guard every persister runs in, and clearing a provider's rows.
+- `queries.ts`: reads. An article's page carries its external data (`findExternalData`, read by
+  the wiki's page query); provider photos come first in `wiki_article_external_media.order_index`
+  order, and the first stands in for cards' and pages' main photo while the article has none.
+- `admin-dashboard.ts`: the observation log at `/external-data/observations`, for people with
+  `content:moderate`. The web app shows it at `/dados-externos`.
+- `report.ts`: per-article summaries for the CLI and the debug page.
+
 Approved article edits submit `FetchArticleExternalData/v3`. Provider failures are non-fatal
 and are recorded in `wiki_article_external_data_observations`, with the article frontier,
 inputs, timestamp, provider, and typed outcome. Successful observations retain the raw provider

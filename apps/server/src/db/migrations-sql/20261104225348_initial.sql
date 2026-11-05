@@ -565,6 +565,7 @@ CREATE INDEX `idx_plant_classification` ON `wiki_plant_taxonomy_classification` 
 -- Create "wiki_article_external_media" table
 CREATE TABLE `wiki_article_external_media` (
   `wiki_article_id` text NOT NULL,
+  `order_index` integer NOT NULL,
   `media_url` text NOT NULL,
   `source_url` text NOT NULL,
   `credit_line` text NOT NULL,

@@ -71,10 +71,10 @@ const Message = defineMessageUnion({
   FailedLoadObservation: { error: ClientFailure },
 })
 
-export const ExternalDataObservationsKey = Symbol("ExternalDataObservations")
+export const ExternalDataAdminDashboardKey = Symbol("ExternalDataAdminDashboard")
 
-export const ExternalDataObservationsBlock = Block.make("ExternalDataObservations", {
-  key: ExternalDataObservationsKey,
+export const ExternalDataAdminDashboardBlock = Block.make("ExternalDataAdminDashboard", {
+  key: ExternalDataAdminDashboardKey,
   Init: Schema.Tuple([ObservationLogQuery]),
   view: { kind: "Element" },
   effects: { services: [GororobasApiClient] },
@@ -82,12 +82,12 @@ export const ExternalDataObservationsBlock = Block.make("ExternalDataObservation
   Message,
 })
 
-const ExternalDataObservationsComposition = ExternalDataObservationsBlock.makeComposition()
-type ViewBuilder = Block.ViewBuilderFor<typeof ExternalDataObservationsComposition>
+const ExternalDataAdminDashboardComposition = ExternalDataAdminDashboardBlock.makeComposition()
+type ViewBuilder = Block.ViewBuilderFor<typeof ExternalDataAdminDashboardComposition>
 
 // COMMANDS
 
-const LoadLog = ExternalDataObservationsBlock.makeCommand("LoadLog", {
+const LoadLog = ExternalDataAdminDashboardBlock.makeCommand("LoadLog", {
   args: { query: ObservationLogQuery },
   messages: [Message.SucceededLoadLog, Message.FailedLoadLog],
   handler: function* () {
@@ -121,7 +121,7 @@ const LoadLog = ExternalDataObservationsBlock.makeCommand("LoadLog", {
   },
 })
 
-const LoadObservation = ExternalDataObservationsBlock.makeCommand("LoadObservation", {
+const LoadObservation = ExternalDataAdminDashboardBlock.makeCommand("LoadObservation", {
   args: { id: ExternalDataObservationId },
   messages: [Message.SucceededLoadObservation, Message.FailedLoadObservation],
   handler: function* () {
@@ -139,12 +139,12 @@ const LoadObservation = ExternalDataObservationsBlock.makeCommand("LoadObservati
 
 // INIT & UPDATE
 
-const init = ExternalDataObservationsComposition.makeInit((query: ObservationLogQuery) => ({
+const init = ExternalDataAdminDashboardComposition.makeInit((query: ObservationLogQuery) => ({
   model: { query, logAsyncData: LogResult.Loading(), maybeOpenObservation: Option.none() },
   commands: [LoadLog({ query })],
 }))
 
-const update = ExternalDataObservationsComposition.makeUpdate({
+const update = ExternalDataAdminDashboardComposition.makeUpdate({
   SucceededLoadLog: (model, { page }) => ({
     model: modifyFields(model, { logAsyncData: () => LogResult.Success({ data: page }) }),
   }),
@@ -704,7 +704,7 @@ const statusText = (text: string, h: ViewBuilder): Html =>
   )
 
 /** Read-only: every provider fetch, what it was asked and what it got back. */
-const view = ExternalDataObservationsComposition.makeView((model, h) =>
+const view = ExternalDataAdminDashboardComposition.makeView((model, h) =>
   h.div(styledAttributes([], pageColumnStyle, pageStyle), [
     h.header(styledAttributes([], introStyle), [
       AppText.view(
@@ -764,7 +764,7 @@ const view = ExternalDataObservationsComposition.makeView((model, h) =>
   ]),
 )
 
-export const layer = ExternalDataObservationsBlock.makeLayer(
+export const layer = ExternalDataAdminDashboardBlock.makeLayer(
   Effect.gen(function* () {
     return {
       children: [],

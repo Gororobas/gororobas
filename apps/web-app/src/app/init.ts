@@ -18,7 +18,7 @@ export const init = ApplicationComposition.makeInit((url: Url) => {
       maybeWikiArticle: Option.none(),
       maybeWikiArticleDebug: Option.none(),
       maybeProfileLocationsEditor: Option.none(),
-      maybeExternalDataObservations: Option.none(),
+      maybeExternalDataAdminDashboard: Option.none(),
       isSearchFieldFocusPending: false,
     },
     commands: [ReadToday()],

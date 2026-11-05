@@ -61,7 +61,7 @@ const wikiArticleTabSlugs = {
 
 const SEARCH_SEGMENT = "buscar"
 const MY_PLACES_SEGMENT = "meus-lugares"
-const EXTERNAL_DATA_OBSERVATIONS_SEGMENT = "dados-externos"
+const EXTERNAL_DATA_ADMIN_DASHBOARD_SEGMENT = "dados-externos"
 
 /** Decodes one segment through a total lookup table, so every value has exactly one slug. */
 const slugCodec = <const Value extends string, const Slug extends string>(
@@ -304,7 +304,7 @@ export const ApplicationRoute = defineRouteUnion({
   WikiArticleDebug: { wikiArticleId: WikiArticleId },
   Login: {},
   MyPlaces: {},
-  ExternalDataObservations: ObservationLogQuery.fields,
+  ExternalDataAdminDashboard: ObservationLogQuery.fields,
   NotFound: { path: Schema.String },
 })
 
@@ -355,19 +355,19 @@ export const myPlacesRouter = pipe(
   Route.mapTo(ApplicationRoute.MyPlaces),
 )
 
-export const externalDataObservationsRouter = pipe(
-  literal(EXTERNAL_DATA_OBSERVATIONS_SEGMENT),
+export const externalDataAdminDashboardRouter = pipe(
+  literal(EXTERNAL_DATA_ADMIN_DASHBOARD_SEGMENT),
   Route.query(ObservationLogQueryParameters),
-  Route.mapTo(ApplicationRoute.ExternalDataObservations),
+  Route.mapTo(ApplicationRoute.ExternalDataAdminDashboard),
 )
 
 export const observationLogUrl = (query: Partial<ObservationLogQuery> = {}): string =>
-  externalDataObservationsRouter({ ...emptyObservationLogQuery, ...query })
+  externalDataAdminDashboardRouter({ ...emptyObservationLogQuery, ...query })
 
 export const observationLogQueryOf = ({
   _tag,
   ...query
-}: typeof ApplicationRoute.ExternalDataObservations.Type): ObservationLogQuery => query
+}: typeof ApplicationRoute.ExternalDataAdminDashboard.Type): ObservationLogQuery => query
 
 export const urlToApplicationRoute = Route.parseUrlWithFallback(
   Route.oneOf(
@@ -375,7 +375,7 @@ export const urlToApplicationRoute = Route.parseUrlWithFallback(
     searchRouter,
     loginRouter,
     myPlacesRouter,
-    externalDataObservationsRouter,
+    externalDataAdminDashboardRouter,
     wikiArticleDebugRouter,
     wikiArticleTabRouter,
     wikiArticleAboutRouter,

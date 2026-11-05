@@ -1,8 +1,6 @@
-import type { MediaAssetRow } from "@gororobas/domain/media-assets/domain"
-import { tiptapToText } from "@gororobas/domain/rich-text/tiptap-to-text"
 import type { WikiArticleQueriedPageData } from "@gororobas/domain/wiki/domain"
 import { Style } from "@pleat/core"
-import { Array as EffectArray, DateTime, Option, String as EffectString } from "effect"
+import { DateTime, Option } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
@@ -30,8 +28,6 @@ export type ArticleState = Readonly<{
   maybeToday: Option.Option<DateTime.Utc>
 }>
 
-export type ImageAsset = Extract<MediaAssetRow, { format: "IMAGE" }>
-
 export const sectionsStyle = Style.make({
   display: "grid",
   rowGap: space[5],
@@ -54,16 +50,6 @@ const tabIcons: Readonly<Record<WikiArticleTab, (config?: IconConfig) => Html>> 
   Photos: Icons.gallery,
   Contributions: Icons.users,
 }
-
-export const images = (page: Page): ReadonlyArray<ImageAsset> =>
-  EffectArray.filter(page.mediaAssets, (media): media is ImageAsset => media.format === "IMAGE")
-
-/** The pt description of a photo, as plain text. */
-export const caption = (media: MediaAssetRow): Option.Option<string> =>
-  Option.fromNullishOr(media.descriptions.pt).pipe(
-    Option.map((document) => EffectString.trim(tiptapToText(document))),
-    Option.filter(EffectString.isNonEmpty),
-  )
 
 export const tabs = (
   {

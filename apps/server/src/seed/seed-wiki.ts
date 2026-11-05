@@ -29,9 +29,9 @@ import {
 } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 
+import { buildExternalDataRequest } from "../wiki/external-data/inputs.js"
 import { persistBook } from "../wiki/external-data/kinds/book-persister.js"
 import { persistPlant } from "../wiki/external-data/kinds/plant-persister.js"
-import { buildExternalDataRequest } from "../wiki/external-data/persist-utils.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
 import { firstParagraphEvidence, richTextDocument, type Reference } from "./rich-text.js"
 import {

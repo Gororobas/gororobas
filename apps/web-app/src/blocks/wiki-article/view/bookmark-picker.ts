@@ -5,16 +5,13 @@ import type { Html } from "foldkit/html"
 
 import { loginRouter } from "../../../app/route"
 import { type BookmarkVocabulary, bookmarkVocabularies } from "../../../lib/vocabulary"
-import * as AppDrawer from "../../../ui/app-drawer/view"
-import { popoverBackdropStyle, popoverPanelStyle } from "../../../ui/app-popover/styles"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
 import { bookmarkStateIcon } from "../../../ui/icons/bookmark-icons"
-import { styledAttributes } from "../../../ui/pleat-attributes"
+import { styledAttributes, styledClassName } from "../../../ui/pleat-attributes"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import {
   borderWidth,
-  breakpoint,
   controlSize,
   duration,
   easing,
@@ -24,13 +21,8 @@ import {
   space,
   toneColors,
   tones,
-  toneStyle,
 } from "../../../ui/theme"
-import {
-  BookmarkDrawerBinding,
-  BookmarkPopoverBinding,
-  type WikiArticleViewBuilder,
-} from "../composition"
+import { BookmarkPickerBinding, type WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
 import { BookmarkSaving, type Model } from "../model"
 import type { Page } from "./shared"
@@ -38,13 +30,6 @@ import type { Page } from "./shared"
 const triggerMarker = When.marker("bookmark-trigger")
 
 const pickerStyle = Style.make({ display: "grid", rowGap: space[2] })
-
-const mobileOnlyStyle = Style.make({ display: "contents" }).pipe(
-  Style.when(breakpoint.md, { display: "none" }),
-)
-const desktopOnlyStyle = Style.make({ display: "none" }).pipe(
-  Style.when(breakpoint.md, { display: "contents" }),
-)
 
 const triggerStyle = Style.make({
   display: "flex",
@@ -189,22 +174,6 @@ const triggerContent = (
   ]),
 ]
 
-const trigger = (
-  {
-    state,
-    attributes,
-  }: Readonly<{
-    state: PickerState
-    /** The popover's trigger attributes, or the drawer's opening click. */
-    attributes: Parameters<WikiArticleViewBuilder["button"]>[0]
-  }>,
-  h: WikiArticleViewBuilder,
-): Html =>
-  h.button(
-    styledAttributes([h.Type("button"), h.Disabled(state.isSaving), ...attributes], triggerStyle),
-    triggerContent(state, h),
-  )
-
 /** Each state in the kind's own words, then a way out of the list once saved. */
 const options = (state: PickerState, h: WikiArticleViewBuilder): Html =>
   h.div(
@@ -264,67 +233,7 @@ const options = (state: PickerState, h: WikiArticleViewBuilder): Html =>
     ],
   )
 
-const popover = (
-  { model, state }: Readonly<{ model: Model; state: PickerState }>,
-  h: WikiArticleViewBuilder,
-): Html =>
-  h.block(
-    BookmarkPopoverBinding.embedView({
-      slotId: "wiki-article-bookmark",
-      model: model.bookmarkPopover,
-      viewInputs: {
-        anchor: { placement: "bottom-start", gap: 6, padding: 8 },
-        ariaLabel: "Salvar na minha lista",
-        toView: ({ button, panel, backdrop, isVisible }) =>
-          h.div(
-            [],
-            [
-              trigger({ state, attributes: button }, h),
-              ...(isVisible
-                ? [
-                    h.div(styledAttributes(backdrop, popoverBackdropStyle)),
-                    h.div(
-                      styledAttributes(
-                        panel,
-                        popoverPanelStyle,
-                        bookmarkPanelStyle,
-                        toneStyle("primary"),
-                      ),
-                      [options(state, h)],
-                    ),
-                  ]
-                : []),
-            ],
-          ),
-      },
-    }),
-  )
-
-const drawer = (
-  { model, state }: Readonly<{ model: Model; state: PickerState }>,
-  h: WikiArticleViewBuilder,
-): Html =>
-  h.block(
-    BookmarkDrawerBinding.embedView({
-      slotId: "wiki-article-bookmark-drawer",
-      model: model.bookmarkDrawer,
-      viewInputs: {
-        toView: (render, drawerBuilder) =>
-          AppDrawer.view(
-            {
-              render,
-              title: "Salvar na minha lista",
-              size: "narrow",
-              tone: "primary",
-              children: [options(state, h)],
-            },
-            drawerBuilder,
-          ),
-      },
-    }),
-  )
-
-/** Someone's own relationship to the article: a popover on wide screens, a drawer on phones. */
+/** Someone's own relationship to the article, chosen in a popover or a drawer. */
 export const view = (
   { model, page, isSignedIn }: Readonly<{ model: Model; page: Page; isSignedIn: boolean }>,
   h: WikiArticleViewBuilder,
@@ -346,17 +255,23 @@ export const view = (
   }
 
   return h.div(styledAttributes([], pickerStyle), [
-    h.div(styledAttributes([], mobileOnlyStyle), [
-      trigger(
-        {
-          state,
-          attributes: [h.AriaHasPopup("dialog"), h.OnClick(Message.ClickedOpenBookmarkDrawer())],
+    h.block(
+      BookmarkPickerBinding.embedView({
+        slotId: model.bookmarkPicker.id,
+        model: model.bookmarkPicker,
+        viewInputs: {
+          title: "Salvar na minha lista",
+          trigger: {
+            children: triggerContent(state, h),
+            className: styledClassName(triggerStyle),
+            isDisabled: state.isSaving,
+          },
+          toContent: () => [options(state, h)],
+          panelClassName: styledClassName(bookmarkPanelStyle),
+          tone: "primary",
         },
-        h,
-      ),
-      drawer({ model, state }, h),
-    ]),
-    h.div(styledAttributes([], desktopOnlyStyle), [popover({ model, state }, h)]),
+      }),
+    ),
     ...(BookmarkSaving.guards.Failed(model.bookmarkSaving)
       ? [
           AppText.view(

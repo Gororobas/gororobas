@@ -28,9 +28,12 @@ import {
 } from "../../../ui/theme"
 import { Thumbnail } from "../../../ui/thumbnail"
 import { WikiArticleComposition, type WikiArticleViewBuilder } from "../composition"
+import type { Model } from "../model"
 import * as About from "./about"
+import * as Classification from "./classification"
 import * as Overview from "./overview"
-import { type Page, emptyState, images, tabs } from "./shared"
+import { mainPhoto } from "./photos"
+import { type Page, emptyState, tabs } from "./shared"
 import * as Tabs from "./tabs"
 
 // The page scrolls the document; once the article's own header leaves the viewport, a compact
@@ -52,7 +55,14 @@ const headerStyle = Style.make({
   paddingBlockStart: space[5],
 }).pipe(Style.when(breakpoint.md, { paddingBlockStart: space[8] }))
 
-const identityStyle = Style.make({ display: "flex", alignItems: "center", gap: space[4] })
+// `minInlineSize: 0` lets long names and the classification shrink instead of widening the page.
+const identityStyle = Style.make({
+  display: "flex",
+  alignItems: "center",
+  gap: space[4],
+  minInlineSize: 0,
+})
+
 const identityTextStyle = Style.make({ flex: 1, minInlineSize: 0 })
 const debugLinkStyle = Style.make({ alignSelf: "flex-start", flexShrink: 0 })
 
@@ -63,7 +73,9 @@ const debugLink = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
         AppButton.view(
           {
             href: wikiArticleDebugRouter({ wikiArticleId: page.id }),
-            children: [Icons.sledgehammer({ size: "sm" }), "Depurar"],
+            // Icon-only, so this development aid doesn't crowd the article's names.
+            children: [Icons.sledgehammer({ size: "sm" })],
+            ariaLabel: "Depurar artigo",
             title: "Ver os dados guardados deste artigo",
             tone: "neutral",
             mode: "outline",
@@ -213,11 +225,11 @@ const headerThumbnail = (
   { page, size }: Readonly<{ page: Page; size: "sm" | "md" }>,
   h: WikiArticleViewBuilder,
 ): Html => {
-  const maybeFirst = EffectArray.head(images(page))
+  const maybeFirst = mainPhoto(page)
 
   const thumbnail = Thumbnail.view(
     {
-      maybeMediaAssetId: Option.map(maybeFirst, (photo) => photo.id),
+      maybeSrc: Option.map(maybeFirst, (photo) => photo.src(300)),
       alt: Option.isSome(maybeFirst) ? `Fotos ${ofName(page)}` : "",
       size,
     },
@@ -232,7 +244,7 @@ const headerThumbnail = (
 }
 
 const header = (
-  { page, tab }: Readonly<{ page: Page; tab: WikiArticleTab }>,
+  { model, page, tab }: Readonly<{ model: Model; page: Page; tab: WikiArticleTab }>,
   h: WikiArticleViewBuilder,
 ): Html =>
   h.div(styledAttributes([], headerBandStyle, toneStyle("primary")), [
@@ -268,6 +280,7 @@ const header = (
               ),
             ),
           ),
+          ...Classification.view({ model, page }, h),
         ]),
         ...debugLink(page, h),
       ]),
@@ -291,7 +304,7 @@ const compactHeader = (
         [
           Thumbnail.view(
             {
-              maybeMediaAssetId: Option.map(EffectArray.head(images(page)), (photo) => photo.id),
+              maybeSrc: Option.map(mainPhoto(page), (photo) => photo.src(300)),
               alt: "",
               size: "xs",
             },
@@ -349,7 +362,7 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
         ]),
       onData: (page) =>
         h.article(styledAttributes([], articleStyle), [
-          header({ page, tab }, h),
+          header({ model, page, tab }, h),
           compactHeader({ page, tab }, h),
           h.div(styledAttributes([], pageColumnStyle), [
             Match.value(tab).pipe(

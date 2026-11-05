@@ -15,9 +15,9 @@ import { HttpClient, HttpClientResponse } from "effect/http"
 import { SqlClient } from "effect/sql"
 
 import { getWikiArticleDebug } from "../../src/wiki/debug.js"
+import { buildExternalDataRequest } from "../../src/wiki/external-data/inputs.js"
 import { persistBook } from "../../src/wiki/external-data/kinds/book-persister.js"
 import { persistPlant } from "../../src/wiki/external-data/kinds/plant-persister.js"
-import { buildExternalDataRequest } from "../../src/wiki/external-data/persist-utils.js"
 import { findArticlesDueForExternalData } from "../../src/wiki/external-data/refresh.js"
 import { ExternalDataReport, reportExternalData } from "../../src/wiki/external-data/report.js"
 import { GbifLive } from "../../src/wiki/external-data/services/gbif.js"
@@ -378,7 +378,7 @@ describe("external data persistence", () => {
       expect(data.externalDataObservations).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            outcome: expect.objectContaining({ _tag: "Success", value: [observation] }),
+            outcome: expect.objectContaining({ _tag: "Success", success: [observation] }),
           }),
         ]),
       )

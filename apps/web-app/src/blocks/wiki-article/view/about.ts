@@ -7,9 +7,9 @@ import type { Html } from "foldkit/html"
 import { wikiArticleUrl } from "../../../app/route"
 import { bookmarkVocabularies, wikiKindLabels } from "../../../lib/vocabulary"
 import { aboutName, ofName } from "../../../lib/wiki-article-names"
-import { imageUrl } from "../../../media-urls"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
+import { MediaCredit } from "../../../ui/media-credit"
 import * as PlaceOutline from "../../../ui/place-outline/view"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { ProfileRow } from "../../../ui/profile-row"
@@ -26,14 +26,13 @@ import * as BookmarkPicker from "./bookmark-picker"
 import * as ChildPlaces from "./child-places"
 import * as ExternalData from "./external-data"
 import * as Overview from "./overview"
+import { type ArticlePhoto, articlePhotos } from "./photos"
 import {
   type ArticleState,
   type Page,
   asyncView,
-  caption,
   emptyState,
   filterChips,
-  images,
   listStyle,
   sectionsStyle,
 } from "./shared"
@@ -56,12 +55,18 @@ const heroStyle = Style.make({
 
 const heroSlideStyle = Style.make({
   position: "relative",
-  display: "block",
   flex: "0 0 100%",
   scrollSnapAlign: "center",
   aspectRatio: "4 / 3",
   maxBlockSize: "30rem",
+  margin: 0,
   overflow: "hidden",
+  borderRadius: radius.lg,
+})
+
+const heroLinkStyle = Style.make({
+  display: "block",
+  blockSize: "100%",
   borderRadius: radius.lg,
   outline: "none",
 }).pipe(Style.when(When.focusVisible, focusRingDeclarations))
@@ -73,6 +78,8 @@ const heroImageStyle = Style.make({ inlineSize: "100%", blockSize: "100%", objec
 
 const heroCaptionStyle = Style.make({
   position: "absolute",
+  display: "grid",
+  rowGap: space[1],
   insetInline: space[4],
   insetBlockEnd: space[4],
   padding: space[3],
@@ -121,38 +128,65 @@ const contentStyle = Style.make({ color: toneColors.foreground })
 
 // SECTIONS
 
+/** A photo's description and who to credit, over its lower edge. */
+const heroCaption = (photo: ArticlePhoto, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
+  Option.isNone(photo.maybeCaption) && EffectArray.isReadonlyArrayEmpty(photo.credits)
+    ? []
+    : [
+        h.figcaption(styledAttributes([], heroCaptionStyle), [
+          ...EffectArray.fromOption(
+            Option.map(photo.maybeCaption, (text) =>
+              AppText.view({ element: "span", appearance: "footnote", children: [text] }, h),
+            ),
+          ),
+          MediaCredit.view(
+            {
+              credits: photo.credits,
+              maybeLicenseUrl: photo.maybeLicenseUrl,
+              appearance: "caption",
+            },
+            h,
+          ),
+        ]),
+      ]
+
 /** Featured photos; each opens the article's photos. */
 const hero = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
-  EffectArray.match(images(page).slice(0, HERO_PHOTO_COUNT), {
+  EffectArray.match(articlePhotos(page).slice(0, HERO_PHOTO_COUNT), {
     onEmpty: () => [],
     onNonEmpty: (slides) => [
       h.div(
         styledAttributes([h.Role("group"), h.AriaLabel("Fotos em destaque")], heroStyle),
         slides.map((photo) =>
-          h.keyed("a")(
-            photo.id,
+          h.keyed("figure")(
+            photo.key,
             styledAttributes(
-              [h.Href(wikiArticleUrl(page, "Photos")), h.AriaLabel(`Ver fotos ${ofName(page)}`)],
+              [],
               heroSlideStyle,
               ...(slides.length > 1 ? [heroSlidePeekStyle] : []),
             ),
             [
-              h.img(
+              h.a(
                 styledAttributes(
                   [
-                    h.Src(imageUrl(photo.id, 1280)),
-                    h.Alt(Option.getOrElse(caption(photo), () => "")),
+                    h.Href(wikiArticleUrl(page, "Photos")),
+                    h.AriaLabel(`Ver fotos ${ofName(page)}`),
                   ],
-                  heroImageStyle,
+                  heroLinkStyle,
                 ),
+                [
+                  h.img(
+                    styledAttributes(
+                      [
+                        h.Src(photo.src(1280)),
+                        h.Alt(Option.getOrElse(photo.maybeCaption, () => "")),
+                      ],
+                      heroImageStyle,
+                    ),
+                  ),
+                ],
               ),
-              ...EffectArray.fromOption(
-                Option.map(caption(photo), (text) =>
-                  h.span(styledAttributes([], heroCaptionStyle), [
-                    AppText.view({ element: "span", appearance: "footnote", children: [text] }, h),
-                  ]),
-                ),
-              ),
+              ...heroCaption(photo, h),
             ],
           ),
         ),
@@ -364,7 +398,7 @@ const related = (model: Model, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
   )
 
 const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> => {
-  const photos = images(page)
+  const photos = articlePhotos(page)
   const remaining = photos.length - PREVIEW_PHOTO_COUNT
 
   // A single photo is already the hero's; repeating it here adds nothing.
@@ -382,11 +416,11 @@ const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Htm
                   .slice(0, PREVIEW_PHOTO_COUNT)
                   .map((photo) =>
                     h.keyed("img")(
-                      photo.id,
+                      photo.key,
                       styledAttributes(
                         [
-                          h.Src(imageUrl(photo.id, 300)),
-                          h.Alt(Option.getOrElse(caption(photo), () => "")),
+                          h.Src(photo.src(300)),
+                          h.Alt(Option.getOrElse(photo.maybeCaption, () => "")),
                           h.Attribute("loading", "lazy"),
                         ],
                         photoThumbnailStyle,
@@ -584,16 +618,15 @@ export const view = (
       ...ordered({ order: 4, children: cultivars({ model, page }, h) }, h),
       ...ordered({ order: 4, children: ChildPlaces.view({ model, page }, h) }, h),
       ...ordered({ order: 6, children: aboutContent(page, h) }, h),
-      ...ordered({ order: 6, children: ExternalData.mainSections({ model, page }, h) }, h),
+      ...ordered({ order: 6, children: ExternalData.editions({ model, page }, h) }, h),
       ...ordered({ order: 7, children: publicationsPreview({ model, page, maybeToday }, h) }, h),
       ...ordered({ order: 8, children: related(model, h) }, h),
       ...ordered({ order: 9, children: photosPreview(page, h) }, h),
-      ...ordered({ order: 9, children: ExternalData.mediaSection({ model, page }, h) }, h),
     ]),
     h.aside(styledAttributes([h.AriaLabel(`Quem acompanha ${aboutName(page)}`)], columnStyle), [
       ...ordered({ order: 2, children: [BookmarkPicker.view({ model, page, isSignedIn }, h)] }, h),
       ...ordered({ order: 5, children: [bookmarkers({ model, page, maybeToday }, h)] }, h),
-      ...ordered({ order: 5, children: ExternalData.wikipediaSection({ model, page }, h) }, h),
+      ...ordered({ order: 5, children: ExternalData.wikipedia({ model, page }, h) }, h),
       ...ordered(
         { order: 10, children: [contributionsPreview({ model, page, maybeToday }, h)] },
         h,
