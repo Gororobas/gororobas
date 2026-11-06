@@ -118,6 +118,7 @@ const PeopleServiceLayer = Layer.effect(PeopleService, PeopleService.make).pipe(
   Layer.provide(TestLayer),
 )
 const ProfilesServiceLayer = Layer.effect(ProfileService, ProfileService.make).pipe(
+  Layer.provide(Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make)),
   Layer.provide(TestLayer),
 )
 

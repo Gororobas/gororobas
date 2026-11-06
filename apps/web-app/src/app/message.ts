@@ -1,3 +1,4 @@
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { UrlRequest } from "foldkit/navigation"
@@ -15,4 +16,8 @@ export const Message = defineMessageUnion({
   CompletedLoadExternal: {},
   CompletedReadToday: { today: Schema.DateTimeUtc },
   CompletedLocateDevice: { deviceLocation: DeviceLocation },
+  CompletedReplaceUrl: {},
+  CompletedLoadTranslations: { language: SupportedLanguage, requestNumber: Schema.Int },
+  FailedLoadTranslations: { language: SupportedLanguage, requestNumber: Schema.Int },
+  CompletedSaveLanguagePreference: {},
 })

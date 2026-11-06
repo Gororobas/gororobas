@@ -156,7 +156,8 @@ export type NavigationItem = Readonly<{
   isCurrent: boolean
 }>
 
-export type Viewer = Readonly<{ name: string }>
+/** `accountLabel` names the link to the viewer's account, such as "Conta de Ana". */
+export type Viewer = Readonly<{ name: string; accountLabel: string }>
 
 const navigationLinks = <Message>(
   items: ReadonlyArray<NavigationItem>,
@@ -179,12 +180,17 @@ const navigationLinks = <Message>(
 /** A link that looks like the search field, for pages other than search. `onClick` is sent
  *  alongside the navigation, such as to focus the field once it renders. */
 export const searchLink = <Message>(
-  { href, onClick }: Readonly<{ href: string; onClick: Message }>,
+  {
+    href,
+    onClick,
+    label,
+    ariaLabel,
+  }: Readonly<{ href: string; onClick: Message; label: string; ariaLabel: string }>,
   h: HtmlBuilder<Message>,
 ): Html =>
   h.a(
     styledAttributes(
-      [h.Href(href), h.AriaLabel("Abrir busca"), h.OnClick(onClick)],
+      [h.Href(href), h.AriaLabel(ariaLabel), h.OnClick(onClick)],
       searchSurfaceStyle,
       searchLinkStyle,
     ),
@@ -192,14 +198,31 @@ export const searchLink = <Message>(
       h.span(styledAttributes([h.AriaHidden(true)], searchIconStyle), [
         Icons.search({ size: "sm" }),
       ]),
-      "Buscar",
+      label,
     ],
   )
 
-export type Account = Readonly<{ href: string; maybeViewer: Option.Option<Viewer> }>
+export type Account = Readonly<{
+  href: string
+  signInLabel: string
+  maybeViewer: Option.Option<Viewer>
+}>
+
+/** One language in the switcher: a short `label` (PT) and its `name` in that language (Português). */
+export type LanguageLink = Readonly<{
+  label: string
+  name: string
+  href: string
+  hreflang: string
+  isCurrent: boolean
+}>
 
 export type HeaderConfig = Readonly<{
   homeHref: string
+  homeLabel: string
+  navigationLabel: string
+  languagesLabel: string
+  languages: ReadonlyArray<LanguageLink>
   /** The search control: a link to search, or the live field on the search page. */
   search: Html
   navigation: ReadonlyArray<NavigationItem>
@@ -207,17 +230,49 @@ export type HeaderConfig = Readonly<{
   maybeAccount: Option.Option<Account>
 }>
 
+const languageLinksStyle = Style.make({ display: "flex", gap: space[1], flexShrink: 0 })
+
+const languageLinks = <Message>(
+  { label, languages }: Readonly<{ label: string; languages: ReadonlyArray<LanguageLink> }>,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.nav(
+    styledAttributes([h.AriaLabel(label)], languageLinksStyle),
+    languages.map((language) =>
+      AppButton.view(
+        {
+          children: [language.label],
+          ariaLabel: language.name,
+          title: language.name,
+          href: language.href,
+          attributes: [h.Hreflang(language.hreflang), h.Lang(language.hreflang)],
+          ariaCurrent: language.isCurrent ? "true" : "false",
+          tone: "neutral",
+          mode: language.isCurrent ? "faded" : "bleed",
+          size: "sm",
+        },
+        h,
+      ),
+    ),
+  )
+
 const accountView = <Message>(account: Account, h: HtmlBuilder<Message>): Html =>
   Option.match(account.maybeViewer, {
     onNone: () =>
       AppButton.view(
-        { children: ["Entrar"], href: account.href, tone: "primary", mode: "outline", size: "sm" },
+        {
+          children: [account.signInLabel],
+          href: account.href,
+          tone: "primary",
+          mode: "outline",
+          size: "sm",
+        },
         h,
       ),
     onSome: (viewer) =>
       h.a(
         styledAttributes(
-          [h.Href(account.href), h.AriaLabel(`Conta de ${viewer.name}`)],
+          [h.Href(account.href), h.AriaLabel(viewer.accountLabel)],
           accountLinkStyle,
         ),
         [profileAvatar({ name: viewer.name, maybePhotoUrl: Option.none(), size: "compact" }, h)],
@@ -228,18 +283,18 @@ export const header = <Message>(config: HeaderConfig, h: HtmlBuilder<Message>): 
   h.header(styledAttributes([], appBarStyle), [
     h.div(styledAttributes([], pageColumnStyle, headerInnerStyle), [
       h.a(
-        styledAttributes(
-          [h.Href(config.homeHref), h.AriaLabel("Gororobas: início")],
-          logoLinkStyle,
-        ),
+        styledAttributes([h.Href(config.homeHref), h.AriaLabel(config.homeLabel)], logoLinkStyle),
         [Logo.view({ styles: [headerLogoStyle] })],
       ),
       config.search,
       h.div(styledAttributes([], spacerStyle)),
       h.nav(
-        styledAttributes([h.AriaLabel("Navegação principal")], desktopNavigationStyle),
+        styledAttributes([h.AriaLabel(config.navigationLabel)], desktopNavigationStyle),
         navigationLinks(config.navigation, h),
       ),
+      ...(EffectArray.isReadonlyArrayNonEmpty(config.languages)
+        ? [languageLinks({ label: config.languagesLabel, languages: config.languages }, h)]
+        : []),
       ...EffectArray.fromOption(
         Option.map(config.maybeAccount, (account) => accountView(account, h)),
       ),
@@ -247,10 +302,10 @@ export const header = <Message>(config: HeaderConfig, h: HtmlBuilder<Message>): 
   ])
 
 export const bottomNavigation = <Message>(
-  items: ReadonlyArray<NavigationItem>,
+  { label, items }: Readonly<{ label: string; items: ReadonlyArray<NavigationItem> }>,
   h: HtmlBuilder<Message>,
 ): Html =>
-  h.nav(styledAttributes([h.AriaLabel("Navegação principal")], bottomBarStyle), [
+  h.nav(styledAttributes([h.AriaLabel(label)], bottomBarStyle), [
     h.div(
       styledAttributes([], bottomItemsStyle),
       items.map((item) =>

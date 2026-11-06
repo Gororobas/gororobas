@@ -11,13 +11,16 @@
     "format": "oxfmt",
     "test": "vitest run",
     "lint": "oxlint src",
-    "gen-icons": "bun src/ui/icons/reicon-cli.ts && pnpm run format"
+    "gen-icons": "bun src/ui/icons/reicon-cli.ts && pnpm run format",
+    "i18n:extract": "lingui extract --clean",
+    "i18n:check": "lingui check sync --clean && lingui check missing"
   },
   "dependencies": {
     "@effect/platform-browser": "catalog:",
     "@foldkit/ui": "file:../../repos/foldkit/packages/ui",
     "@fontsource-variable/alan-sans": "^5.3.1",
     "@gororobas/domain": "workspace:^",
+    "@lingui/core": "catalog:",
     "@pleat/core": "workspace:^",
     "@pleat/foldkit": "workspace:^",
     "@yielded/auth": "catalog:",
@@ -32,6 +35,9 @@
     "@foldkit/devtools": "file:../../repos/foldkit/packages/devtools",
     "@foldkit/devtools-mcp": "file:../../repos/foldkit/packages/devtools-mcp",
     "@foldkit/vite-plugin": "file:../../repos/foldkit/packages/vite-plugin-foldkit",
+    "@lingui/cli": "catalog:",
+    "@lingui/format-po": "catalog:",
+    "@lingui/vite-plugin": "catalog:",
     "happy-dom": "^20.14.6",
     "typescript": "catalog:",
     "vite": "catalog:",

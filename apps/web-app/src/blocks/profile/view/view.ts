@@ -1,9 +1,11 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { Style, When } from "@pleat/core"
 import { type DateTime, Match, Option } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { type ProfileTab, profileUrl, searchUrl, wikiArticleUrl } from "../../../app/route"
+import type { LanguageInputs } from "../../../lib/language"
 import { imageUrl } from "../../../media-urls"
 import { AppText } from "../../../ui/app-text"
 import { EmptyState } from "../../../ui/empty-state"
@@ -71,7 +73,10 @@ const tabEntries: ReadonlyArray<readonly [ProfileTab, string, (config?: IconConf
 ]
 
 /** Where the profile is, leading to that place's article when it's one. */
-const location = (page: Page, h: ProfileViewBuilder): ReadonlyArray<Html> =>
+const location = (
+  { page, language }: Readonly<{ page: Page; language: SupportedLanguage }>,
+  h: ProfileViewBuilder,
+): ReadonlyArray<Html> =>
   page.location === null
     ? []
     : [
@@ -88,7 +93,10 @@ const location = (page: Page, h: ProfileViewBuilder): ReadonlyArray<Html> =>
                     styledAttributes(
                       [
                         h.Href(
-                          wikiArticleUrl({ kind: "PLACE", handle: page.location.placeHandle }),
+                          wikiArticleUrl(language, {
+                            kind: "PLACE",
+                            handle: page.location.placeHandle,
+                          }),
                         ),
                       ],
                       locationLinkStyle,
@@ -102,7 +110,7 @@ const location = (page: Page, h: ProfileViewBuilder): ReadonlyArray<Html> =>
       ]
 
 const header = (
-  { page, tab }: Readonly<{ page: Page; tab: ProfileTab }>,
+  { language, page, tab }: Readonly<{ language: SupportedLanguage; page: Page; tab: ProfileTab }>,
   h: ProfileViewBuilder,
 ): Html =>
   h.div(styledAttributes([], headerBandStyle, toneStyle("primary")), [
@@ -130,7 +138,7 @@ const header = (
             },
             h,
           ),
-          ...location(page, h),
+          ...location({ page, language }, h),
         ]),
       ]),
       TabNavigation.view(
@@ -140,7 +148,7 @@ const header = (
           items: tabEntries.map(([entry, label, icon]) => ({
             key: entry,
             label,
-            href: profileUrl(page.handle, entry),
+            href: profileUrl(language, { handle: page.handle, tab: entry }),
             isCurrent: entry === tab,
             maybeIcon: icon,
           })),
@@ -150,14 +158,15 @@ const header = (
     ]),
   ])
 
-export type ViewInputs = Readonly<{
-  tab: ProfileTab
-  maybeToday: Option.Option<DateTime.Utc>
-}>
+export type ViewInputs = LanguageInputs &
+  Readonly<{
+    tab: ProfileTab
+    maybeToday: Option.Option<DateTime.Utc>
+  }>
 
 export const view = ProfileComposition.makeView.withInputs<ViewInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
-  (model, { tab, maybeToday }, h): Html =>
+  (model, { language, tab, maybeToday }, h): Html =>
     AsyncData.matchData(model.pageAsyncData, {
       onEmpty: () =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
@@ -175,7 +184,7 @@ export const view = ProfileComposition.makeView.withInputs<ViewInputs>(
                   ),
                   maybeAction: Option.some({
                     label: "Buscar pessoas",
-                    href: searchUrl({ type: Option.some("people") }),
+                    href: searchUrl(language, { type: Option.some("people") }),
                   }),
                   size: "roomy",
                 },
@@ -195,20 +204,22 @@ export const view = ProfileComposition.makeView.withInputs<ViewInputs>(
         h.article(
           [],
           [
-            header({ page, tab }, h),
+            header({ language, page, tab }, h),
             h.div(styledAttributes([], pageColumnStyle), [
               Match.value(tab).pipe(
                 Match.withReturnType<Html>(),
-                Match.when("Home", () => Home.view({ model, page, maybeToday }, h)),
+                Match.when("Home", () => Home.view({ model, language, page, maybeToday }, h)),
                 Match.when("Publications", () =>
-                  Collections.publications({ model, page, maybeToday }, h),
+                  Collections.publications({ model, language, page, maybeToday }, h),
                 ),
-                Match.when("Photos", () => Collections.photos({ model, page, maybeToday }, h)),
+                Match.when("Photos", () =>
+                  Collections.photos({ model, language, page, maybeToday }, h),
+                ),
                 Match.when("Contributions", () =>
-                  Collections.contributions({ model, page, maybeToday }, h),
+                  Collections.contributions({ model, language, page, maybeToday }, h),
                 ),
                 Match.when("Bookmarks", () =>
-                  Collections.bookmarks({ model, page, maybeToday }, h),
+                  Collections.bookmarks({ model, language, page, maybeToday }, h),
                 ),
                 Match.exhaustive,
               ),

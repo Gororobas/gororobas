@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { BookmarkState } from "@gororobas/domain/common/enums"
 import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import { Style, When } from "@pleat/core"
@@ -125,6 +126,7 @@ const nameStyle = Style.make({ color: tones.neutral.shade[700] })
 const bookmarkStyle = Style.make({ color: tones.neutral.shade[600] })
 
 export type WikiArticleRowConfig = Readonly<{
+  language: SupportedLanguage
   article: WikiArticleQueriedCardData
   /** Subtitles and similar details shown under the name, such as an author. */
   maybeSubtitle?: Option.Option<string>
@@ -158,7 +160,7 @@ const card = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Message>): H
   const { article } = config
   const name = primaryName(article)
 
-  return h.a(styledAttributes([h.Href(wikiArticleUrl(article))], cardStyle), [
+  return h.a(styledAttributes([h.Href(wikiArticleUrl(config.language, article))], cardStyle), [
     h.div(styledAttributes([], cardMediaStyle), [
       Option.match(thumbnailSrc(article), {
         onNone: () =>
@@ -228,7 +230,7 @@ export const view = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Messa
     EffectArray.head(article.scientificNames),
   )
 
-  return h.a(styledAttributes([h.Href(wikiArticleUrl(article))], rowStyle), [
+  return h.a(styledAttributes([h.Href(wikiArticleUrl(config.language, article))], rowStyle), [
     Thumbnail.view({ maybeSrc: thumbnailSrc(article), alt: name }, h),
     h.div(styledAttributes([], textStyle), [
       AppText.view({ appearance: "caption", isMuted: true, children: [kindLabel(article)] }, h),

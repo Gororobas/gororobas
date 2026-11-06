@@ -19,6 +19,7 @@ export const AuthenticationBinding = ApplicationBlock.makeBinding(Authentication
 
 export const SearchBinding = ApplicationBlock.makeBinding(SearchBlock, {
   field: "search",
+  delivery: { toUpdateContext: (model) => [model.language] },
   subscriptions: { when: (model) => ApplicationRoute.guards.Search(model.route) },
 })
 

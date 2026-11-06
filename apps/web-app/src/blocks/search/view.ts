@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { ProfileCardData } from "@gororobas/domain/profiles/domain"
 import type { ApiPublicationCardData } from "@gororobas/domain/publications/domain"
 import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
@@ -8,6 +9,7 @@ import type { Html } from "foldkit/html"
 
 import { type SearchQuery, type SearchType, searchUrl } from "../../app/route"
 import type { ClientFailure } from "../../lib/client-failure"
+import type { LanguageInputs } from "../../lib/language"
 import { wikiKindLabels } from "../../lib/vocabulary"
 import { AppButton } from "../../ui/app-button"
 import * as AppDrawer from "../../ui/app-drawer/view"
@@ -81,11 +83,13 @@ import { PUBLICATIONS_SEARCH_PAGE_SIZE } from "./subscription"
 const TYPED_ARTICLE_COUNT = 60
 
 /** Ways into the content while nothing is typed yet, each with where it searches. */
-const SEARCH_IDEAS: ReadonlyArray<Readonly<{ label: string; context: string; href: string }>> = [
+const searchIdeas = (
+  language: SupportedLanguage,
+): ReadonlyArray<Readonly<{ label: string; context: string; href: string }>> => [
   {
     label: "Jacarandá",
     context: "entre as plantas",
-    href: searchUrl({
+    href: searchUrl(language, {
       text: Option.some("Jacarandá"),
       type: Option.some("wiki"),
       wikiKind: Option.some("PLANT"),
@@ -94,22 +98,28 @@ const SEARCH_IDEAS: ReadonlyArray<Readonly<{ label: string; context: string; hre
   {
     label: "Livros",
     context: "na enciclopédia",
-    href: searchUrl({ type: Option.some("wiki"), wikiKind: Option.some("BOOK") }),
+    href: searchUrl(language, { type: Option.some("wiki"), wikiKind: Option.some("BOOK") }),
   },
   {
     label: "Organizações",
     context: "entre a gente",
-    href: searchUrl({ type: Option.some("people"), profileType: Option.some("ORGANIZATION") }),
+    href: searchUrl(language, {
+      type: Option.some("people"),
+      profileType: Option.some("ORGANIZATION"),
+    }),
   },
   {
     label: "Aprendizados",
     context: "nos posts",
-    href: searchUrl({ text: Option.some("aprendizados"), type: Option.some("publications") }),
+    href: searchUrl(language, {
+      text: Option.some("aprendizados"),
+      type: Option.some("publications"),
+    }),
   },
   {
     label: "Agrofloresta",
     context: "em tudo",
-    href: searchUrl({ text: Option.some("agrofloresta") }),
+    href: searchUrl(language, { text: Option.some("agrofloresta") }),
   },
 ]
 
@@ -302,6 +312,7 @@ const browseContextStyle = Style.make({ color: toneColors.foregroundMuted })
 
 type ViewState = Readonly<{
   model: Model
+  language: SupportedLanguage
   query: SearchQuery
   maybeToday: Option.Option<DateTime.Utc>
 }>
@@ -318,8 +329,15 @@ const searchTypeIcons: Readonly<Record<SearchType, (config?: IconConfig) => Html
   people: Icons.user,
 }
 
-const typeUrl = (query: SearchQuery, type: Option.Option<SearchType>) =>
-  searchUrl({ text: query.text, type })
+const typeUrl = ({
+  language,
+  query,
+  type,
+}: Readonly<{
+  language: SupportedLanguage
+  query: SearchQuery
+  type: Option.Option<SearchType>
+}>) => searchUrl(language, { text: query.text, type })
 
 /** Nothing matched: suggests what usually helps. */
 const noResults = (
@@ -424,7 +442,10 @@ const searchField = (query: SearchQuery, h: SearchViewBuilder): Html =>
   )
 
 /** The overview's type tabs. A chosen type replaces them with its own heading. */
-const tabs = (query: SearchQuery, h: SearchViewBuilder): Html => {
+const tabs = (
+  { language, query }: Readonly<{ language: SupportedLanguage; query: SearchQuery }>,
+  h: SearchViewBuilder,
+): Html => {
   const entries: ReadonlyArray<readonly [string, Option.Option<SearchType>]> = [
     ["Tudo", Option.none()],
     ["Enciclopédia", Option.some("wiki")],
@@ -441,7 +462,7 @@ const tabs = (query: SearchQuery, h: SearchViewBuilder): Html => {
         return AppButton.view(
           {
             children: [label],
-            href: typeUrl(query, type),
+            href: typeUrl({ language, query, type }),
             ariaCurrent: isCurrent ? "page" : "false",
             mode: isCurrent ? "default" : "outline",
             tone: "accent",
@@ -533,10 +554,12 @@ const resultGrid = (
 const articleGrid = (
   {
     model,
+    language,
     articles,
     maybePreview,
   }: Readonly<{
     model: Model
+    language: SupportedLanguage
     articles: ReadonlyArray<WikiArticleQueriedCardData>
     maybePreview: Option.Option<Preview>
   }>,
@@ -555,6 +578,7 @@ const articleGrid = (
                 WikiArticleRow.view(
                   {
                     article,
+                    language,
                     maybeBookmarkState: HashMap.get(model.viewerBookmarks, article.id),
                     isCard: true,
                   },
@@ -569,10 +593,12 @@ const articleGrid = (
 
 const publicationGrid = (
   {
+    language,
     publications,
     maybeToday,
     maybePreview,
   }: Readonly<{
+    language: SupportedLanguage
     publications: ReadonlyArray<ApiPublicationCardData>
     maybeToday: Option.Option<DateTime.Utc>
     maybePreview: Option.Option<Preview>
@@ -587,7 +613,10 @@ const publicationGrid = (
           maybePreview,
           items: nonEmpty.map(
             (publication) =>
-              [publication.id, PublicationCard.view({ publication, maybeToday }, h)] as const,
+              [
+                publication.id,
+                PublicationCard.view({ language, publication, maybeToday }, h),
+              ] as const,
           ),
         },
         h,
@@ -596,9 +625,11 @@ const publicationGrid = (
 
 const profileGrid = (
   {
+    language,
     profiles,
     maybePreview,
   }: Readonly<{
+    language: SupportedLanguage
     profiles: ReadonlyArray<ProfileCardData>
     maybePreview: Option.Option<Preview>
   }>,
@@ -611,7 +642,8 @@ const profileGrid = (
         {
           maybePreview,
           items: nonEmpty.map(
-            (profile) => [profile.id, ProfileRow.view({ profile, size: "large" }, h)] as const,
+            (profile) =>
+              [profile.id, ProfileRow.view({ profile, language, size: "large" }, h)] as const,
           ),
         },
         h,
@@ -619,17 +651,24 @@ const profileGrid = (
   })
 
 /** Links straight into one kind of article, from the overview. */
-const kindShortcuts = (query: SearchQuery, h: SearchViewBuilder): Html =>
+const kindShortcuts = (
+  { language, query }: Readonly<{ language: SupportedLanguage; query: SearchQuery }>,
+  h: SearchViewBuilder,
+): Html =>
   ChoiceRow.view(
     {
       label: "Tipos de artigo",
       options: [
-        { label: "Todos", isSelected: true, href: typeUrl(query, Option.some("wiki")) },
+        {
+          label: "Todos",
+          isSelected: true,
+          href: typeUrl({ language, query, type: Option.some("wiki") }),
+        },
         ...(["PLANT", "PLANT_CULTIVAR", "CONCEPT", "BOOK", "FILM", "ANIMAL", "TOOL"] as const).map(
           (kind) => ({
             label: wikiKindLabels[kind].plural,
             isSelected: false,
-            href: searchUrl({
+            href: searchUrl(language, {
               text: query.text,
               type: Option.some("wiki"),
               wikiKind: Option.some(kind),
@@ -643,10 +682,16 @@ const kindShortcuts = (query: SearchQuery, h: SearchViewBuilder): Html =>
 
 const overviewSection = (
   {
+    language,
     type,
     query,
     children,
-  }: Readonly<{ type: SearchType; query: SearchQuery; children: ReadonlyArray<Html> }>,
+  }: Readonly<{
+    language: SupportedLanguage
+    type: SearchType
+    query: SearchQuery
+    children: ReadonlyArray<Html>
+  }>,
   h: SearchViewBuilder,
 ): Html =>
   h.section(styledAttributes([h.AriaLabel(searchTypeTitles[type])], sectionStyle), [
@@ -655,7 +700,7 @@ const overviewSection = (
       AppButton.view(
         {
           children: ["Ver todos", Icons.arrowRight({ size: "sm" })],
-          href: typeUrl(query, Option.some(type)),
+          href: typeUrl({ language, query, type: Option.some(type) }),
           tone: "accent",
           mode: "faded",
           size: "sm",
@@ -666,21 +711,27 @@ const overviewSection = (
     ...children,
   ])
 
-const overview = ({ model, query, maybeToday }: ViewState, h: SearchViewBuilder): Html =>
+const overview = ({ model, language, query, maybeToday }: ViewState, h: SearchViewBuilder): Html =>
   h.div(styledAttributes([], sectionsStyle), [
     ...resultSummary({ query, maybeCount: Option.none() }, h),
     overviewSection(
       {
+        language,
         type: "wiki",
         query,
         children: [
-          kindShortcuts(query, h),
+          kindShortcuts({ language, query }, h),
           resultsView(
             {
               asyncData: model.wikiAsyncData,
               onData: (articles) =>
                 articleGrid(
-                  { model, articles, maybePreview: Option.some({ shownAt: articlesShownAt }) },
+                  {
+                    model,
+                    language,
+                    articles,
+                    maybePreview: Option.some({ shownAt: articlesShownAt }),
+                  },
                   h,
                 ),
             },
@@ -692,6 +743,7 @@ const overview = ({ model, query, maybeToday }: ViewState, h: SearchViewBuilder)
     ),
     overviewSection(
       {
+        language,
         type: "publications",
         query,
         children: [
@@ -701,6 +753,7 @@ const overview = ({ model, query, maybeToday }: ViewState, h: SearchViewBuilder)
               onData: (publications) =>
                 publicationGrid(
                   {
+                    language,
                     publications,
                     maybeToday,
                     maybePreview: Option.some({ shownAt: publicationsShownAt }),
@@ -716,6 +769,7 @@ const overview = ({ model, query, maybeToday }: ViewState, h: SearchViewBuilder)
     ),
     overviewSection(
       {
+        language,
         type: "people",
         query,
         children: [
@@ -724,7 +778,7 @@ const overview = ({ model, query, maybeToday }: ViewState, h: SearchViewBuilder)
               asyncData: model.profilesAsyncData,
               onData: (profiles) =>
                 profileGrid(
-                  { profiles, maybePreview: Option.some({ shownAt: profilesShownAt }) },
+                  { language, profiles, maybePreview: Option.some({ shownAt: profilesShownAt }) },
                   h,
                 ),
             },
@@ -800,23 +854,26 @@ const browseLink = (
     ),
   ])
 
-const browse = (model: Model, h: SearchViewBuilder): Html => {
+const browse = (
+  { model, language }: Readonly<{ model: Model; language: SupportedLanguage }>,
+  h: SearchViewBuilder,
+): Html => {
   const tiles = [
     ...Record.toEntries(wikiKindIcons)
       .filter(([kind]) => kind !== "UNCATEGORIZED")
       .map(([kind, icon]) => ({
         label: wikiKindLabels[kind].plural,
-        href: searchUrl({ type: Option.some("wiki"), wikiKind: Option.some(kind) }),
+        href: searchUrl(language, { type: Option.some("wiki"), wikiKind: Option.some(kind) }),
         icon,
       })),
     {
       label: searchTypeTitles.publications,
-      href: searchUrl({ type: Option.some("publications") }),
+      href: searchUrl(language, { type: Option.some("publications") }),
       icon: Icons.clipboard,
     },
     {
       label: searchTypeTitles.people,
-      href: searchUrl({ type: Option.some("people") }),
+      href: searchUrl(language, { type: Option.some("people") }),
       icon: Icons.users,
     },
   ]
@@ -854,7 +911,10 @@ const browse = (model: Model, h: SearchViewBuilder): Html => {
                         onNone: () => "em tudo",
                         onSome: (type) => searchTypeContexts[type],
                       }),
-                      href: searchUrl({ text: Option.some(recent.text), type: recent.type }),
+                      href: searchUrl(language, {
+                        text: Option.some(recent.text),
+                        type: recent.type,
+                      }),
                     },
                     h,
                   ),
@@ -879,7 +939,7 @@ const browse = (model: Model, h: SearchViewBuilder): Html => {
       SectionHeading.view({ title: "Ideias de buscas", icon: Icons.lightbulb }, h),
       h.ul(
         styledAttributes([], browseListStyle),
-        SEARCH_IDEAS.map((idea) =>
+        searchIdeas(language).map((idea) =>
           h.keyed("li")(idea.href, styledAttributes([], browseRowStyle), [browseLink(idea, h)]),
         ),
       ),
@@ -1165,7 +1225,7 @@ const filtersDrawer = (
 
 /** One type's results: a way back to every type, its heading and its filters. */
 const typedResults = (
-  { model, query, maybeToday, type }: ViewState & Readonly<{ type: SearchType }>,
+  { model, language, query, maybeToday, type }: ViewState & Readonly<{ type: SearchType }>,
   h: SearchViewBuilder,
 ): Html =>
   h.div(
@@ -1176,7 +1236,7 @@ const typedResults = (
           AppButton.view(
             {
               children: [Icons.arrowLeft({ size: "sm" }), "Todos os tipos"],
-              href: typeUrl(query, Option.none()),
+              href: typeUrl({ language, query, type: Option.none() }),
               tone: "accent",
               mode: "bleed",
               size: "sm",
@@ -1189,7 +1249,7 @@ const typedResults = (
           ),
           ...resultSummary({ query, maybeCount: typedCount(model, type) }, h),
         ]),
-        filterBar({ model, query }, h),
+        filterBar({ model, language, query }, h),
         Match.value(type).pipe(
           Match.withReturnType<Html>(),
           Match.when("wiki", () =>
@@ -1200,6 +1260,7 @@ const typedResults = (
                   articleGrid(
                     {
                       model,
+                      language,
                       articles: articles.slice(0, TYPED_ARTICLE_COUNT),
                       maybePreview: Option.none(),
                     },
@@ -1214,7 +1275,10 @@ const typedResults = (
               {
                 asyncData: model.publicationsAsyncData,
                 onData: (publications) =>
-                  publicationGrid({ publications, maybeToday, maybePreview: Option.none() }, h),
+                  publicationGrid(
+                    { language, publications, maybeToday, maybePreview: Option.none() },
+                    h,
+                  ),
               },
               h,
             ),
@@ -1223,7 +1287,8 @@ const typedResults = (
             resultsView(
               {
                 asyncData: model.profilesAsyncData,
-                onData: (profiles) => profileGrid({ profiles, maybePreview: Option.none() }, h),
+                onData: (profiles) =>
+                  profileGrid({ language, profiles, maybePreview: Option.none() }, h),
               },
               h,
             ),
@@ -1231,28 +1296,29 @@ const typedResults = (
           Match.exhaustive,
         ),
       ]),
-      filtersDrawer({ model, query }, h),
+      filtersDrawer({ model, language, query }, h),
     ],
   )
 
-export type ViewInputs = Readonly<{
-  query: SearchQuery
-  maybeToday: Option.Option<DateTime.Utc>
-  /** Places the search field in the app bar, where the search link sits on other pages. */
-  renderHeader: (search: Html) => Html
-}>
+export type ViewInputs = LanguageInputs &
+  Readonly<{
+    query: SearchQuery
+    maybeToday: Option.Option<DateTime.Utc>
+    /** Places the search field in the app bar, where the search link sits on other pages. */
+    renderHeader: (search: Html) => Html
+  }>
 
 export const view = SearchComposition.makeView.withInputs<ViewInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
-  (model, { query, maybeToday, renderHeader }, h): Html =>
+  (model, { language, query, maybeToday, renderHeader }, h): Html =>
     h.div(styledAttributes([], pageStyle), [
       renderHeader(searchField(query, h)),
       ...(Option.isNone(query.type) && !isBrowsing(query) && !isTextTooShort(query)
-        ? [tabs(query, h)]
+        ? [tabs({ language, query }, h)]
         : []),
       h.div(styledAttributes([], pageColumnStyle, contentStyle), [
         isBrowsing(query)
-          ? browse(model, h)
+          ? browse({ model, language }, h)
           : isTextTooShort(query)
             ? h.div(
                 [],
@@ -1265,12 +1331,12 @@ export const view = SearchComposition.makeView.withInputs<ViewInputs>(
                     },
                     h,
                   ),
-                  browse(model, h),
+                  browse({ model, language }, h),
                 ],
               )
             : Option.match(query.type, {
-                onNone: () => overview({ model, query, maybeToday }, h),
-                onSome: (type) => typedResults({ model, query, maybeToday, type }, h),
+                onNone: () => overview({ model, language, query, maybeToday }, h),
+                onSome: (type) => typedResults({ model, language, query, maybeToday, type }, h),
               }),
       ]),
     ]),

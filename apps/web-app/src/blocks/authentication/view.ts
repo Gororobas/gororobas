@@ -2,7 +2,8 @@ import { Style } from "@pleat/core"
 import { Option } from "effect"
 import type { Attribute, Html } from "foldkit/html"
 
-import { myPlacesRouter } from "../../app/route"
+import { myPlacesUrl } from "../../app/route"
+import type { LanguageInputs } from "../../lib/language"
 import { AppButton } from "../../ui/app-button"
 import { AppCard } from "../../ui/app-card"
 import { AppField } from "../../ui/app-field"
@@ -81,183 +82,185 @@ const textField = (
     h,
   )
 
-export const view = AuthenticationComposition.makeView((model, h): Html =>
-  h.main(
-    styledAttributes([], pageStyle),
-    Stage.match(model.stage, {
-      Restoring: () => [
-        AppText.view(
-          { element: "p", attributes: [h.Role("status")], children: ["Verificando sua sessão…"] },
-          h,
-        ),
-      ],
-      EnteringEmail: ({ email, isSending, error }) => [
-        heading("Entre ou crie sua conta", h),
-        h.form(styledAttributes([h.OnSubmit(Message.SubmittedEmail())], formStyle), [
-          textField(
-            {
-              id: "authentication-email",
-              label: "Email",
-              value: email,
-              attributes: [
-                h.Type("email"),
-                h.Name("email"),
-                h.Attribute("maxlength", "320"),
-                h.Attribute("autocomplete", "email"),
-              ],
-              onInput: (value) => Message.UpdatedEmail({ value }),
-              error,
-            },
+export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs>(
+  // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
+  (model, { language }, h): Html =>
+    h.main(
+      styledAttributes([], pageStyle),
+      Stage.match(model.stage, {
+        Restoring: () => [
+          AppText.view(
+            { element: "p", attributes: [h.Role("status")], children: ["Verificando sua sessão…"] },
             h,
           ),
-          AppButton.view(
-            {
-              type: "submit",
-              tone: "primary",
-              isDisabled: isSending,
-              children: [isSending ? "Enviando…" : "Continuar com email"],
-            },
-            h,
-          ),
-        ]),
-      ],
-      AwaitingCode: ({ pending, isEnteringCode, code, isBusy, canResend, notice }) => [
-        heading("Confira seu email", h),
-        AppText.view(
-          {
-            element: "p",
-            children: [
-              "Para continuar, clique no link enviado para ",
-              AppText.view({ element: "strong", attributes: [], children: [pending.email] }, h),
-            ],
-          },
-          h,
-        ),
-        isEnteringCode
-          ? h.form(styledAttributes([h.OnSubmit(Message.SubmittedCode())], formStyle), [
-              textField(
-                {
-                  id: "authentication-code",
-                  label: "Código de verificação",
-                  value: code,
-                  attributes: [
-                    h.Type("text"),
-                    h.Name("code"),
-                    h.Attribute("inputmode", "numeric"),
-                    h.Attribute("autocomplete", "one-time-code"),
-                    h.Attribute("pattern", "[0-9]{6}"),
-                    h.Attribute("maxlength", "6"),
-                  ],
-                  onInput: (value) => Message.UpdatedCode({ value }),
-                  error: null,
-                },
-                h,
-              ),
-              AppButton.view(
-                {
-                  type: "submit",
-                  tone: "primary",
-                  isDisabled: isBusy || code.length !== 6,
-                  children: [isBusy ? "Verificando…" : "Verificar"],
-                },
-                h,
-              ),
-            ])
-          : AppButton.view(
+        ],
+        EnteringEmail: ({ email, isSending, error }) => [
+          heading("Entre ou crie sua conta", h),
+          h.form(styledAttributes([h.OnSubmit(Message.SubmittedEmail())], formStyle), [
+            textField(
               {
-                tone: "primary",
-                onClick: Message.ClickedEnterCode(),
-                children: ["Digitar código"],
+                id: "authentication-email",
+                label: "Email",
+                value: email,
+                attributes: [
+                  h.Type("email"),
+                  h.Name("email"),
+                  h.Attribute("maxlength", "320"),
+                  h.Attribute("autocomplete", "email"),
+                ],
+                onInput: (value) => Message.UpdatedEmail({ value }),
+                error,
               },
               h,
             ),
-        h.div(styledAttributes([], actionsStyle), [
-          AppButton.view(
+            AppButton.view(
+              {
+                type: "submit",
+                tone: "primary",
+                isDisabled: isSending,
+                children: [isSending ? "Enviando…" : "Continuar com email"],
+              },
+              h,
+            ),
+          ]),
+        ],
+        AwaitingCode: ({ pending, isEnteringCode, code, isBusy, canResend, notice }) => [
+          heading("Confira seu email", h),
+          AppText.view(
             {
-              mode: "outline",
-              isDisabled: isBusy || !canResend,
-              onClick: Message.ClickedResend(),
-              children: ["Reenviar email"],
-            },
-            h,
-          ),
-          AppButton.view(
-            {
-              mode: "outline",
-              isDisabled: isBusy,
-              onClick: Message.ClickedUseDifferentEmail(),
-              children: ["Usar outro email"],
-            },
-            h,
-          ),
-        ]),
-        ...status(notice, h),
-      ],
-      Onboarding: ({ name, isSaving, error }) => [
-        heading("Boas-vindas ao Gororobas!", h),
-        h.form(styledAttributes([h.OnSubmit(Message.SubmittedName())], formStyle), [
-          textField(
-            {
-              id: "authentication-name",
-              label: "Como podemos te chamar?",
-              value: name,
-              attributes: [
-                h.Type("text"),
-                h.Name("name"),
-                h.Attribute("maxlength", "128"),
-                h.Attribute("autocomplete", "name"),
+              element: "p",
+              children: [
+                "Para continuar, clique no link enviado para ",
+                AppText.view({ element: "strong", attributes: [], children: [pending.email] }, h),
               ],
-              onInput: (value) => Message.UpdatedName({ value }),
-              error,
             },
             h,
           ),
-          AppButton.view(
-            {
-              type: "submit",
-              tone: "primary",
-              isDisabled: isSaving || name.trim() === "",
-              children: [isSaving ? "Salvando…" : "Continuar"],
-            },
-            h,
-          ),
-        ]),
-      ],
-      SignedIn: ({ name, isSigningOut, connection }) => [
-        AppCard.view(
-          {
-            kind: "panel",
-            styles: [formStyle],
-            children: [
-              heading(`Olá, ${name}`, h),
-              ...status(
-                connection === "Offline"
-                  ? "Você está offline ou o servidor está indisponível. Sua conta segue disponível neste aparelho; ações online esperam a sessão ser verificada."
-                  : connection === "Checking"
-                    ? "Verificando sua sessão antes de ações online…"
-                    : null,
-                h,
-              ),
-              h.div(styledAttributes([], actionsStyle), [
-                AppButton.view(
-                  { tone: "primary", href: myPlacesRouter(), children: ["Meus lugares"] },
+          isEnteringCode
+            ? h.form(styledAttributes([h.OnSubmit(Message.SubmittedCode())], formStyle), [
+                textField(
+                  {
+                    id: "authentication-code",
+                    label: "Código de verificação",
+                    value: code,
+                    attributes: [
+                      h.Type("text"),
+                      h.Name("code"),
+                      h.Attribute("inputmode", "numeric"),
+                      h.Attribute("autocomplete", "one-time-code"),
+                      h.Attribute("pattern", "[0-9]{6}"),
+                      h.Attribute("maxlength", "6"),
+                    ],
+                    onInput: (value) => Message.UpdatedCode({ value }),
+                    error: null,
+                  },
                   h,
                 ),
                 AppButton.view(
                   {
-                    mode: "outline",
-                    isDisabled: isSigningOut,
-                    onClick: Message.ClickedSignOut(),
-                    children: ["Sair"],
+                    type: "submit",
+                    tone: "primary",
+                    isDisabled: isBusy || code.length !== 6,
+                    children: [isBusy ? "Verificando…" : "Verificar"],
                   },
                   h,
                 ),
-              ]),
-            ],
-          },
-          h,
-        ),
-      ],
-    }),
-  ),
+              ])
+            : AppButton.view(
+                {
+                  tone: "primary",
+                  onClick: Message.ClickedEnterCode(),
+                  children: ["Digitar código"],
+                },
+                h,
+              ),
+          h.div(styledAttributes([], actionsStyle), [
+            AppButton.view(
+              {
+                mode: "outline",
+                isDisabled: isBusy || !canResend,
+                onClick: Message.ClickedResend(),
+                children: ["Reenviar email"],
+              },
+              h,
+            ),
+            AppButton.view(
+              {
+                mode: "outline",
+                isDisabled: isBusy,
+                onClick: Message.ClickedUseDifferentEmail(),
+                children: ["Usar outro email"],
+              },
+              h,
+            ),
+          ]),
+          ...status(notice, h),
+        ],
+        Onboarding: ({ name, isSaving, error }) => [
+          heading("Boas-vindas ao Gororobas!", h),
+          h.form(styledAttributes([h.OnSubmit(Message.SubmittedName())], formStyle), [
+            textField(
+              {
+                id: "authentication-name",
+                label: "Como podemos te chamar?",
+                value: name,
+                attributes: [
+                  h.Type("text"),
+                  h.Name("name"),
+                  h.Attribute("maxlength", "128"),
+                  h.Attribute("autocomplete", "name"),
+                ],
+                onInput: (value) => Message.UpdatedName({ value }),
+                error,
+              },
+              h,
+            ),
+            AppButton.view(
+              {
+                type: "submit",
+                tone: "primary",
+                isDisabled: isSaving || name.trim() === "",
+                children: [isSaving ? "Salvando…" : "Continuar"],
+              },
+              h,
+            ),
+          ]),
+        ],
+        SignedIn: ({ name, isSigningOut, connection }) => [
+          AppCard.view(
+            {
+              kind: "panel",
+              styles: [formStyle],
+              children: [
+                heading(`Olá, ${name}`, h),
+                ...status(
+                  connection === "Offline"
+                    ? "Você está offline ou o servidor está indisponível. Sua conta segue disponível neste aparelho; ações online esperam a sessão ser verificada."
+                    : connection === "Checking"
+                      ? "Verificando sua sessão antes de ações online…"
+                      : null,
+                  h,
+                ),
+                h.div(styledAttributes([], actionsStyle), [
+                  AppButton.view(
+                    { tone: "primary", href: myPlacesUrl(language), children: ["Meus lugares"] },
+                    h,
+                  ),
+                  AppButton.view(
+                    {
+                      mode: "outline",
+                      isDisabled: isSigningOut,
+                      onClick: Message.ClickedSignOut(),
+                      children: ["Sair"],
+                    },
+                    h,
+                  ),
+                ]),
+              ],
+            },
+            h,
+          ),
+        ],
+      }),
+    ),
 )

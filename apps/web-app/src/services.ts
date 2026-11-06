@@ -1,7 +1,9 @@
 import { Layer } from "effect"
 
 import * as ApiClient from "./api-client"
+import { LanguagePreferenceStoreLive } from "./lib/language-preference"
 import { RecentSearchesStoreLive } from "./lib/recent-searches"
+import { TranslationsLive } from "./lib/translations"
 import { AuthenticationClient, sessionAccessLayer } from "./session-access"
 
 export const ApplicationLayer = Layer.mergeAll(
@@ -9,4 +11,6 @@ export const ApplicationLayer = Layer.mergeAll(
   AuthenticationClient.layerFetch.pipe(Layer.orDie),
   sessionAccessLayer,
   RecentSearchesStoreLive,
+  LanguagePreferenceStoreLive,
+  TranslationsLive,
 )

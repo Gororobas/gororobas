@@ -19,7 +19,7 @@ import { articlePhotos } from "./photos"
 import { type ArticleState, asyncView, listStyle, sectionsStyle } from "./shared"
 
 export const publications = (
-  { model, page, maybeToday }: ArticleState,
+  { model, language, page, maybeToday }: ArticleState,
   h: WikiArticleViewBuilder,
 ): Html =>
   h.div(styledAttributes([], sectionsStyle), [
@@ -72,7 +72,7 @@ export const publications = (
                           h.keyed("div")(
                             publication.id,
                             [],
-                            [PublicationCard.view({ publication, maybeToday }, h)],
+                            [PublicationCard.view({ language, publication, maybeToday }, h)],
                           ),
                         ),
                       ),
@@ -154,7 +154,10 @@ export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder)
   ])
 }
 
-export const contributions = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): Html =>
+export const contributions = (
+  { model, language, page }: ArticleState,
+  h: WikiArticleViewBuilder,
+): Html =>
   h.div(styledAttributes([], sectionsStyle), [
     SectionCard.view(
       {
@@ -175,7 +178,8 @@ export const contributions = ({ model, page }: ArticleState, h: WikiArticleViewB
             {
               asyncData: model.contributorsAsyncData,
               loading: { label: "Carregando contribuições", shape: "rows" },
-              onData: (contributors) => contributorList({ contributors, size: "large" }, h),
+              onData: (contributors) =>
+                contributorList({ contributors, language, size: "large" }, h),
             },
             h,
           ),

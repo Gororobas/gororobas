@@ -3,16 +3,20 @@ import type { Url } from "foldkit/url"
 
 import { DeviceLocation } from "../lib/device-location"
 import { enterRouteStep } from "./change-route"
-import { ReadToday } from "./command"
+import { ReadToday, ReplaceUrl, SaveLanguagePreference } from "./command"
 import { ApplicationComposition } from "./composition"
-import { urlToApplicationRoute } from "./route"
+import type { Flags } from "./definition"
+import { languageRedirectUrl, urlToLocatedRoute } from "./route"
 
-export const init = ApplicationComposition.makeInit((url: Url) => {
-  const route = urlToApplicationRoute(url)
+export const init = ApplicationComposition.makeInit((flags: typeof Flags.Type, url: Url) => {
+  const { maybeLanguage, route } = urlToLocatedRoute(url)
 
   return {
     model: {
       route,
+      language: flags.language,
+      maybeLanguageRequest: Option.none(),
+      languageRequestCount: 0,
       maybeToday: Option.none(),
       deviceLocation: DeviceLocation.Unrequested(),
       maybeWikiArticle: Option.none(),
@@ -22,7 +26,13 @@ export const init = ApplicationComposition.makeInit((url: Url) => {
       maybeExternalDataAdminDashboard: Option.none(),
       isSearchFieldFocusPending: false,
     },
-    commands: [ReadToday()],
+    commands: [
+      ReadToday(),
+      SaveLanguagePreference({ language: flags.language }),
+      ...(Option.isNone(maybeLanguage)
+        ? [ReplaceUrl({ url: languageRedirectUrl(flags.language, url) })]
+        : []),
+    ],
     steps: [enterRouteStep(route)],
   }
 })

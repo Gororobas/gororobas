@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { ApiPublicationCardData } from "@gororobas/domain/publications/domain"
 import { tiptapToText } from "@gororobas/domain/rich-text/tiptap-to-text"
 import { Color, Style, When } from "@pleat/core"
@@ -111,6 +112,7 @@ const copyAppearance = (content: string): AppTextAppearance =>
   content.trim().length <= SHORT_POST_LENGTH ? "large" : "regular"
 
 export type PublicationCardConfig = Readonly<{
+  language: SupportedLanguage
   publication: ApiPublicationCardData
   /** Dates read relative to it; without it, cards show the full date. */
   maybeToday: Option.Option<DateTime.Utc>
@@ -118,7 +120,7 @@ export type PublicationCardConfig = Readonly<{
 
 /** A post or event as it appears in lists: when, its themes, an excerpt, its first media, and who wrote it. */
 export const view = <Message>(
-  { publication, maybeToday }: PublicationCardConfig,
+  { language, publication, maybeToday }: PublicationCardConfig,
   h: HtmlBuilder<Message>,
 ): Html => {
   const content = tiptapToText(publication.content)
@@ -161,9 +163,11 @@ export const view = <Message>(
       h.div(
         styledAttributes([h.AriaLabel("Temas")], tagsRowStyle),
         publication.concepts.map((concept) =>
-          h.keyed("a")(concept.id, styledAttributes([h.Href(wikiArticleUrl(concept))], tagStyle), [
-            primaryName(concept),
-          ]),
+          h.keyed("a")(
+            concept.id,
+            styledAttributes([h.Href(wikiArticleUrl(language, concept))], tagStyle),
+            [primaryName(concept)],
+          ),
         ),
       ),
     ]),
@@ -203,7 +207,7 @@ export const view = <Message>(
       },
     ),
     h.footer(styledAttributes([], footerStyle), [
-      ProfileRow.view({ profile: publication.owner, size: "compact" }, h),
+      ProfileRow.view({ profile: publication.owner, language, size: "compact" }, h),
     ]),
   ])
 }

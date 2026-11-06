@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import { Color, Global, Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, Match, Option } from "effect"
@@ -7,9 +8,10 @@ import type { Html } from "foldkit/html"
 import {
   type WikiArticleTab,
   searchUrl,
-  wikiArticleDebugRouter,
+  wikiArticleDebugUrl,
   wikiArticleUrl,
 } from "../../../app/route"
+import type { LanguageInputs } from "../../../lib/language"
 import { placeKindLabels } from "../../../lib/vocabulary"
 import { inPreposition, ofName, primaryName } from "../../../lib/wiki-article-names"
 import { AppButton } from "../../../ui/app-button"
@@ -74,12 +76,15 @@ const identityTextStyle = Style.make({ flex: 1, minInlineSize: 0 })
 const debugLinkStyle = Style.make({ alignSelf: "flex-start", flexShrink: 0 })
 
 /** Development builds link each article to its stored data, projections and provider observations. */
-const debugLink = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
+const debugLink = (
+  { page, language }: Readonly<{ page: Page; language: SupportedLanguage }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> =>
   import.meta.env.DEV
     ? [
         AppButton.view(
           {
-            href: wikiArticleDebugRouter({ wikiArticleId: page.id }),
+            href: wikiArticleDebugUrl(language, page.id),
             // Icon-only, so this development aid doesn't crowd the article's names.
             children: [Icons.sledgehammer({ size: "sm" })],
             ariaLabel: "Depurar artigo",
@@ -184,7 +189,10 @@ const parentPlant = (page: Page): Option.Option<WikiArticleQueriedCardData> =>
   page.kind === "PLANT_CULTIVAR" ? Option.map(page.parentPlant, ({ card }) => card) : Option.none()
 
 /** "Variedade do Ingá", leading to the plant whose traits the cultivar inherits. */
-const parentPlantLink = (card: WikiArticleQueriedCardData, h: WikiArticleViewBuilder): Html =>
+const parentPlantLink = (
+  { card, language }: Readonly<{ card: WikiArticleQueriedCardData; language: SupportedLanguage }>,
+  h: WikiArticleViewBuilder,
+): Html =>
   AppText.view(
     {
       element: "p",
@@ -192,17 +200,27 @@ const parentPlantLink = (card: WikiArticleQueriedCardData, h: WikiArticleViewBui
       styles: [parentPlantStyle],
       children: [
         "Variedade ",
-        h.a(styledAttributes([h.Href(wikiArticleUrl(card))], parentPlantLinkStyle), [ofName(card)]),
+        h.a(styledAttributes([h.Href(wikiArticleUrl(language, card))], parentPlantLinkStyle), [
+          ofName(card),
+        ]),
       ],
     },
     h,
   )
 
-const articleLink = (card: WikiArticleQueriedCardData, h: WikiArticleViewBuilder): Html =>
-  h.a(styledAttributes([h.Href(wikiArticleUrl(card))], parentPlantLinkStyle), [primaryName(card)])
+const articleLink = (
+  { card, language }: Readonly<{ card: WikiArticleQueriedCardData; language: SupportedLanguage }>,
+  h: WikiArticleViewBuilder,
+): Html =>
+  h.a(styledAttributes([h.Href(wikiArticleUrl(language, card))], parentPlantLinkStyle), [
+    primaryName(card),
+  ])
 
 /** "Município em Boyacá · Colombia", each containing place leading to its own page. */
-const placeLineage = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> => {
+const placeLineage = (
+  { page, language }: Readonly<{ page: Page; language: SupportedLanguage }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> => {
   if (page.kind !== "PLACE") {
     return []
   }
@@ -222,8 +240,8 @@ const placeLineage = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html
           styles: [parentPlantStyle],
           children: [
             `${kindLabel} ${inPreposition(parent)} `,
-            articleLink(parent, h),
-            ...others.flatMap((ancestor) => [" · ", articleLink(ancestor, h)]),
+            articleLink({ card: parent, language }, h),
+            ...others.flatMap((ancestor) => [" · ", articleLink({ card: ancestor, language }, h)]),
           ],
         },
         h,
@@ -234,7 +252,11 @@ const placeLineage = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html
 
 /** The first photo, linking to every photo of the article. */
 const headerThumbnail = (
-  { page, size }: Readonly<{ page: Page; size: "sm" | "md" }>,
+  {
+    language,
+    page,
+    size,
+  }: Readonly<{ language: SupportedLanguage; page: Page; size: "sm" | "md" }>,
   h: WikiArticleViewBuilder,
 ): Html => {
   const maybeFirst = mainPhoto(page)
@@ -249,21 +271,34 @@ const headerThumbnail = (
   )
 
   return Option.isSome(maybeFirst)
-    ? h.a(styledAttributes([h.Href(wikiArticleUrl(page, "Photos"))], thumbnailLinkStyle), [
-        thumbnail,
-      ])
+    ? h.a(
+        styledAttributes(
+          [
+            h.Href(
+              wikiArticleUrl(language, { kind: page.kind, handle: page.handle, tab: "Photos" }),
+            ),
+          ],
+          thumbnailLinkStyle,
+        ),
+        [thumbnail],
+      )
     : thumbnail
 }
 
 const header = (
-  { model, page, tab }: Readonly<{ model: Model; page: Page; tab: WikiArticleTab }>,
+  {
+    model,
+    language,
+    page,
+    tab,
+  }: Readonly<{ model: Model; language: SupportedLanguage; page: Page; tab: WikiArticleTab }>,
   h: WikiArticleViewBuilder,
 ): Html =>
   h.div(styledAttributes([], headerBandStyle, toneStyle("primary")), [
     h.header(styledAttributes([], pageColumnStyle, headerStyle), [
       h.div(styledAttributes([], identityStyle), [
         h.div(styledAttributes([], headerThumbnailStyle), [
-          headerThumbnail({ page, size: "md" }, h),
+          headerThumbnail({ language, page, size: "md" }, h),
         ]),
         h.div(styledAttributes([], identityTextStyle), [
           AppText.view(
@@ -278,9 +313,9 @@ const header = (
             h,
           ),
           ...EffectArray.fromOption(
-            Option.map(parentPlant(page), (card) => parentPlantLink(card, h)),
+            Option.map(parentPlant(page), (card) => parentPlantLink({ card, language }, h)),
           ),
-          ...placeLineage(page, h),
+          ...placeLineage({ page, language }, h),
           ...EffectArray.fromOption(
             Option.map(scientificName(page), (name) =>
               AppText.view(
@@ -296,22 +331,26 @@ const header = (
           ),
           ...Classification.view({ model, page }, h),
         ]),
-        ...debugLink(page, h),
+        ...debugLink({ page, language }, h),
       ]),
-      tabs({ page, currentTab: tab, label: `Seções ${ofName(page)}` }, h),
+      tabs({ language, page, currentTab: tab, label: `Seções ${ofName(page)}` }, h),
     ]),
   ])
 
 /** Repeats the header's name and tabs. While hidden, `visibility` keeps its links out of the tab order. */
 const compactHeader = (
-  { page, tab }: Readonly<{ page: Page; tab: WikiArticleTab }>,
+  {
+    language,
+    page,
+    tab,
+  }: Readonly<{ language: SupportedLanguage; page: Page; tab: WikiArticleTab }>,
   h: WikiArticleViewBuilder,
 ): Html =>
   h.div(styledAttributes([], compactHeaderStyle, toneStyle("primary")), [
     h.div(styledAttributes([], pageColumnStyle, compactInnerStyle), [
       h.a(
         styledAttributes(
-          [h.Href(wikiArticleUrl(page))],
+          [h.Href(wikiArticleUrl(language, page))],
           compactIdentityStyle,
           compactIdentityPaddingStyle,
         ),
@@ -339,22 +378,29 @@ const compactHeader = (
       ),
       h.div(styledAttributes([], compactTabsStyle), [
         tabs(
-          { page, currentTab: tab, label: `Seções ${ofName(page)}, atalho`, isCompact: true },
+          {
+            language,
+            page,
+            currentTab: tab,
+            label: `Seções ${ofName(page)}, atalho`,
+            isCompact: true,
+          },
           h,
         ),
       ]),
     ]),
   ])
 
-export type ViewInputs = Readonly<{
-  tab: WikiArticleTab
-  isSignedIn: boolean
-  maybeToday: Option.Option<DateTime.Utc>
-}>
+export type ViewInputs = LanguageInputs &
+  Readonly<{
+    tab: WikiArticleTab
+    isSignedIn: boolean
+    maybeToday: Option.Option<DateTime.Utc>
+  }>
 
 export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
-  (model, { tab, isSignedIn, maybeToday }, h): Html =>
+  (model, { language, tab, isSignedIn, maybeToday }, h): Html =>
     AsyncData.matchData(model.pageAsyncData, {
       onEmpty: () =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
@@ -372,7 +418,7 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
                   ),
                   maybeAction: Option.some({
                     label: "Buscar na enciclopédia",
-                    href: searchUrl({ type: Option.some("wiki") }),
+                    href: searchUrl(language, { type: Option.some("wiki") }),
                   }),
                   size: "roomy",
                 },
@@ -390,15 +436,21 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
         ]),
       onData: (page) =>
         h.article(styledAttributes([], articleStyle), [
-          header({ model, page, tab }, h),
-          compactHeader({ page, tab }, h),
+          header({ model, language, page, tab }, h),
+          compactHeader({ language, page, tab }, h),
           h.div(styledAttributes([], pageColumnStyle), [
             Match.value(tab).pipe(
               Match.withReturnType<Html>(),
-              Match.when("About", () => About.view({ model, page, maybeToday, isSignedIn }, h)),
-              Match.when("Publications", () => Tabs.publications({ model, page, maybeToday }, h)),
-              Match.when("Photos", () => Tabs.photos({ model, page, maybeToday }, h)),
-              Match.when("Contributions", () => Tabs.contributions({ model, page, maybeToday }, h)),
+              Match.when("About", () =>
+                About.view({ model, language, page, maybeToday, isSignedIn }, h),
+              ),
+              Match.when("Publications", () =>
+                Tabs.publications({ model, language, page, maybeToday }, h),
+              ),
+              Match.when("Photos", () => Tabs.photos({ model, language, page, maybeToday }, h)),
+              Match.when("Contributions", () =>
+                Tabs.contributions({ model, language, page, maybeToday }, h),
+              ),
               Match.exhaustive,
             ),
           ]),

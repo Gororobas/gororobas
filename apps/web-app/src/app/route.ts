@@ -9,6 +9,7 @@ import {
   ProfileType,
   PublicationKind,
   ResourceFormat,
+  SupportedLanguage,
   ToolUsage,
 } from "@gororobas/domain/common/enums"
 import { WikiArticleId } from "@gororobas/domain/common/ids"
@@ -31,33 +32,12 @@ import {
 } from "effect"
 import { Route } from "foldkit"
 import { defineRouteUnion, literal, schemaSegment, slash } from "foldkit/route"
+import type { Url } from "foldkit/url"
 
 // PATH SEGMENTS
 
-/** pt-BR path segments. Other languages add their own table once the interface is localized. */
-const wikiKindSlugs = {
-  PLANT: "vegetais",
-  PLANT_CULTIVAR: "variedades",
-  ANIMAL: "animais",
-  BOOK: "livros",
-  FILM: "filmes",
-  CONCEPT: "conceitos",
-  PLACE: "lugares",
-  TOOL: "ferramentas",
-  RESOURCE: "recursos",
-  NOTEWORTHY_ENTITY: "organizacoes",
-  UNCATEGORIZED: "outros",
-} as const satisfies Record<WikiArticleKind, string>
-
 export const WikiArticleTab = Schema.Literals(["About", "Publications", "Photos", "Contributions"])
 export type WikiArticleTab = typeof WikiArticleTab.Type
-
-const wikiArticleTabSlugs = {
-  About: "sobre",
-  Publications: "publicacoes",
-  Photos: "fotos",
-  Contributions: "contribuicoes",
-} as const satisfies Record<WikiArticleTab, string>
 
 export const ProfileTab = Schema.Literals([
   "Home",
@@ -69,18 +49,115 @@ export const ProfileTab = Schema.Literals([
 
 export type ProfileTab = typeof ProfileTab.Type
 
-const profileTabSlugs = {
-  Home: "inicio",
-  Publications: "publicacoes",
-  Photos: "fotos",
-  Contributions: "contribuicoes",
-  Bookmarks: "salvos",
-} as const satisfies Record<ProfileTab, string>
+/** A language's fixed path segments. Handles are content and stay the same in every language. */
+type PathSlugs = Readonly<{
+  wikiKinds: Readonly<Record<WikiArticleKind, string>>
+  wikiArticleTabs: Readonly<Record<WikiArticleTab, string>>
+  profileTabs: Readonly<Record<ProfileTab, string>>
+  profile: string
+  search: string
+  myPlaces: string
+  externalDataAdminDashboard: string
+}>
 
-const PROFILE_SEGMENT = "gente"
-const SEARCH_SEGMENT = "buscar"
-const MY_PLACES_SEGMENT = "meus-lugares"
-const EXTERNAL_DATA_ADMIN_DASHBOARD_SEGMENT = "dados-externos"
+const pathSlugs: Readonly<Record<SupportedLanguage, PathSlugs>> = {
+  pt: {
+    wikiKinds: {
+      PLANT: "vegetais",
+      PLANT_CULTIVAR: "variedades",
+      ANIMAL: "animais",
+      BOOK: "livros",
+      FILM: "filmes",
+      CONCEPT: "conceitos",
+      PLACE: "lugares",
+      TOOL: "ferramentas",
+      RESOURCE: "recursos",
+      NOTEWORTHY_ENTITY: "organizacoes",
+      UNCATEGORIZED: "outros",
+    },
+    wikiArticleTabs: {
+      About: "sobre",
+      Publications: "publicacoes",
+      Photos: "fotos",
+      Contributions: "contribuicoes",
+    },
+    profileTabs: {
+      Home: "inicio",
+      Publications: "publicacoes",
+      Photos: "fotos",
+      Contributions: "contribuicoes",
+      Bookmarks: "salvos",
+    },
+    profile: "gente",
+    search: "buscar",
+    myPlaces: "meus-lugares",
+    externalDataAdminDashboard: "dados-externos",
+  },
+  es: {
+    wikiKinds: {
+      PLANT: "vegetales",
+      PLANT_CULTIVAR: "variedades",
+      ANIMAL: "animales",
+      BOOK: "libros",
+      FILM: "peliculas",
+      CONCEPT: "conceptos",
+      PLACE: "lugares",
+      TOOL: "herramientas",
+      RESOURCE: "recursos",
+      NOTEWORTHY_ENTITY: "organizaciones",
+      UNCATEGORIZED: "otros",
+    },
+    wikiArticleTabs: {
+      About: "sobre",
+      Publications: "publicaciones",
+      Photos: "fotos",
+      Contributions: "contribuciones",
+    },
+    profileTabs: {
+      Home: "inicio",
+      Publications: "publicaciones",
+      Photos: "fotos",
+      Contributions: "contribuciones",
+      Bookmarks: "guardados",
+    },
+    profile: "gente",
+    search: "buscar",
+    myPlaces: "mis-lugares",
+    externalDataAdminDashboard: "datos-externos",
+  },
+  en: {
+    wikiKinds: {
+      PLANT: "plants",
+      PLANT_CULTIVAR: "varieties",
+      ANIMAL: "animals",
+      BOOK: "books",
+      FILM: "films",
+      CONCEPT: "concepts",
+      PLACE: "places",
+      TOOL: "tools",
+      RESOURCE: "resources",
+      NOTEWORTHY_ENTITY: "organizations",
+      UNCATEGORIZED: "other",
+    },
+    wikiArticleTabs: {
+      About: "about",
+      Publications: "publications",
+      Photos: "photos",
+      Contributions: "contributions",
+    },
+    profileTabs: {
+      Home: "home",
+      Publications: "publications",
+      Photos: "photos",
+      Contributions: "contributions",
+      Bookmarks: "bookmarks",
+    },
+    profile: "people",
+    search: "search",
+    myPlaces: "my-places",
+    externalDataAdminDashboard: "external-data",
+  },
+}
 
 /** Decodes one segment through a total lookup table, so every value has exactly one slug. */
 const slugCodec = <const Value extends string, const Slug extends string>(
@@ -105,10 +182,6 @@ const slugCodec = <const Value extends string, const Slug extends string>(
     ),
   )
 }
-
-export const WikiArticleKindFromSlug = slugCodec(wikiKindSlugs, WikiArticleKind)
-const WikiArticleTabFromSlug = slugCodec(wikiArticleTabSlugs, WikiArticleTab)
-const ProfileTabFromSlug = slugCodec(profileTabSlugs, ProfileTab)
 
 // SEARCH QUERY
 
@@ -171,16 +244,20 @@ const listParam = <A extends string>(schema: Schema.Codec<A>) => {
   )
 }
 
-const kindParam = Schema.OptionFromOptional(Schema.String).pipe(
-  Schema.decodeTo(
-    Schema.Option(WikiArticleKind),
-    SchemaTransformation.transform<Option.Option<WikiArticleKind>, Option.Option<string>>({
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- URL parameters are free text until a known value decodes from them.
-      decode: Option.flatMap(Schema.decodeUnknownOption(WikiArticleKindFromSlug)),
-      encode: Option.map((kind) => wikiKindSlugs[kind]),
-    }),
-  ),
-)
+const kindParam = (slugs: PathSlugs) => {
+  const WikiArticleKindFromSlug = slugCodec(slugs.wikiKinds, WikiArticleKind)
+
+  return Schema.OptionFromOptional(Schema.String).pipe(
+    Schema.decodeTo(
+      Schema.Option(WikiArticleKind),
+      SchemaTransformation.transform<Option.Option<WikiArticleKind>, Option.Option<string>>({
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- URL parameters are free text until a known value decodes from them.
+        decode: Option.flatMap(Schema.decodeUnknownOption(WikiArticleKindFromSlug)),
+        encode: Option.map((kind) => slugs.wikiKinds[kind]),
+      }),
+    ),
+  )
+}
 
 /** Everything a search shows comes from these fields, which live in the URL. */
 export const SearchQuery = Schema.Struct({
@@ -200,40 +277,41 @@ export const SearchQuery = Schema.Struct({
   profileType: Schema.Option(ProfileType),
 })
 
-/** The search query as URL parameters, with short pt-BR keys. */
-const SearchQueryParameters = Schema.Struct({
-  text: optionalParam(Schema.String, "raw"),
-  type: optionalParam(SearchType, "raw"),
-  wikiKind: kindParam,
-  plantUsages: listParam(PlantUsage),
-  plantLifecycles: listParam(PlantLifecycle),
-  plantingMethods: listParam(PlantingMethod),
-  strata: listParam(AgroforestryStratum),
-  edibleParts: listParam(EdiblePlantPart),
-  animalRoles: listParam(AnimalRole),
-  toolUsages: listParam(ToolUsage),
-  resourceFormats: listParam(ResourceFormat),
-  entityTypes: listParam(NoteworthyEntityType),
-  publicationKind: optionalParam(PublicationKind, "enum"),
-  profileType: optionalParam(ProfileType, "enum"),
-}).pipe(
-  Schema.encodeKeys({
-    text: "q",
-    type: "t",
-    wikiKind: "tipo",
-    plantUsages: "usos",
-    plantLifecycles: "ciclos",
-    plantingMethods: "plantio",
-    strata: "estratos",
-    edibleParts: "partes",
-    animalRoles: "papeis",
-    toolUsages: "aplicacoes",
-    resourceFormats: "formatos",
-    entityTypes: "categorias",
-    publicationKind: "formato",
-    profileType: "perfil",
-  }),
-)
+/** The search query as URL parameters, with short pt-BR keys in every language for now. */
+const searchQueryParameters = (slugs: PathSlugs) =>
+  Schema.Struct({
+    text: optionalParam(Schema.String, "raw"),
+    type: optionalParam(SearchType, "raw"),
+    wikiKind: kindParam(slugs),
+    plantUsages: listParam(PlantUsage),
+    plantLifecycles: listParam(PlantLifecycle),
+    plantingMethods: listParam(PlantingMethod),
+    strata: listParam(AgroforestryStratum),
+    edibleParts: listParam(EdiblePlantPart),
+    animalRoles: listParam(AnimalRole),
+    toolUsages: listParam(ToolUsage),
+    resourceFormats: listParam(ResourceFormat),
+    entityTypes: listParam(NoteworthyEntityType),
+    publicationKind: optionalParam(PublicationKind, "enum"),
+    profileType: optionalParam(ProfileType, "enum"),
+  }).pipe(
+    Schema.encodeKeys({
+      text: "q",
+      type: "t",
+      wikiKind: "tipo",
+      plantUsages: "usos",
+      plantLifecycles: "ciclos",
+      plantingMethods: "plantio",
+      strata: "estratos",
+      edibleParts: "partes",
+      animalRoles: "papeis",
+      toolUsages: "aplicacoes",
+      resourceFormats: "formatos",
+      entityTypes: "categorias",
+      publicationKind: "formato",
+      profileType: "perfil",
+    }),
+  )
 
 export type SearchQuery = typeof SearchQuery.Type
 
@@ -331,113 +409,219 @@ export const ApplicationRoute = defineRouteUnion({
 
 export type ApplicationRoute = typeof ApplicationRoute.Type
 
-const homeRouter = pipe(
-  Route.root,
-  Route.query(SearchQueryParameters),
-  Route.mapTo(ApplicationRoute.Search),
-)
+/** One language's routers, for paths with that language's prefix already removed. */
+const makeRouters = (slugs: PathSlugs) => {
+  const SearchQueryParameters = searchQueryParameters(slugs)
+  const WikiArticleKindFromSlug = slugCodec(slugs.wikiKinds, WikiArticleKind)
+  const WikiArticleTabFromSlug = slugCodec(slugs.wikiArticleTabs, WikiArticleTab)
+  const ProfileTabFromSlug = slugCodec(slugs.profileTabs, ProfileTab)
 
-export const searchRouter = pipe(
-  literal(SEARCH_SEGMENT),
-  Route.query(SearchQueryParameters),
-  Route.mapTo(ApplicationRoute.Search),
-)
+  const home = pipe(
+    Route.root,
+    Route.query(SearchQueryParameters),
+    Route.mapTo(ApplicationRoute.Search),
+  )
 
-const wikiArticleBase = pipe(
-  schemaSegment("kind", WikiArticleKindFromSlug),
-  slash(schemaSegment("handle", Handle)),
-)
+  const search = pipe(
+    literal(slugs.search),
+    Route.query(SearchQueryParameters),
+    Route.mapTo(ApplicationRoute.Search),
+  )
 
-const wikiArticleAboutRouter = pipe(
-  wikiArticleBase,
-  Route.mapTo({
-    make: (lookup: { kind: WikiArticleKind; handle: Handle }) =>
-      ApplicationRoute.WikiArticle({ ...lookup, tab: "About" }),
-  }),
-)
+  const wikiArticleBase = pipe(
+    schemaSegment("kind", WikiArticleKindFromSlug),
+    slash(schemaSegment("handle", Handle)),
+  )
 
-const wikiArticleTabRouter = pipe(
-  wikiArticleBase,
-  slash(schemaSegment("tab", WikiArticleTabFromSlug)),
-  Route.mapTo(ApplicationRoute.WikiArticle),
-)
+  const wikiArticleAbout = pipe(
+    wikiArticleBase,
+    Route.mapTo({
+      make: (lookup: { kind: WikiArticleKind; handle: Handle }) =>
+        ApplicationRoute.WikiArticle({ ...lookup, tab: "About" }),
+    }),
+  )
 
-export const wikiArticleDebugRouter = pipe(
-  literal("wiki"),
-  slash(schemaSegment("wikiArticleId", WikiArticleId)),
-  slash(literal("debug")),
-  Route.mapTo(ApplicationRoute.WikiArticleDebug),
-)
+  const wikiArticleTab = pipe(
+    wikiArticleBase,
+    slash(schemaSegment("tab", WikiArticleTabFromSlug)),
+    Route.mapTo(ApplicationRoute.WikiArticle),
+  )
 
-const profileBase = pipe(literal(PROFILE_SEGMENT), slash(schemaSegment("handle", Handle)))
+  const wikiArticleDebug = pipe(
+    literal("wiki"),
+    slash(schemaSegment("wikiArticleId", WikiArticleId)),
+    slash(literal("debug")),
+    Route.mapTo(ApplicationRoute.WikiArticleDebug),
+  )
 
-const profileHomeRouter = pipe(
-  profileBase,
-  Route.mapTo({
-    make: ({ handle }: { handle: Handle }) => ApplicationRoute.Profile({ handle, tab: "Home" }),
-  }),
-)
+  const profileBase = pipe(literal(slugs.profile), slash(schemaSegment("handle", Handle)))
 
-const profileTabRouter = pipe(
-  profileBase,
-  slash(schemaSegment("tab", ProfileTabFromSlug)),
-  Route.mapTo(ApplicationRoute.Profile),
-)
+  const profileHome = pipe(
+    profileBase,
+    Route.mapTo({
+      make: ({ handle }: { handle: Handle }) => ApplicationRoute.Profile({ handle, tab: "Home" }),
+    }),
+  )
 
-export const loginRouter = pipe(literal("login"), Route.mapTo(ApplicationRoute.Login))
+  const profileTab = pipe(
+    profileBase,
+    slash(schemaSegment("tab", ProfileTabFromSlug)),
+    Route.mapTo(ApplicationRoute.Profile),
+  )
 
-export const myPlacesRouter = pipe(
-  literal(MY_PLACES_SEGMENT),
-  Route.mapTo(ApplicationRoute.MyPlaces),
-)
+  const login = pipe(literal("login"), Route.mapTo(ApplicationRoute.Login))
 
-export const externalDataAdminDashboardRouter = pipe(
-  literal(EXTERNAL_DATA_ADMIN_DASHBOARD_SEGMENT),
-  Route.query(ObservationLogQueryParameters),
-  Route.mapTo(ApplicationRoute.ExternalDataAdminDashboard),
-)
+  const myPlaces = pipe(literal(slugs.myPlaces), Route.mapTo(ApplicationRoute.MyPlaces))
 
-export const observationLogUrl = (query: Partial<ObservationLogQuery> = {}): string =>
-  externalDataAdminDashboardRouter({ ...emptyObservationLogQuery, ...query })
+  const externalDataAdminDashboard = pipe(
+    literal(slugs.externalDataAdminDashboard),
+    Route.query(ObservationLogQueryParameters),
+    Route.mapTo(ApplicationRoute.ExternalDataAdminDashboard),
+  )
 
-export const observationLogQueryOf = ({
-  _tag,
-  ...query
-}: typeof ApplicationRoute.ExternalDataAdminDashboard.Type): ObservationLogQuery => query
+  const parse = Route.parseUrlWithFallback(
+    Route.oneOf(
+      home,
+      search,
+      login,
+      myPlaces,
+      externalDataAdminDashboard,
+      wikiArticleDebug,
+      profileTab,
+      profileHome,
+      wikiArticleTab,
+      wikiArticleAbout,
+    ),
+    ApplicationRoute.NotFound,
+  )
 
-export const urlToApplicationRoute = Route.parseUrlWithFallback(
-  Route.oneOf(
-    homeRouter,
-    searchRouter,
-    loginRouter,
-    myPlacesRouter,
-    externalDataAdminDashboardRouter,
-    wikiArticleDebugRouter,
-    profileTabRouter,
-    profileHomeRouter,
-    wikiArticleTabRouter,
-    wikiArticleAboutRouter,
-  ),
-  ApplicationRoute.NotFound,
-)
+  return {
+    parse,
+    search,
+    login,
+    myPlaces,
+    externalDataAdminDashboard,
+    wikiArticleDebug,
+    wikiArticleAbout,
+    wikiArticleTab,
+    profileHome,
+    profileTab,
+  }
+}
 
-/** The About tab is the article's bare path. */
-export const wikiArticleUrl = (
-  lookup: Readonly<{ kind: WikiArticleKind; handle: Handle }>,
-  tab: WikiArticleTab = "About",
-): string =>
-  tab === "About"
-    ? wikiArticleAboutRouter({ kind: lookup.kind, handle: lookup.handle, tab })
-    : wikiArticleTabRouter({ kind: lookup.kind, handle: lookup.handle, tab })
+const routers = Record.map(pathSlugs, makeRouters)
 
-/** The home tab is the profile's bare path. */
-export const profileUrl = (handle: Handle, tab: ProfileTab = "Home"): string =>
-  tab === "Home" ? profileHomeRouter({ handle, tab }) : profileTabRouter({ handle, tab })
+/** Puts the language first: `/buscar?q=x` in Portuguese is `/pt/buscar?q=x`, and `/` is `/pt`. */
+const prefixed = (language: SupportedLanguage, path: string): string =>
+  path === "/"
+    ? `/${language}`
+    : path.startsWith("/?")
+      ? `/${language}${path.slice(1)}`
+      : `/${language}${path}`
+
+/** A URL's route, and its language when the path starts with one. */
+export type LocatedRoute = Readonly<{
+  maybeLanguage: Option.Option<SupportedLanguage>
+  route: ApplicationRoute
+}>
+
+/**
+ * Paths without a language are today's Portuguese URLs, read so they can redirect to the same page
+ * in the reader's language.
+ */
+export const urlToLocatedRoute = (url: Url): LocatedRoute => {
+  const [, first = "", ...rest] = url.pathname.split("/")
+
+  return Schema.is(SupportedLanguage)(first)
+    ? {
+        maybeLanguage: Option.some(first),
+        route: routers[first].parse({ ...url, pathname: `/${rest.join("/")}` }),
+      }
+    : { maybeLanguage: Option.none(), route: routers.pt.parse(url) }
+}
 
 export const searchQueryOf = ({
   _tag,
   ...query
 }: typeof ApplicationRoute.Search.Type): SearchQuery => query
 
-export const searchUrl = (query: Partial<SearchQuery> = {}): string =>
-  searchRouter({ ...emptySearchQuery, ...query })
+export const observationLogQueryOf = ({
+  _tag,
+  ...query
+}: typeof ApplicationRoute.ExternalDataAdminDashboard.Type): ObservationLogQuery => query
+
+export const searchUrl = (language: SupportedLanguage, query: Partial<SearchQuery> = {}): string =>
+  prefixed(language, routers[language].search({ ...emptySearchQuery, ...query }))
+
+/** The About tab is the article's bare path. */
+export const wikiArticleUrl = (
+  language: SupportedLanguage,
+  {
+    kind,
+    handle,
+    tab = "About",
+  }: Readonly<{ kind: WikiArticleKind; handle: Handle; tab?: WikiArticleTab }>,
+): string =>
+  prefixed(
+    language,
+    tab === "About"
+      ? routers[language].wikiArticleAbout({ kind, handle, tab })
+      : routers[language].wikiArticleTab({ kind, handle, tab }),
+  )
+
+export const wikiArticleDebugUrl = (language: SupportedLanguage, wikiArticleId: WikiArticleId) =>
+  prefixed(language, routers[language].wikiArticleDebug({ wikiArticleId }))
+
+/** The home tab is the profile's bare path. */
+export const profileUrl = (
+  language: SupportedLanguage,
+  { handle, tab = "Home" }: Readonly<{ handle: Handle; tab?: ProfileTab }>,
+): string =>
+  prefixed(
+    language,
+    tab === "Home"
+      ? routers[language].profileHome({ handle, tab })
+      : routers[language].profileTab({ handle, tab }),
+  )
+
+export const loginUrl = (language: SupportedLanguage): string =>
+  prefixed(language, routers[language].login())
+
+export const myPlacesUrl = (language: SupportedLanguage): string =>
+  prefixed(language, routers[language].myPlaces())
+
+export const observationLogUrl = (
+  language: SupportedLanguage,
+  query: Partial<ObservationLogQuery> = {},
+): string =>
+  prefixed(
+    language,
+    routers[language].externalDataAdminDashboard({ ...emptyObservationLogQuery, ...query }),
+  )
+
+/** Identifies a log by its filters alone, so reading it in another language keeps it loaded. */
+export const observationLogQueryKey: (query: ObservationLogQuery) => string =
+  routers.pt.externalDataAdminDashboard
+
+/** The same page in a language: what language links and redirects point to. */
+export const applicationRouteUrl = (language: SupportedLanguage, route: ApplicationRoute): string =>
+  ApplicationRoute.match(route, {
+    Search: (search) => searchUrl(language, searchQueryOf(search)),
+    WikiArticle: ({ kind, handle, tab }) => wikiArticleUrl(language, { kind, handle, tab }),
+    WikiArticleDebug: ({ wikiArticleId }) => wikiArticleDebugUrl(language, wikiArticleId),
+    Profile: ({ handle, tab }) => profileUrl(language, { handle: handle, tab }),
+    Login: () => loginUrl(language),
+    MyPlaces: () => myPlacesUrl(language),
+    ExternalDataAdminDashboard: (log) => observationLogUrl(language, observationLogQueryOf(log)),
+    NotFound: () => searchUrl(language),
+  })
+
+/** Where a path without a language goes: the same page in `language`, keeping unknown paths. */
+export const languageRedirectUrl = (language: SupportedLanguage, url: Url): string => {
+  const { route } = urlToLocatedRoute(url)
+  const search = Option.match(url.search, { onNone: () => "", onSome: (query) => `?${query}` })
+
+  return ApplicationRoute.guards.NotFound(route)
+    ? prefixed(language, `${url.pathname}${search}`)
+    : applicationRouteUrl(language, route)
+}

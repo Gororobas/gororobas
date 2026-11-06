@@ -19,8 +19,9 @@
     "check-bdd": "tsx packages/effect-bdd/bin/effect-bdd-check.ts check --paired --quiet --patterns 'apps/server/test/*.feature' --test-pattern 'apps/server/test/*-feature.test.ts'",
     "check-test-inventory": "tsx scripts/check-test-inventory.ts",
     "coverage": "pnpm exec vitest --coverage",
-    "check": "pnpm run format:check && pnpm run type-check && pnpm run lint:check && pnpm run test && pnpm run check-bdd && pnpm run check-test-inventory",
-    "fix": "pnpm run lint && pnpm run format",
+    "check-translations": "pnpm --filter @gororobas/web-app i18n:check",
+    "check": "pnpm run format:check && pnpm run type-check && pnpm run lint:check && pnpm run test && pnpm run check-bdd && pnpm run check-test-inventory && pnpm run check-translations",
+    "fix": "pnpm run lint && pnpm --filter @gororobas/web-app i18n:extract && pnpm run format",
     "quality-gates": "pnpm run fix && pnpm run check"
   },
   "devDependencies": {

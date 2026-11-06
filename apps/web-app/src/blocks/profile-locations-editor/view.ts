@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { InformationVisibility } from "@gororobas/domain/common/enums"
 import type { WhosOnFirstId } from "@gororobas/domain/common/external-identifiers"
 import {
@@ -12,7 +13,8 @@ import * as Length from "effect-units/Length"
 import { AsyncData } from "foldkit"
 import { childAttributes, type Html, type MessageOf } from "foldkit/html"
 
-import { loginRouter, wikiArticleUrl } from "../../app/route"
+import { loginUrl, wikiArticleUrl } from "../../app/route"
+import type { LanguageInputs } from "../../lib/language"
 import { formatPartialDate } from "../../lib/partial-dates"
 import { informationVisibilityLabels } from "../../lib/vocabulary"
 import { AppButton } from "../../ui/app-button"
@@ -377,9 +379,11 @@ const destructiveMenuItemStyle = Style.make({ color: tones.destructive.emphasis 
 
 const entryMenu = (
   {
+    language,
     location,
     title,
   }: Readonly<{
+    language: SupportedLanguage
     location: ProfileLocationData
     title: string
   }>,
@@ -411,7 +415,14 @@ const entryMenu = (
           ? [
               h.a(
                 styledAttributes(
-                  [h.Href(wikiArticleUrl({ kind: "PLACE", handle: location.place.placeHandle }))],
+                  [
+                    h.Href(
+                      wikiArticleUrl(language, {
+                        kind: "PLACE",
+                        handle: location.place.placeHandle,
+                      }),
+                    ),
+                  ],
                   menuItemStyle,
                 ),
                 [Icons.mapPoint({ size: "sm" }), "Ver página do lugar"],
@@ -473,11 +484,13 @@ const entryTitle = (place: ProfileLocationData["place"]) =>
 
 const entryView = (
   {
+    language,
     location,
     isLatest,
     isDeleting,
     isConfirmingDelete,
   }: Readonly<{
+    language: SupportedLanguage
     location: ProfileLocationData
     isLatest: boolean
     isDeleting: boolean
@@ -551,7 +564,7 @@ const entryView = (
           },
           h,
         ),
-        ...entryMenu({ location, title }, h),
+        ...entryMenu({ language, location, title }, h),
       ]),
       ...(isConfirmingDelete || isDeleting
         ? [
@@ -618,13 +631,16 @@ const stop = (
     content,
   ])
 
-const timeline = (model: Model, h: ProfileLocationsEditorViewBuilder): ReadonlyArray<Html> =>
+const timeline = (
+  { model, language }: Readonly<{ model: Model; language: SupportedLanguage }>,
+  h: ProfileLocationsEditorViewBuilder,
+): ReadonlyArray<Html> =>
   AsyncData.matchData(model.locations, {
     onEmpty: () => [status("Carregando seus lugares…", h)],
     onFailure: () => [
       alert("Não foi possível carregar seus lugares. Tente novamente em instantes.", h),
     ],
-    onData: (locations) => timelineEntries({ model, locations }, h),
+    onData: (locations) => timelineEntries({ model, language, locations }, h),
   })
 
 const emptyStateStyle = Style.make({
@@ -637,7 +653,15 @@ const emptyStateStyle = Style.make({
 })
 
 const timelineEntries = (
-  { model, locations }: Readonly<{ model: Model; locations: ReadonlyArray<ProfileLocationData> }>,
+  {
+    model,
+    language,
+    locations,
+  }: Readonly<{
+    model: Model
+    language: SupportedLanguage
+    locations: ReadonlyArray<ProfileLocationData>
+  }>,
   h: ProfileLocationsEditorViewBuilder,
 ): ReadonlyArray<Html> => {
   const maybeEditingId = Option.flatMap(model.maybeForm, (form) => form.maybeEditingId)
@@ -685,6 +709,7 @@ const timelineEntries = (
                       onNone: () =>
                         entryView(
                           {
+                            language,
                             location,
                             isLatest: location.id === latestId,
                             isDeleting: Option.contains(model.maybeDeletingId, location.id),
@@ -1307,7 +1332,7 @@ const formView = (
   )
 }
 
-export type ViewInputs = Readonly<{ isSignedIn: boolean }>
+export type ViewInputs = LanguageInputs & Readonly<{ isSignedIn: boolean }>
 
 const TITLE = "Meu itinerário geográfico"
 
@@ -1326,7 +1351,7 @@ const intro = (h: ProfileLocationsEditorViewBuilder) =>
 
 export const view = ProfileLocationsEditorComposition.makeView.withInputs<ViewInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
-  (model, { isSignedIn }, h) => {
+  (model, { language, isSignedIn }, h) => {
     const isAdding = Option.exists(model.maybeForm, (form) => Option.isNone(form.maybeEditingId))
 
     return h.div(styledAttributes([], pageStyle), [
@@ -1361,7 +1386,7 @@ export const view = ProfileLocationsEditorComposition.makeView.withInputs<ViewIn
                     (form) => formView({ model, form }, h),
                   ),
                 ),
-                h.div(styledAttributes([], stackStyle), timeline(model, h)),
+                h.div(styledAttributes([], stackStyle), timeline({ model, language }, h)),
               ]
             : [
                 intro(h),
@@ -1370,7 +1395,10 @@ export const view = ProfileLocationsEditorComposition.makeView.withInputs<ViewIn
                     { element: "p", children: ["Entre na sua conta para registrar seus lugares."] },
                     h,
                   ),
-                  AppButton.view({ tone: "primary", href: loginRouter(), children: ["Entrar"] }, h),
+                  AppButton.view(
+                    { tone: "primary", href: loginUrl(language), children: ["Entrar"] },
+                    h,
+                  ),
                 ]),
               ],
         },

@@ -145,13 +145,16 @@ const bio = ({ page }: ProfileState, h: ProfileViewBuilder): ReadonlyArray<Html>
         ),
       ]
 
-const publications = ({ model, page, maybeToday }: ProfileState, h: ProfileViewBuilder) =>
+const publications = ({ model, language, page, maybeToday }: ProfileState, h: ProfileViewBuilder) =>
   sample(
     {
       title: "Publicações",
       icon: Icons.clipboard,
       asyncData: model.publicationsAsyncData,
-      footerLink: { label: "Todas as publicações", href: profileUrl(page.handle, "Publications") },
+      footerLink: {
+        label: "Todas as publicações",
+        href: profileUrl(language, { handle: page.handle, tab: "Publications" }),
+      },
       loadingShape: "cards",
       render: (all) =>
         h.div(
@@ -160,7 +163,7 @@ const publications = ({ model, page, maybeToday }: ProfileState, h: ProfileViewB
             .slice(0, PREVIEW_PUBLICATION_COUNT)
             .map((publication) =>
               h.keyed("div")(publication.id, styledAttributes([], carouselItemStyle), [
-                PublicationCard.view({ publication, maybeToday }, h),
+                PublicationCard.view({ language, publication, maybeToday }, h),
               ]),
             ),
         ),
@@ -168,13 +171,16 @@ const publications = ({ model, page, maybeToday }: ProfileState, h: ProfileViewB
     h,
   )
 
-const photos = ({ model, page }: ProfileState, h: ProfileViewBuilder) =>
+const photos = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) =>
   sample(
     {
       title: "Fotos",
       icon: Icons.gallery,
       asyncData: model.photosAsyncData,
-      footerLink: { label: "Ver todas as fotos", href: profileUrl(page.handle, "Photos") },
+      footerLink: {
+        label: "Ver todas as fotos",
+        href: profileUrl(language, { handle: page.handle, tab: "Photos" }),
+      },
       loadingShape: "tiles",
       render: (media) => {
         const all = galleryPhotos(media)
@@ -205,7 +211,10 @@ const photos = ({ model, page }: ProfileState, h: ProfileViewBuilder) =>
           ...(remaining > 0
             ? [
                 h.a(
-                  styledAttributes([h.Href(profileUrl(page.handle, "Photos"))], morePhotosStyle),
+                  styledAttributes(
+                    [h.Href(profileUrl(language, { handle: page.handle, tab: "Photos" }))],
+                    morePhotosStyle,
+                  ),
                   [`+${remaining}`],
                 ),
               ]
@@ -216,37 +225,42 @@ const photos = ({ model, page }: ProfileState, h: ProfileViewBuilder) =>
     h,
   )
 
-const bookmarks = ({ model, page }: ProfileState, h: ProfileViewBuilder) =>
+const bookmarks = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) =>
   sample(
     {
       title: "Salvos",
       icon: Icons.bookmark,
       asyncData: model.bookmarksAsyncData,
-      footerLink: { label: "Ver todos os salvos", href: profileUrl(page.handle, "Bookmarks") },
+      footerLink: {
+        label: "Ver todos os salvos",
+        href: profileUrl(language, { handle: page.handle, tab: "Bookmarks" }),
+      },
       loadingShape: "rows",
       render: (all) =>
         h.div(
           styledAttributes([], listStyle),
-          all
-            .slice(0, PREVIEW_BOOKMARK_COUNT)
-            .map((bookmark) =>
-              h.keyed("div")(
-                bookmark.article.id,
-                [],
-                [
-                  WikiArticleRow.view(
-                    { article: bookmark.article, maybeBookmarkState: Option.some(bookmark.state) },
-                    h,
-                  ),
-                ],
-              ),
+          all.slice(0, PREVIEW_BOOKMARK_COUNT).map((bookmark) =>
+            h.keyed("div")(
+              bookmark.article.id,
+              [],
+              [
+                WikiArticleRow.view(
+                  {
+                    article: bookmark.article,
+                    language,
+                    maybeBookmarkState: Option.some(bookmark.state),
+                  },
+                  h,
+                ),
+              ],
             ),
+          ),
         ),
     },
     h,
   )
 
-const contributions = ({ model, page }: ProfileState, h: ProfileViewBuilder) =>
+const contributions = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) =>
   sample(
     {
       title: "Na enciclopédia",
@@ -254,7 +268,7 @@ const contributions = ({ model, page }: ProfileState, h: ProfileViewBuilder) =>
       asyncData: model.contributionsAsyncData,
       footerLink: {
         label: "Todas as contribuições",
-        href: profileUrl(page.handle, "Contributions"),
+        href: profileUrl(language, { handle: page.handle, tab: "Contributions" }),
       },
       loadingShape: "rows",
       render: (all) =>
@@ -268,6 +282,7 @@ const contributions = ({ model, page }: ProfileState, h: ProfileViewBuilder) =>
                 WikiArticleRow.view(
                   {
                     article: contribution.article,
+                    language,
                     maybeSubtitle: Option.some(contributionSummary(contribution)),
                   },
                   h,

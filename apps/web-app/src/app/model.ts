@@ -1,3 +1,4 @@
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { WikiArticleId } from "@gororobas/domain/common/ids"
 import { Schema } from "effect"
 
@@ -34,8 +35,16 @@ export const ExternalDataAdminDashboardInstance = Schema.Struct({
   model: ExternalDataAdminDashboardBlock.Model,
 })
 
+/** A language the URL asked for whose translations are still loading. Each request is numbered so
+ *  only the latest one, not a slower earlier one, switches the app. */
+export const LanguageRequest = Schema.Struct({ language: SupportedLanguage, number: Schema.Int })
+
 export const Model = Schema.Struct({
   route: ApplicationRoute,
+  /** The language the app renders in, whose translations have loaded. */
+  language: SupportedLanguage,
+  maybeLanguageRequest: Schema.Option(LanguageRequest),
+  languageRequestCount: Schema.Int,
   authentication: AuthenticationBlock.Model,
   search: SearchBlock.Model,
   /** Today's date, read once at startup, for relative dates such as "Há 3 dias". */

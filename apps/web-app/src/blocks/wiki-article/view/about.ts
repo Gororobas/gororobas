@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { WikiArticleContributor } from "@gororobas/domain/wiki/domain"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, HashMap, Option } from "effect"
@@ -134,7 +135,7 @@ const heroCaption = (photo: ArticlePhoto, h: WikiArticleViewBuilder): ReadonlyAr
 
 /** Featured photos; each opens the article's photos. */
 const hero = (
-  { model, page }: Readonly<{ model: Model; page: Page }>,
+  { model, language, page }: Readonly<{ model: Model; language: SupportedLanguage; page: Page }>,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> =>
   EffectArray.match(articlePhotos(page).slice(0, HERO_PHOTO_COUNT), {
@@ -154,7 +155,13 @@ const hero = (
               h.a(
                 styledAttributes(
                   [
-                    h.Href(wikiArticleUrl(page, "Photos")),
+                    h.Href(
+                      wikiArticleUrl(language, {
+                        kind: page.kind,
+                        handle: page.handle,
+                        tab: "Photos",
+                      }),
+                    ),
                     h.AriaLabel(`Ver fotos ${ofName(page)}`),
                   ],
                   heroLinkStyle,
@@ -180,7 +187,7 @@ const hero = (
     ],
   })
 
-const bookmarkers = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): Html => {
+const bookmarkers = ({ model, language, page }: ArticleState, h: WikiArticleViewBuilder): Html => {
   const groupLabels = bookmarkVocabularies[page.kind].groups
 
   return SectionCard.view(
@@ -230,7 +237,7 @@ const bookmarkers = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): 
                         h.keyed("div")(
                           bookmarker.profile.id,
                           [],
-                          [ProfileRow.view({ profile: bookmarker.profile }, h)],
+                          [ProfileRow.view({ profile: bookmarker.profile, language }, h)],
                         ),
                       ),
                     ),
@@ -261,7 +268,7 @@ const aboutContent = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html
 
 /** Only shown once it has posts: an empty preview would only repeat the Posts tab's empty state. */
 const publicationsPreview = (
-  { model, page, maybeToday }: ArticleState,
+  { model, language, page, maybeToday }: ArticleState,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> =>
   EffectArray.fromOption(
@@ -276,7 +283,11 @@ const publicationsPreview = (
         icon: Icons.clipboard,
         footerLink: {
           label: `Todos os posts sobre ${aboutName(page)}`,
-          href: wikiArticleUrl(page, "Publications"),
+          href: wikiArticleUrl(language, {
+            kind: page.kind,
+            handle: page.handle,
+            tab: "Publications",
+          }),
         },
         children: [
           h.div(
@@ -285,7 +296,7 @@ const publicationsPreview = (
               .slice(0, PREVIEW_PUBLICATION_COUNT)
               .map((publication) =>
                 h.keyed("div")(publication.id, styledAttributes([], carouselItemStyle), [
-                  PublicationCard.view({ publication, maybeToday }, h),
+                  PublicationCard.view({ language, publication, maybeToday }, h),
                 ]),
               ),
           ),
@@ -302,7 +313,7 @@ const cultivarItemStyle = Style.make({
 
 /** A plant's varieties, each a card with its photo. Only shown when the plant has some. */
 const cultivars = (
-  { model, page }: Readonly<{ model: Model; page: Page }>,
+  { model, language, page }: Readonly<{ model: Model; language: SupportedLanguage; page: Page }>,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> =>
   EffectArray.fromOption(
@@ -320,6 +331,7 @@ const cultivars = (
                 WikiArticleRow.view(
                   {
                     article: cultivar,
+                    language,
                     maybeBookmarkState: HashMap.get(model.viewerBookmarks, cultivar.id),
                     isCard: true,
                   },
@@ -335,7 +347,10 @@ const cultivars = (
   )
 
 /** Only shown once it has articles: an empty "related" list says nothing useful. */
-const related = (model: Model, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
+const related = (
+  { model, language }: Readonly<{ model: Model; language: SupportedLanguage }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> =>
   EffectArray.fromOption(
     Option.map(
       Option.filter(AsyncData.getData(model.relatedAsyncData), EffectArray.isReadonlyArrayNonEmpty),
@@ -378,6 +393,7 @@ const related = (model: Model, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
                     WikiArticleRow.view(
                       {
                         article,
+                        language,
                         maybeBookmarkState: HashMap.get(model.viewerBookmarks, article.id),
                       },
                       h,
@@ -396,7 +412,10 @@ const related = (model: Model, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
     ),
   )
 
-const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> => {
+const photosPreview = (
+  { page, language }: Readonly<{ page: Page; language: SupportedLanguage }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> => {
   const photos = articlePhotos(page)
   const remaining = photos.length - PREVIEW_PHOTO_COUNT
 
@@ -408,7 +427,14 @@ const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Htm
           {
             title: "Fotos",
             icon: Icons.gallery,
-            footerLink: { label: "Ver todas as fotos", href: wikiArticleUrl(page, "Photos") },
+            footerLink: {
+              label: "Ver todas as fotos",
+              href: wikiArticleUrl(language, {
+                kind: page.kind,
+                handle: page.handle,
+                tab: "Photos",
+              }),
+            },
             children: [
               h.div(styledAttributes([], photoStripStyle, cardBleedStyle), [
                 ...photos
@@ -429,7 +455,18 @@ const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Htm
                 ...(remaining > 0
                   ? [
                       h.a(
-                        styledAttributes([h.Href(wikiArticleUrl(page, "Photos"))], morePhotosStyle),
+                        styledAttributes(
+                          [
+                            h.Href(
+                              wikiArticleUrl(language, {
+                                kind: page.kind,
+                                handle: page.handle,
+                                tab: "Photos",
+                              }),
+                            ),
+                          ],
+                          morePhotosStyle,
+                        ),
                         [`+${remaining}`],
                       ),
                     ]
@@ -442,12 +479,22 @@ const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Htm
       ]
 }
 
-const contributionsPreview = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): Html =>
+const contributionsPreview = (
+  { model, language, page }: ArticleState,
+  h: WikiArticleViewBuilder,
+): Html =>
   SectionCard.view(
     {
       title: "Contribuições",
       icon: Icons.users,
-      footerLink: { label: "Ver contribuições", href: wikiArticleUrl(page, "Contributions") },
+      footerLink: {
+        label: "Ver contribuições",
+        href: wikiArticleUrl(language, {
+          kind: page.kind,
+          handle: page.handle,
+          tab: "Contributions",
+        }),
+      },
       children: [
         AppText.view(
           {
@@ -466,6 +513,7 @@ const contributionsPreview = ({ model, page }: ArticleState, h: WikiArticleViewB
               contributorList(
                 {
                   contributors: contributors.slice(0, PREVIEW_CONTRIBUTOR_COUNT),
+                  language,
                   size: "standard",
                 },
                 h,
@@ -485,13 +533,19 @@ type ContributorRowSize = "standard" | "large"
 const contributorRow = (
   {
     contributor,
+    language,
     size,
-  }: Readonly<{ contributor: WikiArticleContributor; size: ContributorRowSize }>,
+  }: Readonly<{
+    contributor: WikiArticleContributor
+    language: SupportedLanguage
+    size: ContributorRowSize
+  }>,
   h: WikiArticleViewBuilder,
 ): Html =>
   ProfileRow.view(
     {
       profile: contributor.profile,
+      language,
       size,
       trailing: [
         h.div(styledAttributes([], contributorCountStyle), [
@@ -522,8 +576,13 @@ const contributorRow = (
 export const contributorList = (
   {
     contributors,
+    language,
     size,
-  }: Readonly<{ contributors: ReadonlyArray<WikiArticleContributor>; size: ContributorRowSize }>,
+  }: Readonly<{
+    contributors: ReadonlyArray<WikiArticleContributor>
+    language: SupportedLanguage
+    size: ContributorRowSize
+  }>,
   h: WikiArticleViewBuilder,
 ): Html =>
   EffectArray.match(contributors, {
@@ -540,7 +599,11 @@ export const contributorList = (
       h.div(
         styledAttributes([], listStyle),
         shown.map((contributor) =>
-          h.keyed("div")(contributor.profile.id, [], [contributorRow({ contributor, size }, h)]),
+          h.keyed("div")(
+            contributor.profile.id,
+            [],
+            [contributorRow({ contributor, language, size }, h)],
+          ),
         ),
       ),
   })
@@ -616,26 +679,41 @@ const ordered = (
 ) => children.map((child) => h.div(styledAttributes([], orderStyle(order)), [child]))
 
 export const view = (
-  { model, page, maybeToday, isSignedIn }: ArticleState & Readonly<{ isSignedIn: boolean }>,
+  {
+    model,
+    language,
+    page,
+    maybeToday,
+    isSignedIn,
+  }: ArticleState & Readonly<{ isSignedIn: boolean }>,
   h: WikiArticleViewBuilder,
 ): Html =>
   h.div(styledAttributes([], sectionsStyle, layoutStyle), [
     h.div(styledAttributes([], columnStyle), [
-      ...ordered({ order: 1, children: hero({ model, page }, h) }, h),
+      ...ordered({ order: 1, children: hero({ model, language, page }, h) }, h),
       ...ordered({ order: 3, children: [Overview.view(page, h), ...placeMap(page, h)] }, h),
-      ...ordered({ order: 4, children: cultivars({ model, page }, h) }, h),
-      ...ordered({ order: 4, children: ChildPlaces.view({ model, page }, h) }, h),
+      ...ordered({ order: 4, children: cultivars({ model, language, page }, h) }, h),
+      ...ordered({ order: 4, children: ChildPlaces.view({ model, language, page }, h) }, h),
       ...ordered({ order: 6, children: ExternalData.editions({ model, page }, h) }, h),
       ...ordered({ order: 6, children: aboutContent(page, h) }, h),
-      ...ordered({ order: 7, children: publicationsPreview({ model, page, maybeToday }, h) }, h),
-      ...ordered({ order: 8, children: related(model, h) }, h),
-      ...ordered({ order: 9, children: photosPreview(page, h) }, h),
+      ...ordered(
+        { order: 7, children: publicationsPreview({ model, language, page, maybeToday }, h) },
+        h,
+      ),
+      ...ordered({ order: 8, children: related({ model, language }, h) }, h),
+      ...ordered({ order: 9, children: photosPreview({ page, language }, h) }, h),
     ]),
     h.aside(styledAttributes([h.AriaLabel(`Quem acompanha ${aboutName(page)}`)], columnStyle), [
-      ...ordered({ order: 2, children: [BookmarkPicker.view({ model, page, isSignedIn }, h)] }, h),
-      ...ordered({ order: 5, children: [bookmarkers({ model, page, maybeToday }, h)] }, h),
       ...ordered(
-        { order: 10, children: [contributionsPreview({ model, page, maybeToday }, h)] },
+        { order: 2, children: [BookmarkPicker.view({ model, language, page, isSignedIn }, h)] },
+        h,
+      ),
+      ...ordered(
+        { order: 5, children: [bookmarkers({ model, language, page, maybeToday }, h)] },
+        h,
+      ),
+      ...ordered(
+        { order: 10, children: [contributionsPreview({ model, language, page, maybeToday }, h)] },
         h,
       ),
     ]),

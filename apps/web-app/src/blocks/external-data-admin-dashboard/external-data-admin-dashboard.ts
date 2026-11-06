@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { ExternalDataObservationId } from "@gororobas/domain/common/ids"
 import {
   ExternalDataObservationDetail,
@@ -16,10 +17,11 @@ import { GororobasApiClient } from "../../api-client"
 import {
   ObservationLogQuery,
   observationLogUrl,
-  wikiArticleDebugRouter,
+  wikiArticleDebugUrl,
   wikiArticleUrl,
 } from "../../app/route"
 import { ClientFailure } from "../../lib/client-failure"
+import type { LanguageInputs } from "../../lib/language"
 import { wikiKindLabels } from "../../lib/vocabulary"
 import { AppButton } from "../../ui/app-button"
 import { AppText } from "../../ui/app-text"
@@ -76,7 +78,7 @@ export const ExternalDataAdminDashboardKey = Symbol("ExternalDataAdminDashboard"
 export const ExternalDataAdminDashboardBlock = Block.make("ExternalDataAdminDashboard", {
   key: ExternalDataAdminDashboardKey,
   Init: Schema.Tuple([ObservationLogQuery]),
-  view: { kind: "Element" },
+  view: { kind: "Element", Inputs: Block.makeInputContract<LanguageInputs>() },
   effects: { services: [GororobasApiClient] },
   Model,
   Message,
@@ -348,7 +350,10 @@ const encodeCompactJson = Schema.encodeSync(Schema.fromJsonString(Schema.Json))
 const isForbidden = (error: ClientFailure): boolean =>
   Schema.is(Schema.TaggedStruct("UnauthorizedError", {}))(error.cause)
 
-const filters = (query: ObservationLogQuery, h: ViewBuilder): Html => {
+const filters = (
+  { language, query }: Readonly<{ language: SupportedLanguage; query: ObservationLogQuery }>,
+  h: ViewBuilder,
+): Html => {
   const reset = { ...query, currentPage: 0 }
 
   return h.div(styledAttributes([], filterGroupsStyle), [
@@ -356,7 +361,7 @@ const filters = (query: ObservationLogQuery, h: ViewBuilder): Html => {
       Chip.view(
         {
           label: "Todos os provedores",
-          href: observationLogUrl({ ...reset, provider: Option.none() }),
+          href: observationLogUrl(language, { ...reset, provider: Option.none() }),
           appearance: Option.isNone(query.provider) ? "selectedOption" : "option",
         },
         h,
@@ -365,7 +370,7 @@ const filters = (query: ObservationLogQuery, h: ViewBuilder): Html => {
         Chip.view(
           {
             label: ProviderMark.names[provider],
-            href: observationLogUrl({ ...reset, provider: Option.some(provider) }),
+            href: observationLogUrl(language, { ...reset, provider: Option.some(provider) }),
             appearance: Option.contains(query.provider, provider) ? "selectedOption" : "option",
           },
           h,
@@ -376,7 +381,7 @@ const filters = (query: ObservationLogQuery, h: ViewBuilder): Html => {
       Chip.view(
         {
           label: "Todos os resultados",
-          href: observationLogUrl({ ...reset, outcome: Option.none() }),
+          href: observationLogUrl(language, { ...reset, outcome: Option.none() }),
           appearance: Option.isNone(query.outcome) ? "selectedOption" : "option",
         },
         h,
@@ -384,7 +389,7 @@ const filters = (query: ObservationLogQuery, h: ViewBuilder): Html => {
       Chip.view(
         {
           label: "Sucessos",
-          href: observationLogUrl({ ...reset, outcome: Option.some("Success") }),
+          href: observationLogUrl(language, { ...reset, outcome: Option.some("Success") }),
           appearance: Option.contains(query.outcome, "Success") ? "selectedOption" : "option",
         },
         h,
@@ -392,7 +397,7 @@ const filters = (query: ObservationLogQuery, h: ViewBuilder): Html => {
       Chip.view(
         {
           label: "Falhas",
-          href: observationLogUrl({ ...reset, outcome: Option.some("Failure") }),
+          href: observationLogUrl(language, { ...reset, outcome: Option.some("Failure") }),
           appearance: Option.contains(query.outcome, "Failure") ? "selectedOption" : "option",
         },
         h,
@@ -402,7 +407,7 @@ const filters = (query: ObservationLogQuery, h: ViewBuilder): Html => {
           Chip.view(
             {
               label: "Só este artigo ✕",
-              href: observationLogUrl({ ...reset, wikiArticleId: Option.none() }),
+              href: observationLogUrl(language, { ...reset, wikiArticleId: Option.none() }),
               appearance: "selectedOption",
             },
             h,
@@ -532,7 +537,15 @@ const response = (
   )
 
 const entryView = (
-  { model, entry }: Readonly<{ model: Model; entry: ExternalDataObservationLogEntry }>,
+  {
+    model,
+    language,
+    entry,
+  }: Readonly<{
+    model: Model
+    language: SupportedLanguage
+    entry: ExternalDataObservationLogEntry
+  }>,
   h: ViewBuilder,
 ): Html =>
   h.keyed("li")(entry.id, styledAttributes([], entryStyle), [
@@ -548,7 +561,11 @@ const entryView = (
       ),
       h.a(
         styledAttributes(
-          [h.Href(wikiArticleUrl({ kind: entry.article.kind, handle: entry.article.handle }))],
+          [
+            h.Href(
+              wikiArticleUrl(language, { kind: entry.article.kind, handle: entry.article.handle }),
+            ),
+          ],
           linkStyle,
         ),
         [entry.article.title ?? entry.article.handle],
@@ -623,7 +640,7 @@ const entryView = (
             AppButton.view(
               {
                 children: [Icons.filter({ size: "sm" }), "Só este artigo"],
-                href: observationLogUrl({
+                href: observationLogUrl(language, {
                   ...model.query,
                   wikiArticleId: Option.some(entry.article.id),
                   currentPage: 0,
@@ -640,7 +657,7 @@ const entryView = (
             AppButton.view(
               {
                 children: [Icons.sledgehammer({ size: "sm" }), "Depurar artigo"],
-                href: wikiArticleDebugRouter({ wikiArticleId: entry.article.id }),
+                href: wikiArticleDebugUrl(language, entry.article.id),
                 mode: "bleed",
                 tone: "neutral",
                 size: "sm",
@@ -653,7 +670,15 @@ const entryView = (
   ])
 
 const pagination = (
-  { query, page }: Readonly<{ query: ObservationLogQuery; page: ExternalDataObservationLogPage }>,
+  {
+    language,
+    query,
+    page,
+  }: Readonly<{
+    language: SupportedLanguage
+    query: ObservationLogQuery
+    page: ExternalDataObservationLogPage
+  }>,
   h: ViewBuilder,
 ): Html => {
   const pageCount = Math.max(1, Math.ceil(page.totalCount / page.pageSize))
@@ -663,7 +688,7 @@ const pagination = (
       ? AppButton.view(
           {
             children: [Icons.arrowLeft({ size: "sm" }), "Mais recentes"],
-            href: observationLogUrl({ ...query, currentPage: query.currentPage - 1 }),
+            href: observationLogUrl(language, { ...query, currentPage: query.currentPage - 1 }),
             mode: "outline",
             size: "sm",
           },
@@ -683,7 +708,7 @@ const pagination = (
       ? AppButton.view(
           {
             children: ["Mais antigas", Icons.arrowRight({ size: "sm" })],
-            href: observationLogUrl({ ...query, currentPage: query.currentPage + 1 }),
+            href: observationLogUrl(language, { ...query, currentPage: query.currentPage + 1 }),
             mode: "outline",
             size: "sm",
           },
@@ -704,64 +729,66 @@ const statusText = (text: string, h: ViewBuilder): Html =>
   )
 
 /** Read-only: every provider fetch, what it was asked and what it got back. */
-const view = ExternalDataAdminDashboardComposition.makeView((model, h) =>
-  h.div(styledAttributes([], pageColumnStyle, pageStyle), [
-    h.header(styledAttributes([], introStyle), [
-      AppText.view(
-        {
-          element: "h1",
-          appearance: "xxl",
-          weight: "semibold",
-          lineHeight: "tight",
-          children: ["Dados externos"],
-        },
-        h,
-      ),
-      AppText.view(
-        {
-          element: "p",
-          isMuted: true,
-          children: [
-            "Cada busca no Wikidata, GBIF e Google Livros, das mais recentes às mais antigas. Apenas leitura.",
-          ],
-        },
-        h,
-      ),
-    ]),
-    AsyncData.matchData(model.logAsyncData, {
-      onEmpty: () => statusText("Carregando observações…", h),
-      onFailure: (error) =>
-        statusText(
-          isForbidden(error)
-            ? "Só pessoas da moderação e da administração podem ver este registro."
-            : "Não foi possível carregar as observações.",
+const view = ExternalDataAdminDashboardComposition.makeView.withInputs<LanguageInputs>(
+  // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
+  (model, { language }, h) =>
+    h.div(styledAttributes([], pageColumnStyle, pageStyle), [
+      h.header(styledAttributes([], introStyle), [
+        AppText.view(
+          {
+            element: "h1",
+            appearance: "xxl",
+            weight: "semibold",
+            lineHeight: "tight",
+            children: ["Dados externos"],
+          },
           h,
         ),
-      onData: (page) =>
-        h.div(styledAttributes([], pageStyle), [
-          tallies(page, h),
-          SectionCard.view(
-            {
-              title: `${page.totalCount} ${page.totalCount === 1 ? "observação" : "observações"}`,
-              icon: Icons.history,
-              children: [
-                filters(model.query, h),
-                EffectArray.match(page.entries, {
-                  onEmpty: () => statusText("Nenhuma observação com esses filtros.", h),
-                  onNonEmpty: (entries) =>
-                    h.ul(
-                      styledAttributes([], entryListStyle),
-                      entries.map((entry) => entryView({ model, entry }, h)),
-                    ),
-                }),
-                pagination({ query: model.query, page }, h),
-              ],
-            },
+        AppText.view(
+          {
+            element: "p",
+            isMuted: true,
+            children: [
+              "Cada busca no Wikidata, GBIF e Google Livros, das mais recentes às mais antigas. Apenas leitura.",
+            ],
+          },
+          h,
+        ),
+      ]),
+      AsyncData.matchData(model.logAsyncData, {
+        onEmpty: () => statusText("Carregando observações…", h),
+        onFailure: (error) =>
+          statusText(
+            isForbidden(error)
+              ? "Só pessoas da moderação e da administração podem ver este registro."
+              : "Não foi possível carregar as observações.",
             h,
           ),
-        ]),
-    }),
-  ]),
+        onData: (page) =>
+          h.div(styledAttributes([], pageStyle), [
+            tallies(page, h),
+            SectionCard.view(
+              {
+                title: `${page.totalCount} ${page.totalCount === 1 ? "observação" : "observações"}`,
+                icon: Icons.history,
+                children: [
+                  filters({ language, query: model.query }, h),
+                  EffectArray.match(page.entries, {
+                    onEmpty: () => statusText("Nenhuma observação com esses filtros.", h),
+                    onNonEmpty: (entries) =>
+                      h.ul(
+                        styledAttributes([], entryListStyle),
+                        entries.map((entry) => entryView({ model, language, entry }, h)),
+                      ),
+                  }),
+                  pagination({ language, query: model.query, page }, h),
+                ],
+              },
+              h,
+            ),
+          ]),
+      }),
+    ]),
 )
 
 export const layer = ExternalDataAdminDashboardBlock.makeLayer(

@@ -1,3 +1,4 @@
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { Schema } from "effect"
 import { Block } from "foldkit"
 
@@ -14,6 +15,8 @@ export const SearchKey = Symbol("Search")
 export const SearchBlock = Block.make("Search", {
   key: SearchKey,
   Init: Schema.Tuple([]),
+  /** Searches navigate to URLs in the language the app is read in. */
+  Context: Schema.Tuple([SupportedLanguage]),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
   effects: { services: [GororobasApiClient, RecentSearchesStore, SessionAccess] },
   InMessage,

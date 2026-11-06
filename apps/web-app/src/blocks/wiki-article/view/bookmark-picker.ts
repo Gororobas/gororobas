@@ -1,9 +1,10 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { BookmarkState } from "@gororobas/domain/common/enums"
 import { Style, When } from "@pleat/core"
 import { HashMap, Option } from "effect"
 import type { Html } from "foldkit/html"
 
-import { loginRouter } from "../../../app/route"
+import { loginUrl } from "../../../app/route"
 import { type BookmarkVocabulary, bookmarkVocabularies } from "../../../lib/vocabulary"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
@@ -235,13 +236,18 @@ const options = (state: PickerState, h: WikiArticleViewBuilder): Html =>
 
 /** Someone's own relationship to the article, chosen in a popover or a drawer. */
 export const view = (
-  { model, page, isSignedIn }: Readonly<{ model: Model; page: Page; isSignedIn: boolean }>,
+  {
+    model,
+    language,
+    page,
+    isSignedIn,
+  }: Readonly<{ model: Model; language: SupportedLanguage; page: Page; isSignedIn: boolean }>,
   h: WikiArticleViewBuilder,
 ): Html => {
   const vocabulary = bookmarkVocabularies[page.kind]
 
   if (!isSignedIn) {
-    return h.a(styledAttributes([h.Href(loginRouter())], signInLinkStyle), [
+    return h.a(styledAttributes([h.Href(loginUrl(language))], signInLinkStyle), [
       Icons.bookmark({ size: "md" }),
       `${vocabulary.states.INTERESTED}? Entre para salvar`,
     ])

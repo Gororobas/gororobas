@@ -1,3 +1,4 @@
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { Effect, Layer, Match } from "effect"
 import { pushUrl, replaceUrl } from "foldkit/navigation"
 
@@ -7,13 +8,13 @@ import { SearchBlock } from "./definition"
 import { Message, Navigation } from "./message"
 
 export const NavigateSearch = SearchBlock.makeCommand("NavigateSearch", {
-  args: { query: SearchQuery, navigation: Navigation },
+  args: { language: SupportedLanguage, query: SearchQuery, navigation: Navigation },
   messages: [Message.CompletedNavigateSearch],
   handler: function* () {
-    return ({ query, navigation }) =>
+    return ({ language, query, navigation }) =>
       Match.value(navigation).pipe(
-        Match.when("Replace", () => replaceUrl(searchUrl(query))),
-        Match.when("Push", () => pushUrl(searchUrl(query))),
+        Match.when("Replace", () => replaceUrl(searchUrl(language, query))),
+        Match.when("Push", () => pushUrl(searchUrl(language, query))),
         Match.exhaustive,
         Effect.as(Message.CompletedNavigateSearch()),
       )

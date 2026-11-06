@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { CreditedMediaAssetRow } from "@gororobas/domain/media-assets/domain"
 import type { ProfilePageData } from "@gororobas/domain/profiles/domain"
 import { Style } from "@pleat/core"
@@ -21,6 +22,7 @@ export type Page = ProfilePageData
 /** The inputs every profile section renders from. */
 export type ProfileState = Readonly<{
   model: Model
+  language: SupportedLanguage
   page: Page
   /** Dates read relative to it; without it, cards show the full date. */
   maybeToday: Option.Option<DateTime.Utc>

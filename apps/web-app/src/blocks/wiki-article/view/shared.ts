@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { WikiArticleQueriedPageData } from "@gororobas/domain/wiki/domain"
 import { Style } from "@pleat/core"
 import { DateTime, Option } from "effect"
@@ -21,6 +22,7 @@ export type Page = WikiArticleQueriedPageData
 /** The inputs most article sections render from. */
 export type ArticleState = Readonly<{
   model: Model
+  language: SupportedLanguage
   page: Page
   /** Dates read relative to it; without it, cards show the full date. */
   maybeToday: Option.Option<DateTime.Utc>
@@ -43,11 +45,13 @@ const tabIcons: Readonly<Record<WikiArticleTab, (config?: IconConfig) => Html>> 
 
 export const tabs = (
   {
+    language,
     page,
     currentTab,
     label,
     isCompact = false,
   }: Readonly<{
+    language: SupportedLanguage
     page: Page
     currentTab: WikiArticleTab
     label: string
@@ -72,7 +76,7 @@ export const tabs = (
       items: entries.map(([tab, tabLabel]) => ({
         key: tab,
         label: tabLabel,
-        href: wikiArticleUrl({ kind: page.kind, handle: page.handle }, tab),
+        href: wikiArticleUrl(language, { kind: page.kind, handle: page.handle, tab }),
         isCurrent: tab === currentTab,
         maybeIcon: tabIcons[tab],
       })),

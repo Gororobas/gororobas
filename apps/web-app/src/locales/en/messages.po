@@ -1,0 +1,88 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-11-05 21:52-0500\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+
+#: src/app/view.ts
+msgid "{name}'s account"
+msgstr "{name}'s account"
+
+#: src/app/view.ts
+msgid "Debugging | Gororobas"
+msgstr "Debugging | Gororobas"
+
+#: src/app/view.ts
+msgid "Encyclopedia"
+msgstr "Encyclopedia"
+
+#: src/app/view.ts
+msgid "Encyclopedia | Gororobas"
+msgstr "Encyclopedia | Gororobas"
+
+#: src/app/view.ts
+msgid "External data | Gororobas"
+msgstr "External data | Gororobas"
+
+#: src/app/view.ts
+msgid "Gororobas: home"
+msgstr "Gororobas: home"
+
+#: src/app/view.ts
+msgid "Languages"
+msgstr "Languages"
+
+#: src/app/view.ts
+msgid "Main navigation"
+msgstr "Main navigation"
+
+#: src/app/view.ts
+msgid "My places | Gororobas"
+msgstr "My places | Gororobas"
+
+#: src/app/view.ts
+msgid "Open search"
+msgstr "Open search"
+
+#: src/app/view.ts
+msgid "Page not found"
+msgstr "Page not found"
+
+#: src/app/view.ts
+msgid "Page not found | Gororobas"
+msgstr "Page not found | Gororobas"
+
+#: src/app/view.ts
+msgid "People"
+msgstr "People"
+
+#: src/app/view.ts
+msgid "People | Gororobas"
+msgstr "People | Gororobas"
+
+#: src/app/view.ts
+msgid "Posts"
+msgstr "Posts"
+
+#: src/app/view.ts
+msgid "Search"
+msgstr "Search"
+
+#: src/app/view.ts
+msgid "Search | Gororobas"
+msgstr "Search | Gororobas"
+
+#: src/app/view.ts
+msgid "Sign in"
+msgstr "Sign in"
+
+#: src/app/view.ts
+msgid "Sign in | Gororobas"
+msgstr "Sign in | Gororobas"
+
+#: src/app/view.ts
+msgid "There is nothing at {path}."
+msgstr "There is nothing at {path}."

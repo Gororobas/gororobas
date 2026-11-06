@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { Array as EffectArray, Option, Schema } from "effect"
 import { AsyncData } from "foldkit"
 import { modifyFields } from "foldkit/struct"
@@ -67,12 +68,16 @@ export const inMessageUpdate = SearchComposition.makeInMessageUpdate({
   InformedOfOpenedResult: (model, { query }) => rememberStep(model, query),
 })
 
-export const update = SearchComposition.makeUpdate({
+export const update = SearchComposition.makeUpdate.withContext((language: SupportedLanguage) => ({
   SubmittedSearch: (model, { query }) => {
     const remembered = rememberStep(model, query)
+
     return {
       model: remembered.model,
-      commands: [...(remembered.commands ?? []), NavigateSearch({ query, navigation: "Replace" })],
+      commands: [
+        ...(remembered.commands ?? []),
+        NavigateSearch({ language, query, navigation: "Replace" }),
+      ],
     }
   },
   ClickedRemoveRecentSearch: (model, { index }) => {
@@ -88,7 +93,7 @@ export const update = SearchComposition.makeUpdate({
   CompletedSaveRecentSearches: makeFieldsStep(() => ({})),
   ChangedSearchQuery: (model, { query, navigation }) => ({
     model,
-    commands: [NavigateSearch({ query, navigation })],
+    commands: [NavigateSearch({ language, query, navigation })],
   }),
   CompletedNavigateSearch: makeFieldsStep(() => ({})),
   ClickedOpenFilters: FiltersDrawerBinding.requestOpen(),
@@ -114,4 +119,4 @@ export const update = SearchComposition.makeUpdate({
   UpdatedViewerBookmarks: makeFieldsStep.fromMessage(({ bookmarks }) => ({
     viewerBookmarks: () => bookmarks,
   })),
-})
+}))

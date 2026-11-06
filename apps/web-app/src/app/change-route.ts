@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { Handle } from "@gororobas/domain/common/primitives"
 import type { WikiArticleKind } from "@gororobas/domain/wiki/domain"
 import { Option } from "effect"
@@ -5,7 +6,7 @@ import { Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { Url } from "foldkit/url"
 
-import { FocusSearchField } from "./command"
+import { FocusSearchField, LoadTranslations, ReplaceUrl } from "./command"
 import {
   AuthenticationBinding,
   ExternalDataAdminDashboardBinding,
@@ -16,13 +17,14 @@ import {
   WikiArticleDebugBinding,
   wikiArticleKey,
 } from "./composition"
-import { makeFieldsStep, makeStep } from "./definition"
+import { makeCommandsStep, makeFieldsStep, makeStep } from "./definition"
 import {
   ApplicationRoute,
   type ObservationLogQuery,
+  languageRedirectUrl,
+  observationLogQueryKey,
   observationLogQueryOf,
-  observationLogUrl,
-  urlToApplicationRoute,
+  urlToLocatedRoute,
 } from "./route"
 
 const clearPagesStep = makeFieldsStep(() => ({
@@ -35,7 +37,7 @@ const clearPagesStep = makeFieldsStep(() => ({
 
 /** Each filter combination is its own URL, so the log loads afresh when one changes. */
 const showExternalDataAdminDashboardStep = (query: ObservationLogQuery) => {
-  const queryKey = observationLogUrl(query)
+  const queryKey = observationLogQueryKey(query)
 
   return makeStep((model) =>
     Option.exists(model.maybeExternalDataAdminDashboard, (log) => log.queryKey === queryKey)
@@ -148,12 +150,40 @@ const consumeSearchFieldFocusStep = (route: ApplicationRoute) =>
         : [],
   }))
 
-export const changeRouteStep = (url: Url) => {
-  const route = urlToApplicationRoute(url)
+/** The app keeps rendering its current language until the URL's has loaded. */
+const requestLanguageStep = (language: SupportedLanguage) =>
+  makeStep((model) => {
+    if (language === model.language) {
+      return { model: modifyFields(model, { maybeLanguageRequest: () => Option.none() }) }
+    }
 
-  return Update.combineSteps([
-    makeFieldsStep(() => ({ route: () => route })),
-    enterRouteStep(route),
-    consumeSearchFieldFocusStep(route),
-  ])
+    if (Option.exists(model.maybeLanguageRequest, (request) => request.language === language)) {
+      return { model }
+    }
+
+    const requestNumber = model.languageRequestCount + 1
+
+    return {
+      model: modifyFields(model, {
+        languageRequestCount: () => requestNumber,
+        maybeLanguageRequest: () => Option.some({ language, number: requestNumber }),
+      }),
+      commands: [LoadTranslations({ language, requestNumber })],
+    }
+  })
+
+export const changeRouteStep = (url: Url) => {
+  const { maybeLanguage, route } = urlToLocatedRoute(url)
+
+  return Option.match(maybeLanguage, {
+    onNone: () =>
+      makeCommandsStep((model) => [ReplaceUrl({ url: languageRedirectUrl(model.language, url) })]),
+    onSome: (language) =>
+      Update.combineSteps([
+        makeFieldsStep(() => ({ route: () => route })),
+        requestLanguageStep(language),
+        enterRouteStep(route),
+        consumeSearchFieldFocusStep(route),
+      ]),
+  })
 }

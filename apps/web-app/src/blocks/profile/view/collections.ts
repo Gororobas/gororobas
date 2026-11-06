@@ -43,7 +43,7 @@ const page = (
   ])
 
 export const publications = (
-  { model, page: profile, maybeToday }: ProfileState,
+  { model, language, page: profile, maybeToday }: ProfileState,
   h: ProfileViewBuilder,
 ): Html =>
   page(
@@ -94,7 +94,7 @@ export const publications = (
                         h.keyed("div")(
                           publication.id,
                           [],
-                          [PublicationCard.view({ publication, maybeToday }, h)],
+                          [PublicationCard.view({ language, publication, maybeToday }, h)],
                         ),
                       ),
                     ),
@@ -144,7 +144,7 @@ export const photos = ({ model, page: profile }: ProfileState, h: ProfileViewBui
   )
 
 export const contributions = (
-  { model, page: profile }: ProfileState,
+  { model, language, page: profile }: ProfileState,
   h: ProfileViewBuilder,
 ): Html =>
   page(
@@ -188,6 +188,7 @@ export const contributions = (
                           WikiArticleRow.view(
                             {
                               article: contribution.article,
+                              language,
                               maybeSubtitle: Option.some(contributionSummary(contribution)),
                             },
                             h,
@@ -205,7 +206,10 @@ export const contributions = (
     h,
   )
 
-export const bookmarks = ({ model, page: profile }: ProfileState, h: ProfileViewBuilder): Html =>
+export const bookmarks = (
+  { model, language, page: profile }: ProfileState,
+  h: ProfileViewBuilder,
+): Html =>
   page(
     {
       title: `Salvos por ${profile.name}`,
@@ -258,6 +262,7 @@ export const bookmarks = ({ model, page: profile }: ProfileState, h: ProfileView
                             WikiArticleRow.view(
                               {
                                 article: bookmark.article,
+                                language,
                                 maybeBookmarkState: Option.some(bookmark.state),
                                 isCard: true,
                               },

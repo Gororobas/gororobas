@@ -1,10 +1,13 @@
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { ElevationInMeters } from "@gororobas/domain/profiles/locations"
 import { DateTime, Effect, Layer, Option, Schema } from "effect"
 import * as Dom from "foldkit/dom"
-import { load, pushUrl } from "foldkit/navigation"
+import { load, pushUrl, replaceUrl } from "foldkit/navigation"
 
 import { SEARCH_FIELD_ID } from "../blocks/search"
 import { DeviceLocation } from "../lib/device-location"
+import { LanguagePreferenceStore } from "../lib/language-preference"
+import { Translations } from "../lib/translations"
 import { ApplicationBlock } from "./definition"
 import { Message } from "./message"
 
@@ -13,6 +16,39 @@ export const NavigateInternal = ApplicationBlock.makeCommand("NavigateInternal",
   messages: [Message.CompletedNavigateInternal],
   handler: function* () {
     return ({ url }) => pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal()))
+  },
+})
+
+/** For paths without a language: the same page, at its URL in the app's language. */
+export const ReplaceUrl = ApplicationBlock.makeCommand("ReplaceUrl", {
+  args: { url: Schema.String },
+  messages: [Message.CompletedReplaceUrl],
+  handler: function* () {
+    return ({ url }) => replaceUrl(url).pipe(Effect.as(Message.CompletedReplaceUrl()))
+  },
+})
+
+export const LoadTranslations = ApplicationBlock.makeCommand("LoadTranslations", {
+  args: { language: SupportedLanguage, requestNumber: Schema.Int },
+  messages: [Message.CompletedLoadTranslations, Message.FailedLoadTranslations],
+  handler: function* () {
+    const translations = yield* Translations
+
+    return ({ language, requestNumber }) =>
+      translations.load(language).pipe(
+        Effect.as(Message.CompletedLoadTranslations({ language, requestNumber })),
+        Effect.orElseSucceed(() => Message.FailedLoadTranslations({ language, requestNumber })),
+      )
+  },
+})
+
+export const SaveLanguagePreference = ApplicationBlock.makeCommand("SaveLanguagePreference", {
+  args: { language: SupportedLanguage },
+  messages: [Message.CompletedSaveLanguagePreference],
+  handler: function* () {
+    const store = yield* LanguagePreferenceStore
+    return ({ language }) =>
+      store.write(language).pipe(Effect.as(Message.CompletedSaveLanguagePreference()))
   },
 })
 
@@ -84,6 +120,9 @@ export const LocateDevice = ApplicationBlock.makeCommand("LocateDevice", {
 export const EffectsLayer = Layer.mergeAll(
   NavigateInternal.layer,
   LoadExternal.layer,
+  ReplaceUrl.layer,
+  LoadTranslations.layer,
+  SaveLanguagePreference.layer,
   ReadToday.layer,
   FocusSearchField.layer,
   LocateDevice.layer,

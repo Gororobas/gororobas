@@ -21,6 +21,10 @@ catalog:
   "@effect/platform-node": ^4.1.2
   "@effect/sql-sqlite-node": ^4.1.2
   "@effect/vitest": ^4.1.2
+  "@lingui/cli": 6.12.0
+  "@lingui/core": 6.12.0
+  "@lingui/format-po": 6.12.0
+  "@lingui/vite-plugin": 6.12.0
   "@maple-dev/effect-sdk": "^0.10.0"
   "@tiptap/core": ^3.31.4
   "@tiptap/html": ^3.31.4

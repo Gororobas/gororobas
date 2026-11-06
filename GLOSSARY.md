@@ -10,6 +10,8 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Language fallback**: when content isn't available in the requested language, readers fall back to the requested language, then Portuguese, Spanish and English (`languageFallbackOrder`). SQL readers sort by the same order with `orderByLanguagePreference`.
 
+**Interface language**: the `SupportedLanguage` a person reads the web app in, the first segment of every path (`/pt/gente`, `/en/people`). It's a language, never a locale: there is no geographic localization, and Intl gets regional tags (`pt-BR`, `es-419`, `en-US`) from `intlTags`. Paths without one redirect to the detected language: the saved preference, then the browser's, then Portuguese.
+
 **Evaluation**: a moderator's verdict on a pending wiki revision: `PENDING`, `APPROVED` or `REJECTED` (`RevisionEvaluation`). The API payload, the TypeScript input and the `evaluation` column all use this name.
 
 **Enrichment**: the derived work a committed change requests: external provider data and link inference for approved wiki articles, link inference and translations for publication content, translations for comments. Services request it through `Enrichment` (`apps/server/src/enrichment/`) after their transaction commits; requests are best-effort and logged when they fail.

@@ -7,4 +7,4 @@ export {
   searchSurfaceStyle,
 } from "./view"
 
-export type { Account, HeaderConfig, NavigationItem, Viewer } from "./view"
+export type { Account, HeaderConfig, LanguageLink, NavigationItem, Viewer } from "./view"

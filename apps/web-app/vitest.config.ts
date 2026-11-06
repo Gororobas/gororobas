@@ -1,6 +1,8 @@
+import { lingui } from "@lingui/vite-plugin"
 import { defineConfig } from "vitest/config"
 
 export default defineConfig({
+  plugins: [lingui({ cwd: import.meta.dirname, macroTransform: true, failOnMissing: true })],
   resolve: {
     conditions: ["@pleat/source"],
     alias: [

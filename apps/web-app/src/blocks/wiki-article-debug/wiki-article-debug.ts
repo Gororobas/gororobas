@@ -6,6 +6,7 @@ import { modifyFields } from "foldkit/struct"
 
 import { GororobasApiClient } from "../../api-client"
 import { observationLogUrl } from "../../app/route"
+import type { LanguageInputs } from "../../lib/language"
 import { AppText } from "../../ui/app-text"
 
 const DebugData = Schema.Record(Schema.String, Schema.Json)
@@ -28,7 +29,7 @@ export const WikiArticleDebugKey = Symbol("WikiArticleDebug")
 export const WikiArticleDebugBlock = Block.make("WikiArticleDebug", {
   key: WikiArticleDebugKey,
   Init: Schema.Tuple([WikiArticleId]),
-  view: { kind: "Element" },
+  view: { kind: "Element", Inputs: Block.makeInputContract<LanguageInputs>() },
   effects: { services: [GororobasApiClient] },
   Model,
   Message,
@@ -97,35 +98,43 @@ const subscriptions = WikiArticleDebugBlock.makeSubscriptions((entry) => ({
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Json, { space: 2 }))
 
 /** Local development view: contributor data, revisions, provider observations and stored projections. */
-const view = WikiArticleDebugComposition.makeView((model, h) =>
-  h.main(
-    [],
-    [
-      AppText.view({ element: "h1", attributes: [], children: ["Depuração do artigo"] }, h),
-      AppText.view({ element: "p", attributes: [], children: [model.wikiArticleId] }, h),
-      h.button([h.Type("button"), h.OnClick(Message.ClickedReload())], ["Recarregar"]),
-      AppText.view(
-        {
-          element: "p",
-          children: [
-            h.a(
-              [h.Href(observationLogUrl({ wikiArticleId: Option.some(model.wikiArticleId) }))],
-              ["Observações de dados externos deste artigo"],
+const view = WikiArticleDebugComposition.makeView.withInputs<LanguageInputs>(
+  // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
+  (model, { language }, h) =>
+    h.main(
+      [],
+      [
+        AppText.view({ element: "h1", attributes: [], children: ["Depuração do artigo"] }, h),
+        AppText.view({ element: "p", attributes: [], children: [model.wikiArticleId] }, h),
+        h.button([h.Type("button"), h.OnClick(Message.ClickedReload())], ["Recarregar"]),
+        AppText.view(
+          {
+            element: "p",
+            children: [
+              h.a(
+                [
+                  h.Href(
+                    observationLogUrl(language, {
+                      wikiArticleId: Option.some(model.wikiArticleId),
+                    }),
+                  ),
+                ],
+                ["Observações de dados externos deste artigo"],
+              ),
+            ],
+          },
+          h,
+        ),
+        AppText.view({ element: "p", attributes: [h.Role("status")], children: [model.status] }, h),
+        ...Option.match(model.maybeData, {
+          onNone: () => [],
+          onSome: (data) =>
+            Record.toEntries(data).map(([name, value]) =>
+              h.keyed("details")(name, [], [h.summary([], [name]), h.pre([], [encodeJson(value)])]),
             ),
-          ],
-        },
-        h,
-      ),
-      AppText.view({ element: "p", attributes: [h.Role("status")], children: [model.status] }, h),
-      ...Option.match(model.maybeData, {
-        onNone: () => [],
-        onSome: (data) =>
-          Record.toEntries(data).map(([name, value]) =>
-            h.keyed("details")(name, [], [h.summary([], [name]), h.pre([], [encodeJson(value)])]),
-          ),
-      }),
-    ],
-  ),
+        }),
+      ],
+    ),
 )
 
 export const layer = WikiArticleDebugBlock.makeLayer(

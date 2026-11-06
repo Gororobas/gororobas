@@ -1,4 +1,5 @@
 import { foldkit } from "@foldkit/vite-plugin"
+import { lingui } from "@lingui/vite-plugin"
 import { defineConfig, loadEnv } from "vite"
 
 import { offlineShell } from "./offline-shell-plugin.ts"
@@ -9,7 +10,11 @@ export default defineConfig(({ mode }) => {
   const apiOrigin = `http://localhost:${environment.API_PORT ?? 4000}`
 
   return {
-    plugins: [foldkit(), offlineShell()],
+    plugins: [
+      foldkit(),
+      lingui({ cwd: import.meta.dirname, macroTransform: true, failOnMissing: true }),
+      offlineShell(),
+    ],
     server: {
       host: true,
       port: Number(environment.WEB_PORT ?? 4443),

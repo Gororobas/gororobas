@@ -1,8 +1,11 @@
+import { msg } from "@lingui/core/macro"
 import { Style } from "@pleat/core"
 import { Option } from "effect"
 import type { Document, Html } from "foldkit/html"
 
 import { isSignedIn, viewerName } from "../blocks/authentication"
+import { intlTags, languageNames, supportedLanguages } from "../lib/language"
+import { type Translator, translatorFor } from "../lib/translations"
 import * as AppShell from "../ui/app-shell"
 import { AppText } from "../ui/app-text"
 import * as Icons from "../ui/icons"
@@ -22,7 +25,13 @@ import {
 } from "./composition"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { ApplicationRoute, type SearchType, loginRouter, searchUrl } from "./route"
+import {
+  ApplicationRoute,
+  type SearchType,
+  applicationRouteUrl,
+  loginUrl,
+  searchUrl,
+} from "./route"
 
 // SHARED STYLES
 
@@ -52,71 +61,112 @@ const notFoundStyle = Style.make({ display: "grid", rowGap: space[3], padding: s
 const isSearchType = (route: ApplicationRoute, type: SearchType) =>
   ApplicationRoute.guards.Search(route) && Option.contains(route.type, type)
 
-const navigationItems = (model: typeof Model.Type): ReadonlyArray<AppShell.NavigationItem> => [
+const navigationItems = (
+  model: typeof Model.Type,
+  i18n: Translator,
+): ReadonlyArray<AppShell.NavigationItem> => [
   {
-    label: "Enciclopédia",
-    href: searchUrl({ type: Option.some("wiki") }),
+    label: i18n._(msg`Encyclopedia`),
+    href: searchUrl(model.language, { type: Option.some("wiki") }),
     icon: Icons.encyclopedia,
     isCurrent:
       isSearchType(model.route, "wiki") || ApplicationRoute.guards.WikiArticle(model.route),
   },
   {
-    label: "Posts",
-    href: searchUrl({ type: Option.some("publications") }),
+    label: i18n._(msg`Posts`),
+    href: searchUrl(model.language, { type: Option.some("publications") }),
     icon: Icons.clipboard,
     isCurrent: isSearchType(model.route, "publications"),
   },
   {
-    label: "Gente",
-    href: searchUrl({ type: Option.some("people") }),
+    label: i18n._(msg`People`),
+    href: searchUrl(model.language, { type: Option.some("people") }),
     icon: Icons.users,
     isCurrent: isSearchType(model.route, "people") || ApplicationRoute.guards.Profile(model.route),
   },
 ]
 
-/** Search takes over the app bar: no navigation or account competes with the field. */
+/** The current page in every language, so switching keeps people where they are. */
+const languageLinks = (model: typeof Model.Type): ReadonlyArray<AppShell.LanguageLink> =>
+  supportedLanguages.map((language) => ({
+    label: language.toUpperCase(),
+    name: languageNames[language],
+    href: applicationRouteUrl(language, model.route),
+    hreflang: intlTags[language],
+    isCurrent: language === model.language,
+  }))
+
+/** Search takes over the app bar: no navigation, languages or account compete with the field. */
 const header = (
-  { model, search }: Readonly<{ model: typeof Model.Type; search: Html }>,
+  { model, i18n, search }: Readonly<{ model: typeof Model.Type; i18n: Translator; search: Html }>,
   h: ApplicationViewBuilder,
-): Html =>
-  AppShell.header(
+): Html => {
+  const isSearching = ApplicationRoute.guards.Search(model.route)
+
+  return AppShell.header(
     {
-      homeHref: searchUrl(),
+      homeHref: searchUrl(model.language),
+      homeLabel: i18n._(msg`Gororobas: home`),
+      navigationLabel: i18n._(msg`Main navigation`),
+      languagesLabel: i18n._(msg`Languages`),
+      languages: isSearching ? [] : languageLinks(model),
       search,
-      navigation: ApplicationRoute.guards.Search(model.route) ? [] : navigationItems(model),
-      maybeAccount: ApplicationRoute.guards.Search(model.route)
+      navigation: isSearching ? [] : navigationItems(model, i18n),
+      maybeAccount: isSearching
         ? Option.none()
         : Option.some({
-            href: loginRouter(),
-            maybeViewer: Option.map(viewerName(model.authentication), (name) => ({ name })),
+            href: loginUrl(model.language),
+            signInLabel: i18n._(msg`Sign in`),
+            maybeViewer: Option.map(viewerName(model.authentication), (name) => ({
+              name,
+              accountLabel: i18n._(msg`${name}'s account`),
+            })),
           }),
     },
     h,
   )
+}
 
-const notFound = (path: string, h: ApplicationViewBuilder): Html =>
+const notFound = (
+  { path, i18n }: Readonly<{ path: string; i18n: Translator }>,
+  h: ApplicationViewBuilder,
+): Html =>
   h.section(styledAttributes([], notFoundStyle), [
     AppText.view(
-      { element: "h1", appearance: "xl", weight: "semibold", children: ["Página não encontrada"] },
+      {
+        element: "h1",
+        appearance: "xl",
+        weight: "semibold",
+        children: [i18n._(msg`Page not found`)],
+      },
       h,
     ),
-    AppText.view({ element: "p", isMuted: true, children: [`Não há nada em ${path}.`] }, h),
+    AppText.view(
+      { element: "p", isMuted: true, children: [i18n._(msg`There is nothing at ${path}.`)] },
+      h,
+    ),
   ])
 
 const prose = (content: Html, h: ApplicationViewBuilder): Html =>
   h.div(styledAttributes([], proseStyle), [content])
 
-const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
-  ApplicationRoute.match(model.route, {
+const page = (
+  { model, i18n }: Readonly<{ model: typeof Model.Type; i18n: Translator }>,
+  h: ApplicationViewBuilder,
+): Html => {
+  const language = model.language
+
+  return ApplicationRoute.match(model.route, {
     Search: ({ _tag, ...query }) =>
       h.block(
         SearchBinding.embedView({
           slotId: "search",
           model: model.search,
           viewInputs: {
+            language,
             query,
             maybeToday: model.maybeToday,
-            renderHeader: (search) => header({ model, search }, h),
+            renderHeader: (search) => header({ model, i18n, search }, h),
           },
         }),
       ),
@@ -131,6 +181,7 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
                   slotId: "wiki-article",
                   model: article.model,
                   viewInputs: {
+                    language,
                     tab: route.tab,
                     isSignedIn: isSignedIn(model.authentication),
                     maybeToday: model.maybeToday,
@@ -149,7 +200,7 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
                   key: profile.handle,
                   slotId: "profile",
                   model: profile.model,
-                  viewInputs: { tab: route.tab, maybeToday: model.maybeToday },
+                  viewInputs: { language, tab: route.tab, maybeToday: model.maybeToday },
                 }),
               )
             : h.empty,
@@ -165,6 +216,7 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
                     key: wikiArticleId,
                     slotId: "wiki-article-debug",
                     model: debug.model,
+                    viewInputs: { language },
                   }),
                 )
               : h.empty,
@@ -177,6 +229,7 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
           AuthenticationBinding.embedView({
             slotId: "authentication",
             model: model.authentication,
+            viewInputs: { language },
           }),
         ),
         h,
@@ -189,7 +242,7 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
             ProfileLocationsEditorBinding.embedView({
               slotId: "profile-locations-editor",
               model: editor,
-              viewInputs: { isSignedIn: isSignedIn(model.authentication) },
+              viewInputs: { language, isSignedIn: isSignedIn(model.authentication) },
             }),
           ),
       }),
@@ -202,44 +255,63 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
               key: log.queryKey,
               slotId: "external-data-admin-dashboard",
               model: log.model,
+              viewInputs: { language },
             }),
           ),
       }),
-    NotFound: ({ path }) => prose(notFound(path, h), h),
+    NotFound: ({ path }) => prose(notFound({ path, i18n }, h), h),
   })
+}
 
-const title = (route: ApplicationRoute): string =>
+const title = (route: ApplicationRoute, i18n: Translator): string =>
   ApplicationRoute.match(route, {
-    Search: () => "Busca | Gororobas",
-    WikiArticle: () => "Enciclopédia | Gororobas",
-    WikiArticleDebug: () => "Depuração | Gororobas",
-    Profile: () => "Gente | Gororobas",
-    Login: () => "Entrar | Gororobas",
-    MyPlaces: () => "Meus lugares | Gororobas",
-    ExternalDataAdminDashboard: () => "Dados externos | Gororobas",
-    NotFound: () => "Página não encontrada | Gororobas",
+    Search: () => i18n._(msg`Search | Gororobas`),
+    WikiArticle: () => i18n._(msg`Encyclopedia | Gororobas`),
+    WikiArticleDebug: () => i18n._(msg`Debugging | Gororobas`),
+    Profile: () => i18n._(msg`People | Gororobas`),
+    Login: () => i18n._(msg`Sign in | Gororobas`),
+    MyPlaces: () => i18n._(msg`My places | Gororobas`),
+    ExternalDataAdminDashboard: () => i18n._(msg`External data | Gororobas`),
+    NotFound: () => i18n._(msg`Page not found | Gororobas`),
   })
 
-export const view = ApplicationComposition.makeView((model, h): Document => ({
-  title: title(model.route),
-  body: h.div(styledAttributes([], shellStyle), [
-    ...(ApplicationRoute.guards.Search(model.route)
-      ? []
-      : [
-          header(
-            {
-              model,
-              search: AppShell.searchLink(
-                { href: searchUrl(), onClick: Message.ClickedSearchLink() },
-                h,
-              ),
-            },
-            h,
-          ),
-        ]),
-    h.main(styledAttributes([], mainStyle), [page(model, h)]),
-    ...(ApplicationRoute.guards.Search(model.route)
-      ? []
-      : [AppShell.bottomNavigation(navigationItems(model), h)]),
-  ]),
-}))
+export const view = ApplicationComposition.makeView((model, h): Document => {
+  const i18n = translatorFor(model.language)
+  const isSearching = ApplicationRoute.guards.Search(model.route)
+
+  return {
+    title: title(model.route, i18n),
+    lang: intlTags[model.language],
+    body: h.div(styledAttributes([], shellStyle), [
+      ...(isSearching
+        ? []
+        : [
+            header(
+              {
+                model,
+                i18n,
+                search: AppShell.searchLink(
+                  {
+                    href: searchUrl(model.language),
+                    onClick: Message.ClickedSearchLink(),
+                    label: i18n._(msg`Search`),
+                    ariaLabel: i18n._(msg`Open search`),
+                  },
+                  h,
+                ),
+              },
+              h,
+            ),
+          ]),
+      h.main(styledAttributes([], mainStyle), [page({ model, i18n }, h)]),
+      ...(isSearching
+        ? []
+        : [
+            AppShell.bottomNavigation(
+              { label: i18n._(msg`Main navigation`), items: navigationItems(model, i18n) },
+              h,
+            ),
+          ]),
+    ]),
+  }
+})

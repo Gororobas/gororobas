@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { WikiChildPlace } from "@gororobas/domain/wiki/domain"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
@@ -58,14 +59,18 @@ const footerStyle = Style.make({
 
 /** A child place's outline, drawn inside the place whose page this is so readers see where it lies. */
 const childCard = (
-  { child, page }: Readonly<{ child: WikiChildPlace; page: PlacePage }>,
+  {
+    child,
+    language,
+    page,
+  }: Readonly<{ child: WikiChildPlace; language: SupportedLanguage; page: PlacePage }>,
   h: WikiArticleViewBuilder,
 ): Html => {
   const name = primaryName(child.card)
 
   return h.keyed("a")(
     child.card.id,
-    styledAttributes([h.Href(wikiArticleUrl(child.card))], cardStyle),
+    styledAttributes([h.Href(wikiArticleUrl(language, child.card))], cardStyle),
     [
       Option.match(Option.fromNullishOr(child.outline), {
         onNone: () => h.div(styledAttributes([], missingOutlineStyle)),
@@ -100,7 +105,7 @@ const countLabel = (count: number): string => (count === 1 ? "1 lugar" : `${coun
  * state can hold hundreds of municipalities. Only shown when the place has some.
  */
 export const view = (
-  { model, page }: Readonly<{ model: Model; page: Page }>,
+  { model, language, page }: Readonly<{ model: Model; language: SupportedLanguage; page: Page }>,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> => {
   if (page.kind !== "PLACE") {
@@ -137,7 +142,7 @@ export const view = (
                           onNonEmpty: (shown) =>
                             h.div(
                               styledAttributes([], gridStyle),
-                              shown.map((child) => childCard({ child, page }, h)),
+                              shown.map((child) => childCard({ child, language, page }, h)),
                             ),
                         }),
                         ...(places.length < totalCount
