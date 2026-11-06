@@ -1,6 +1,7 @@
 import type { WikiArticleLookup } from "@gororobas/domain/wiki/domain"
 import { HashMap, Option } from "effect"
 
+import { PhotoGallery } from "../../ui/photo-gallery"
 import {
   LoadBookmarkers,
   LoadChildPlaces,
@@ -41,6 +42,7 @@ export const init = WikiArticleComposition.makeInit((lookup: WikiArticleLookup) 
     maybeRelatedKindFilter: Option.none(),
     maybePhotoCategoryFilter: Option.none(),
     maybePublicationKindFilter: Option.none(),
+    photoColumnCount: PhotoGallery.initialColumnCount,
   },
   commands: [
     LoadPage({ lookup }),

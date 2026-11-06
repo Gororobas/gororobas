@@ -4,12 +4,19 @@ import { Array as EffectArray, DateTime, Match, Option } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
-import { type WikiArticleTab, wikiArticleDebugRouter, wikiArticleUrl } from "../../../app/route"
+import {
+  type WikiArticleTab,
+  searchUrl,
+  wikiArticleDebugRouter,
+  wikiArticleUrl,
+} from "../../../app/route"
 import { placeKindLabels } from "../../../lib/vocabulary"
 import { inPreposition, ofName, primaryName } from "../../../lib/wiki-article-names"
 import { AppButton } from "../../../ui/app-button"
 import { AppText } from "../../../ui/app-text"
+import { EmptyState } from "../../../ui/empty-state"
 import * as Icons from "../../../ui/icons"
+import { LoadingState } from "../../../ui/loading-state"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import { pageColumnStyle } from "../../../ui/styles/page-column"
@@ -33,7 +40,7 @@ import * as About from "./about"
 import * as Classification from "./classification"
 import * as Overview from "./overview"
 import { mainPhoto } from "./photos"
-import { type Page, emptyState, tabs } from "./shared"
+import { type Page, tabs } from "./shared"
 import * as Tabs from "./tabs"
 
 // The page scrolls the document; once the article's own header leaves the viewport, a compact
@@ -104,6 +111,11 @@ const parentPlantLinkStyle = Style.make({
 )
 
 const statusStyle = Style.make({ paddingBlock: space[6] })
+
+/** Phones leave the photo to the compact header, so names and classification get the width. */
+const headerThumbnailStyle = Style.make({ display: "none" }).pipe(
+  Style.when(breakpoint.md, { display: "contents" }),
+)
 
 const thumbnailLinkStyle = Style.make({
   flexShrink: 0,
@@ -250,7 +262,9 @@ const header = (
   h.div(styledAttributes([], headerBandStyle, toneStyle("primary")), [
     h.header(styledAttributes([], pageColumnStyle, headerStyle), [
       h.div(styledAttributes([], identityStyle), [
-        headerThumbnail({ page, size: "md" }, h),
+        h.div(styledAttributes([], headerThumbnailStyle), [
+          headerThumbnail({ page, size: "md" }, h),
+        ]),
         h.div(styledAttributes([], identityTextStyle), [
           AppText.view(
             {
@@ -343,22 +357,36 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
   (model, { tab, isSignedIn, maybeToday }, h): Html =>
     AsyncData.matchData(model.pageAsyncData, {
       onEmpty: () =>
-        AppText.view(
-          {
-            element: "p",
-            attributes: styledAttributes([h.Role("status")], pageColumnStyle, statusStyle),
-            children: ["Carregando artigo…"],
-          },
-          h,
-        ),
+        h.div(styledAttributes([], pageColumnStyle, statusStyle), [
+          LoadingState.view({ label: "Carregando artigo", shape: "page", count: 2 }, h),
+        ]),
       onFailure: (error) =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
-          emptyState(
-            error.cause === "NotFound"
-              ? "Não encontramos esse artigo na enciclopédia."
-              : "Não foi possível carregar o artigo agora.",
-            h,
-          ),
+          error.cause === "NotFound"
+            ? EmptyState.view(
+                {
+                  icon: Icons.encyclopedia,
+                  title: "Não encontramos esse artigo na enciclopédia",
+                  maybeDescription: Option.some(
+                    "Ele pode ter mudado de nome. Tente encontrá-lo pela busca.",
+                  ),
+                  maybeAction: Option.some({
+                    label: "Buscar na enciclopédia",
+                    href: searchUrl({ type: Option.some("wiki") }),
+                  }),
+                  size: "roomy",
+                },
+                h,
+              )
+            : EmptyState.view(
+                {
+                  icon: Icons.alertCircle,
+                  title: "Não foi possível carregar o artigo agora",
+                  maybeDescription: Option.some("Tente recarregar a página em instantes."),
+                  size: "roomy",
+                },
+                h,
+              ),
         ]),
       onData: (page) =>
         h.article(styledAttributes([], articleStyle), [

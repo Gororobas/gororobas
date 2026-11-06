@@ -52,10 +52,11 @@ export const readMediaAssetMetadata = Effect.fn("MediaAssets.readMetadata")(
         if (format === "IMAGE") {
           const metadata = yield* processingPromise(() => sharp(filename).metadata())
 
+          // As displayed: derivatives are rotated by their EXIF orientation, and so are layouts.
           return yield* Schema.decodeEffect(MediaAssetMetadata)({
             format,
-            originalWidth: metadata.width,
-            originalHeight: metadata.height,
+            originalWidth: metadata.autoOrient.width,
+            originalHeight: metadata.autoOrient.height,
             ...(metadata.density ? { density: metadata.density } : {}),
           })
         }

@@ -1,8 +1,12 @@
-import { Schema, Struct } from "effect"
+import { Schema } from "effect"
 
-import { GbifDeprecatedSpeciesId, GbifTaxonId } from "../../../common/external-identifiers.js"
-import { WikiPlantArticle } from "../../kinds/plant.js"
-import { ExternalLink, ExternalMedia, GbifClassification, Observation } from "../common.js"
+import {
+  GbifDeprecatedSpeciesId,
+  GbifTaxonId,
+  WikidataId,
+} from "../../../common/external-identifiers.js"
+import { OptionalColumn } from "../../../common/primitives.js"
+import { ExternalLink, ExternalMedia, Observation } from "../common.js"
 import { ExternalDataFetchError } from "../error.js"
 
 export const GbifIdentifier = Schema.Union([
@@ -19,6 +23,15 @@ export const WikidataResult = Schema.Struct({
   wikipediaLinks: Schema.Array(ExternalLink),
 })
 
+/** One rank of a taxon's classification, such as its family. */
+export const GbifClassification = Schema.Struct({
+  taxonId: Schema.String,
+  scientificName: Schema.String,
+  taxonRank: Schema.String,
+})
+
+export type GbifClassification = typeof GbifClassification.Type
+
 export const GbifPlantResult = Schema.Struct({
   observations: Schema.Array(Observation),
   gbifTaxonId: GbifTaxonId,
@@ -27,9 +40,13 @@ export const GbifPlantResult = Schema.Struct({
   media: Schema.Array(ExternalMedia),
 })
 
+/**
+ * Typed as `WikiPlantArticle`'s editable attributes. It's not picked from it because the kind's
+ * definition depends on this module, through the page data.
+ */
 export const PlantExternalDataInputs = Schema.Struct({
   kind: Schema.Literal("PLANT"),
-  ...WikiPlantArticle.EditableAttributes.mapFields(Struct.pick(["wikidataId"])).fields,
+  wikidataId: OptionalColumn(WikidataId),
 })
 
 export const PlantExternalDataResult = Schema.Struct({

@@ -69,13 +69,18 @@ export const ProfileRowUpdate = CoreProfileRow.mapFields(
 
 export type ProfileRowUpdate = typeof ProfileRowUpdate.Type
 
+/** The profile's latest location, when the reader may see it. */
+const pageLocation = { location: Schema.NullOr(ProfileLocationCardData) }
+
 export const OrganizationProfilePageData = Schema.Struct({
   ...OrganizationProfileRow.fields,
+  ...pageLocation,
 })
 export type OrganizationProfilePageData = typeof OrganizationProfilePageData.Type
 
 export const PersonProfilePageData = Schema.Struct({
   ...PersonProfileRow.fields,
+  ...pageLocation,
 })
 export type PersonProfilePageData = typeof PersonProfilePageData.Type
 

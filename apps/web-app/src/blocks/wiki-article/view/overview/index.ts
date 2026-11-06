@@ -11,6 +11,7 @@ import {
 } from "../../../../lib/vocabulary"
 import { agreeingWith } from "../../../../lib/wiki-article-names"
 import type { WikiArticleViewBuilder } from "../../composition"
+import * as ExternalData from "../external-data"
 import type { Page } from "../shared"
 import {
   chipFact,
@@ -230,4 +231,7 @@ const kindFacts = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
 
 /** The facts each kind of article is known by, in one card. */
 export const view = (page: Page, h: WikiArticleViewBuilder): Html =>
-  overviewCard([...namingFacts(page, h), ...kindFacts(page, h)], h)
+  overviewCard(
+    [...namingFacts(page, h), ...kindFacts(page, h), ...ExternalData.wikipediaFact(page, h)],
+    h,
+  )

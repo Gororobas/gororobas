@@ -22,6 +22,7 @@ import { findArticlesDueForExternalData } from "../../src/wiki/external-data/ref
 import { ExternalDataReport, reportExternalData } from "../../src/wiki/external-data/report.js"
 import { GbifLive } from "../../src/wiki/external-data/services/gbif.js"
 import { GoogleBooksLive } from "../../src/wiki/external-data/services/google-books.js"
+import { ImageDimensionsLive } from "../../src/wiki/external-data/services/image-dimensions.js"
 import { WikidataLive } from "../../src/wiki/external-data/services/wikidata.js"
 import {
   FetchArticleExternalData,
@@ -88,6 +89,8 @@ const gbif = GbifPlantResult.make({
       sourceUrl: "https://www.gbif.org/occurrence/1",
       creditLine: "Photographer",
       licenseUrl: null,
+      width: 1024,
+      height: 768,
     },
   ],
 })
@@ -437,7 +440,7 @@ const failedHttp = HttpClient.make((request) =>
 
 const workflowLayer = FetchArticleExternalDataLive.pipe(
   Layer.provide(
-    Layer.mergeAll(WikidataLive, GbifLive, GoogleBooksLive).pipe(
+    Layer.mergeAll(WikidataLive, GbifLive, GoogleBooksLive, ImageDimensionsLive).pipe(
       Layer.provide(Layer.succeed(HttpClient.HttpClient, failedHttp)),
     ),
   ),

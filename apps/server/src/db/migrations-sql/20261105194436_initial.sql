@@ -570,6 +570,8 @@ CREATE TABLE `wiki_article_external_media` (
   `source_url` text NOT NULL,
   `credit_line` text NOT NULL,
   `license_url` text NULL,
+  `width` integer NULL,
+  `height` integer NULL,
   PRIMARY KEY (`wiki_article_id`, `media_url`),
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );

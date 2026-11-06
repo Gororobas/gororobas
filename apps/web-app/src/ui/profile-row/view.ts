@@ -1,15 +1,28 @@
 import type { ProfileCardData } from "@gororobas/domain/profiles/domain"
-import { Style } from "@pleat/core"
+import { Style, When } from "@pleat/core"
 import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
+import { profileUrl } from "../../app/route"
 import { imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import { styledAttributes } from "../pleat-attributes"
 import { profileAvatar, type ProfileAvatarSize } from "../profile-avatar/view"
-import { space, tones } from "../theme"
+import { focusRingDeclarations } from "../styles/focus-ring"
+import { radius, space, tones } from "../theme"
 
-const rowStyle = Style.make({ display: "flex", alignItems: "center", gap: space[3] })
+const rowStyle = Style.make({
+  display: "flex",
+  alignItems: "center",
+  gap: space[3],
+  borderRadius: radius.md,
+  color: "inherit",
+  outline: "none",
+}).pipe(
+  Style.when(When.hover, { color: tones.accent.shade[800] }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
+
 const textStyle = Style.make({ display: "grid", minInlineSize: 0 })
 const nameStyle = Style.make({ color: tones.neutral.shade[700] })
 
@@ -23,12 +36,12 @@ export type ProfileRowConfig = Readonly<{
   trailing?: ReadonlyArray<Html>
 }>
 
-/** A person or organization: avatar, name and location. */
+/** A person or organization: avatar, name and location, leading to their profile. */
 export const view = <Message>(config: ProfileRowConfig, h: HtmlBuilder<Message>): Html => {
   const { profile } = config
   const size = config.size ?? "standard"
 
-  return h.div(styledAttributes([], rowStyle), [
+  return h.a(styledAttributes([h.Href(profileUrl(profile.handle))], rowStyle), [
     profileAvatar(
       {
         name: profile.name,

@@ -41,13 +41,12 @@ export const PublicationResults = AsyncData.Schema(
 )
 
 /** Sections showing provider data, each crediting its provider. */
-export const AttributedSection = Schema.Literals(["Wikipedia", "Editions"])
+export const AttributedSection = Schema.Literals(["Editions"])
 export type AttributedSection = typeof AttributedSection.Type
 
 export const attributedSectionProviders: Readonly<
   Record<AttributedSection, typeof ExternalDataProvider.Type>
 > = {
-  Wikipedia: "WIKIDATA",
   Editions: "GOOGLE_BOOKS",
 }
 
@@ -68,6 +67,7 @@ export const Model = Schema.Struct({
   /** Places only; other kinds start with none. */
   childPlacesAsyncData: ChildPlaceResults.schema,
   publicationsAsyncData: PublicationResults.schema,
+  /** Credits for each section of provider data, then for each photo once the page has loaded. */
   attributions: Schema.Array(PopoverDrawerBlock.Model),
   viewerBookmarks: ViewerBookmarks,
   bookmarkSaving: BookmarkSaving,
@@ -77,6 +77,8 @@ export const Model = Schema.Struct({
   maybeRelatedKindFilter: Schema.Option(WikiArticleKind),
   maybePhotoCategoryFilter: Schema.Option(Schema.String),
   maybePublicationKindFilter: Schema.Option(PublicationKind),
+  /** The photo gallery lays photos out in JavaScript, so it follows the viewport's width. */
+  photoColumnCount: Schema.Int,
 })
 
 export type Model = typeof Model.Type

@@ -6,13 +6,11 @@ import type { Html } from "foldkit/html"
 
 import { type WikiArticleTab, wikiArticleUrl } from "../../../app/route"
 import type { ClientFailure } from "../../../lib/client-failure"
-import { AppText } from "../../../ui/app-text"
-import { Chip } from "../../../ui/chip"
+import { EmptyState } from "../../../ui/empty-state"
 import * as Icons from "../../../ui/icons"
 import type { IconConfig } from "../../../ui/icons"
-import { styledAttributes } from "../../../ui/pleat-attributes"
-import { cardBleedStyle } from "../../../ui/section-card"
-import { emptyStateStyle } from "../../../ui/styles/surfaces"
+import { type LoadingShape, LoadingState } from "../../../ui/loading-state"
+import { pageColumnBleedStyle } from "../../../ui/styles/page-column"
 import { TabNavigation } from "../../../ui/tab-navigation"
 import { breakpoint, space } from "../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../composition"
@@ -35,14 +33,6 @@ export const sectionsStyle = Style.make({
 }).pipe(Style.when(breakpoint.md, { rowGap: space[6], paddingBlock: space[8] }))
 
 export const listStyle = Style.make({ display: "grid", rowGap: space[3] })
-
-export const chipRowStyle = Style.make({
-  display: "flex",
-  gap: space[2],
-  overflowX: "auto",
-  scrollbarWidth: "none",
-  paddingBlock: space[1],
-})
 
 const tabIcons: Readonly<Record<WikiArticleTab, (config?: IconConfig) => Html>> = {
   About: Icons.encyclopedia,
@@ -77,6 +67,8 @@ export const tabs = (
     {
       ariaLabel: label,
       size: isCompact ? "compact" : "regular",
+      // The compact header's tabs share a row with the name, away from the screen's edges.
+      styles: isCompact ? [] : [pageColumnBleedStyle],
       items: entries.map(([tab, tabLabel]) => ({
         key: tab,
         label: tabLabel,
@@ -89,71 +81,28 @@ export const tabs = (
   )
 }
 
-export const emptyState = (text: string, h: WikiArticleViewBuilder): Html =>
-  AppText.view(
-    {
-      element: "p",
-      attributes: styledAttributes([], emptyStateStyle({ size: "compact" })),
-      children: [text],
-    },
-    h,
-  )
-
 export const asyncView = <A>(
   {
     asyncData,
+    loading,
     onData,
-  }: Readonly<{ asyncData: AsyncData.AsyncData<A, ClientFailure>; onData: (data: A) => Html }>,
-  h: WikiArticleViewBuilder,
-): Html =>
-  AsyncData.matchData(asyncData, {
-    onEmpty: () =>
-      AppText.view(
-        {
-          element: "p",
-          appearance: "footnote",
-          isMuted: true,
-          attributes: [h.Role("status")],
-          children: ["Carregando…"],
-        },
-        h,
-      ),
-    onFailure: () => emptyState("Não foi possível carregar agora.", h),
-    onData,
-  })
-
-/** Chips that narrow a list in place: "Todos" first, then one per value. */
-export const filterChips = <Value>(
-  config: Readonly<{
-    label: string
-    options: ReadonlyArray<readonly [Value, string]>
-    selected: Option.Option<Value>
-    toMessage: (value: Option.Option<Value>) => Parameters<WikiArticleViewBuilder["OnClick"]>[0]
+  }: Readonly<{
+    asyncData: AsyncData.AsyncData<A, ClientFailure>
+    loading: Readonly<{ label: string; shape: LoadingShape; count?: number }>
+    onData: (data: A) => Html
   }>,
   h: WikiArticleViewBuilder,
 ): Html =>
-  h.div(
-    styledAttributes([h.Role("group"), h.AriaLabel(config.label)], chipRowStyle, cardBleedStyle),
-    [
-      Chip.view(
+  AsyncData.matchData(asyncData, {
+    onEmpty: () => LoadingState.view(loading, h),
+    onFailure: () =>
+      EmptyState.view(
         {
-          label: "Todos",
-          appearance: Option.isNone(config.selected) ? "selectedOption" : "option",
-          isPressed: Option.isNone(config.selected),
-          onClick: config.toMessage(Option.none()),
+          icon: Icons.alertCircle,
+          title: "Não foi possível carregar agora",
+          maybeDescription: Option.some("Tente recarregar a página em instantes."),
         },
         h,
       ),
-      ...config.options.map(([value, label]) =>
-        Chip.view(
-          {
-            label,
-            appearance: Option.contains(config.selected, value) ? "selectedOption" : "option",
-            isPressed: Option.contains(config.selected, value),
-            onClick: config.toMessage(Option.some(value)),
-          },
-          h,
-        ),
-      ),
-    ],
-  )
+    onData,
+  })

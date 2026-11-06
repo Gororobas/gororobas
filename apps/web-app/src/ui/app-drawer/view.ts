@@ -101,6 +101,7 @@ const bodyStyle = Style.make({
   overscrollBehavior: "contain",
   margin: `calc(-1 * ${space[1]})`,
   padding: space[1],
+  outline: "none",
 })
 
 const footerStyle = Style.make({
@@ -193,7 +194,12 @@ export const view = <Message>(config: AppDrawerConfig, h: DrawerViewBuilder<Mess
                           ),
                         ]),
                   ]),
-                  h.div(styledAttributes([], bodyStyle), config.children),
+                  // Focusing the body opens it at its top. Its first focusable element can sit
+                  // further down, and focusing that would scroll past everything above it.
+                  h.div(
+                    styledAttributes([...render.initialFocus, h.Tabindex(-1)], bodyStyle),
+                    config.children,
+                  ),
                   ...(config.footer === undefined
                     ? []
                     : [

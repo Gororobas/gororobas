@@ -18,6 +18,7 @@ import { Activity } from "effect/workflow"
 
 import { Gbif } from "../services/gbif.js"
 import type { GbifOccurrenceResult } from "../services/gbif.schema.js"
+import { ImageDimensions } from "../services/image-dimensions.js"
 import { Wikidata } from "../services/wikidata.js"
 
 export const fetchPlantGbif = Effect.fn(function* (
@@ -29,6 +30,17 @@ export const fetchPlantGbif = Effect.fn(function* (
   const taxonomy = yield* gbif.taxonMetadata({ kind: "taxon", id: taxonId })
 
   const images = yield* gbif.occurrences({ taxonId, limit: 20, mediaType: "StillImage" })
+  const imageDimensions = yield* ImageDimensions
+
+  const media = yield* Effect.forEach(
+    images.value.results.flatMap(occurrenceImages),
+    (image) =>
+      Effect.map(imageDimensions.probe(image.mediaUrl), (maybeDimensions) => ({
+        ...image,
+        ...Option.getOrElse(maybeDimensions, () => ({ width: null, height: null })),
+      })),
+    { concurrency: 4 },
+  )
 
   return GbifPlantResult.make({
     observations: [taxonomy.observation, images.observation],
@@ -39,7 +51,7 @@ export const fetchPlantGbif = Effect.fn(function* (
       scientificName: taxon.scientificName,
       taxonRank: taxon.taxonRank,
     })),
-    media: images.value.results.flatMap(occurrenceImages),
+    media,
   })
 })
 
@@ -50,7 +62,7 @@ export const fetchPlantGbif = Effect.fn(function* (
  */
 export const occurrenceImages = (
   occurrence: typeof GbifOccurrenceResult.Type,
-): ReadonlyArray<typeof ExternalMedia.Type> =>
+): ReadonlyArray<Omit<ExternalMedia, "width" | "height">> =>
   (occurrence.media ?? []).flatMap((media) => {
     const licenseUrl = [media.license, occurrence.license].find(
       (license) => license !== undefined && Schema.is(UrlAsString)(license),

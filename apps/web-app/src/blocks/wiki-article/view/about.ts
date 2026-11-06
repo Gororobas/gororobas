@@ -8,8 +8,9 @@ import { wikiArticleUrl } from "../../../app/route"
 import { bookmarkVocabularies, wikiKindLabels } from "../../../lib/vocabulary"
 import { aboutName, ofName } from "../../../lib/wiki-article-names"
 import { AppText } from "../../../ui/app-text"
+import { EmptyState } from "../../../ui/empty-state"
+import { FilterChips } from "../../../ui/filter-chips"
 import * as Icons from "../../../ui/icons"
-import { MediaCredit } from "../../../ui/media-credit"
 import * as PlaceOutline from "../../../ui/place-outline/view"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { ProfileRow } from "../../../ui/profile-row"
@@ -22,20 +23,13 @@ import { WikiArticleRow } from "../../../ui/wiki-article-row"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
 import { type Model } from "../model"
+import { photoCredit } from "./attribution"
 import * as BookmarkPicker from "./bookmark-picker"
 import * as ChildPlaces from "./child-places"
 import * as ExternalData from "./external-data"
 import * as Overview from "./overview"
 import { type ArticlePhoto, articlePhotos } from "./photos"
-import {
-  type ArticleState,
-  type Page,
-  asyncView,
-  emptyState,
-  filterChips,
-  listStyle,
-  sectionsStyle,
-} from "./shared"
+import { type ArticleState, type Page, asyncView, listStyle, sectionsStyle } from "./shared"
 
 const HERO_PHOTO_COUNT = 5
 const PREVIEW_PUBLICATION_COUNT = 4
@@ -128,30 +122,21 @@ const contentStyle = Style.make({ color: toneColors.foreground })
 
 // SECTIONS
 
-/** A photo's description and who to credit, over its lower edge. */
+/** A photo's description, over its lower edge. */
 const heroCaption = (photo: ArticlePhoto, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
-  Option.isNone(photo.maybeCaption) && EffectArray.isReadonlyArrayEmpty(photo.credits)
-    ? []
-    : [
-        h.figcaption(styledAttributes([], heroCaptionStyle), [
-          ...EffectArray.fromOption(
-            Option.map(photo.maybeCaption, (text) =>
-              AppText.view({ element: "span", appearance: "footnote", children: [text] }, h),
-            ),
-          ),
-          MediaCredit.view(
-            {
-              credits: photo.credits,
-              maybeLicenseUrl: photo.maybeLicenseUrl,
-              appearance: "caption",
-            },
-            h,
-          ),
-        ]),
-      ]
+  EffectArray.fromOption(
+    Option.map(photo.maybeCaption, (text) =>
+      h.figcaption(styledAttributes([], heroCaptionStyle), [
+        AppText.view({ element: "span", appearance: "footnote", children: [text] }, h),
+      ]),
+    ),
+  )
 
 /** Featured photos; each opens the article's photos. */
-const hero = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
+const hero = (
+  { model, page }: Readonly<{ model: Model; page: Page }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> =>
   EffectArray.match(articlePhotos(page).slice(0, HERO_PHOTO_COUNT), {
     onEmpty: () => [],
     onNonEmpty: (slides) => [
@@ -187,6 +172,7 @@ const hero = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
                 ],
               ),
               ...heroCaption(photo, h),
+              ...photoCredit({ model, photo, corner: "topEnd" }, h),
             ],
           ),
         ),
@@ -202,7 +188,7 @@ const bookmarkers = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): 
       title: groupLabels.INTERESTED,
       icon: Icons.heart,
       children: [
-        filterChips(
+        FilterChips.view(
           {
             label: "Filtrar por situação",
             options: (["INTERESTED", "ACTIVE", "PREVIOUSLY_ACTIVE"] as const).map(
@@ -216,6 +202,7 @@ const bookmarkers = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): 
         asyncView(
           {
             asyncData: model.bookmarkersAsyncData,
+            loading: { label: "Carregando quem acompanha", shape: "rows", count: 2 },
             onData: (all) =>
               EffectArray.match(
                 all.filter((bookmarker) =>
@@ -225,7 +212,17 @@ const bookmarkers = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): 
                   }),
                 ),
                 {
-                  onEmpty: () => emptyState("Ninguém por aqui ainda.", h),
+                  onEmpty: () =>
+                    EmptyState.view(
+                      {
+                        icon: Icons.heart,
+                        title: "Ninguém por aqui ainda",
+                        maybeDescription: Option.some(
+                          "Salve este artigo para aparecer aqui e encontrar quem se interessa pelo mesmo.",
+                        ),
+                      },
+                      h,
+                    ),
                   onNonEmpty: (shown) =>
                     h.div(
                       styledAttributes([], listStyle),
@@ -357,7 +354,7 @@ const related = (model: Model, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
         return h.div(styledAttributes([], listStyle), [
           ...(kinds.length > 1
             ? [
-                filterChips(
+                FilterChips.view(
                   {
                     label: "Filtrar por tipo",
                     options: kinds.map((kind) => [kind, wikiKindLabels[kind].plural] as const),
@@ -369,7 +366,9 @@ const related = (model: Model, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
               ]
             : []),
           ...EffectArray.match(shown, {
-            onEmpty: () => [emptyState("Nenhum artigo relacionado ainda.", h)],
+            onEmpty: () => [
+              EmptyState.view({ icon: Icons.encyclopedia, title: "Nenhum artigo desse tipo" }, h),
+            ],
             onNonEmpty: (nonEmpty) =>
               nonEmpty.map((article) =>
                 h.keyed("div")(
@@ -462,6 +461,7 @@ const contributionsPreview = ({ model, page }: ArticleState, h: WikiArticleViewB
         asyncView(
           {
             asyncData: model.contributorsAsyncData,
+            loading: { label: "Carregando contribuições", shape: "rows", count: 2 },
             onData: (contributors) =>
               contributorList(
                 {
@@ -527,7 +527,15 @@ export const contributorList = (
   h: WikiArticleViewBuilder,
 ): Html =>
   EffectArray.match(contributors, {
-    onEmpty: () => emptyState("Nenhuma contribuição pública ainda.", h),
+    onEmpty: () =>
+      EmptyState.view(
+        {
+          icon: Icons.users,
+          title: "Nenhuma contribuição pública ainda",
+          maybeDescription: Option.some("Que tal ser a primeira pessoa a sugerir uma edição?"),
+        },
+        h,
+      ),
     onNonEmpty: (shown) =>
       h.div(
         styledAttributes([], listStyle),
@@ -613,12 +621,12 @@ export const view = (
 ): Html =>
   h.div(styledAttributes([], sectionsStyle, layoutStyle), [
     h.div(styledAttributes([], columnStyle), [
-      ...ordered({ order: 1, children: hero(page, h) }, h),
+      ...ordered({ order: 1, children: hero({ model, page }, h) }, h),
       ...ordered({ order: 3, children: [Overview.view(page, h), ...placeMap(page, h)] }, h),
       ...ordered({ order: 4, children: cultivars({ model, page }, h) }, h),
       ...ordered({ order: 4, children: ChildPlaces.view({ model, page }, h) }, h),
-      ...ordered({ order: 6, children: aboutContent(page, h) }, h),
       ...ordered({ order: 6, children: ExternalData.editions({ model, page }, h) }, h),
+      ...ordered({ order: 6, children: aboutContent(page, h) }, h),
       ...ordered({ order: 7, children: publicationsPreview({ model, page, maybeToday }, h) }, h),
       ...ordered({ order: 8, children: related(model, h) }, h),
       ...ordered({ order: 9, children: photosPreview(page, h) }, h),
@@ -626,7 +634,6 @@ export const view = (
     h.aside(styledAttributes([h.AriaLabel(`Quem acompanha ${aboutName(page)}`)], columnStyle), [
       ...ordered({ order: 2, children: [BookmarkPicker.view({ model, page, isSignedIn }, h)] }, h),
       ...ordered({ order: 5, children: [bookmarkers({ model, page, maybeToday }, h)] }, h),
-      ...ordered({ order: 5, children: ExternalData.wikipedia({ model, page }, h) }, h),
       ...ordered(
         { order: 10, children: [contributionsPreview({ model, page, maybeToday }, h)] },
         h,

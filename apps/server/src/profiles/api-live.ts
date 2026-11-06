@@ -1,16 +1,12 @@
-import {
-  assertAuthenticated,
-  GororobasApi,
-  Policies,
-  ProfileNotFoundError,
-} from "@gororobas/domain"
-import { Effect, Option } from "effect"
+import { assertAuthenticated, GororobasApi } from "@gororobas/domain"
+import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
 import { requestLocale } from "../common/request-locale.js"
 import { ProfileLocationsService } from "./locations-service.js"
 import { ProfilesRepository } from "./repository.js"
+import { ProfileService } from "./service.js"
 
 export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (handlers) =>
   handlers
@@ -30,25 +26,28 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
     )
     .handle("getProfileByHandle", ({ params }) =>
       Effect.gen(function* () {
-        const repo = yield* ProfilesRepository
-
-        const profile = yield* repo.findByHandle(params.handle).pipe(
-          Effect.flatMap(
-            Option.match({
-              onNone: () => Effect.fail(new ProfileNotFoundError({ handle: params.handle })),
-              onSome: Effect.succeed,
-            }),
-          ),
-        )
-
-        yield* Policies.profiles.canRead(profile)
-
-        return profile
-      }).pipe(
+        const { language } = yield* requestLocale
+        return yield* ProfileService.use((service) => service.getPage(params.handle, language))
+      }).pipe(withApiInfrastructureErrors({ endpoint: "getProfileByHandle", group: "profiles" })),
+    )
+    .handle("listProfileBookmarks", ({ params, query }) =>
+      ProfileService.use((service) => service.listBookmarks(params.handle, query.language)).pipe(
+        withApiInfrastructureErrors({ endpoint: "listProfileBookmarks", group: "profiles" }),
+      ),
+    )
+    .handle("listProfileWikiContributions", ({ params, query }) =>
+      ProfileService.use((service) =>
+        service.listWikiContributions(params.handle, query.language),
+      ).pipe(
         withApiInfrastructureErrors({
-          endpoint: "getProfileByHandle",
+          endpoint: "listProfileWikiContributions",
           group: "profiles",
         }),
+      ),
+    )
+    .handle("listProfilePhotos", ({ params }) =>
+      ProfileService.use((service) => service.listPhotos(params.handle)).pipe(
+        withApiInfrastructureErrors({ endpoint: "listProfilePhotos", group: "profiles" }),
       ),
     )
     .handle("handleAvailability", ({ query }) =>

@@ -16,10 +16,12 @@ import * as AppShell from "../../ui/app-shell"
 import { AppText } from "../../ui/app-text"
 import { Chip } from "../../ui/chip"
 import { type Choice, ChoiceRow } from "../../ui/choice-row"
+import { EmptyState } from "../../ui/empty-state"
 import * as Icons from "../../ui/icons"
 import type { IconConfig } from "../../ui/icons"
 import { iconSizeProperty } from "../../ui/icons/icon-size"
 import { wikiKindIcons } from "../../ui/icons/wiki-kind-icons"
+import { LoadingState } from "../../ui/loading-state"
 import { styledAttributes } from "../../ui/pleat-attributes"
 import { ProfileRow } from "../../ui/profile-row"
 import { PublicationCard } from "../../ui/publication-card"
@@ -33,7 +35,6 @@ import {
   resultGridContainerStyle,
   resultGridStyle,
 } from "../../ui/styles/result-grid"
-import { emptyStateStyle } from "../../ui/styles/surfaces"
 import { fluidResultCountFontSize } from "../../ui/theme"
 import {
   type Tone,
@@ -167,12 +168,6 @@ const sectionHeaderStyle = Style.make({
   alignItems: "center",
   justifyContent: "space-between",
   gap: space[3],
-})
-
-const loadingStyle = Style.make({
-  paddingBlock: space[6],
-  color: toneColors.foregroundMuted,
-  fontSize: fontSize.footnote,
 })
 
 const summaryStyle = Style.make({ color: toneColors.foregroundMuted })
@@ -326,12 +321,17 @@ const searchTypeIcons: Readonly<Record<SearchType, (config?: IconConfig) => Html
 const typeUrl = (query: SearchQuery, type: Option.Option<SearchType>) =>
   searchUrl({ text: query.text, type })
 
-const emptyState = (text: string, h: SearchViewBuilder): Html =>
-  AppText.view(
+/** Nothing matched: suggests what usually helps. */
+const noResults = (
+  { icon, title }: Readonly<{ icon: (config?: IconConfig) => Html; title: string }>,
+  h: SearchViewBuilder,
+): Html =>
+  EmptyState.view(
     {
-      element: "p",
-      attributes: styledAttributes([], emptyStateStyle({ size: "compact" })),
-      children: [text],
+      icon,
+      title,
+      maybeDescription: Option.some("Tente outras palavras, ou tire alguns filtros."),
+      size: "roomy",
     },
     h,
   )
@@ -344,16 +344,17 @@ const resultsView = <A>(
   h: SearchViewBuilder,
 ): Html =>
   AsyncData.matchData(asyncData, {
-    onEmpty: () =>
-      AppText.view(
+    onEmpty: () => LoadingState.view({ label: "Buscando", shape: "tiles", count: 6 }, h),
+    onFailure: () =>
+      EmptyState.view(
         {
-          element: "p",
-          attributes: styledAttributes([h.Role("status")], loadingStyle),
-          children: ["Buscando…"],
+          icon: Icons.alertCircle,
+          title: "Não foi possível buscar agora",
+          maybeDescription: Option.some("Tente novamente em instantes."),
+          size: "roomy",
         },
         h,
       ),
-    onFailure: () => emptyState("Não foi possível buscar agora. Tente novamente em instantes.", h),
     onData,
   })
 
@@ -542,7 +543,7 @@ const articleGrid = (
   h: SearchViewBuilder,
 ): Html =>
   EffectArray.match(articles, {
-    onEmpty: () => emptyState("Nenhum artigo encontrado.", h),
+    onEmpty: () => noResults({ icon: Icons.encyclopedia, title: "Nenhum artigo encontrado" }, h),
     onNonEmpty: (nonEmpty) =>
       resultGrid(
         {
@@ -579,7 +580,7 @@ const publicationGrid = (
   h: SearchViewBuilder,
 ): Html =>
   EffectArray.match(publications, {
-    onEmpty: () => emptyState("Nenhum post encontrado.", h),
+    onEmpty: () => noResults({ icon: Icons.clipboard, title: "Nenhum post encontrado" }, h),
     onNonEmpty: (nonEmpty) =>
       resultGrid(
         {
@@ -604,7 +605,7 @@ const profileGrid = (
   h: SearchViewBuilder,
 ): Html =>
   EffectArray.match(profiles, {
-    onEmpty: () => emptyState("Ninguém encontrado.", h),
+    onEmpty: () => noResults({ icon: Icons.user, title: "Ninguém encontrado" }, h),
     onNonEmpty: (nonEmpty) =>
       resultGrid(
         {

@@ -1,86 +1,22 @@
-import { Style } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
 import type { Html } from "foldkit/html"
 
 import { publicationKindLabels } from "../../../lib/vocabulary"
 import { aboutName, ofName } from "../../../lib/wiki-article-names"
 import { AppText } from "../../../ui/app-text"
+import { EmptyState } from "../../../ui/empty-state"
+import { FilterChips } from "../../../ui/filter-chips"
 import * as Icons from "../../../ui/icons"
-import { MediaCredit } from "../../../ui/media-credit"
+import { PhotoGallery } from "../../../ui/photo-gallery"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { PublicationCard } from "../../../ui/publication-card"
 import { SectionCard } from "../../../ui/section-card"
-import { radius, space } from "../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
 import { contributorList } from "./about"
-import { type ArticlePhoto, articlePhotos } from "./photos"
-import {
-  type ArticleState,
-  asyncView,
-  emptyState,
-  filterChips,
-  listStyle,
-  sectionsStyle,
-} from "./shared"
-
-const featuredPhotoStyle = Style.make({ display: "grid", rowGap: space[1] })
-
-const featuredImageStyle = Style.make({
-  inlineSize: "100%",
-  aspectRatio: "16 / 10",
-  objectFit: "cover",
-  borderRadius: radius.lg,
-})
-
-const masonryStyle = Style.make({ columnCount: 2, columnGap: space[3] })
-
-const masonryItemStyle = Style.make({
-  display: "grid",
-  rowGap: space[1],
-  marginBlockEnd: space[3],
-  breakInside: "avoid",
-})
-
-const masonryImageStyle = Style.make({ inlineSize: "100%", borderRadius: radius.md })
-
-const figcaptionStyle = Style.make({ display: "grid", rowGap: space[1] })
-
-const photoFigure = (
-  {
-    photo,
-    imageStyle,
-    figureStyle,
-  }: Readonly<{
-    photo: ArticlePhoto
-    imageStyle: Style.Style
-    figureStyle: Style.Style
-  }>,
-  h: WikiArticleViewBuilder,
-): Html =>
-  h.keyed("figure")(photo.key, styledAttributes([], figureStyle), [
-    h.img(
-      styledAttributes(
-        [
-          h.Src(photo.src(1280)),
-          h.Alt(Option.getOrElse(photo.maybeCaption, () => "")),
-          h.Attribute("loading", "lazy"),
-        ],
-        imageStyle,
-      ),
-    ),
-    h.figcaption(styledAttributes([], figcaptionStyle), [
-      ...EffectArray.fromOption(
-        Option.map(photo.maybeCaption, (text) =>
-          AppText.view({ element: "span", appearance: "footnote", children: [text] }, h),
-        ),
-      ),
-      MediaCredit.view(
-        { credits: photo.credits, maybeLicenseUrl: photo.maybeLicenseUrl, appearance: "caption" },
-        h,
-      ),
-    ]),
-  ])
+import { photoCredit } from "./attribution"
+import { articlePhotos } from "./photos"
+import { type ArticleState, asyncView, listStyle, sectionsStyle } from "./shared"
 
 export const publications = (
   { model, page, maybeToday }: ArticleState,
@@ -93,7 +29,7 @@ export const publications = (
         icon: Icons.clipboard,
         isBare: true,
         children: [
-          filterChips(
+          FilterChips.view(
             {
               label: "Filtrar por formato",
               options: (["POST", "EVENT"] as const).map(
@@ -107,6 +43,7 @@ export const publications = (
           asyncView(
             {
               asyncData: model.publicationsAsyncData,
+              loading: { label: "Carregando posts", shape: "cards" },
               onData: (all) =>
                 EffectArray.match(
                   all.filter((publication) =>
@@ -116,7 +53,18 @@ export const publications = (
                     }),
                   ),
                   {
-                    onEmpty: () => emptyState(`Ainda não há posts sobre ${aboutName(page)}.`, h),
+                    onEmpty: () =>
+                      EmptyState.view(
+                        {
+                          icon: Icons.clipboard,
+                          title: `Ainda não há posts sobre ${aboutName(page)}`,
+                          maybeDescription: Option.some(
+                            "Quando alguém compartilhar uma experiência, ela aparece aqui.",
+                          ),
+                          size: "roomy",
+                        },
+                        h,
+                      ),
                     onNonEmpty: (shown) =>
                       h.div(
                         styledAttributes([], listStyle),
@@ -161,7 +109,7 @@ export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder)
         children: [
           ...(EffectArray.isReadonlyArrayNonEmpty(categories)
             ? [
-                filterChips(
+                FilterChips.view(
                   {
                     label: "Filtrar por categoria",
                     options: categories.map((category) => [category, category] as const),
@@ -174,29 +122,28 @@ export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder)
               ]
             : []),
           EffectArray.match(shown, {
-            onEmpty: () => emptyState("Nenhuma foto por aqui ainda.", h),
+            onEmpty: () =>
+              EmptyState.view(
+                { icon: Icons.gallery, title: "Nenhuma foto por aqui ainda", size: "roomy" },
+                h,
+              ),
             onNonEmpty: ([featured, ...rest]) =>
               h.div(styledAttributes([], listStyle), [
-                photoFigure(
+                PhotoGallery.figure(
                   {
                     photo: featured,
-                    imageStyle: featuredImageStyle,
-                    figureStyle: featuredPhotoStyle,
+                    isFeatured: true,
+                    overlay: (photo) => photoCredit({ model, photo }, h),
                   },
                   h,
                 ),
-                h.div(
-                  styledAttributes([], masonryStyle),
-                  rest.map((photo) =>
-                    photoFigure(
-                      {
-                        photo: photo,
-                        imageStyle: masonryImageStyle,
-                        figureStyle: masonryItemStyle,
-                      },
-                      h,
-                    ),
-                  ),
+                PhotoGallery.masonry(
+                  {
+                    photos: rest,
+                    columnCount: model.photoColumnCount,
+                    overlay: (photo) => photoCredit({ model, photo }, h),
+                  },
+                  h,
                 ),
               ]),
           }),
@@ -227,6 +174,7 @@ export const contributions = ({ model, page }: ArticleState, h: WikiArticleViewB
           asyncView(
             {
               asyncData: model.contributorsAsyncData,
+              loading: { label: "Carregando contribuições", shape: "rows" },
               onData: (contributors) => contributorList({ contributors, size: "large" }, h),
             },
             h,

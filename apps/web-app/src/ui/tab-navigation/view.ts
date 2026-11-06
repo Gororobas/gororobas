@@ -129,6 +129,8 @@ export type TabNavigationConfig = Readonly<{
   items: ReadonlyArray<TabNavigationItem>
   /** Compact tabs are smaller and leave their icons out, for condensed headers. */
   size?: "regular" | "compact"
+  /** Extra styles for the scrolling list, such as bleeding past its column's padding. */
+  styles?: ReadonlyArray<Style.Style>
 }>
 
 /** Links between a page's sections, underlined by an indicator that slides to the current one. */
@@ -136,30 +138,33 @@ export const view = <Message>(config: TabNavigationConfig, h: HtmlBuilder<Messag
   const size = config.size ?? "regular"
   const hasCurrent = config.items.some((item) => item.isCurrent)
 
-  return h.nav(styledAttributes([h.AriaLabel(config.ariaLabel)], listStyle), [
-    ...config.items.map((item) =>
-      h.keyed("a")(
-        item.key,
-        styledAttributes(
-          [h.Href(item.href), h.AriaCurrent(item.isCurrent ? "page" : "false")],
-          tabStyle({ size, isCurrent: item.isCurrent }),
-        ),
-        [
-          ...(size === "compact" || item.maybeIcon === undefined
-            ? []
-            : [item.maybeIcon({ mode: item.isCurrent ? "duotone" : "outline" })]),
-          item.label,
-        ],
-      ),
-    ),
-    // Keyed so patches keep the same element, which is what lets it transition.
-    ...(hasCurrent
-      ? [
-          h.keyed("span")(
-            "indicator",
-            styledAttributes([h.AriaHidden(true)], indicatorStyle({ size })),
+  return h.nav(
+    styledAttributes([h.AriaLabel(config.ariaLabel)], listStyle, ...(config.styles ?? [])),
+    [
+      ...config.items.map((item) =>
+        h.keyed("a")(
+          item.key,
+          styledAttributes(
+            [h.Href(item.href), h.AriaCurrent(item.isCurrent ? "page" : "false")],
+            tabStyle({ size, isCurrent: item.isCurrent }),
           ),
-        ]
-      : []),
-  ])
+          [
+            ...(size === "compact" || item.maybeIcon === undefined
+              ? []
+              : [item.maybeIcon({ mode: item.isCurrent ? "duotone" : "outline" })]),
+            item.label,
+          ],
+        ),
+      ),
+      // Keyed so patches keep the same element, which is what lets it transition.
+      ...(hasCurrent
+        ? [
+            h.keyed("span")(
+              "indicator",
+              styledAttributes([h.AriaHidden(true)], indicatorStyle({ size })),
+            ),
+          ]
+        : []),
+    ],
+  )
 }

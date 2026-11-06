@@ -59,6 +59,25 @@ const wikiArticleTabSlugs = {
   Contributions: "contribuicoes",
 } as const satisfies Record<WikiArticleTab, string>
 
+export const ProfileTab = Schema.Literals([
+  "Home",
+  "Publications",
+  "Photos",
+  "Contributions",
+  "Bookmarks",
+])
+
+export type ProfileTab = typeof ProfileTab.Type
+
+const profileTabSlugs = {
+  Home: "inicio",
+  Publications: "publicacoes",
+  Photos: "fotos",
+  Contributions: "contribuicoes",
+  Bookmarks: "salvos",
+} as const satisfies Record<ProfileTab, string>
+
+const PROFILE_SEGMENT = "gente"
 const SEARCH_SEGMENT = "buscar"
 const MY_PLACES_SEGMENT = "meus-lugares"
 const EXTERNAL_DATA_ADMIN_DASHBOARD_SEGMENT = "dados-externos"
@@ -89,6 +108,7 @@ const slugCodec = <const Value extends string, const Slug extends string>(
 
 export const WikiArticleKindFromSlug = slugCodec(wikiKindSlugs, WikiArticleKind)
 const WikiArticleTabFromSlug = slugCodec(wikiArticleTabSlugs, WikiArticleTab)
+const ProfileTabFromSlug = slugCodec(profileTabSlugs, ProfileTab)
 
 // SEARCH QUERY
 
@@ -302,6 +322,7 @@ export const ApplicationRoute = defineRouteUnion({
   Search: SearchQuery.fields,
   WikiArticle: { kind: WikiArticleKind, handle: Handle, tab: WikiArticleTab },
   WikiArticleDebug: { wikiArticleId: WikiArticleId },
+  Profile: { handle: Handle, tab: ProfileTab },
   Login: {},
   MyPlaces: {},
   ExternalDataAdminDashboard: ObservationLogQuery.fields,
@@ -348,6 +369,21 @@ export const wikiArticleDebugRouter = pipe(
   Route.mapTo(ApplicationRoute.WikiArticleDebug),
 )
 
+const profileBase = pipe(literal(PROFILE_SEGMENT), slash(schemaSegment("handle", Handle)))
+
+const profileHomeRouter = pipe(
+  profileBase,
+  Route.mapTo({
+    make: ({ handle }: { handle: Handle }) => ApplicationRoute.Profile({ handle, tab: "Home" }),
+  }),
+)
+
+const profileTabRouter = pipe(
+  profileBase,
+  slash(schemaSegment("tab", ProfileTabFromSlug)),
+  Route.mapTo(ApplicationRoute.Profile),
+)
+
 export const loginRouter = pipe(literal("login"), Route.mapTo(ApplicationRoute.Login))
 
 export const myPlacesRouter = pipe(
@@ -377,6 +413,8 @@ export const urlToApplicationRoute = Route.parseUrlWithFallback(
     myPlacesRouter,
     externalDataAdminDashboardRouter,
     wikiArticleDebugRouter,
+    profileTabRouter,
+    profileHomeRouter,
     wikiArticleTabRouter,
     wikiArticleAboutRouter,
   ),
@@ -391,6 +429,10 @@ export const wikiArticleUrl = (
   tab === "About"
     ? wikiArticleAboutRouter({ kind: lookup.kind, handle: lookup.handle, tab })
     : wikiArticleTabRouter({ kind: lookup.kind, handle: lookup.handle, tab })
+
+/** The home tab is the profile's bare path. */
+export const profileUrl = (handle: Handle, tab: ProfileTab = "Home"): string =>
+  tab === "Home" ? profileHomeRouter({ handle, tab }) : profileTabRouter({ handle, tab })
 
 export const searchQueryOf = ({
   _tag,

@@ -1,5 +1,6 @@
 import { HashMap, Option } from "effect"
 import { AsyncData, Update } from "foldkit"
+import { initAndAppend } from "foldkit/bindingInit"
 import { modifyFields } from "foldkit/struct"
 
 import {
@@ -9,7 +10,7 @@ import {
   LoadPublications,
   SaveBookmark,
 } from "./command"
-import { BookmarkPickerBinding, WikiArticleComposition } from "./composition"
+import { AttributionsBinding, BookmarkPickerBinding, WikiArticleComposition } from "./composition"
 import { makeFieldsStep, makeStep } from "./definition"
 import {
   BookmarkSaving,
@@ -21,12 +22,26 @@ import {
   PublicationResults,
   RelatedResults,
 } from "./model"
+import { articlePhotos } from "./view/photos"
 
 export const update = WikiArticleComposition.makeUpdate({
-  SucceededLoadPage: (model, { page }) => ({
-    model: modifyFields(model, { pageAsyncData: () => PageResult.Success({ data: page }) }),
-    commands: [LoadPublications({ wikiArticleId: page.id })],
-  }),
+  SucceededLoadPage: (model, { page }) =>
+    Update.combineSteps([
+      makeStep((stepModel) => ({
+        model: modifyFields(stepModel, {
+          pageAsyncData: () => PageResult.Success({ data: page }),
+        }),
+        commands: [LoadPublications({ wikiArticleId: page.id })],
+      })),
+      ...articlePhotos(page).map(({ creditId }) =>
+        makeStep((stepModel) =>
+          initAndAppend(AttributionsBinding, stepModel, {
+            key: creditId,
+            args: [{ id: creditId }],
+          }),
+        ),
+      ),
+    ])(model),
   FailedLoadPage: makeFieldsStep.fromMessage(({ error }) => ({
     pageAsyncData: () => PageResult.Failure({ error }),
     publicationsAsyncData: () => PublicationResults.Idle(),
@@ -145,5 +160,8 @@ export const update = WikiArticleComposition.makeUpdate({
   })),
   ClickedPublicationKindFilter: makeFieldsStep.fromMessage(({ maybeKind }) => ({
     maybePublicationKindFilter: () => maybeKind,
+  })),
+  ChangedPhotoColumnCount: makeFieldsStep.fromMessage(({ columnCount }) => ({
+    photoColumnCount: () => columnCount,
   })),
 })

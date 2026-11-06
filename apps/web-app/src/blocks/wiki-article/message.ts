@@ -39,4 +39,5 @@ export const Message = defineMessageUnion({
   ClickedRelatedKindFilter: { maybeKind: Schema.Option(WikiArticleKind) },
   ClickedPhotoCategoryFilter: { maybeCategory: Schema.Option(Schema.String) },
   ClickedPublicationKindFilter: { maybeKind: Schema.Option(PublicationKind) },
+  ChangedPhotoColumnCount: { columnCount: Schema.Int },
 })

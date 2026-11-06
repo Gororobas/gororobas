@@ -4,6 +4,7 @@ import { WikiArticleLookup } from "@gororobas/domain/wiki/domain"
 import { Effect, Function, Layer, Option, Schema } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
+import { readerLanguage } from "../../lib/reader-language"
 import { WikiArticleBlock } from "./definition"
 import { Message } from "./message"
 
@@ -20,16 +21,18 @@ export const LoadPage = WikiArticleBlock.makeCommand("LoadPage", {
     const api = yield* GororobasApiClient
 
     return ({ lookup }) =>
-      api.wiki.getWikiArticleByHandleAndKind({ params: lookup, query: { language: "pt" } }).pipe(
-        Effect.map((page) => Message.SucceededLoadPage({ page })),
-        Effect.catchTag("WikiArticleNotFoundError", () =>
-          Effect.succeed(Message.FailedLoadPage({ error: { cause: "NotFound" } })),
-        ),
-        Effect.match({
-          onFailure: (error) => Message.FailedLoadPage({ error: { cause: error } }),
-          onSuccess: Function.identity,
-        }),
-      )
+      api.wiki
+        .getWikiArticleByHandleAndKind({ params: lookup, query: { language: readerLanguage } })
+        .pipe(
+          Effect.map((page) => Message.SucceededLoadPage({ page })),
+          Effect.catchTag("WikiArticleNotFoundError", () =>
+            Effect.succeed(Message.FailedLoadPage({ error: { cause: "NotFound" } })),
+          ),
+          Effect.match({
+            onFailure: (error) => Message.FailedLoadPage({ error: { cause: error } }),
+            onSuccess: Function.identity,
+          }),
+        )
   },
 })
 
@@ -40,12 +43,14 @@ export const LoadRelated = WikiArticleBlock.makeCommand("LoadRelated", {
     const api = yield* GororobasApiClient
 
     return ({ lookup }) =>
-      api.wiki.listRelatedWikiArticles({ params: lookup, query: { language: "pt" } }).pipe(
-        Effect.match({
-          onFailure: (error) => Message.FailedLoadRelated({ error: { cause: error } }),
-          onSuccess: (articles) => Message.SucceededLoadRelated({ articles }),
-        }),
-      )
+      api.wiki
+        .listRelatedWikiArticles({ params: lookup, query: { language: readerLanguage } })
+        .pipe(
+          Effect.match({
+            onFailure: (error) => Message.FailedLoadRelated({ error: { cause: error } }),
+            onSuccess: (articles) => Message.SucceededLoadRelated({ articles }),
+          }),
+        )
   },
 })
 
@@ -88,12 +93,14 @@ export const LoadCultivars = WikiArticleBlock.makeCommand("LoadCultivars", {
     const api = yield* GororobasApiClient
 
     return ({ lookup }) =>
-      api.wiki.listWikiArticleCultivars({ params: lookup, query: { language: "pt" } }).pipe(
-        Effect.match({
-          onFailure: (error) => Message.FailedLoadCultivars({ error: { cause: error } }),
-          onSuccess: (cultivars) => Message.SucceededLoadCultivars({ cultivars }),
-        }),
-      )
+      api.wiki
+        .listWikiArticleCultivars({ params: lookup, query: { language: readerLanguage } })
+        .pipe(
+          Effect.match({
+            onFailure: (error) => Message.FailedLoadCultivars({ error: { cause: error } }),
+            onSuccess: (cultivars) => Message.SucceededLoadCultivars({ cultivars }),
+          }),
+        )
   },
 })
 
@@ -107,7 +114,7 @@ export const LoadChildPlaces = WikiArticleBlock.makeCommand("LoadChildPlaces", {
       api.wiki
         .listWikiArticleChildPlaces({
           params: lookup,
-          query: { language: "pt", pageSize: CHILD_PLACES_PAGE_SIZE, currentPage },
+          query: { language: readerLanguage, pageSize: CHILD_PLACES_PAGE_SIZE, currentPage },
         })
         .pipe(
           Effect.match({
@@ -129,7 +136,7 @@ export const LoadPublications = WikiArticleBlock.makeCommand("LoadPublications",
         .searchPublications({
           query: {
             wikiArticleId,
-            language: "pt",
+            language: readerLanguage,
             pageSize: PUBLICATIONS_IN_ARTICLE_PAGE_SIZE,
             currentPage: 0,
           },

@@ -5,6 +5,7 @@ import type { Html } from "foldkit/html"
 
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
+import { MediaCredit } from "../../../ui/media-credit"
 import { styledAttributes, styledClassName } from "../../../ui/pleat-attributes"
 import { ProviderMark } from "../../../ui/provider-mark"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
@@ -21,6 +22,7 @@ import {
 } from "../../../ui/theme"
 import { AttributionsBinding, attributionId, type WikiArticleViewBuilder } from "../composition"
 import { type AttributedSection, type Model, attributedSectionProviders } from "../model"
+import type { ArticlePhoto } from "./photos"
 import type { Page } from "./shared"
 
 const triggerStyle = Style.make({
@@ -190,3 +192,45 @@ export const attribution = (
     ),
   )
 }
+
+/** Who to credit for a photo: a badge over its corner opens the details, as a popover or drawer. */
+export const photoCredit = (
+  {
+    model,
+    photo,
+    corner = "bottomStart",
+  }: Readonly<{ model: Model; photo: ArticlePhoto; corner?: "bottomStart" | "topEnd" }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> =>
+  EffectArray.isReadonlyArrayEmpty(photo.attribution.credits) &&
+  Option.isNone(photo.attribution.maybeLicenseUrl)
+    ? []
+    : EffectArray.fromOption(
+        Option.map(
+          EffectArray.findFirst(model.attributions, (instance) => instance.id === photo.creditId),
+          (instance) =>
+            h.block(
+              AttributionsBinding.embedView({
+                key: instance.id,
+                slotId: instance.id,
+                model: instance,
+                viewInputs: {
+                  title: "Créditos da foto",
+                  trigger: {
+                    children: MediaCredit.badgeChildren(photo.attribution, h),
+                    className: styledClassName(MediaCredit.badgeStyle({ corner })),
+                    ariaLabel: MediaCredit.badgeLabel(photo.attribution),
+                  },
+                  toContent: () => [MediaCredit.details(photo.attribution, h)],
+                  anchor: {
+                    placement: corner === "bottomStart" ? "top-start" : "bottom-end",
+                    gap: 6,
+                    padding: 8,
+                  },
+                  panelClassName: styledClassName(panelStyle),
+                  tone: "primary",
+                },
+              }),
+            ),
+        ),
+      )

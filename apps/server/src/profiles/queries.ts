@@ -1,5 +1,11 @@
 import {
+  BookmarkState,
   Handle,
+  IntNonNegative,
+  MediaAssetRow,
+  type Session,
+  TimestampColumn,
+  WikiArticleId,
   ProfileContentCounts,
   ProfileId,
   ProfileMetadataResult,
@@ -13,6 +19,7 @@ import { Array as EffectArray, Effect, Option, Schema, SchemaGetter } from "effe
 import { SqlClient, SqlSchema } from "effect/sql"
 import type { Statement } from "effect/sql"
 
+import { publicationVisibleTo } from "../content-visibility/visible-to.js"
 import {
   containsEveryTerm,
   fullTextQuery,
@@ -202,3 +209,79 @@ export const fetchProfileContentCounts = SqlSchema.findOne({
     `
     }),
 })
+
+/** The profile's latest location, as its page shows it: only when that entry is public. */
+export const findPageLocation = SqlSchema.findOne({
+  Request: Schema.Struct({ profileId: ProfileId, language: SupportedLanguage }),
+  Result: Schema.Struct({
+    location: Schema.NullOr(Schema.fromJsonString(ProfileLocationCardData)),
+  }),
+  execute: ({ profileId, language }) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`
+        SELECT ${latestPublicProfileLocationJson(sql, { profileIdColumn: "p.id", language })} AS location
+        FROM profiles p WHERE p.id = ${profileId}
+      `,
+    ),
+})
+
+/** Published articles the profile bookmarked, as anything but indifferent. */
+export const listBookmarkedArticles = SqlSchema.findAll({
+  Request: ProfileId,
+  Result: Schema.Struct({ wikiArticleId: WikiArticleId, state: BookmarkState }),
+  execute: (profileId) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`
+        SELECT b.wiki_article_id, b.state FROM bookmarks_wiki_articles b
+        WHERE b.person_id = ${profileId} AND b.state <> 'INDIFFERENT'
+      `,
+    ),
+})
+
+/** Articles with revisions the profile created that were approved, most recent first. */
+export const listContributedArticles = SqlSchema.findAll({
+  Request: ProfileId,
+  Result: Schema.Struct({
+    wikiArticleId: WikiArticleId,
+    revisionCount: IntNonNegative,
+    lastContributedAt: TimestampColumn,
+  }),
+  execute: (profileId) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`
+        SELECT r.wiki_article_id, COUNT(*) AS revision_count, MAX(r.created_at) AS last_contributed_at
+        FROM wiki_article_revisions r
+        WHERE r.created_by_id = ${profileId} AND r.evaluation = 'APPROVED'
+        GROUP BY r.wiki_article_id
+        ORDER BY last_contributed_at DESC
+      `,
+    ),
+})
+
+/**
+ * Images the profile uploaded that `session` can see: censored ones only by their owner, and each
+ * attached to a wiki article, which anyone can read, or to a publication `session` can see.
+ */
+export const listVisiblePhotos = (session: Session) =>
+  SqlSchema.findAll({
+    Request: ProfileId,
+    Result: MediaAssetRow,
+    execute: (profileId) =>
+      SqlClient.SqlClient.use(
+        (sql) => sql`
+          SELECT m.* FROM media_assets m
+          WHERE m.owner_profile_id = ${profileId} AND m.format = 'IMAGE'
+            AND (m.moderation_status <> 'CENSORED'
+              OR ${session.type === "ACCOUNT" ? sql`m.owner_profile_id = ${session.personId}` : sql.literal("0")})
+            AND (
+              EXISTS (SELECT 1 FROM wiki_article_media_assets w WHERE w.media_asset_id = m.id)
+              OR EXISTS (
+                SELECT 1 FROM publication_media_assets attached
+                JOIN publication_sources source ON source.id = attached.publication_id
+                WHERE attached.media_asset_id = m.id AND ${publicationVisibleTo(sql, session)}
+              )
+            )
+          ORDER BY m.created_at DESC, m.id
+        `,
+      ),
+  })

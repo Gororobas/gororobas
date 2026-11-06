@@ -1,10 +1,23 @@
-import { Schema, Struct } from "effect"
+import { Schema } from "effect"
 
 import { GoogleBooksVolumeId } from "../../../common/external-identifiers.js"
-import { UrlAsString } from "../../../common/primitives.js"
-import { WikiBookArticle } from "../../kinds/book.js"
-import { BookEdition, Observation } from "../common.js"
+import { OptionalColumn, UrlAsString } from "../../../common/primitives.js"
+import { Observation } from "../common.js"
 import { ExternalDataFetchError } from "../error.js"
+
+/** A published edition of a book, as a catalogue lists it. */
+export const BookEdition = Schema.Struct({
+  externalId: Schema.String,
+  title: Schema.String,
+  publisher: Schema.NullOr(Schema.String),
+  publicationDate: Schema.NullOr(Schema.String),
+  pageCount: Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  languages: Schema.Array(Schema.String),
+  isbn: Schema.Array(Schema.String),
+  sourceUrl: UrlAsString,
+})
+
+export type BookEdition = typeof BookEdition.Type
 
 export const BookResult = Schema.Struct({
   observations: Schema.Array(Observation),
@@ -12,12 +25,16 @@ export const BookResult = Schema.Struct({
   coverage: Schema.Literals(["COMPLETE", "PARTIAL"]),
 })
 
-/** Without a volume ID, the fetcher looks for a volume listing one of the ISBNs. */
+/**
+ * The article's identifiers, typed as `WikiBookArticle`'s editable attributes. They're not picked
+ * from it because the kind's definition depends on this module, through the page data. Without a
+ * volume ID, the fetcher looks for a volume listing one of the ISBNs.
+ */
 export const BookExternalDataInputs = Schema.Struct({
   kind: Schema.Literal("BOOK"),
-  ...WikiBookArticle.EditableAttributes.mapFields(
-    Struct.pick(["googleBooksVolumeId", "isbn13", "isbn10"]),
-  ).fields,
+  googleBooksVolumeId: OptionalColumn(GoogleBooksVolumeId),
+  isbn13: OptionalColumn(Schema.String),
+  isbn10: OptionalColumn(Schema.String),
 })
 
 export const BookExternalDataResult = Schema.Struct({

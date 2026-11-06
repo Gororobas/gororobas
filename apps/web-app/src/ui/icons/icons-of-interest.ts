@@ -81,6 +81,8 @@ export const ICONS_OF_INTEREST: ReadonlyArray<IconOfInterest> = [
   "bookmark-x",
   "glasses",
   "hand-heart",
+  "camera",
+  "copyright",
   { name: "notebook3", alias: "encyclopedia" },
   { name: "clapperboard-play", alias: "video" },
   { name: "magnifier", alias: "search" },

@@ -66,7 +66,8 @@ const findExternalMedia = SqlSchema.findAll({
   execute: ({ wikiArticleId }) =>
     SqlClient.SqlClient.use(
       (sql) => sql`
-        SELECT media_url, source_url, credit_line, license_url FROM wiki_article_external_media
+        SELECT media_url, source_url, credit_line, license_url, width, height
+        FROM wiki_article_external_media
         WHERE wiki_article_id = ${wikiArticleId}
         ORDER BY order_index
       `,

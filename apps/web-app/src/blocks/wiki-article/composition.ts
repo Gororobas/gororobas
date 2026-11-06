@@ -18,7 +18,10 @@ export const ClassificationBinding = WikiArticleBlock.makeBinding(PopoverDrawerB
 
 export const attributionId = (section: AttributedSection) => `wiki-article-attribution-${section}`
 
-/** One per section of provider data, crediting where it came from. */
+/**
+ * One per section of provider data, crediting where it came from. Photos get theirs once the page
+ * has loaded, as its photos are only known then.
+ */
 export const AttributionsBinding = WikiArticleBlock.makeBinding(PopoverDrawerBlock, {
   field: "attributions",
   key: "id",

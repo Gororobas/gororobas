@@ -9,6 +9,7 @@ import { FocusSearchField } from "./command"
 import {
   AuthenticationBinding,
   ExternalDataAdminDashboardBinding,
+  ProfileBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
@@ -27,6 +28,7 @@ import {
 const clearPagesStep = makeFieldsStep(() => ({
   maybeWikiArticle: () => Option.none(),
   maybeWikiArticleDebug: () => Option.none(),
+  maybeProfile: () => Option.none(),
   maybeProfileLocationsEditor: () => Option.none(),
   maybeExternalDataAdminDashboard: () => Option.none(),
 }))
@@ -45,6 +47,7 @@ const showExternalDataAdminDashboardStep = (query: ObservationLogQuery) => {
             modifyFields(model, {
               maybeWikiArticle: () => Option.none(),
               maybeWikiArticleDebug: () => Option.none(),
+              maybeProfile: () => Option.none(),
               maybeProfileLocationsEditor: () => Option.none(),
               maybeExternalDataAdminDashboard: () => Option.some({ queryKey, model: child }),
             }),
@@ -60,6 +63,7 @@ const showProfileLocationsEditorStep = makeStep((model) =>
       modifyFields(model, {
         maybeWikiArticle: () => Option.none(),
         maybeWikiArticleDebug: () => Option.none(),
+        maybeProfile: () => Option.none(),
         maybeProfileLocationsEditor: () => Option.some(child),
       }),
   }),
@@ -78,10 +82,27 @@ const showWikiArticleStep = (lookup: Readonly<{ kind: WikiArticleKind; handle: H
             modifyFields(model, {
               maybeWikiArticle: () => Option.some({ articleKey, model: child }),
               maybeWikiArticleDebug: () => Option.none(),
+              maybeProfile: () => Option.none(),
             }),
         }),
   )
 }
+
+const showProfileStep = (handle: Handle) =>
+  makeStep((model) =>
+    Option.exists(model.maybeProfile, (profile) => profile.handle === handle)
+      ? { model }
+      : ProfileBinding.init({
+          key: handle,
+          args: [handle],
+          toParentModel: (child) =>
+            modifyFields(model, {
+              maybeWikiArticle: () => Option.none(),
+              maybeWikiArticleDebug: () => Option.none(),
+              maybeProfile: () => Option.some({ handle, model: child }),
+            }),
+        }),
+  )
 
 const showWikiArticleDebugStep = (
   wikiArticleId: (typeof ApplicationRoute.WikiArticleDebug.Type)["wikiArticleId"],
@@ -96,6 +117,7 @@ const showWikiArticleDebugStep = (
             modifyFields(model, {
               maybeWikiArticle: () => Option.none(),
               maybeWikiArticleDebug: () => Option.some({ wikiArticleId, model: child }),
+              maybeProfile: () => Option.none(),
             }),
         }),
   )
@@ -109,6 +131,7 @@ export const enterRouteStep = (route: ApplicationRoute) =>
     Search: ({ _tag, ...query }) =>
       Update.combineSteps([clearPagesStep, SearchBinding.informQueryChange({ query })]),
     WikiArticle: ({ kind, handle }) => showWikiArticleStep({ kind, handle }),
+    Profile: ({ handle }) => showProfileStep(handle),
     MyPlaces: () => showProfileLocationsEditorStep,
     ExternalDataAdminDashboard: (route) =>
       showExternalDataAdminDashboardStep(observationLogQueryOf(route)),

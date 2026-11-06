@@ -1,13 +1,9 @@
 import { Schema } from "effect"
 
 import { UrlAsString } from "../../common/primitives.js"
-import {
-  BookEdition,
-  ExternalDataProvider,
-  ExternalLink,
-  ExternalMedia,
-  GbifClassification,
-} from "./common.js"
+import { ExternalDataProvider, ExternalLink, ExternalMedia } from "./common.js"
+import { BookEdition } from "./kinds/book-external-data.js"
+import { GbifClassification } from "./kinds/plant-external-data.js"
 
 /** Credits a provider on an article's page, linking to where readers can check its data. */
 export const ExternalDataAttribution = Schema.Struct({

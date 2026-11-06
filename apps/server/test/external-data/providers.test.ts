@@ -4,9 +4,10 @@ import { GbifTaxonId, WikidataId } from "@gororobas/domain"
 import { assertProperty } from "@gororobas/domain/testing"
 import { GoogleBooksVolume } from "@gororobas/server/wiki/external-data/services/google-books.schema"
 import { WikidataEntity } from "@gororobas/server/wiki/external-data/services/wikidata.schema"
-import { Clock, Effect, Fiber, Schema } from "effect"
+import { Clock, Effect, Fiber, Option, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { HttpClient, HttpClientResponse, HttpClientError } from "effect/http"
+import sharp from "sharp"
 
 import { makeProviderHttp } from "../../src/common/generic-http-service.js"
 import { normalizeBookLanguage } from "../../src/wiki/external-data/kinds/book-fetcher.js"
@@ -24,6 +25,10 @@ import { makeGbif } from "../../src/wiki/external-data/services/gbif.js"
 import { GbifOccurrenceResult } from "../../src/wiki/external-data/services/gbif.schema.js"
 import { GoogleBooks } from "../../src/wiki/external-data/services/google-books.js"
 import { makeGoogleBooks } from "../../src/wiki/external-data/services/google-books.js"
+import {
+  ImageDimensions,
+  readImageDimensions,
+} from "../../src/wiki/external-data/services/image-dimensions.js"
 import { Wikidata } from "../../src/wiki/external-data/services/wikidata.js"
 import { makeWikidata } from "../../src/wiki/external-data/services/wikidata.js"
 
@@ -139,15 +144,21 @@ describe("external data providers", () => {
   it.live("extracts taxonomy and media while preserving individual rights", () =>
     Effect.gen(function* () {
       const provider = yield* makeGbif
+
       const result = yield* fetchPlantGbif({ kind: "deprecated-species", id: "2930137" }).pipe(
         Effect.provideService(Gbif, provider),
+        Effect.provideService(ImageDimensions, {
+          probe: () => Effect.succeedSome({ width: 800, height: 600 }),
+        }),
       )
+
       expect(result.gbifTaxonId).toBe("4Y369")
       expect(result.classification).toEqual([
         { taxonId: "6W", scientificName: "Solanaceae", taxonRank: "FAMILY" },
       ])
       expect(result.media[0]?.creditLine).toBe("Photographer · Institution")
       expect(result.media[0]?.licenseUrl).toBe("https://creativecommons.org/licenses/by/4.0/")
+      expect([result.media[0]?.width, result.media[0]?.height]).toEqual([800, 600])
     }).pipe(
       Effect.provideService(
         HttpClient.HttpClient,
@@ -780,6 +791,33 @@ describe("Google Books volumes", () => {
       }).volumeInfo.dimensions,
     ).toEqual({ height: "23 cm" })
   })
+})
+
+describe("external image dimensions", () => {
+  it.live("reads a photo's displayed dimensions from its first bytes, after EXIF rotation", () =>
+    Effect.gen(function* () {
+      const photo = yield* Effect.tryPromise(() =>
+        sharp({
+          create: {
+            width: 1200,
+            height: 600,
+            channels: 3,
+            background: "#6b8e23",
+            // Noise keeps the file far larger than the bytes read, like a real photo.
+            noise: { type: "gaussian", mean: 128, sigma: 30 },
+          },
+        })
+          .jpeg()
+          .withMetadata({ orientation: 6 })
+          .toBuffer(),
+      )
+
+      expect(yield* readImageDimensions(photo.subarray(0, 20_000))).toEqual(
+        Option.some({ width: 600, height: 1200 }),
+      )
+      expect(yield* readImageDimensions(new TextEncoder().encode("<html>"))).toEqual(Option.none())
+    }),
+  )
 })
 
 describe("GBIF taxon matching", () => {

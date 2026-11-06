@@ -263,3 +263,12 @@ export const bookmarkVocabularies: Readonly<Record<WikiArticleKind, BookmarkVoca
   ),
   UNCATEGORIZED: usageVocabulary,
 }
+
+/** A profile's bookmarks of every kind of article, grouped in words that suit them all. */
+export const profileBookmarkStateLabels: Readonly<
+  Record<Exclude<BookmarkState, "INDIFFERENT">, string>
+> = {
+  INTERESTED: "Interesses",
+  ACTIVE: "No dia a dia",
+  PREVIOUSLY_ACTIVE: "Já fez parte",
+}

@@ -12,6 +12,14 @@ import {
   ProfileNotFoundError,
 } from "./errors.js"
 import { ProfileLocationData, ProfileLocationPayload } from "./locations.js"
+import {
+  ProfileBookmark,
+  ProfileCollectionQuery,
+  ProfilePhotos,
+  ProfileWikiContribution,
+} from "./profile-page.js"
+
+const ProfileCollectionParams = Schema.Struct({ handle: Handle })
 
 export class ProfilesApiGroup extends HttpApiGroup.make("profiles")
   .add(
@@ -25,6 +33,29 @@ export class ProfilesApiGroup extends HttpApiGroup.make("profiles")
       success: ProfilePageData,
       error: [ProfileNotFoundError, UnauthorizedError],
       params: Schema.Struct({ handle: Handle }),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("listProfileBookmarks", "/profiles/:handle/bookmarks", {
+      success: Schema.Array(ProfileBookmark),
+      error: [ProfileNotFoundError, UnauthorizedError],
+      params: ProfileCollectionParams,
+      query: ProfileCollectionQuery,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("listProfileWikiContributions", "/profiles/:handle/wiki-contributions", {
+      success: Schema.Array(ProfileWikiContribution),
+      error: [ProfileNotFoundError, UnauthorizedError],
+      params: ProfileCollectionParams,
+      query: ProfileCollectionQuery,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("listProfilePhotos", "/profiles/:handle/photos", {
+      success: ProfilePhotos,
+      error: [ProfileNotFoundError, UnauthorizedError],
+      params: ProfileCollectionParams,
     }),
   )
   .add(

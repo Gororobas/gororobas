@@ -13,6 +13,7 @@ import {
   type ApplicationViewBuilder,
   AuthenticationBinding,
   ExternalDataAdminDashboardBinding,
+  ProfileBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
@@ -69,7 +70,7 @@ const navigationItems = (model: typeof Model.Type): ReadonlyArray<AppShell.Navig
     label: "Gente",
     href: searchUrl({ type: Option.some("people") }),
     icon: Icons.users,
-    isCurrent: isSearchType(model.route, "people"),
+    isCurrent: isSearchType(model.route, "people") || ApplicationRoute.guards.Profile(model.route),
   },
 ]
 
@@ -138,6 +139,21 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
               )
             : h.empty,
       }),
+    Profile: (route) =>
+      Option.match(model.maybeProfile, {
+        onNone: () => h.empty,
+        onSome: (profile) =>
+          profile.handle === route.handle
+            ? h.block(
+                ProfileBinding.embedView({
+                  key: profile.handle,
+                  slotId: "profile",
+                  model: profile.model,
+                  viewInputs: { tab: route.tab, maybeToday: model.maybeToday },
+                }),
+              )
+            : h.empty,
+      }),
     WikiArticleDebug: ({ wikiArticleId }) =>
       prose(
         Option.match(model.maybeWikiArticleDebug, {
@@ -197,6 +213,7 @@ const title = (route: ApplicationRoute): string =>
     Search: () => "Busca | Gororobas",
     WikiArticle: () => "Enciclopédia | Gororobas",
     WikiArticleDebug: () => "Depuração | Gororobas",
+    Profile: () => "Gente | Gororobas",
     Login: () => "Entrar | Gororobas",
     MyPlaces: () => "Meus lugares | Gororobas",
     ExternalDataAdminDashboard: () => "Dados externos | Gororobas",

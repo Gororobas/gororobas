@@ -3,7 +3,7 @@ import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option, Order, String as EffectString } from "effect"
 import type { Html } from "foldkit/html"
 
-import { aboutName } from "../../../lib/wiki-article-names"
+import { readerLanguage } from "../../../lib/reader-language"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
 import { styledAttributes } from "../../../ui/pleat-attributes"
@@ -20,6 +20,7 @@ import {
   externalLinkStyle,
   termStyle,
 } from "./attribution"
+import { fact } from "./overview/facts"
 import type { Page } from "./shared"
 
 type SectionState = Readonly<{ model: Model; page: Page }>
@@ -59,57 +60,63 @@ const languageName = (code: string): string =>
     Option.getOrElse(Option.fromNullishOr(languageNames.of(code)), () => code),
   )
 
-/** Portuguese first, then other languages alphabetically by their name. */
-const wikipediaOrder = Order.combine(
-  Order.mapInput(Order.Boolean, (link: ExternalLink) => link.language !== "pt"),
-  Order.mapInput(Order.String, (link: ExternalLink) => languageName(link.language)),
+const byLanguageName = Order.mapInput(Order.String, (link: ExternalLink) =>
+  languageName(link.language),
 )
 
-/** Where to read more about what the article is about, beside it. */
-export const wikipedia = (
-  { model, page }: SectionState,
+const wikipediaLink = (
+  { link, label }: Readonly<{ link: ExternalLink; label: string }>,
   h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> =>
-  EffectArray.match(EffectArray.sort(page.externalData.wikipediaLinks, wikipediaOrder), {
-    onEmpty: () => [],
-    onNonEmpty: (links) => [
-      SectionCard.view(
-        {
-          title: "Na Wikipédia",
-          icon: Icons.globe,
-          actions: attribution({ model, page, section: "Wikipedia" }, h),
-          children: [
-            AppText.view(
+): Html =>
+  h.keyed("a")(
+    link.language,
+    styledAttributes(
+      [...externalLinkAttributes(link.url, h), h.Attribute("hreflang", link.language)],
+      languageLinkStyle,
+    ),
+    [label, Icons.arrowRight({ size: "sm" })],
+  )
+
+/**
+ * Where to read more, in the overview: the reader's language when Wikipedia has it, or else every
+ * language it has, by name.
+ */
+export const wikipediaFact = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> => {
+  const links = page.externalData.wikipediaLinks
+
+  return Option.match(
+    EffectArray.findFirst(links, (link) => link.language === readerLanguage),
+    {
+      onSome: (link) => [
+        fact(
+          { title: "Wikipédia", content: wikipediaLink({ link, label: "Ler na Wikipédia" }, h) },
+          h,
+        ),
+      ],
+      onNone: () =>
+        EffectArray.match(EffectArray.sort(links, byLanguageName), {
+          onEmpty: () => [],
+          onNonEmpty: (others) => [
+            fact(
               {
-                element: "p",
-                appearance: "footnote",
-                isMuted: true,
-                children: [`Leia mais sobre ${aboutName(page)} na enciclopédia livre.`],
+                title: "Wikipédia",
+                maybeDescription: Option.some(
+                  `Ainda sem artigo em ${languageName(readerLanguage)}`,
+                ),
+                content: h.div(
+                  styledAttributes([], linkListStyle),
+                  others.map((link) =>
+                    wikipediaLink({ link, label: languageName(link.language) }, h),
+                  ),
+                ),
               },
               h,
             ),
-            h.div(
-              styledAttributes([], linkListStyle),
-              links.map((link) =>
-                h.keyed("a")(
-                  link.language,
-                  styledAttributes(
-                    [
-                      ...externalLinkAttributes(link.url, h),
-                      h.Attribute("hreflang", link.language),
-                    ],
-                    languageLinkStyle,
-                  ),
-                  [languageName(link.language), Icons.arrowRight({ size: "sm" })],
-                ),
-              ),
-            ),
           ],
-        },
-        h,
-      ),
-    ],
-  })
+        }),
+    },
+  )
+}
 
 const editionDetails = (edition: BookEdition): ReadonlyArray<readonly [string, string]> => [
   ...(edition.publisher === null ? [] : [["Editora", edition.publisher] as const]),

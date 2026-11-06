@@ -3,6 +3,7 @@ import { modifyFields } from "foldkit/struct"
 
 import { AuthenticationBlock } from "../blocks/authentication"
 import { ExternalDataAdminDashboardBlock } from "../blocks/external-data-admin-dashboard"
+import { ProfileBlock } from "../blocks/profile"
 import { ProfileLocationsEditorBlock } from "../blocks/profile-locations-editor"
 import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
@@ -46,6 +47,17 @@ export const WikiArticleDebugBinding = ApplicationBlock.makeBinding(WikiArticleD
   subscriptions: { when: (model, wikiArticleId) => isDebugRouteFor(model.route, wikiArticleId) },
 })
 
+const isProfileRouteFor = (route: ApplicationRoute, handle: string) =>
+  ApplicationRoute.guards.Profile(route) && route.handle === handle
+
+export const ProfileBinding = ApplicationBlock.makeBinding(ProfileBlock, {
+  field: "maybeProfile",
+  key: "handle",
+  childField: "model",
+  delivery: { when: (model, handle) => isProfileRouteFor(model.route, handle) },
+  subscriptions: { when: (model, handle) => isProfileRouteFor(model.route, handle) },
+})
+
 export const ExternalDataAdminDashboardBinding = ApplicationBlock.makeBinding(
   ExternalDataAdminDashboardBlock,
   {
@@ -84,6 +96,7 @@ export const ApplicationComposition = ApplicationBlock.makeComposition({
     SearchBinding,
     WikiArticleBinding,
     WikiArticleDebugBinding,
+    ProfileBinding,
     ProfileLocationsEditorBinding,
     ExternalDataAdminDashboardBinding,
   ],

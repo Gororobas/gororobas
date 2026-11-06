@@ -20,6 +20,7 @@ export * from "./places/domain.js"
 export * from "./places/geometry.js"
 export * from "./profiles/domain.js"
 export * from "./profiles/locations.js"
+export * from "./profiles/profile-page.js"
 export * from "./publications/domain.js"
 export * from "./wiki/domain.js"
 

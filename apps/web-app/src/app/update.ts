@@ -1,13 +1,14 @@
 import { Option } from "effect"
 import { Update } from "foldkit"
 import { UrlRequest } from "foldkit/navigation"
+import { modifyFields } from "foldkit/struct"
 import { toString as urlToString } from "foldkit/url"
 
 import { changeRouteStep } from "./change-route"
-import { LoadExternal, NavigateInternal } from "./command"
+import { FocusSearchField, LoadExternal, NavigateInternal } from "./command"
 import { ApplicationComposition, ProfileLocationsEditorBinding, SearchBinding } from "./composition"
 import { makeCommandsStep, makeFieldsStep, makeNoopStep } from "./definition"
-import { ApplicationRoute, searchQueryOf, urlToApplicationRoute } from "./route"
+import { ApplicationRoute, searchQueryOf, searchUrl, urlToApplicationRoute } from "./route"
 
 export const update = ApplicationComposition.makeUpdate({
   ClickedLink: (model, { request }) =>
@@ -30,6 +31,14 @@ export const update = ApplicationComposition.makeUpdate({
         Update.combineSteps([makeCommandsStep(() => [LoadExternal({ href })])])(model),
     }),
   ClickedSearchLink: makeFieldsStep(() => ({ isSearchFieldFocusPending: () => true })),
+  /** Focuses search where it is, or opens it with its field focused. */
+  PressedSearchShortcut: (model) =>
+    ApplicationRoute.guards.Search(model.route)
+      ? { model, commands: [FocusSearchField()] }
+      : {
+          model: modifyFields(model, { isSearchFieldFocusPending: () => true }),
+          commands: [NavigateInternal({ url: searchUrl() })],
+        },
   ChangedUrl: (model, { url }) => changeRouteStep(url)(model),
   CompletedFocusSearchField: makeNoopStep(),
   CompletedNavigateInternal: makeNoopStep(),

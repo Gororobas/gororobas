@@ -593,6 +593,8 @@ CREATE TABLE wiki_article_external_media (
   source_url text NOT NULL,
   credit_line text NOT NULL,
   license_url text,
+  width integer,
+  height integer,
   PRIMARY KEY (wiki_article_id, media_url)
 );
 

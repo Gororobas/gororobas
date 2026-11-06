@@ -8,6 +8,7 @@ import { wikiArticleUrl } from "../../../app/route"
 import { inPreposition, primaryName } from "../../../lib/wiki-article-names"
 import { AppButton } from "../../../ui/app-button"
 import { AppText } from "../../../ui/app-text"
+import { EmptyState } from "../../../ui/empty-state"
 import * as Icons from "../../../ui/icons"
 import * as PlaceOutline from "../../../ui/place-outline/view"
 import { styledAttributes } from "../../../ui/pleat-attributes"
@@ -17,7 +18,7 @@ import { radius, space, toneColors, tones } from "../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
 import type { Model } from "../model"
-import { type Page, asyncView, emptyState } from "./shared"
+import { type Page, asyncView } from "./shared"
 
 type PlacePage = Extract<Page, { kind: "PLACE" }>
 
@@ -122,12 +123,17 @@ export const view = (
               asyncView(
                 {
                   asyncData: model.childPlacesAsyncData,
+                  loading: { label: "Carregando lugares", shape: "rows" },
                   onData: ({ places, totalCount }) =>
                     h.div(
                       [],
                       [
                         EffectArray.match(places, {
-                          onEmpty: () => emptyState("Nenhum lugar por aqui ainda.", h),
+                          onEmpty: () =>
+                            EmptyState.view(
+                              { icon: Icons.mapPoint, title: "Nenhum lugar por aqui ainda" },
+                              h,
+                            ),
                           onNonEmpty: (shown) =>
                             h.div(
                               styledAttributes([], gridStyle),

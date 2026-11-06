@@ -17,6 +17,7 @@ export const init = ApplicationComposition.makeInit((url: Url) => {
       deviceLocation: DeviceLocation.Unrequested(),
       maybeWikiArticle: Option.none(),
       maybeWikiArticleDebug: Option.none(),
+      maybeProfile: Option.none(),
       maybeProfileLocationsEditor: Option.none(),
       maybeExternalDataAdminDashboard: Option.none(),
       isSearchFieldFocusPending: false,
