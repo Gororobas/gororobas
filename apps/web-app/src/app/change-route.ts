@@ -1,12 +1,12 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { Handle } from "@gororobas/domain/common/primitives"
 import type { WikiArticleKind } from "@gororobas/domain/wiki/domain"
-import { Option } from "effect"
+import { Array as EffectArray, Option } from "effect"
 import { Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { Url } from "foldkit/url"
 
-import { FocusSearchField, LoadTranslations, ReplaceUrl } from "./command"
+import { FocusSearchField, LoadTranslations, ReplaceUrl, SaveLanguagePreference } from "./command"
 import {
   AuthenticationBinding,
   ExternalDataAdminDashboardBinding,
@@ -15,9 +15,10 @@ import {
   SearchBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
+  profileKey,
   wikiArticleKey,
 } from "./composition"
-import { makeCommandsStep, makeFieldsStep, makeStep } from "./definition"
+import { makeCommandsStep, makeFieldsStep, makeNoopStep, makeStep } from "./definition"
 import {
   ApplicationRoute,
   type ObservationLogQuery,
@@ -71,40 +72,41 @@ const showProfileLocationsEditorStep = makeStep((model) =>
   }),
 )
 
-const showWikiArticleStep = (lookup: Readonly<{ kind: WikiArticleKind; handle: Handle }>) => {
-  const articleKey = wikiArticleKey(lookup)
+const showWikiArticleStep = (lookup: Readonly<{ kind: WikiArticleKind; handle: Handle }>) =>
+  makeStep((model) => {
+    const articleKey = wikiArticleKey(model.language, lookup)
 
-  return makeStep((model) =>
-    Option.exists(model.maybeWikiArticle, (article) => article.articleKey === articleKey)
+    return Option.exists(model.maybeWikiArticle, (article) => article.articleKey === articleKey)
       ? { model }
       : WikiArticleBinding.init({
           key: articleKey,
-          args: [{ kind: lookup.kind, handle: lookup.handle }],
+          args: [{ kind: lookup.kind, handle: lookup.handle }, model.language],
           toParentModel: (child) =>
             modifyFields(model, {
               maybeWikiArticle: () => Option.some({ articleKey, model: child }),
               maybeWikiArticleDebug: () => Option.none(),
               maybeProfile: () => Option.none(),
             }),
-        }),
-  )
-}
+        })
+  })
 
 const showProfileStep = (handle: Handle) =>
-  makeStep((model) =>
-    Option.exists(model.maybeProfile, (profile) => profile.handle === handle)
+  makeStep((model) => {
+    const key = profileKey(model.language, handle)
+
+    return Option.exists(model.maybeProfile, (profile) => profile.profileKey === key)
       ? { model }
       : ProfileBinding.init({
-          key: handle,
-          args: [handle],
+          key,
+          args: [handle, model.language],
           toParentModel: (child) =>
             modifyFields(model, {
               maybeWikiArticle: () => Option.none(),
               maybeWikiArticleDebug: () => Option.none(),
-              maybeProfile: () => Option.some({ handle, model: child }),
+              maybeProfile: () => Option.some({ profileKey: key, model: child }),
             }),
-        }),
-  )
+        })
+  })
 
 const showWikiArticleDebugStep = (
   wikiArticleId: (typeof ApplicationRoute.WikiArticleDebug.Type)["wikiArticleId"],
@@ -124,14 +126,22 @@ const showWikiArticleDebugStep = (
         }),
   )
 
-/** Prepares the page a route shows, keeping it when the route still shows the same one. */
+/**
+ * Prepares the page a route shows in the app's language, keeping it when the route still shows the
+ * same one.
+ */
 export const enterRouteStep = (route: ApplicationRoute) =>
   ApplicationRoute.match(route, {
     WikiArticleDebug: ({ wikiArticleId }) => showWikiArticleDebugStep(wikiArticleId),
     Login: () =>
       Update.combineSteps([clearPagesStep, AuthenticationBinding.requestRestoreSession()]),
-    Search: ({ _tag, ...query }) =>
-      Update.combineSteps([clearPagesStep, SearchBinding.informQueryChange({ query })]),
+    Search: ({ query }) =>
+      Update.combineSteps([
+        clearPagesStep,
+        makeStep((model) =>
+          SearchBinding.informQueryChange({ search: { query, language: model.language } }),
+        ),
+      ]),
     WikiArticle: ({ kind, handle }) => showWikiArticleStep({ kind, handle }),
     Profile: ({ handle }) => showProfileStep(handle),
     MyPlaces: () => showProfileLocationsEditorStep,
@@ -150,7 +160,10 @@ const consumeSearchFieldFocusStep = (route: ApplicationRoute) =>
         : [],
   }))
 
-/** The app keeps rendering its current language until the URL's has loaded. */
+/**
+ * The app keeps rendering its current language until the URL's has loaded. Content then loads in
+ * the new language, so pages enter their route once the request settles, not before.
+ */
 const requestLanguageStep = (language: SupportedLanguage) =>
   makeStep((model) => {
     if (language === model.language) {
@@ -172,6 +185,42 @@ const requestLanguageStep = (language: SupportedLanguage) =>
     }
   })
 
+/**
+ * Settles the latest language request, entering the route it held back. A slower, earlier request
+ * finishing after a newer one must not switch the app back, and a failed one leaves the app readable
+ * in its current language: following a language link again retries.
+ */
+export const settleLanguageRequestStep = ({
+  requestNumber,
+  maybeLoadedLanguage,
+}: Readonly<{ requestNumber: number; maybeLoadedLanguage: Option.Option<SupportedLanguage> }>) =>
+  makeStep((model) =>
+    Option.exists(model.maybeLanguageRequest, (request) => request.number === requestNumber)
+      ? Update.combineSteps([
+          makeFieldsStep(() => ({
+            language: (current) => Option.getOrElse(maybeLoadedLanguage, () => current),
+            maybeLanguageRequest: () => Option.none(),
+            maybeUnavailableLanguage: () =>
+              Option.isSome(maybeLoadedLanguage)
+                ? Option.none()
+                : Option.map(model.maybeLanguageRequest, (request) => request.language),
+          })),
+          makeCommandsStep(() =>
+            EffectArray.fromOption(
+              Option.map(maybeLoadedLanguage, (language) => SaveLanguagePreference({ language })),
+            ),
+          ),
+          enterRouteStep(model.route),
+        ])
+      : makeNoopStep(),
+  )
+
+/** Enters the route unless its language is still loading, which enters it when it settles. */
+const enterRouteUnlessLoadingStep = (route: ApplicationRoute) =>
+  makeStep((model) =>
+    Option.isSome(model.maybeLanguageRequest) ? makeNoopStep() : enterRouteStep(route),
+  )
+
 export const changeRouteStep = (url: Url) => {
   const { maybeLanguage, route } = urlToLocatedRoute(url)
 
@@ -182,7 +231,7 @@ export const changeRouteStep = (url: Url) => {
       Update.combineSteps([
         makeFieldsStep(() => ({ route: () => route })),
         requestLanguageStep(language),
-        enterRouteStep(route),
+        enterRouteUnlessLoadingStep(route),
         consumeSearchFieldFocusStep(route),
       ]),
   })

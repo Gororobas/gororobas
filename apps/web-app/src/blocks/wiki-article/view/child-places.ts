@@ -1,12 +1,14 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { WikiChildPlace } from "@gororobas/domain/wiki/domain"
+import { msg, plural, select } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { wikiArticleUrl } from "../../../app/route"
-import { inPreposition, primaryName } from "../../../lib/wiki-article-names"
+import { translatorFor } from "../../../lib/translations"
+import { nameParts, primaryName } from "../../../lib/wiki-article-names"
 import { AppButton } from "../../../ui/app-button"
 import { AppText } from "../../../ui/app-text"
 import { EmptyState } from "../../../ui/empty-state"
@@ -80,6 +82,7 @@ const childCard = (
               geometry: outline.geometry,
               boundingBox: outline.boundingBox,
               label: name,
+              i18n: translatorFor(language),
               ...(page.map === null
                 ? {}
                 : {
@@ -98,8 +101,6 @@ const childCard = (
   )
 }
 
-const countLabel = (count: number): string => (count === 1 ? "1 lugar" : `${count} lugares`)
-
 /**
  * The places inside a place, each a card with its outline. They load a page at a time, since a
  * state can hold hundreds of municipalities. Only shown when the place has some.
@@ -112,6 +113,8 @@ export const view = (
     return []
   }
 
+  const i18n = translatorFor(language)
+  const { name, gender } = nameParts(page)
   const hasNone = Option.exists(
     AsyncData.getData(model.childPlacesAsyncData),
     (loaded) => loaded.totalCount === 0,
@@ -122,21 +125,24 @@ export const view = (
     : [
         SectionCard.view(
           {
-            title: `Lugares ${inPreposition(page)} ${primaryName(page)}`,
+            title: i18n._(msg`${select(gender, { other: `Places in ${name}` })}`),
             icon: Icons.mapPoint,
             children: [
               asyncView(
                 {
+                  i18n,
                   asyncData: model.childPlacesAsyncData,
-                  loading: { label: "Carregando lugares", shape: "rows" },
-                  onData: ({ places, totalCount }) =>
-                    h.div(
+                  loading: { label: i18n._(msg`Loading places`), shape: "rows" },
+                  onData: ({ places, totalCount }) => {
+                    const shownCount = places.length
+
+                    return h.div(
                       [],
                       [
                         EffectArray.match(places, {
                           onEmpty: () =>
                             EmptyState.view(
-                              { icon: Icons.mapPoint, title: "Nenhum lugar por aqui ainda" },
+                              { icon: Icons.mapPoint, title: i18n._(msg`No places here yet`) },
                               h,
                             ),
                           onNonEmpty: (shown) =>
@@ -154,7 +160,12 @@ export const view = (
                                     appearance: "footnote",
                                     isMuted: true,
                                     children: [
-                                      `Mostrando ${places.length} de ${countLabel(totalCount)}`,
+                                      i18n._(
+                                        msg`${plural(totalCount, {
+                                          one: `Showing ${shownCount} of # place`,
+                                          other: `Showing ${shownCount} of # places`,
+                                        })}`,
+                                      ),
                                     ],
                                   },
                                   h,
@@ -166,8 +177,8 @@ export const view = (
                                     isDisabled: AsyncData.isRefreshing(model.childPlacesAsyncData),
                                     children: [
                                       AsyncData.isRefreshing(model.childPlacesAsyncData)
-                                        ? "Carregando…"
-                                        : "Mostrar mais lugares",
+                                        ? i18n._(msg`Loading…`)
+                                        : i18n._(msg`Show more places`),
                                     ],
                                   },
                                   h,
@@ -176,7 +187,8 @@ export const view = (
                             ]
                           : []),
                       ],
-                    ),
+                    )
+                  },
                 },
                 h,
               ),

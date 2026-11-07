@@ -1,3 +1,4 @@
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { WikiArticleLookup } from "@gororobas/domain/wiki/domain"
 import { Schema } from "effect"
 import { Block } from "foldkit"
@@ -12,7 +13,7 @@ export const WikiArticleKey = Symbol("WikiArticle")
 
 export const WikiArticleBlock = Block.make("WikiArticle", {
   key: WikiArticleKey,
-  Init: Schema.Tuple([WikiArticleLookup]),
+  Init: Schema.Tuple([WikiArticleLookup, SupportedLanguage]),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
   effects: { services: [GororobasApiClient, SessionAccess] },
   Model,

@@ -12,9 +12,16 @@ import {
 } from "./command"
 import { AuthenticationComposition } from "./composition"
 import { RestoredSession } from "./message"
-import { type PendingCode, awaitingCode, enteringEmail, isSignedIn, signedIn } from "./model"
+import {
+  type AuthenticationNotice,
+  type PendingCode,
+  awaitingCode,
+  enteringEmail,
+  isSignedIn,
+  signedIn,
+} from "./model"
 
-const sentCode = (pending: PendingCode, notice?: string) => ({
+const sentCode = (pending: PendingCode, notice?: AuthenticationNotice) => ({
   model: {
     stage: awaitingCode({ pending, canResend: false, ...(notice === undefined ? {} : { notice }) }),
   },
@@ -114,10 +121,7 @@ export const update = AuthenticationComposition.makeUpdate({
       }),
       FailedLink: () => ({
         model: {
-          stage: enteringEmail(
-            "",
-            "Esse link não funcionou. Ele pode ter expirado ou sido aberto em outro navegador. Digite seu email para receber um novo.",
-          ),
+          stage: enteringEmail("", "LinkFailed"),
         },
       }),
     }),
@@ -127,9 +131,7 @@ export const update = AuthenticationComposition.makeUpdate({
       ? { model: { stage: { ...model.stage, isSending: false, error } } }
       : { model },
   SucceededResendCode: (model, { pending }) =>
-    Predicate.isTagged(model.stage, "AwaitingCode")
-      ? sentCode(pending, "Enviamos um novo email. Os códigos anteriores não funcionam mais.")
-      : { model },
+    Predicate.isTagged(model.stage, "AwaitingCode") ? sentCode(pending, "CodeResent") : { model },
   FailedResendCode: (model, { error }) =>
     Predicate.isTagged(model.stage, "AwaitingCode")
       ? { model: { stage: { ...model.stage, isBusy: false, notice: error } } }

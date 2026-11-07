@@ -5,7 +5,7 @@ import { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import { Schema } from "effect"
 import { AsyncData } from "foldkit"
 
-import { SearchQuery } from "../../app/route"
+import { AnsweredSearch } from "../../app/search-query"
 import { ClientFailure } from "../../lib/client-failure"
 import { RecentSearches } from "../../lib/recent-searches"
 import { ViewerBookmarks } from "../../lib/viewer-bookmarks"
@@ -19,8 +19,8 @@ export const PublicationResults = AsyncData.Schema(
 export const ProfileResults = AsyncData.Schema(Schema.Array(ProfileCardData), ClientFailure)
 
 export const Model = Schema.Struct({
-  /** The query the results answer. The URL holds the query being shown. */
-  maybeAnsweredQuery: Schema.Option(SearchQuery),
+  /** The search the results answer. The URL holds the query being shown. */
+  maybeAnsweredSearch: Schema.Option(AnsweredSearch),
   wikiAsyncData: WikiResults.schema,
   publicationsAsyncData: PublicationResults.schema,
   profilesAsyncData: ProfileResults.schema,

@@ -10,7 +10,9 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Language fallback**: when content isn't available in the requested language, readers fall back to the requested language, then Portuguese, Spanish and English (`languageFallbackOrder`). SQL readers sort by the same order with `orderByLanguagePreference`.
 
-**Interface language**: the `SupportedLanguage` a person reads the web app in, the first segment of every path (`/pt/gente`, `/en/people`). It's a language, never a locale: there is no geographic localization, and Intl gets regional tags (`pt-BR`, `es-419`, `en-US`) from `intlTags`. Paths without one redirect to the detected language: the saved preference, then the browser's, then Portuguese.
+**Interface language**: the `SupportedLanguage` a person reads the web app in, the first segment of every path (`/pt/gente`, `/en/people`). It's a language, never a locale: there is no geographic localization, and Intl gets regional tags (`pt-BR`, `es-419`, `en-US`) from `intlTags`. Paths without one redirect to the detected language: the saved preference, then the browser's, then the default, the first `SupportedLanguage` (English). Content loads in the interface language, falling back through `languageFallbackOrder` when it has no translation.
+
+**Search scope**: what a search covers (`SearchScope` in `apps/web-app/src/app/search-query.ts`): everything, or one type of result with only the filters that type offers. A wiki scope may name an article kind, which carries that kind's filters, so a plant's planting methods can't be set on a book search. URLs keep it as flat, localized parameters (`?secao=enciclopedia&tipo=vegetais`), and parameters the scope doesn't offer read as absent.
 
 **Evaluation**: a moderator's verdict on a pending wiki revision: `PENDING`, `APPROVED` or `REJECTED` (`RevisionEvaluation`). The API payload, the TypeScript input and the `evaluation` column all use this name.
 

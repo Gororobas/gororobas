@@ -4,7 +4,7 @@ import { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 
-import { SearchQuery } from "../../app/route"
+import { SearchQuery } from "../../app/search-query"
 import { ClientFailure } from "../../lib/client-failure"
 import { RecentSearches } from "../../lib/recent-searches"
 import { ViewerBookmarks } from "../../lib/viewer-bookmarks"

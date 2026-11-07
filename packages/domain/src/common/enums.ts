@@ -4,7 +4,11 @@
  */
 import { Schema } from "effect"
 
-export const SupportedLanguage = Schema.Literals(["pt", "es", "en"])
+/**
+ * Order matters: the first language is the web app's default, and content falls back through the
+ * others in this order when the requested language is missing.
+ */
+export const SupportedLanguage = Schema.Literals(["en", "pt", "es"])
 export type SupportedLanguage = typeof SupportedLanguage.Type
 
 export const TrustedAccessLevel = Schema.Literals([

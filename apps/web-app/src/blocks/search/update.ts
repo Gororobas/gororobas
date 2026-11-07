@@ -3,7 +3,8 @@ import { Array as EffectArray, Option, Schema } from "effect"
 import { AsyncData } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
-import { SearchQuery, type SearchType } from "../../app/route"
+import { AnsweredSearch, type SearchQuery, type SearchType } from "../../app/search-query"
+import { scopeType } from "../../app/search-query"
 import type { ClientFailure } from "../../lib/client-failure"
 import { addRecentSearch } from "../../lib/recent-searches"
 import { NavigateSearch, SaveRecentSearches } from "./command"
@@ -12,7 +13,7 @@ import { makeFieldsStep } from "./definition"
 import { isResultTypeShown } from "./filters"
 import { type Model, ProfileResults, PublicationResults, WikiResults } from "./model"
 
-const isSameQuery = Schema.toEquivalence(SearchQuery)
+const isSameSearch = Schema.toEquivalence(AnsweredSearch)
 
 /** Keeps showing earlier results while the new ones load. */
 const pending = <A>(
@@ -37,7 +38,7 @@ const pendingIfShown = <A>({
 const remember = (model: Model, query: SearchQuery): Model["recentSearches"] =>
   Option.match(query.text, {
     onNone: () => model.recentSearches,
-    onSome: (text) => addRecentSearch(model.recentSearches, { text, type: query.type }),
+    onSome: (text) => addRecentSearch(model.recentSearches, { text, type: scopeType(query.scope) }),
   })
 
 /** Records the query and saves the history, when the query adds to it. */
@@ -53,16 +54,18 @@ const rememberStep = (model: Model, query: SearchQuery) => {
 }
 
 export const inMessageUpdate = SearchComposition.makeInMessageUpdate({
-  InformedOfQueryChange: (model, { query }) =>
-    Option.exists(model.maybeAnsweredQuery, (answered) => isSameQuery(answered, query))
+  InformedOfQueryChange: (model, { search }) =>
+    Option.exists(model.maybeAnsweredSearch, (answered) => isSameSearch(answered, search))
       ? { model }
       : {
           model: modifyFields(model, {
-            maybeAnsweredQuery: () => Option.some(query),
-            wikiAsyncData: (asyncData) => pendingIfShown({ query, type: "wiki", asyncData }),
+            maybeAnsweredSearch: () => Option.some(search),
+            wikiAsyncData: (asyncData) =>
+              pendingIfShown({ query: search.query, type: "wiki", asyncData }),
             publicationsAsyncData: (asyncData) =>
-              pendingIfShown({ query, type: "publications", asyncData }),
-            profilesAsyncData: (asyncData) => pendingIfShown({ query, type: "people", asyncData }),
+              pendingIfShown({ query: search.query, type: "publications", asyncData }),
+            profilesAsyncData: (asyncData) =>
+              pendingIfShown({ query: search.query, type: "people", asyncData }),
           }),
         },
   InformedOfOpenedResult: (model, { query }) => rememberStep(model, query),

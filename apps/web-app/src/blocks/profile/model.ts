@@ -1,4 +1,4 @@
-import { BookmarkState, PublicationKind } from "@gororobas/domain/common/enums"
+import { BookmarkState, PublicationKind, SupportedLanguage } from "@gororobas/domain/common/enums"
 import { Handle } from "@gororobas/domain/common/primitives"
 import { CreditedMediaAssetRow } from "@gororobas/domain/media-assets/domain"
 import { ProfilePageData } from "@gororobas/domain/profiles/domain"
@@ -23,6 +23,8 @@ export const BookmarkResults = AsyncData.Schema(Schema.Array(ProfileBookmark), C
 
 export const Model = Schema.Struct({
   handle: Handle,
+  /** The language its content loads in, which is the app's. */
+  language: SupportedLanguage,
   pageAsyncData: PageResult.schema,
   /** Loads once the page has, as publications are found by the profile's ID. */
   publicationsAsyncData: PublicationResults.schema,

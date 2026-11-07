@@ -3,7 +3,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 
 import { SessionState } from "../../session-access"
-import { PendingCode } from "./model"
+import { AuthenticationNotice, PendingCode } from "./model"
 
 export const RestoredSession = defineTaggedUnion({
   SignedOut: {},
@@ -28,14 +28,14 @@ export const Message = defineMessageUnion({
   ChangedSessionAccess: { state: SessionState },
   ChangedConnection: {},
   SucceededSendCode: { pending: PendingCode },
-  FailedSendCode: { error: Schema.String },
+  FailedSendCode: { error: AuthenticationNotice },
   SucceededResendCode: { pending: PendingCode },
-  FailedResendCode: { error: Schema.String },
+  FailedResendCode: { error: AuthenticationNotice },
   CompletedWaitForResendCooldown: { sentAt: Schema.Finite },
   SucceededVerifyCode: { name: Schema.NullOr(Schema.String) },
-  FailedVerifyCode: { error: Schema.String },
+  FailedVerifyCode: { error: AuthenticationNotice },
   SucceededCompleteOnboarding: { name: Schema.String },
-  FailedCompleteOnboarding: { error: Schema.String },
+  FailedCompleteOnboarding: { error: AuthenticationNotice },
   SucceededSignOut: {},
   FailedSignOut: {},
 })

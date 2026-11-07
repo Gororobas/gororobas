@@ -1,10 +1,9 @@
-import { BookmarkState } from "@gororobas/domain/common/enums"
+import { BookmarkState, SupportedLanguage } from "@gororobas/domain/common/enums"
 import { WikiArticleId } from "@gororobas/domain/common/ids"
 import { WikiArticleLookup } from "@gororobas/domain/wiki/domain"
 import { Effect, Function, Layer, Option, Schema } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
-import { readerLanguage } from "../../lib/reader-language"
 import { WikiArticleBlock } from "./definition"
 import { Message } from "./message"
 
@@ -15,42 +14,38 @@ export const CHILD_PLACES_PAGE_SIZE = 24
 const PUBLICATIONS_IN_ARTICLE_PAGE_SIZE = 30
 
 export const LoadPage = WikiArticleBlock.makeCommand("LoadPage", {
-  args: { lookup: WikiArticleLookup },
+  args: { lookup: WikiArticleLookup, language: SupportedLanguage },
   messages: [Message.SucceededLoadPage, Message.FailedLoadPage],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return ({ lookup }) =>
-      api.wiki
-        .getWikiArticleByHandleAndKind({ params: lookup, query: { language: readerLanguage } })
-        .pipe(
-          Effect.map((page) => Message.SucceededLoadPage({ page })),
-          Effect.catchTag("WikiArticleNotFoundError", () =>
-            Effect.succeed(Message.FailedLoadPage({ error: { cause: "NotFound" } })),
-          ),
-          Effect.match({
-            onFailure: (error) => Message.FailedLoadPage({ error: { cause: error } }),
-            onSuccess: Function.identity,
-          }),
-        )
+    return ({ lookup, language }) =>
+      api.wiki.getWikiArticleByHandleAndKind({ params: lookup, query: { language } }).pipe(
+        Effect.map((page) => Message.SucceededLoadPage({ page })),
+        Effect.catchTag("WikiArticleNotFoundError", () =>
+          Effect.succeed(Message.FailedLoadPage({ error: { cause: "NotFound" } })),
+        ),
+        Effect.match({
+          onFailure: (error) => Message.FailedLoadPage({ error: { cause: error } }),
+          onSuccess: Function.identity,
+        }),
+      )
   },
 })
 
 export const LoadRelated = WikiArticleBlock.makeCommand("LoadRelated", {
-  args: { lookup: WikiArticleLookup },
+  args: { lookup: WikiArticleLookup, language: SupportedLanguage },
   messages: [Message.SucceededLoadRelated, Message.FailedLoadRelated],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return ({ lookup }) =>
-      api.wiki
-        .listRelatedWikiArticles({ params: lookup, query: { language: readerLanguage } })
-        .pipe(
-          Effect.match({
-            onFailure: (error) => Message.FailedLoadRelated({ error: { cause: error } }),
-            onSuccess: (articles) => Message.SucceededLoadRelated({ articles }),
-          }),
-        )
+    return ({ lookup, language }) =>
+      api.wiki.listRelatedWikiArticles({ params: lookup, query: { language } }).pipe(
+        Effect.match({
+          onFailure: (error) => Message.FailedLoadRelated({ error: { cause: error } }),
+          onSuccess: (articles) => Message.SucceededLoadRelated({ articles }),
+        }),
+      )
   },
 })
 
@@ -87,34 +82,32 @@ export const LoadContributors = WikiArticleBlock.makeCommand("LoadContributors",
 })
 
 export const LoadCultivars = WikiArticleBlock.makeCommand("LoadCultivars", {
-  args: { lookup: WikiArticleLookup },
+  args: { lookup: WikiArticleLookup, language: SupportedLanguage },
   messages: [Message.SucceededLoadCultivars, Message.FailedLoadCultivars],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return ({ lookup }) =>
-      api.wiki
-        .listWikiArticleCultivars({ params: lookup, query: { language: readerLanguage } })
-        .pipe(
-          Effect.match({
-            onFailure: (error) => Message.FailedLoadCultivars({ error: { cause: error } }),
-            onSuccess: (cultivars) => Message.SucceededLoadCultivars({ cultivars }),
-          }),
-        )
+    return ({ lookup, language }) =>
+      api.wiki.listWikiArticleCultivars({ params: lookup, query: { language } }).pipe(
+        Effect.match({
+          onFailure: (error) => Message.FailedLoadCultivars({ error: { cause: error } }),
+          onSuccess: (cultivars) => Message.SucceededLoadCultivars({ cultivars }),
+        }),
+      )
   },
 })
 
 export const LoadChildPlaces = WikiArticleBlock.makeCommand("LoadChildPlaces", {
-  args: { lookup: WikiArticleLookup, currentPage: Schema.Int },
+  args: { lookup: WikiArticleLookup, language: SupportedLanguage, currentPage: Schema.Int },
   messages: [Message.SucceededLoadChildPlaces, Message.FailedLoadChildPlaces],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return ({ lookup, currentPage }) =>
+    return ({ lookup, language, currentPage }) =>
       api.wiki
         .listWikiArticleChildPlaces({
           params: lookup,
-          query: { language: readerLanguage, pageSize: CHILD_PLACES_PAGE_SIZE, currentPage },
+          query: { language, pageSize: CHILD_PLACES_PAGE_SIZE, currentPage },
         })
         .pipe(
           Effect.match({
@@ -126,17 +119,17 @@ export const LoadChildPlaces = WikiArticleBlock.makeCommand("LoadChildPlaces", {
 })
 
 export const LoadPublications = WikiArticleBlock.makeCommand("LoadPublications", {
-  args: { wikiArticleId: WikiArticleId },
+  args: { wikiArticleId: WikiArticleId, language: SupportedLanguage },
   messages: [Message.SucceededLoadPublications, Message.FailedLoadPublications],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return ({ wikiArticleId }) =>
+    return ({ wikiArticleId, language }) =>
       api.publications
         .searchPublications({
           query: {
             wikiArticleId,
-            language: readerLanguage,
+            language,
             pageSize: PUBLICATIONS_IN_ARTICLE_PAGE_SIZE,
             currentPage: 0,
           },
@@ -162,8 +155,7 @@ export const SaveBookmark = WikiArticleBlock.makeCommand("SaveBookmark", {
         onSome: (state) => api.wiki.setWikiArticleBookmark({ params: lookup, payload: { state } }),
       }).pipe(
         Effect.match({
-          onFailure: () =>
-            Message.FailedSaveBookmark({ error: "Não foi possível salvar. Tente novamente." }),
+          onFailure: () => Message.FailedSaveBookmark({ error: "Saving the bookmark failed" }),
           onSuccess: () => Message.SucceededSaveBookmark({ maybeState }),
         }),
       )

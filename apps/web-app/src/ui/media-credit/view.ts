@@ -1,8 +1,10 @@
 import type { CreditedProfile } from "@gororobas/domain/media-assets/domain"
+import { msg, plural } from "@lingui/core/macro"
 import { Color, Recipe, Style, When } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
+import type { Translator } from "../../lib/translations"
 import { imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import * as Icons from "../icons"
@@ -92,12 +94,12 @@ const badgeLabelStyle = Style.make({
 
 /** "📷 Ana +2": the first person credited, and how many more there are. */
 export const badgeChildren = <Message>(
-  attribution: MediaAttribution,
+  { attribution, i18n }: Readonly<{ attribution: MediaAttribution; i18n: Translator }>,
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> => [
   Icons.camera({ size: "sm" }),
   ...EffectArray.match(attribution.credits, {
-    onEmpty: () => [h.span(styledAttributes([], badgeLabelStyle), ["Créditos"])],
+    onEmpty: () => [h.span(styledAttributes([], badgeLabelStyle), [i18n._(msg`Credits`)])],
     onNonEmpty: ([first, ...others]) => [
       h.span(styledAttributes([], badgeLabelStyle), [creditName(first)]),
       ...(EffectArray.isReadonlyArrayNonEmpty(others) ? [h.span([], [`+${others.length}`])] : []),
@@ -105,15 +107,24 @@ export const badgeChildren = <Message>(
   }),
 ]
 
-/** "Foto de Ana, licença CC BY 4.0", for assistive technology. */
-export const badgeLabel = (attribution: MediaAttribution): string =>
+/** "Photo by Ana, license CC BY 4.0", for assistive technology. */
+export const badgeLabel = ({
+  attribution,
+  i18n,
+}: Readonly<{ attribution: MediaAttribution; i18n: Translator }>): string =>
   [
     EffectArray.match(attribution.credits, {
-      onEmpty: () => "Créditos da foto",
-      onNonEmpty: (credits) => `Foto de ${credits.map(creditName).join(", ")}`,
+      onEmpty: () => i18n._(msg`Photo credits`),
+      onNonEmpty: (credits) => {
+        const names = credits.map(creditName).join(", ")
+        return i18n._(msg`Photo by ${names}`)
+      },
     }),
     ...EffectArray.fromOption(
-      Option.map(attribution.maybeLicenseUrl, (url) => `licença ${licenseName(url)}`),
+      Option.map(attribution.maybeLicenseUrl, (url) => {
+        const license = licenseName(url, i18n)
+        return i18n._(msg`license ${license}`)
+      }),
     ),
   ].join(", ")
 
@@ -208,14 +219,17 @@ const section = <Message>(
   ])
 
 /** Everything readers need to credit a photo, inside its popover or drawer. */
-export const details = <Message>(attribution: MediaAttribution, h: HtmlBuilder<Message>): Html =>
+export const details = <Message>(
+  { attribution, i18n }: Readonly<{ attribution: MediaAttribution; i18n: Translator }>,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.div(styledAttributes([], detailsStyle), [
     ...EffectArray.match(attribution.credits, {
       onEmpty: () => [],
       onNonEmpty: (credits) => [
         section(
           {
-            title: credits.length === 1 ? "Autoria" : "Autorias",
+            title: i18n._(msg`${plural(credits.length, { one: "Author", other: "Authors" })}`),
             children: [
               h.div(
                 styledAttributes([], creditListStyle),
@@ -231,11 +245,11 @@ export const details = <Message>(attribution: MediaAttribution, h: HtmlBuilder<M
       Option.map(attribution.maybeLicenseUrl, (url) =>
         section(
           {
-            title: "Licença",
+            title: i18n._(msg`License`),
             children: [
               h.a(styledAttributes(externalLinkAttributes(url, h), licenseStyle), [
                 Icons.copyright({ size: "sm" }),
-                licenseName(url),
+                licenseName(url, i18n),
                 Icons.arrowRight({ size: "sm" }),
               ]),
             ],
@@ -247,7 +261,7 @@ export const details = <Message>(attribution: MediaAttribution, h: HtmlBuilder<M
     ...EffectArray.fromOption(
       Option.map(attribution.maybeSourceUrl, (url) =>
         h.a(styledAttributes(externalLinkAttributes(url, h), linkStyle), [
-          "Ver a publicação original",
+          i18n._(msg`See the original post`),
           Icons.arrowRight({ size: "sm" }),
         ]),
       ),

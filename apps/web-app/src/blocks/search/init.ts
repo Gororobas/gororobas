@@ -6,7 +6,7 @@ import { ProfileResults, PublicationResults, WikiResults } from "./model"
 
 export const init = SearchComposition.makeInit(() => ({
   model: {
-    maybeAnsweredQuery: Option.none(),
+    maybeAnsweredSearch: Option.none(),
     wikiAsyncData: WikiResults.Idle(),
     publicationsAsyncData: PublicationResults.Idle(),
     profilesAsyncData: ProfileResults.Idle(),

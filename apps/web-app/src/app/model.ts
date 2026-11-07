@@ -18,14 +18,14 @@ export const WikiArticleDebugInstance = Schema.Struct({
 })
 
 export const WikiArticleInstance = Schema.Struct({
-  /** `kind/handle`, so switching tabs keeps the loaded article. */
+  /** `language/kind/handle`, so switching tabs keeps the loaded article. */
   articleKey: Schema.String,
   model: WikiArticleBlock.Model,
 })
 
 export const ProfileInstance = Schema.Struct({
-  /** The profile's handle, so switching tabs keeps the loaded profile. */
-  handle: Schema.String,
+  /** `language/handle`, so switching tabs keeps the loaded profile. */
+  profileKey: Schema.String,
   model: ProfileBlock.Model,
 })
 
@@ -44,10 +44,12 @@ export const Model = Schema.Struct({
   /** The language the app renders in, whose translations have loaded. */
   language: SupportedLanguage,
   maybeLanguageRequest: Schema.Option(LanguageRequest),
+  /** A language whose translations failed to load, shown in another one until a retry works. */
+  maybeUnavailableLanguage: Schema.Option(SupportedLanguage),
   languageRequestCount: Schema.Int,
   authentication: AuthenticationBlock.Model,
   search: SearchBlock.Model,
-  /** Today's date, read once at startup, for relative dates such as "Há 3 dias". */
+  /** Today's date, read once at startup, for relative dates such as "3 days ago". */
   maybeToday: Schema.Option(Schema.DateTimeUtc),
   /** Read only when a page asks for it, such as to find the municipality someone is in. */
   deviceLocation: DeviceLocation,

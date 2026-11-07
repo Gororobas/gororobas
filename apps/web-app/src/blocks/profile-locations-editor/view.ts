@@ -7,15 +7,18 @@ import {
   type GazetteerPlaceSummary,
 } from "@gororobas/domain/places/domain"
 import { type ElevationInMeters, ProfileLocationData } from "@gororobas/domain/profiles/locations"
+import type { MessageDescriptor } from "@lingui/core"
+import { msg } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
-import { Array as EffectArray, Option } from "effect"
+import { DateTime, Array as EffectArray, Option } from "effect"
 import * as Length from "effect-units/Length"
 import { AsyncData } from "foldkit"
 import { childAttributes, type Html, type MessageOf } from "foldkit/html"
 
 import { loginUrl, wikiArticleUrl } from "../../app/route"
-import type { LanguageInputs } from "../../lib/language"
+import { type LanguageInputs, intlTags } from "../../lib/language"
 import { formatPartialDate } from "../../lib/partial-dates"
+import { type Translator, translatorFor } from "../../lib/translations"
 import { informationVisibilityLabels } from "../../lib/vocabulary"
 import { AppButton } from "../../ui/app-button"
 import { AppField } from "../../ui/app-field"
@@ -52,26 +55,24 @@ import {
   placeFieldId,
 } from "./composition"
 import { DateField, Message } from "./message"
-import type { Form, Model } from "./model"
+import type { Form, FormError, Model } from "./model"
 
 type ViewMessage = MessageOf<ProfileLocationsEditorViewBuilder>
 
 const LocationPlace = ProfileLocationData.fields.place
 
-const MONTHS = [
-  "janeiro",
-  "fevereiro",
-  "março",
-  "abril",
-  "maio",
-  "junho",
-  "julho",
-  "agosto",
-  "setembro",
-  "outubro",
-  "novembro",
-  "dezembro",
-] as const
+/** Month names in the reader's language, January first. */
+const monthNames = (language: SupportedLanguage): ReadonlyArray<string> => {
+  const formatMonth = DateTime.format({
+    locale: intlTags[language],
+    month: "long",
+    timeZone: "UTC",
+  })
+
+  return EffectArray.makeBy(12, (index) =>
+    formatMonth(DateTime.makeUnsafe({ year: 2000, month: index + 1, day: 1 })),
+  )
+}
 
 const visibilityIcons: Readonly<Record<InformationVisibility, (config?: IconConfig) => Html>> = {
   PUBLIC: Icons.globe,
@@ -79,19 +80,29 @@ const visibilityIcons: Readonly<Record<InformationVisibility, (config?: IconConf
   PRIVATE: Icons.lock,
 }
 
-const visibilityDescriptions: Readonly<Record<InformationVisibility, string>> = {
-  PUBLIC: "Qualquer pessoa. Se for o mais recente, aparece no seu perfil.",
-  COMMUNITY: "Só pessoas da comunidade Gororobas.",
-  PRIVATE: "Só você. Ajuda a Gororobas a te mostrar o que é relevante.",
+const visibilityDescriptions: Readonly<Record<InformationVisibility, MessageDescriptor>> = {
+  PUBLIC: msg`Anyone. If it's the most recent, it shows on your profile.`,
+  COMMUNITY: msg`Only people in the Gororobas community.`,
+  PRIVATE: msg`Only you. It helps Gororobas show you what's relevant.`,
 }
 
-const deviceLookupMessages: Readonly<Record<Form["deviceLookup"], string | null>> = {
+const deviceLookupMessages: Readonly<Record<Form["deviceLookup"], MessageDescriptor | null>> = {
   Idle: null,
-  Locating: "Procurando o município onde você está…",
-  Unavailable:
-    "Não conseguimos a localização do aparelho. Confira se o navegador tem permissão, ou busque o lugar pelo nome.",
-  OutsideGazetteer:
-    "Ainda não temos o mapa dessa região. Busque o lugar pelo nome ou descreva onde você está.",
+  Locating: msg`Looking for the municipality you're in…`,
+  Unavailable: msg`We couldn't get the device's location. Check that the browser has permission, or search for the place by name.`,
+  OutsideGazetteer: msg`We don't have a map of this region yet. Search for the place by name or describe where you are.`,
+}
+
+const formErrorMessages: Readonly<Record<FormError, MessageDescriptor>> = {
+  PlaceLoadFailed: msg`Couldn't load this place. Try again.`,
+  StartYearMissing: msg`Enter the start year.`,
+  StartYearInvalid: msg`The start year needs four digits, like 2024.`,
+  EndYearMissing: msg`Enter the end year.`,
+  EndYearInvalid: msg`The end year needs four digits, like 2024.`,
+  FreeTextMissing: msg`Describe where you are.`,
+  PlaceMissing: msg`Choose a place from the list or use the device's location.`,
+  EndBeforeStart: msg`The end can't come before the start.`,
+  SaveFailed: msg`Couldn't save the place. Try again.`,
 }
 
 // LAYOUT
@@ -150,17 +161,25 @@ const alert = (text: string, h: ProfileLocationsEditorViewBuilder) =>
 const muted = (text: string, h: ProfileLocationsEditorViewBuilder) =>
   AppText.view({ element: "p", appearance: "footnote", isMuted: true, children: [text] }, h)
 
-const period = (location: ProfileLocationData): string | null => {
-  const start = location.startDate === null ? null : formatPartialDate(location.startDate)
-  const end = location.endDate === null ? null : formatPartialDate(location.endDate)
+const period = ({
+  location,
+  language,
+  i18n,
+}: Readonly<{
+  location: ProfileLocationData
+  language: SupportedLanguage
+  i18n: Translator
+}>): string | null => {
+  const start = location.startDate === null ? null : formatPartialDate(location.startDate, language)
+  const end = location.endDate === null ? null : formatPartialDate(location.endDate, language)
   if (start !== null && end !== null) return `${start} – ${end}`
-  if (start !== null) return `Desde ${start}`
-  if (end !== null) return `Até ${end}`
+  if (start !== null) return i18n._(msg`Since ${start}`)
+  if (end !== null) return i18n._(msg`Until ${end}`)
   return null
 }
 
-const formatElevation = (elevation: ElevationInMeters) =>
-  `${Length.inMeters(elevation).toLocaleString("pt-BR")} m`
+const formatElevation = (elevation: ElevationInMeters, language: SupportedLanguage) =>
+  `${Length.inMeters(elevation).toLocaleString(intlTags[language])} m`
 
 // TIMELINE
 
@@ -391,13 +410,14 @@ const entryMenu = (
 ): ReadonlyArray<Html> => {
   const id = `profile-locations-editor-menu-${location.id}`
   const anchor = `--${id}`
+  const i18n = translatorFor(language)
 
   return [
     AppButton.view(
       {
         mode: "outline",
         size: "sm",
-        ariaLabel: `Mais ações para ${title}`,
+        ariaLabel: i18n._(msg`More actions for ${title}`),
         styles: [iconButtonStyle, Style.make({ anchorName: anchor })],
         attributes: [h.Id(entryMenuButtonId(location.id)), h.Attribute("popovertarget", id)],
         children: [Icons.dotsVertical({ size: "sm", styles: [Style.make({ rotate: "90deg" })] })],
@@ -425,7 +445,7 @@ const entryMenu = (
                   ],
                   menuItemStyle,
                 ),
-                [Icons.mapPoint({ size: "sm" }), "Ver página do lugar"],
+                [Icons.mapPoint({ size: "sm" }), i18n._(msg`See the place's page`)],
               ),
             ]
           : []),
@@ -441,7 +461,7 @@ const entryMenu = (
             menuItemStyle,
             destructiveMenuItemStyle,
           ),
-          [Icons.trash({ size: "sm" }), "Remover do itinerário"],
+          [Icons.trash({ size: "sm" }), i18n._(msg`Remove from the itinerary`)],
         ),
       ],
     ),
@@ -449,7 +469,7 @@ const entryMenu = (
 }
 
 const thumbnail = (
-  place: ProfileLocationData["place"],
+  { place, i18n }: Readonly<{ place: ProfileLocationData["place"]; i18n: Translator }>,
   h: ProfileLocationsEditorViewBuilder,
 ): Html =>
   h.div(
@@ -461,6 +481,7 @@ const thumbnail = (
               geometry: place.gazetteerPlace.geometry,
               boundingBox: place.gazetteerPlace.boundingBox,
               label: place.gazetteerPlace.name,
+              i18n,
             },
             h,
           ),
@@ -500,7 +521,8 @@ const entryView = (
 ): Html => {
   const place = location.place
   const title = entryTitle(place)
-  const maybePeriod = Option.fromNullishOr(period(location))
+  const i18n = translatorFor(language)
+  const maybePeriod = Option.fromNullishOr(period({ location, language, i18n }))
   const isOnProfile = isLatest && location.visibility === "PUBLIC"
 
   return h.article(
@@ -511,7 +533,7 @@ const entryView = (
       ...(isDeleting ? [deletingEntryStyle] : []),
     ),
     [
-      thumbnail(place, h),
+      thumbnail({ place, i18n }, h),
       h.div(styledAttributes([], entryBodyStyle), [
         h.div(styledAttributes([], tightStackStyle), [
           AppText.view(
@@ -537,17 +559,29 @@ const entryView = (
           metaChip(
             {
               icon: visibilityIcons[location.visibility],
-              label: informationVisibilityLabels[location.visibility],
+              label: i18n._(informationVisibilityLabels[location.visibility]),
               background: visibilityBackground[location.visibility],
             },
             h,
           ),
           ...(isOnProfile
-            ? [metaChip({ icon: Icons.user, label: "No seu perfil", background: "neutral" }, h)]
+            ? [
+                metaChip(
+                  { icon: Icons.user, label: i18n._(msg`On your profile`), background: "neutral" },
+                  h,
+                ),
+              ]
             : []),
         ]),
         ...(isLatest && !isOnProfile
-          ? [muted("Seu perfil não mostra um lugar agora, porque o mais recente não é público.", h)]
+          ? [
+              muted(
+                i18n._(
+                  msg`Your profile doesn't show a place right now, because the most recent one isn't public.`,
+                ),
+                h,
+              ),
+            ]
           : []),
       ]),
       h.div(styledAttributes([], entryActionsStyle), [
@@ -555,8 +589,8 @@ const entryView = (
           {
             mode: "outline",
             size: "sm",
-            ariaLabel: `Editar ${title}`,
-            title: "Editar",
+            ariaLabel: i18n._(msg`Edit ${title}`),
+            title: i18n._(msg`Edit`),
             isDisabled: isDeleting,
             styles: [iconButtonStyle],
             onClick: Message.ClickedEditLocation({ id: location.id }),
@@ -574,7 +608,7 @@ const entryView = (
                   element: "p",
                   appearance: "footnote",
                   weight: "medium",
-                  children: ["Remover este lugar do seu itinerário?"],
+                  children: [i18n._(msg`Remove this place from your itinerary?`)],
                 },
                 h,
               ),
@@ -585,7 +619,7 @@ const entryView = (
                     size: "sm",
                     isDisabled: isDeleting,
                     onClick: Message.CancelledDeleteLocation(),
-                    children: ["Manter"],
+                    children: [i18n._(msg`Keep`)],
                   },
                   h,
                 ),
@@ -596,7 +630,10 @@ const entryView = (
                     isDisabled: isDeleting,
                     attributes: [h.Id(CONFIRM_DELETE_BUTTON_ID)],
                     onClick: Message.ConfirmedDeleteLocation({ id: location.id }),
-                    children: [Icons.trash({ size: "sm" }), isDeleting ? "Removendo…" : "Remover"],
+                    children: [
+                      Icons.trash({ size: "sm" }),
+                      isDeleting ? i18n._(msg`Removing…`) : i18n._(msg`Remove`),
+                    ],
                   },
                   h,
                 ),
@@ -634,14 +671,15 @@ const stop = (
 const timeline = (
   { model, language }: Readonly<{ model: Model; language: SupportedLanguage }>,
   h: ProfileLocationsEditorViewBuilder,
-): ReadonlyArray<Html> =>
-  AsyncData.matchData(model.locations, {
-    onEmpty: () => [status("Carregando seus lugares…", h)],
-    onFailure: () => [
-      alert("Não foi possível carregar seus lugares. Tente novamente em instantes.", h),
-    ],
+): ReadonlyArray<Html> => {
+  const i18n = translatorFor(language)
+
+  return AsyncData.matchData(model.locations, {
+    onEmpty: () => [status(i18n._(msg`Loading your places…`), h)],
+    onFailure: () => [alert(i18n._(msg`Couldn't load your places. Try again in a moment.`), h)],
     onData: (locations) => timelineEntries({ model, language, locations }, h),
   })
+}
 
 const emptyStateStyle = Style.make({
   display: "grid",
@@ -665,9 +703,12 @@ const timelineEntries = (
   h: ProfileLocationsEditorViewBuilder,
 ): ReadonlyArray<Html> => {
   const maybeEditingId = Option.flatMap(model.maybeForm, (form) => form.maybeEditingId)
+  const i18n = translatorFor(language)
 
   return [
-    ...Option.toArray(Option.map(model.maybeListError, (error) => alert(error, h))),
+    ...Option.toArray(
+      Option.map(model.maybeListError, () => alert(i18n._(msg`Couldn't remove it. Try again.`), h)),
+    ),
     ...EffectArray.match(locations, {
       onEmpty: () =>
         Option.isSome(model.maybeForm)
@@ -679,11 +720,16 @@ const timelineEntries = (
                   {
                     element: "p",
                     weight: "medium",
-                    children: ["Seu itinerário ainda está vazio."],
+                    children: [i18n._(msg`Your itinerary is still empty.`)],
                   },
                   h,
                 ),
-                muted("Conte onde você cultiva, onde já viveu ou por onde está passando.", h),
+                muted(
+                  i18n._(
+                    msg`Tell where you grow, where you've lived or where you're passing through.`,
+                  ),
+                  h,
+                ),
               ]),
             ],
       // Listed from latest to oldest; the trail reads from oldest to the present.
@@ -693,7 +739,7 @@ const timelineEntries = (
         return [
           h.ol(
             styledAttributes(
-              [h.AriaLabel("Seus lugares, do mais antigo ao mais recente")],
+              [h.AriaLabel(i18n._(msg`Your places, from oldest to most recent`))],
               timelineStyle,
             ),
             EffectArray.reverse(entries).map((location) =>
@@ -720,7 +766,7 @@ const timelineEntries = (
                           },
                           h,
                         ),
-                      onSome: (form) => formView({ model, form }, h),
+                      onSome: (form) => formView({ model, form, language }, h),
                     },
                   ),
                 },
@@ -817,6 +863,8 @@ const datesStyle = Style.make({
 
 const dateInputs = (
   config: Readonly<{
+    language: SupportedLanguage
+    i18n: Translator
     label: string
     year: string
     month: string
@@ -834,14 +882,17 @@ const dateInputs = (
       h.select(
         styledAttributes(
           [
-            h.AriaLabel(`Mês (${config.label.toLowerCase()})`),
+            h.AriaLabel(config.i18n._(msg`Month (${config.label})`)),
             h.OnChange((value) => Message.UpdatedDate({ field: config.monthField, value })),
           ],
           textControlStyle,
         ),
         [
-          h.option([h.Value(""), h.Selected(config.month === "")], ["Mês (opcional)"]),
-          ...MONTHS.map((month, index) =>
+          h.option(
+            [h.Value(""), h.Selected(config.month === "")],
+            [config.i18n._(msg`Month (optional)`)],
+          ),
+          ...monthNames(config.language).map((month, index) =>
             h.option(
               [h.Value(String(index + 1)), h.Selected(config.month === String(index + 1))],
               [month],
@@ -852,9 +903,9 @@ const dateInputs = (
       AppInput.view<ViewMessage>(
         {
           attributes: [
-            h.AriaLabel(`Ano (${config.label.toLowerCase()})`),
+            h.AriaLabel(config.i18n._(msg`Year (${config.label})`)),
             h.Value(config.year),
-            h.Placeholder("Ano"),
+            h.Placeholder(config.i18n._(msg`Year`)),
             h.Attribute("inputmode", "numeric"),
             h.Attribute("maxlength", "4"),
             h.Attribute("autocomplete", "off"),
@@ -883,13 +934,20 @@ const checkboxStyle = Style.make({
   cursor: "pointer",
 }).pipe(Style.when(When.focusVisible, focusRingDeclarations))
 
-const datesFieldset = (form: Form, h: ProfileLocationsEditorViewBuilder) =>
+type FormInputs = Readonly<{ form: Form; language: SupportedLanguage; i18n: Translator }>
+
+const datesFieldset = (
+  { form, language, i18n }: FormInputs,
+  h: ProfileLocationsEditorViewBuilder,
+) =>
   h.fieldset(styledAttributes([], fieldsetStyle), [
-    legend("Quando", h),
+    legend(i18n._(msg`When`), h),
     h.div(styledAttributes([], datesStyle), [
       dateInputs(
         {
-          label: "Desde",
+          language,
+          i18n,
+          label: i18n._(msg`Since`),
           year: form.startYear,
           month: form.startMonth,
           yearField: "startYear",
@@ -902,7 +960,9 @@ const datesFieldset = (form: Form, h: ProfileLocationsEditorViewBuilder) =>
         : [
             dateInputs(
               {
-                label: "Até",
+                language,
+                i18n,
+                label: i18n._(msg`Until`),
                 year: form.endYear,
                 month: form.endMonth,
                 yearField: "endYear",
@@ -928,12 +988,12 @@ const datesFieldset = (form: Form, h: ProfileLocationsEditorViewBuilder) =>
               checkboxStyle,
             ),
           ),
-          "Ainda estou neste lugar",
+          i18n._(msg`I'm still in this place`),
         ],
       },
       h,
     ),
-    muted("As datas são opcionais, e o ano basta.", h),
+    muted(i18n._(msg`Dates are optional, and the year is enough.`), h),
   ])
 
 // VISIBILITY
@@ -967,9 +1027,9 @@ const selectedVisibilityOptionStyle = Style.make({
   backgroundColor: tones.primary.shade[100],
 }).pipe(Style.when(When.hover, { borderColor: tones.primary.shade[600] }))
 
-const visibilityFieldset = (form: Form, h: ProfileLocationsEditorViewBuilder) =>
+const visibilityFieldset = ({ form, i18n }: FormInputs, h: ProfileLocationsEditorViewBuilder) =>
   h.fieldset(styledAttributes([], fieldsetStyle), [
-    legend("Quem pode ver", h),
+    legend(i18n._(msg`Who can see it`), h),
     h.div(
       styledAttributes([], visibilityOptionsStyle),
       InformationVisibility.literals.map((visibility) => {
@@ -1001,7 +1061,7 @@ const visibilityFieldset = (form: Form, h: ProfileLocationsEditorViewBuilder) =>
                   element: "span",
                   appearance: "footnote",
                   weight: "semibold",
-                  children: [informationVisibilityLabels[visibility]],
+                  children: [i18n._(informationVisibilityLabels[visibility])],
                 },
                 h,
               ),
@@ -1012,7 +1072,7 @@ const visibilityFieldset = (form: Form, h: ProfileLocationsEditorViewBuilder) =>
                   isMuted: true,
                   lineHeight: "normal",
                   styles: [Style.make({ gridColumn: "2" })],
-                  children: [visibilityDescriptions[visibility]],
+                  children: [i18n._(visibilityDescriptions[visibility])],
                 },
                 h,
               ),
@@ -1065,7 +1125,10 @@ const previewStyle = Style.make({
 })
 
 /** The place's name over its hierarchy, so places with the same name tell apart. */
-const placeItem = (place: GazetteerPlaceSummary, h: ProfileLocationsEditorViewBuilder): Html =>
+const placeItem = (
+  { place, i18n }: Readonly<{ place: GazetteerPlaceSummary; i18n: Translator }>,
+  h: ProfileLocationsEditorViewBuilder,
+): Html =>
   h.div(styledAttributes([], placeItemStyle), [
     AppText.view(
       { element: "span", appearance: "regular", weight: "medium", children: [place.name] },
@@ -1078,7 +1141,7 @@ const placeItem = (place: GazetteerPlaceSummary, h: ProfileLocationsEditorViewBu
         isMuted: true,
         children: [
           [
-            ...(place.matchedName === null ? [] : [`inclui ${place.matchedName}`]),
+            ...(place.matchedName === null ? [] : [i18n._(msg`includes ${place.matchedName}`)]),
             ...place.ancestors.map((ancestor) => ancestor.name),
           ].join(" · "),
         ],
@@ -1088,13 +1151,13 @@ const placeItem = (place: GazetteerPlaceSummary, h: ProfileLocationsEditorViewBu
   ])
 
 const placePreview = (
-  { place, form }: Readonly<{ place: GazetteerPlace; form: Form }>,
+  { place, form, language, i18n }: FormInputs & Readonly<{ place: GazetteerPlace }>,
   h: ProfileLocationsEditorViewBuilder,
 ): Html =>
   h.div(styledAttributes([], previewStyle), [
     h.div(styledAttributes([], thumbnailSize), [
       PlaceOutline.view(
-        { geometry: place.geometry, boundingBox: place.boundingBox, label: place.name },
+        { geometry: place.geometry, boundingBox: place.boundingBox, label: place.name, i18n },
         h,
       ),
     ]),
@@ -1109,17 +1172,22 @@ const placePreview = (
         },
         h,
       ),
-      muted("Guardamos apenas este lugar inteiro, nunca suas coordenadas.", h),
+      muted(i18n._(msg`We only keep this whole place, never your coordinates.`), h),
       ...EffectArray.fromOption(
         Option.map(form.maybeElevation, (elevation) =>
           h.div(styledAttributes([], rowStyle), [
-            muted(`${formatElevation(elevation)} de altitude, pelo aparelho. Só você vê.`, h),
+            muted(
+              i18n._(
+                msg`${formatElevation(elevation, language)} of altitude, from the device. Only you see it.`,
+              ),
+              h,
+            ),
             AppButton.view(
               {
                 mode: "bleed",
                 size: "sm",
                 onClick: Message.ClickedRemoveElevation(),
-                children: ["Não guardar"],
+                children: [i18n._(msg`Don't keep it`)],
               },
               h,
             ),
@@ -1130,7 +1198,7 @@ const placePreview = (
   ])
 
 const placeFields = (
-  { model, form }: Readonly<{ model: Model; form: Form }>,
+  { model, form, language, i18n }: FormInputs & Readonly<{ model: Model }>,
   h: ProfileLocationsEditorViewBuilder,
 ): ReadonlyArray<Html> => {
   const labelOf = (id: WhosOnFirstId) =>
@@ -1153,7 +1221,7 @@ const placeFields = (
           appearance: "footnote",
           weight: "medium",
           attributes: [h.For(placeFieldId("Place"))],
-          children: ["Município, estado ou país"],
+          children: [i18n._(msg`Municipality, state or country`)],
         },
         h,
       ),
@@ -1172,12 +1240,15 @@ const placeFields = (
               className: comboboxItemClassName,
               content: Option.match(
                 EffectArray.findFirst(model.searchResults, (place) => place.id === id),
-                { onNone: () => h.span([], [id]), onSome: (place) => placeItem(place, h) },
+                {
+                  onNone: () => h.span([], [id]),
+                  onSome: (place) => placeItem({ place, i18n }, h),
+                },
               ),
             }),
             itemToValue: (id) => id,
             itemToDisplayText: labelOf,
-            inputPlaceholder: "Busque pelo nome: Villa de Leyva, Viçosa, Boyacá…",
+            inputPlaceholder: i18n._(msg`Search by name: Villa de Leyva, Viçosa, Boyacá…`),
             inputAttributes: childAttributes(styledAttributes([], textControlStyle)),
             itemsAttributes: childAttributes(styledAttributes([], comboboxItemsStyle)),
             backdropAttributes: childAttributes(styledAttributes([], comboboxBackdropStyle)),
@@ -1195,7 +1266,9 @@ const placeFields = (
             onClick: Message.ClickedUseDeviceLocation(),
             children: [
               Icons.gps({ size: "sm" }),
-              form.deviceLookup === "Locating" ? "Localizando…" : "Usar minha localização",
+              form.deviceLookup === "Locating"
+                ? i18n._(msg`Locating…`)
+                : i18n._(msg`Use my location`),
             ],
           },
           h,
@@ -1205,24 +1278,24 @@ const placeFields = (
             mode: "bleed",
             size: "sm",
             onClick: Message.ChoseMode({ mode: "FreeText" }),
-            children: [Icons.signpost({ size: "sm" }), "Descrever com minhas palavras"],
+            children: [Icons.signpost({ size: "sm" }), i18n._(msg`Describe it in my own words`)],
           },
           h,
         ),
       ]),
-      ...(deviceMessage === null ? [] : [status(deviceMessage, h)]),
+      ...(deviceMessage === null ? [] : [status(i18n._(deviceMessage), h)]),
     ]),
     ...Option.match(form.maybePlace, {
       onNone: () => [],
       onSome: (place) => [
-        placePreview({ place, form }, h),
+        placePreview({ place, form, language, i18n }, h),
         textInput(
           {
             id: "profile-locations-editor-label",
-            label: "Como você chama esse lugar? (opcional)",
+            label: i18n._(msg`What do you call this place? (optional)`),
             value: form.label,
-            placeholder: "Ex.: sítio na estrada para Sáchica",
-            description: "Aparece junto ao nome do lugar, para quem pode vê-lo.",
+            placeholder: i18n._(msg`E.g.: farm on the road to Sáchica`),
+            description: i18n._(msg`Shows next to the place's name, for those who can see it.`),
             maxLength: 120,
             onInput: (value) => Message.UpdatedLabel({ value }),
           },
@@ -1233,14 +1306,17 @@ const placeFields = (
   ]
 }
 
-const freeTextFields = (form: Form, h: ProfileLocationsEditorViewBuilder): ReadonlyArray<Html> => [
+const freeTextFields = (
+  { form, i18n }: FormInputs,
+  h: ProfileLocationsEditorViewBuilder,
+): ReadonlyArray<Html> => [
   h.div(styledAttributes([], stackStyle), [
     textInput(
       {
         id: FREE_TEXT_INPUT_ID,
-        label: "Onde você está, com suas palavras",
+        label: i18n._(msg`Where you are, in your own words`),
         value: form.freeText,
-        placeholder: "Ex.: Online, Viajando por aí, Algum canto da Argentina",
+        placeholder: i18n._(msg`E.g.: Online, Traveling around, Somewhere in Argentina`),
         maxLength: 120,
         onInput: (value) => Message.UpdatedFreeText({ value }),
       },
@@ -1252,7 +1328,10 @@ const freeTextFields = (form: Form, h: ProfileLocationsEditorViewBuilder): Reado
           mode: "bleed",
           size: "sm",
           onClick: Message.ChoseMode({ mode: "Place" }),
-          children: [Icons.mapPoint({ size: "sm" }), "Escolher um município, estado ou país"],
+          children: [
+            Icons.mapPoint({ size: "sm" }),
+            i18n._(msg`Choose a municipality, state or country`),
+          ],
         },
         h,
       ),
@@ -1268,11 +1347,13 @@ const formActionsStyle = Style.make({
 })
 
 const formView = (
-  { model, form }: Readonly<{ model: Model; form: Form }>,
+  { model, form, language }: Readonly<{ model: Model; form: Form; language: SupportedLanguage }>,
   h: ProfileLocationsEditorViewBuilder,
 ): Html => {
+  const i18n = translatorFor(language)
+  const inputs = { form, language, i18n }
   const isEditing = Option.isSome(form.maybeEditingId)
-  const title = isEditing ? "Editar lugar" : "Novo lugar no itinerário"
+  const title = isEditing ? i18n._(msg`Edit place`) : i18n._(msg`New place in the itinerary`)
 
   return h.form(
     styledAttributes(
@@ -1296,8 +1377,8 @@ const formView = (
           {
             mode: "bleed",
             size: "sm",
-            ariaLabel: "Fechar sem salvar",
-            title: "Fechar",
+            ariaLabel: i18n._(msg`Close without saving`),
+            title: i18n._(msg`Close`),
             onClick: Message.ClickedCancelForm(),
             children: [Icons.x({ size: "sm" })],
           },
@@ -1305,15 +1386,23 @@ const formView = (
         ),
       ]),
       h.fieldset(styledAttributes([], fieldsetStyle), [
-        legend("Onde", h),
-        ...(form.mode === "Place" ? placeFields({ model, form }, h) : freeTextFields(form, h)),
+        legend(i18n._(msg`Where`), h),
+        ...(form.mode === "Place"
+          ? placeFields({ ...inputs, model }, h)
+          : freeTextFields(inputs, h)),
       ]),
-      datesFieldset(form, h),
-      visibilityFieldset(form, h),
-      ...Option.toArray(Option.map(form.maybeError, (error) => alert(error, h))),
+      datesFieldset(inputs, h),
+      visibilityFieldset(inputs, h),
+      ...Option.toArray(
+        Option.map(form.maybeError, (error) => alert(i18n._(formErrorMessages[error]), h)),
+      ),
       h.div(styledAttributes([], formActionsStyle), [
         AppButton.view(
-          { mode: "outline", onClick: Message.ClickedCancelForm(), children: ["Cancelar"] },
+          {
+            mode: "outline",
+            onClick: Message.ClickedCancelForm(),
+            children: [i18n._(msg`Cancel`)],
+          },
           h,
         ),
         AppButton.view(
@@ -1322,7 +1411,11 @@ const formView = (
             tone: "primary",
             isDisabled: form.isSaving,
             children: [
-              form.isSaving ? "Salvando…" : isEditing ? "Salvar alterações" : "Adicionar lugar",
+              form.isSaving
+                ? i18n._(msg`Saving…`)
+                : isEditing
+                  ? i18n._(msg`Save changes`)
+                  : i18n._(msg`Add place`),
             ],
           },
           h,
@@ -1334,16 +1427,16 @@ const formView = (
 
 export type ViewInputs = LanguageInputs & Readonly<{ isSignedIn: boolean }>
 
-const TITLE = "Meu itinerário geográfico"
-
-const intro = (h: ProfileLocationsEditorViewBuilder) =>
+const intro = ({ i18n }: Readonly<{ i18n: Translator }>, h: ProfileLocationsEditorViewBuilder) =>
   AppText.view(
     {
       element: "p",
       appearance: "footnote",
       isMuted: true,
       children: [
-        "Onde você cultiva, onde já viveu, por onde está passando. Cada lugar aparece só para quem você escolher, e guardamos apenas o município, nunca suas coordenadas.",
+        i18n._(
+          msg`Where you grow, where you've lived, where you're passing through. Each place only shows to whoever you choose, and we only keep the municipality, never your coordinates.`,
+        ),
       ],
     },
     h,
@@ -1353,11 +1446,12 @@ export const view = ProfileLocationsEditorComposition.makeView.withInputs<ViewIn
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
   (model, { language, isSignedIn }, h) => {
     const isAdding = Option.exists(model.maybeForm, (form) => Option.isNone(form.maybeEditingId))
+    const i18n = translatorFor(language)
 
     return h.div(styledAttributes([], pageStyle), [
       SectionCard.view(
         {
-          title: TITLE,
+          title: i18n._(msg`My geographic itinerary`),
           icon: Icons.route,
           headingElement: "h1",
           tone: "neutral",
@@ -1370,7 +1464,7 @@ export const view = ProfileLocationsEditorComposition.makeView.withInputs<ViewIn
                       size: "sm",
                       isDisabled: isAdding,
                       onClick: Message.ClickedAddLocation(),
-                      children: [Icons.addCircle({ size: "sm" }), "Adicionar lugar"],
+                      children: [Icons.addCircle({ size: "sm" }), i18n._(msg`Add place`)],
                     },
                     h,
                   ),
@@ -1379,24 +1473,27 @@ export const view = ProfileLocationsEditorComposition.makeView.withInputs<ViewIn
             : {}),
           children: isSignedIn
             ? [
-                intro(h),
+                intro({ i18n }, h),
                 ...EffectArray.fromOption(
                   Option.map(
                     Option.filter(model.maybeForm, (form) => Option.isNone(form.maybeEditingId)),
-                    (form) => formView({ model, form }, h),
+                    (form) => formView({ model, form, language }, h),
                   ),
                 ),
                 h.div(styledAttributes([], stackStyle), timeline({ model, language }, h)),
               ]
             : [
-                intro(h),
+                intro({ i18n }, h),
                 h.div(styledAttributes([], rowStyle), [
                   AppText.view(
-                    { element: "p", children: ["Entre na sua conta para registrar seus lugares."] },
+                    {
+                      element: "p",
+                      children: [i18n._(msg`Sign in to your account to record your places.`)],
+                    },
                     h,
                   ),
                   AppButton.view(
-                    { tone: "primary", href: loginUrl(language), children: ["Entrar"] },
+                    { tone: "primary", href: loginUrl(language), children: [i18n._(msg`Sign in`)] },
                     h,
                   ),
                 ]),

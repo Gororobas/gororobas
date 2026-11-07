@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { Handle } from "@gororobas/domain/common/primitives"
 import { Option } from "effect"
 
@@ -13,9 +14,10 @@ import {
 } from "./model"
 
 /** Every collection loads with the page, so the home tab can sample each of them. */
-export const init = ProfileComposition.makeInit((handle: Handle) => ({
+export const init = ProfileComposition.makeInit((handle: Handle, language: SupportedLanguage) => ({
   model: {
     handle,
+    language,
     pageAsyncData: PageResult.Loading(),
     publicationsAsyncData: PublicationResults.Loading(),
     photosAsyncData: PhotoResults.Loading(),
@@ -28,7 +30,7 @@ export const init = ProfileComposition.makeInit((handle: Handle) => ({
   commands: [
     LoadPage({ handle }),
     LoadPhotos({ handle }),
-    LoadContributions({ handle }),
-    LoadBookmarks({ handle }),
+    LoadContributions({ handle, language }),
+    LoadBookmarks({ handle, language }),
   ],
 }))

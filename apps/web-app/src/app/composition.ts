@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { Block } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
@@ -11,6 +12,7 @@ import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
 import { DeviceLocation } from "../lib/device-location"
 import { LocateDevice } from "./command"
 import { ApplicationBlock } from "./definition"
+import type { Model } from "./model"
 import { ApplicationRoute } from "./route"
 
 export const AuthenticationBinding = ApplicationBlock.makeBinding(AuthenticationBlock, {
@@ -23,18 +25,22 @@ export const SearchBinding = ApplicationBlock.makeBinding(SearchBlock, {
   subscriptions: { when: (model) => ApplicationRoute.guards.Search(model.route) },
 })
 
-export const wikiArticleKey = (lookup: Readonly<{ kind: string; handle: string }>) =>
-  `${lookup.kind}/${lookup.handle}`
+/** An article in a language: reading it in another one loads its content afresh. */
+export const wikiArticleKey = (
+  language: SupportedLanguage,
+  lookup: Readonly<{ kind: string; handle: string }>,
+) => `${language}/${lookup.kind}/${lookup.handle}`
 
-const isWikiArticleRouteFor = (route: ApplicationRoute, articleKey: string) =>
-  ApplicationRoute.guards.WikiArticle(route) && wikiArticleKey(route) === articleKey
+const isWikiArticleRouteFor = (model: typeof Model.Type, articleKey: string) =>
+  ApplicationRoute.guards.WikiArticle(model.route) &&
+  wikiArticleKey(model.language, model.route) === articleKey
 
 export const WikiArticleBinding = ApplicationBlock.makeBinding(WikiArticleBlock, {
   field: "maybeWikiArticle",
   key: "articleKey",
   childField: "model",
-  delivery: { when: (model, articleKey) => isWikiArticleRouteFor(model.route, articleKey) },
-  subscriptions: { when: (model, articleKey) => isWikiArticleRouteFor(model.route, articleKey) },
+  delivery: { when: isWikiArticleRouteFor },
+  subscriptions: { when: isWikiArticleRouteFor },
 })
 
 const isDebugRouteFor = (route: ApplicationRoute, wikiArticleId: string) =>
@@ -48,15 +54,19 @@ export const WikiArticleDebugBinding = ApplicationBlock.makeBinding(WikiArticleD
   subscriptions: { when: (model, wikiArticleId) => isDebugRouteFor(model.route, wikiArticleId) },
 })
 
-const isProfileRouteFor = (route: ApplicationRoute, handle: string) =>
-  ApplicationRoute.guards.Profile(route) && route.handle === handle
+/** A profile in a language: reading it in another one loads its content afresh. */
+export const profileKey = (language: SupportedLanguage, handle: string) => `${language}/${handle}`
+
+const isProfileRouteFor = (model: typeof Model.Type, key: string) =>
+  ApplicationRoute.guards.Profile(model.route) &&
+  profileKey(model.language, model.route.handle) === key
 
 export const ProfileBinding = ApplicationBlock.makeBinding(ProfileBlock, {
   field: "maybeProfile",
-  key: "handle",
+  key: "profileKey",
   childField: "model",
-  delivery: { when: (model, handle) => isProfileRouteFor(model.route, handle) },
-  subscriptions: { when: (model, handle) => isProfileRouteFor(model.route, handle) },
+  delivery: { when: isProfileRouteFor },
+  subscriptions: { when: isProfileRouteFor },
 })
 
 export const ExternalDataAdminDashboardBinding = ApplicationBlock.makeBinding(

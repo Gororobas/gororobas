@@ -17,12 +17,14 @@ const chipRowStyle = Style.make({
 
 export type FilterChipsConfig<Value, Message> = Readonly<{
   label: string
+  /** The chip that clears the filter, such as "All". */
+  allLabel: string
   options: ReadonlyArray<readonly [Value, string]>
   selected: Option.Option<Value>
   toMessage: (value: Option.Option<Value>) => Message
 }>
 
-/** Chips that narrow a list in place: "Todos" first, then one per value. */
+/** Chips that narrow a list in place: "All" first, then one per value. */
 export const view = <Value, Message>(
   config: FilterChipsConfig<Value, Message>,
   h: HtmlBuilder<Message>,
@@ -32,7 +34,7 @@ export const view = <Value, Message>(
     [
       Chip.view(
         {
-          label: "Todos",
+          label: config.allLabel,
           appearance: Option.isNone(config.selected) ? "selectedOption" : "option",
           isPressed: Option.isNone(config.selected),
           onClick: config.toMessage(Option.none()),

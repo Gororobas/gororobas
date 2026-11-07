@@ -1,5 +1,6 @@
 import { WikiArticleId } from "@gororobas/domain/common/ids"
-import { Effect, Option, Record, Result, Schema, Stream } from "effect"
+import { msg } from "@lingui/core/macro"
+import { Effect, Match, Option, Record, Result, Schema, Stream } from "effect"
 import { Block } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
@@ -7,6 +8,7 @@ import { modifyFields } from "foldkit/struct"
 import { GororobasApiClient } from "../../api-client"
 import { observationLogUrl } from "../../app/route"
 import type { LanguageInputs } from "../../lib/language"
+import { translatorFor } from "../../lib/translations"
 import { AppText } from "../../ui/app-text"
 
 const DebugData = Schema.Record(Schema.String, Schema.Json)
@@ -14,7 +16,11 @@ const DebugData = Schema.Record(Schema.String, Schema.Json)
 const Model = Schema.Struct({
   wikiArticleId: WikiArticleId,
   maybeData: Schema.Option(DebugData),
-  status: Schema.String,
+  status: Schema.Union([
+    Schema.TaggedStruct("Loading", {}),
+    Schema.TaggedStruct("Loaded", {}),
+    Schema.TaggedStruct("Failed", { error: Schema.String }),
+  ]),
   reloadCount: Schema.Int,
 })
 
@@ -41,7 +47,7 @@ const init = WikiArticleDebugComposition.makeInit((wikiArticleId: WikiArticleId)
   model: {
     wikiArticleId,
     maybeData: Option.none(),
-    status: "Carregando dados do artigo…",
+    status: { _tag: "Loading" },
     reloadCount: 0,
   },
 }))
@@ -50,15 +56,15 @@ const update = WikiArticleDebugComposition.makeUpdate({
   CompletedLoad: (model, { data }) => ({
     model: modifyFields(model, {
       maybeData: () => Option.some(data),
-      status: () => "Dados do artigo carregados",
+      status: () => ({ _tag: "Loaded" }),
     }),
   }),
   FailedLoad: (model, { error }) => ({
-    model: modifyFields(model, { status: () => `Não foi possível carregar: ${error}` }),
+    model: modifyFields(model, { status: () => ({ _tag: "Failed", error }) }),
   }),
   ClickedReload: (model) => ({
     model: modifyFields(model, {
-      status: () => "Carregando dados do artigo…",
+      status: () => ({ _tag: "Loading" }),
       reloadCount: (count) => count + 1,
     }),
   }),
@@ -100,13 +106,19 @@ const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Json, { space:
 /** Local development view: contributor data, revisions, provider observations and stored projections. */
 const view = WikiArticleDebugComposition.makeView.withInputs<LanguageInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
-  (model, { language }, h) =>
-    h.main(
+  (model, { language }, h) => {
+    const i18n = translatorFor(language)
+    const { status } = model
+
+    return h.main(
       [],
       [
-        AppText.view({ element: "h1", attributes: [], children: ["Depuração do artigo"] }, h),
+        AppText.view(
+          { element: "h1", attributes: [], children: [i18n._(msg`Article debugging`)] },
+          h,
+        ),
         AppText.view({ element: "p", attributes: [], children: [model.wikiArticleId] }, h),
-        h.button([h.Type("button"), h.OnClick(Message.ClickedReload())], ["Recarregar"]),
+        h.button([h.Type("button"), h.OnClick(Message.ClickedReload())], [i18n._(msg`Reload`)]),
         AppText.view(
           {
             element: "p",
@@ -119,13 +131,28 @@ const view = WikiArticleDebugComposition.makeView.withInputs<LanguageInputs>(
                     }),
                   ),
                 ],
-                ["Observações de dados externos deste artigo"],
+                [i18n._(msg`External data observations for this article`)],
               ),
             ],
           },
           h,
         ),
-        AppText.view({ element: "p", attributes: [h.Role("status")], children: [model.status] }, h),
+        AppText.view(
+          {
+            element: "p",
+            attributes: [h.Role("status")],
+            children: [
+              Match.value(status).pipe(
+                Match.tagsExhaustive({
+                  Loading: () => i18n._(msg`Loading the article's data…`),
+                  Loaded: () => i18n._(msg`Article data loaded`),
+                  Failed: ({ error }) => i18n._(msg`Couldn't load: ${error}`),
+                }),
+              ),
+            ],
+          },
+          h,
+        ),
         ...Option.match(model.maybeData, {
           onNone: () => [],
           onSome: (data) =>
@@ -134,7 +161,8 @@ const view = WikiArticleDebugComposition.makeView.withInputs<LanguageInputs>(
             ),
         }),
       ],
-    ),
+    )
+  },
 )
 
 export const layer = WikiArticleDebugBlock.makeLayer(

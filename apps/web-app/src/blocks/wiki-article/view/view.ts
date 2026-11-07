@@ -1,5 +1,6 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
+import { msg, select } from "@lingui/core/macro"
 import { Color, Global, Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, Match, Option } from "effect"
 import { AsyncData } from "foldkit"
@@ -11,9 +12,11 @@ import {
   wikiArticleDebugUrl,
   wikiArticleUrl,
 } from "../../../app/route"
+import { wikiScope } from "../../../app/search-query"
 import type { LanguageInputs } from "../../../lib/language"
-import { placeKindLabels } from "../../../lib/vocabulary"
-import { inPreposition, ofName, primaryName } from "../../../lib/wiki-article-names"
+import { translatorFor } from "../../../lib/translations"
+import { placeKindLabels, wikiKindLabels } from "../../../lib/vocabulary"
+import { nameGender, nameParts, primaryName } from "../../../lib/wiki-article-names"
 import { AppButton } from "../../../ui/app-button"
 import { AppText } from "../../../ui/app-text"
 import { EmptyState } from "../../../ui/empty-state"
@@ -87,8 +90,8 @@ const debugLink = (
             href: wikiArticleDebugUrl(language, page.id),
             // Icon-only, so this development aid doesn't crowd the article's names.
             children: [Icons.sledgehammer({ size: "sm" })],
-            ariaLabel: "Depurar artigo",
-            title: "Ver os dados guardados deste artigo",
+            ariaLabel: translatorFor(language)._(msg`Debug article`),
+            title: translatorFor(language)._(msg`See this article's stored data`),
             tone: "neutral",
             mode: "outline",
             size: "sm",
@@ -188,25 +191,30 @@ const scientificName = (page: Page): Option.Option<string> =>
 const parentPlant = (page: Page): Option.Option<WikiArticleQueriedCardData> =>
   page.kind === "PLANT_CULTIVAR" ? Option.map(page.parentPlant, ({ card }) => card) : Option.none()
 
-/** "Variedade do Ingá", leading to the plant whose traits the cultivar inherits. */
+/** "Variety of Ingá", leading to the plant whose traits the cultivar inherits. */
 const parentPlantLink = (
   { card, language }: Readonly<{ card: WikiArticleQueriedCardData; language: SupportedLanguage }>,
   h: WikiArticleViewBuilder,
-): Html =>
-  AppText.view(
+): Html => {
+  const gender = nameGender(card)
+  // The name is a link, so the message only holds the words that agree with it.
+  const prefix = translatorFor(language)._(msg`${select(gender, { other: "Variety of" })}`)
+
+  return AppText.view(
     {
       element: "p",
       appearance: "large",
       styles: [parentPlantStyle],
       children: [
-        "Variedade ",
+        `${prefix} `,
         h.a(styledAttributes([h.Href(wikiArticleUrl(language, card))], parentPlantLinkStyle), [
-          ofName(card),
+          primaryName(card),
         ]),
       ],
     },
     h,
   )
+}
 
 const articleLink = (
   { card, language }: Readonly<{ card: WikiArticleQueriedCardData; language: SupportedLanguage }>,
@@ -216,7 +224,7 @@ const articleLink = (
     primaryName(card),
   ])
 
-/** "Município em Boyacá · Colombia", each containing place leading to its own page. */
+/** "Municipality in Boyacá · Colombia", each containing place leading to its own page. */
 const placeLineage = (
   { page, language }: Readonly<{ page: Page; language: SupportedLanguage }>,
   h: WikiArticleViewBuilder,
@@ -225,10 +233,14 @@ const placeLineage = (
     return []
   }
 
-  const kindLabel = Option.match(page.attributes.placeKind, {
-    onNone: () => "Lugar",
-    onSome: (placeKind) => placeKindLabels[placeKind],
-  })
+  const i18n = translatorFor(language)
+
+  const kind = i18n._(
+    Option.match(page.attributes.placeKind, {
+      onNone: () => wikiKindLabels.PLACE.singular,
+      onSome: (placeKind) => placeKindLabels[placeKind],
+    }),
+  )
 
   return EffectArray.match(page.ancestorPlaces, {
     onEmpty: () => [],
@@ -239,7 +251,8 @@ const placeLineage = (
           appearance: "large",
           styles: [parentPlantStyle],
           children: [
-            `${kindLabel} ${inPreposition(parent)} `,
+            // The parent's name is a link, so the message only holds the words that agree with it.
+            `${i18n._(msg`${select(nameGender(parent), { other: `${kind} in` })}`)} `,
             articleLink({ card: parent, language }, h),
             ...others.flatMap((ancestor) => [" · ", articleLink({ card: ancestor, language }, h)]),
           ],
@@ -260,11 +273,14 @@ const headerThumbnail = (
   h: WikiArticleViewBuilder,
 ): Html => {
   const maybeFirst = mainPhoto(page)
+  const { name, gender } = nameParts(page)
 
   const thumbnail = Thumbnail.view(
     {
       maybeSrc: Option.map(maybeFirst, (photo) => photo.src(300)),
-      alt: Option.isSome(maybeFirst) ? `Fotos ${ofName(page)}` : "",
+      alt: Option.isSome(maybeFirst)
+        ? translatorFor(language)._(msg`${select(gender, { other: `Photos of ${name}` })}`)
+        : "",
       size,
     },
     h,
@@ -333,9 +349,17 @@ const header = (
         ]),
         ...debugLink({ page, language }, h),
       ]),
-      tabs({ language, page, currentTab: tab, label: `Seções ${ofName(page)}` }, h),
+      tabs({ language, page, currentTab: tab, label: sectionsLabel({ language, page }) }, h),
     ]),
   ])
+
+const sectionsLabel = ({
+  language,
+  page,
+}: Readonly<{ language: SupportedLanguage; page: Page }>) => {
+  const { name, gender } = nameParts(page)
+  return translatorFor(language)._(msg`${select(gender, { other: `Sections of ${name}` })}`)
+}
 
 /** Repeats the header's name and tabs. While hidden, `visibility` keeps its links out of the tab order. */
 const compactHeader = (
@@ -382,7 +406,7 @@ const compactHeader = (
             language,
             page,
             currentTab: tab,
-            label: `Seções ${ofName(page)}, atalho`,
+            label: translatorFor(language)._(msg`${sectionsLabel({ language, page })}, shortcut`),
             isCompact: true,
           },
           h,
@@ -404,7 +428,10 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
     AsyncData.matchData(model.pageAsyncData, {
       onEmpty: () =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
-          LoadingState.view({ label: "Carregando artigo", shape: "page", count: 2 }, h),
+          LoadingState.view(
+            { label: translatorFor(language)._(msg`Loading article`), shape: "page", count: 2 },
+            h,
+          ),
         ]),
       onFailure: (error) =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
@@ -412,13 +439,17 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
             ? EmptyState.view(
                 {
                   icon: Icons.encyclopedia,
-                  title: "Não encontramos esse artigo na enciclopédia",
+                  title: translatorFor(language)._(
+                    msg`We couldn't find this article in the encyclopedia`,
+                  ),
                   maybeDescription: Option.some(
-                    "Ele pode ter mudado de nome. Tente encontrá-lo pela busca.",
+                    translatorFor(language)._(
+                      msg`It may have been renamed. Try finding it through search.`,
+                    ),
                   ),
                   maybeAction: Option.some({
-                    label: "Buscar na enciclopédia",
-                    href: searchUrl(language, { type: Option.some("wiki") }),
+                    label: translatorFor(language)._(msg`Search the encyclopedia`),
+                    href: searchUrl(language, { scope: wikiScope() }),
                   }),
                   size: "roomy",
                 },
@@ -427,8 +458,10 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
             : EmptyState.view(
                 {
                   icon: Icons.alertCircle,
-                  title: "Não foi possível carregar o artigo agora",
-                  maybeDescription: Option.some("Tente recarregar a página em instantes."),
+                  title: translatorFor(language)._(msg`Couldn't load the article right now`),
+                  maybeDescription: Option.some(
+                    translatorFor(language)._(msg`Try reloading the page in a moment.`),
+                  ),
                   size: "roomy",
                 },
                 h,

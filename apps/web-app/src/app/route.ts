@@ -22,6 +22,7 @@ import {
 import {
   Array as EffectArray,
   Effect,
+  Match,
   Option,
   Record,
   Schema,
@@ -33,6 +34,19 @@ import {
 import { Route } from "foldkit"
 import { defineRouteUnion, literal, schemaSegment, slash } from "foldkit/route"
 import type { Url } from "foldkit/url"
+
+import {
+  SearchQuery,
+  SearchScope,
+  SearchType,
+  type WikiKindFilters,
+  emptySearchQuery,
+  everything,
+  peopleScope,
+  publicationsScope,
+  scopeType,
+  unfilteredKind,
+} from "./search-query"
 
 // PATH SEGMENTS
 
@@ -58,7 +72,12 @@ type PathSlugs = Readonly<{
   search: string
   myPlaces: string
   externalDataAdminDashboard: string
+  searchTypes: Readonly<Record<SearchType, string>>
+  searchKeys: SearchKeys
+  observationLogKeys: Readonly<Record<keyof ObservationLogQuery, string>>
 }>
+
+type SearchKeys = Readonly<Record<keyof SearchParameters, string>>
 
 const pathSlugs: Readonly<Record<SupportedLanguage, PathSlugs>> = {
   pt: {
@@ -92,6 +111,29 @@ const pathSlugs: Readonly<Record<SupportedLanguage, PathSlugs>> = {
     search: "buscar",
     myPlaces: "meus-lugares",
     externalDataAdminDashboard: "dados-externos",
+    searchTypes: { wiki: "enciclopedia", publications: "publicacoes", people: "gente" },
+    searchKeys: {
+      text: "q",
+      type: "secao",
+      wikiKind: "tipo",
+      plantUsages: "usos",
+      plantLifecycles: "ciclos",
+      plantingMethods: "plantio",
+      strata: "estratos",
+      edibleParts: "partes",
+      animalRoles: "papeis",
+      toolUsages: "aplicacoes",
+      resourceFormats: "formatos",
+      entityTypes: "categorias",
+      publicationKind: "formato",
+      profileType: "perfil",
+    },
+    observationLogKeys: {
+      provider: "provedor",
+      outcome: "resultado",
+      wikiArticleId: "artigo",
+      currentPage: "pagina",
+    },
   },
   es: {
     wikiKinds: {
@@ -124,6 +166,29 @@ const pathSlugs: Readonly<Record<SupportedLanguage, PathSlugs>> = {
     search: "buscar",
     myPlaces: "mis-lugares",
     externalDataAdminDashboard: "datos-externos",
+    searchTypes: { wiki: "enciclopedia", publications: "publicaciones", people: "gente" },
+    searchKeys: {
+      text: "q",
+      type: "seccion",
+      wikiKind: "tipo",
+      plantUsages: "usos",
+      plantLifecycles: "ciclos",
+      plantingMethods: "siembra",
+      strata: "estratos",
+      edibleParts: "partes",
+      animalRoles: "roles",
+      toolUsages: "aplicaciones",
+      resourceFormats: "formatos",
+      entityTypes: "categorias",
+      publicationKind: "formato",
+      profileType: "perfil",
+    },
+    observationLogKeys: {
+      provider: "proveedor",
+      outcome: "resultado",
+      wikiArticleId: "articulo",
+      currentPage: "pagina",
+    },
   },
   en: {
     wikiKinds: {
@@ -156,6 +221,29 @@ const pathSlugs: Readonly<Record<SupportedLanguage, PathSlugs>> = {
     search: "search",
     myPlaces: "my-places",
     externalDataAdminDashboard: "external-data",
+    searchTypes: { wiki: "encyclopedia", publications: "posts", people: "people" },
+    searchKeys: {
+      text: "q",
+      type: "section",
+      wikiKind: "kind",
+      plantUsages: "uses",
+      plantLifecycles: "lifecycles",
+      plantingMethods: "planting",
+      strata: "strata",
+      edibleParts: "parts",
+      animalRoles: "roles",
+      toolUsages: "applications",
+      resourceFormats: "formats",
+      entityTypes: "categories",
+      publicationKind: "format",
+      profileType: "profile",
+    },
+    observationLogKeys: {
+      provider: "provider",
+      outcome: "outcome",
+      wikiArticleId: "article",
+      currentPage: "page",
+    },
   },
 }
 
@@ -185,8 +273,107 @@ const slugCodec = <const Value extends string, const Slug extends string>(
 
 // SEARCH QUERY
 
-export const SearchType = Schema.Literals(["wiki", "publications", "people"])
-export type SearchType = typeof SearchType.Type
+/**
+ * A search as flat URL parameters. Decoding keeps only the ones the chosen type and kind offer, so
+ * `?plantio=` outside a plant search reads as absent.
+ */
+type SearchParameters = Readonly<{
+  text: Option.Option<string>
+  type: Option.Option<SearchType>
+  wikiKind: Option.Option<WikiArticleKind>
+  plantUsages: ReadonlyArray<PlantUsage>
+  plantLifecycles: ReadonlyArray<PlantLifecycle>
+  plantingMethods: ReadonlyArray<PlantingMethod>
+  strata: ReadonlyArray<AgroforestryStratum>
+  edibleParts: ReadonlyArray<EdiblePlantPart>
+  animalRoles: ReadonlyArray<AnimalRole>
+  toolUsages: ReadonlyArray<ToolUsage>
+  resourceFormats: ReadonlyArray<typeof ResourceFormat.Type>
+  entityTypes: ReadonlyArray<typeof NoteworthyEntityType.Type>
+  publicationKind: Option.Option<PublicationKind>
+  profileType: Option.Option<ProfileType>
+}>
+
+const noSearchParameters: SearchParameters = {
+  text: Option.none(),
+  type: Option.none(),
+  wikiKind: Option.none(),
+  plantUsages: [],
+  plantLifecycles: [],
+  plantingMethods: [],
+  strata: [],
+  edibleParts: [],
+  animalRoles: [],
+  toolUsages: [],
+  resourceFormats: [],
+  entityTypes: [],
+  publicationKind: Option.none(),
+  profileType: Option.none(),
+}
+
+const kindFiltersFromParameters = (
+  kind: WikiArticleKind,
+  parameters: SearchParameters,
+): WikiKindFilters =>
+  Match.value(kind).pipe(
+    Match.withReturnType<WikiKindFilters>(),
+    Match.when("PLANT", (plant) => ({
+      kind: plant,
+      plantUsages: parameters.plantUsages,
+      edibleParts: parameters.edibleParts,
+      plantLifecycles: parameters.plantLifecycles,
+      strata: parameters.strata,
+      plantingMethods: parameters.plantingMethods,
+    })),
+    Match.when("ANIMAL", (animal) => ({ kind: animal, animalRoles: parameters.animalRoles })),
+    Match.when("TOOL", (tool) => ({ kind: tool, toolUsages: parameters.toolUsages })),
+    Match.when("RESOURCE", (resource) => ({
+      kind: resource,
+      resourceFormats: parameters.resourceFormats,
+    })),
+    Match.when("NOTEWORTHY_ENTITY", (entity) => ({
+      kind: entity,
+      entityTypes: parameters.entityTypes,
+    })),
+    Match.orElse(unfilteredKind),
+  )
+
+const searchQueryFromParameters = (parameters: SearchParameters): SearchQuery => ({
+  text: parameters.text,
+  scope: Option.match(parameters.type, {
+    onNone: () => everything,
+    onSome: (type) =>
+      Match.value(type).pipe(
+        Match.withReturnType<SearchScope>(),
+        Match.when("wiki", () =>
+          SearchScope.cases.Wiki.make({
+            maybeKind: Option.map(parameters.wikiKind, (kind) =>
+              kindFiltersFromParameters(kind, parameters),
+            ),
+          }),
+        ),
+        Match.when("publications", () => publicationsScope(parameters.publicationKind)),
+        Match.when("people", () => peopleScope(parameters.profileType)),
+        Match.exhaustive,
+      ),
+  }),
+})
+
+const searchQueryToParameters = ({ text, scope }: SearchQuery): SearchParameters => ({
+  ...noSearchParameters,
+  text,
+  type: scopeType(scope),
+  ...SearchScope.match(scope, {
+    Everything: () => ({}),
+    Wiki: ({ maybeKind }) =>
+      Option.match(maybeKind, {
+        onNone: () => ({}),
+        onSome: ({ kind, ...filters }) => ({ wikiKind: Option.some(kind), ...filters }),
+      }),
+    Publications: ({ maybeKind }) => ({ publicationKind: maybeKind }),
+    People: ({ maybeType }) => ({ profileType: maybeType }),
+  }),
+})
 
 const toParamValue = (value: string) => EffectString.toLowerCase(value).replaceAll("_", "-")
 const fromParamValue = (value: string) => EffectString.toUpperCase(value).replaceAll("-", "_")
@@ -244,45 +431,30 @@ const listParam = <A extends string>(schema: Schema.Codec<A>) => {
   )
 }
 
-const kindParam = (slugs: PathSlugs) => {
-  const WikiArticleKindFromSlug = slugCodec(slugs.wikiKinds, WikiArticleKind)
+/** A single value through a language's slugs, such as `?tipo=livros`. */
+const optionalSlugParam = <const Value extends string>(
+  slugs: Readonly<Record<Value, string>>,
+  ValueSchema: Schema.Codec<Value>,
+) => {
+  const ValueFromSlug = slugCodec(slugs, ValueSchema)
 
   return Schema.OptionFromOptional(Schema.String).pipe(
     Schema.decodeTo(
-      Schema.Option(WikiArticleKind),
-      SchemaTransformation.transform<Option.Option<WikiArticleKind>, Option.Option<string>>({
+      Schema.Option(ValueSchema),
+      SchemaTransformation.transform<Option.Option<Value>, Option.Option<string>>({
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- URL parameters are free text until a known value decodes from them.
-        decode: Option.flatMap(Schema.decodeUnknownOption(WikiArticleKindFromSlug)),
-        encode: Option.map((kind) => slugs.wikiKinds[kind]),
+        decode: Option.flatMap(Schema.decodeUnknownOption(ValueFromSlug)),
+        encode: Option.map((value) => slugs[value]),
       }),
     ),
   )
 }
 
-/** Everything a search shows comes from these fields, which live in the URL. */
-export const SearchQuery = Schema.Struct({
-  text: Schema.Option(Schema.String),
-  type: Schema.Option(SearchType),
-  wikiKind: Schema.Option(WikiArticleKind),
-  plantUsages: Schema.Array(PlantUsage),
-  plantLifecycles: Schema.Array(PlantLifecycle),
-  plantingMethods: Schema.Array(PlantingMethod),
-  strata: Schema.Array(AgroforestryStratum),
-  edibleParts: Schema.Array(EdiblePlantPart),
-  animalRoles: Schema.Array(AnimalRole),
-  toolUsages: Schema.Array(ToolUsage),
-  resourceFormats: Schema.Array(ResourceFormat),
-  entityTypes: Schema.Array(NoteworthyEntityType),
-  publicationKind: Schema.Option(PublicationKind),
-  profileType: Schema.Option(ProfileType),
-})
-
-/** The search query as URL parameters, with short pt-BR keys in every language for now. */
-const searchQueryParameters = (slugs: PathSlugs) =>
+const flatSearchParameters = (slugs: PathSlugs) =>
   Schema.Struct({
     text: optionalParam(Schema.String, "raw"),
-    type: optionalParam(SearchType, "raw"),
-    wikiKind: kindParam(slugs),
+    type: optionalSlugParam(slugs.searchTypes, SearchType),
+    wikiKind: optionalSlugParam(slugs.wikiKinds, WikiArticleKind),
     plantUsages: listParam(PlantUsage),
     plantLifecycles: listParam(PlantLifecycle),
     plantingMethods: listParam(PlantingMethod),
@@ -294,43 +466,19 @@ const searchQueryParameters = (slugs: PathSlugs) =>
     entityTypes: listParam(NoteworthyEntityType),
     publicationKind: optionalParam(PublicationKind, "enum"),
     profileType: optionalParam(ProfileType, "enum"),
-  }).pipe(
-    Schema.encodeKeys({
-      text: "q",
-      type: "t",
-      wikiKind: "tipo",
-      plantUsages: "usos",
-      plantLifecycles: "ciclos",
-      plantingMethods: "plantio",
-      strata: "estratos",
-      edibleParts: "partes",
-      animalRoles: "papeis",
-      toolUsages: "aplicacoes",
-      resourceFormats: "formatos",
-      entityTypes: "categorias",
-      publicationKind: "formato",
-      profileType: "perfil",
-    }),
+  }).pipe(Schema.encodeKeys(slugs.searchKeys))
+
+/** A language's search as URL parameters, with its own keys and type slugs. */
+const searchQueryParameters = (slugs: PathSlugs) =>
+  flatSearchParameters(slugs).pipe(
+    Schema.decodeTo(
+      Schema.Struct({ query: SearchQuery }),
+      SchemaTransformation.transform({
+        decode: (parameters) => ({ query: searchQueryFromParameters(parameters) }),
+        encode: ({ query }) => searchQueryToParameters(query),
+      }),
+    ),
   )
-
-export type SearchQuery = typeof SearchQuery.Type
-
-export const emptySearchQuery: SearchQuery = {
-  text: Option.none(),
-  type: Option.none(),
-  wikiKind: Option.none(),
-  plantUsages: [],
-  plantLifecycles: [],
-  plantingMethods: [],
-  strata: [],
-  edibleParts: [],
-  animalRoles: [],
-  toolUsages: [],
-  resourceFormats: [],
-  entityTypes: [],
-  publicationKind: Option.none(),
-  profileType: Option.none(),
-}
 
 // EXTERNAL DATA OBSERVATIONS QUERY
 
@@ -373,19 +521,13 @@ export const ObservationLogQuery = Schema.Struct({
 
 export type ObservationLogQuery = typeof ObservationLogQuery.Type
 
-const ObservationLogQueryParameters = Schema.Struct({
-  provider: optionalParam(ExternalDataProvider, "enum"),
-  outcome: optionalParam(ExternalDataOutcomeTag, "raw"),
-  wikiArticleId: wikiArticleIdParam,
-  currentPage: pageParam,
-}).pipe(
-  Schema.encodeKeys({
-    provider: "provedor",
-    outcome: "resultado",
-    wikiArticleId: "artigo",
-    currentPage: "pagina",
-  }),
-)
+const observationLogQueryParameters = (slugs: PathSlugs) =>
+  Schema.Struct({
+    provider: optionalParam(ExternalDataProvider, "enum"),
+    outcome: optionalParam(ExternalDataOutcomeTag, "raw"),
+    wikiArticleId: wikiArticleIdParam,
+    currentPage: pageParam,
+  }).pipe(Schema.encodeKeys(slugs.observationLogKeys))
 
 export const emptyObservationLogQuery: ObservationLogQuery = {
   provider: Option.none(),
@@ -397,7 +539,7 @@ export const emptyObservationLogQuery: ObservationLogQuery = {
 // ROUTES
 
 export const ApplicationRoute = defineRouteUnion({
-  Search: SearchQuery.fields,
+  Search: { query: SearchQuery },
   WikiArticle: { kind: WikiArticleKind, handle: Handle, tab: WikiArticleTab },
   WikiArticleDebug: { wikiArticleId: WikiArticleId },
   Profile: { handle: Handle, tab: ProfileTab },
@@ -475,7 +617,7 @@ const makeRouters = (slugs: PathSlugs) => {
 
   const externalDataAdminDashboard = pipe(
     literal(slugs.externalDataAdminDashboard),
-    Route.query(ObservationLogQueryParameters),
+    Route.query(observationLogQueryParameters(slugs)),
     Route.mapTo(ApplicationRoute.ExternalDataAdminDashboard),
   )
 
@@ -540,18 +682,13 @@ export const urlToLocatedRoute = (url: Url): LocatedRoute => {
     : { maybeLanguage: Option.none(), route: routers.pt.parse(url) }
 }
 
-export const searchQueryOf = ({
-  _tag,
-  ...query
-}: typeof ApplicationRoute.Search.Type): SearchQuery => query
-
 export const observationLogQueryOf = ({
   _tag,
   ...query
 }: typeof ApplicationRoute.ExternalDataAdminDashboard.Type): ObservationLogQuery => query
 
 export const searchUrl = (language: SupportedLanguage, query: Partial<SearchQuery> = {}): string =>
-  prefixed(language, routers[language].search({ ...emptySearchQuery, ...query }))
+  prefixed(language, routers[language].search({ query: { ...emptySearchQuery, ...query } }))
 
 /** The About tab is the article's bare path. */
 export const wikiArticleUrl = (
@@ -606,7 +743,7 @@ export const observationLogQueryKey: (query: ObservationLogQuery) => string =
 /** The same page in a language: what language links and redirects point to. */
 export const applicationRouteUrl = (language: SupportedLanguage, route: ApplicationRoute): string =>
   ApplicationRoute.match(route, {
-    Search: (search) => searchUrl(language, searchQueryOf(search)),
+    Search: ({ query }) => searchUrl(language, query),
     WikiArticle: ({ kind, handle, tab }) => wikiArticleUrl(language, { kind, handle, tab }),
     WikiArticleDebug: ({ wikiArticleId }) => wikiArticleDebugUrl(language, wikiArticleId),
     Profile: ({ handle, tab }) => profileUrl(language, { handle: handle, tab }),

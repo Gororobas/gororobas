@@ -124,7 +124,7 @@ export type TabNavigationItem = Readonly<{
 }>
 
 export type TabNavigationConfig = Readonly<{
-  /** Names the navigation for assistive technology, such as "Seções da Couve". */
+  /** Names the navigation for assistive technology, such as "Sections of Kale". */
   ariaLabel: string
   items: ReadonlyArray<TabNavigationItem>
   /** Compact tabs are smaller and leave their icons out, for condensed headers. */

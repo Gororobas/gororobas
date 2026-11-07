@@ -11,7 +11,7 @@ import {
 } from "effect"
 import * as KeyValueStore from "effect/persistence/KeyValueStore"
 
-import { SearchType } from "../app/route"
+import { SearchType } from "../app/search-query"
 
 /** A search someone committed to: pressed Enter, or opened one of its results. */
 export const RecentSearch = Schema.Struct({

@@ -38,28 +38,19 @@ export const profileAvatar = <Message>(
   h: HtmlBuilder<Message>,
 ): Html => {
   if (Option.isSome(maybePhotoUrl)) {
-    return h.img(
-      styledAttributes(
-        [h.Src(maybePhotoUrl.value), h.Alt(`Foto de ${name}`)],
-        avatarStyle({ size }),
-      ),
-    )
+    return h.img(styledAttributes([h.Src(maybePhotoUrl.value), h.Alt(name)], avatarStyle({ size })))
   }
 
   const parts = _parts(name, { animate: "always" })
 
   return h.svg(
     styledAttributes(
-      [
-        h.Xmlns("http://www.w3.org/2000/svg"),
-        h.ViewBox("0 0 100 100"),
-        h.AriaLabel(`Avatar de ${name}`),
-      ],
+      [h.Xmlns("http://www.w3.org/2000/svg"), h.ViewBox("0 0 100 100"), h.AriaLabel(name)],
       avatarStyle({ size }),
       Style.make({ transform: "scale(1.25)" }),
     ),
     [
-      h.title([], [`Avatar de ${name}`]),
+      h.title([], [name]),
       ...(parts.bg ? [h.path([h.D(parts.bg.d), h.Fill(parts.bg.fill)])] : []),
       h.g([
         h.Class(parts.cls ?? ""),

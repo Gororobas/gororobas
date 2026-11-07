@@ -1,13 +1,16 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { WikiArticleContributor } from "@gororobas/domain/wiki/domain"
+import { msg, plural, select } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, HashMap, Option } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { wikiArticleUrl } from "../../../app/route"
+import { intlTags } from "../../../lib/language"
+import { translateLabels, translatorFor } from "../../../lib/translations"
 import { bookmarkVocabularies, wikiKindLabels } from "../../../lib/vocabulary"
-import { aboutName, ofName } from "../../../lib/wiki-article-names"
+import { nameParts } from "../../../lib/wiki-article-names"
 import { AppText } from "../../../ui/app-text"
 import { EmptyState } from "../../../ui/empty-state"
 import { FilterChips } from "../../../ui/filter-chips"
@@ -137,12 +140,16 @@ const heroCaption = (photo: ArticlePhoto, h: WikiArticleViewBuilder): ReadonlyAr
 const hero = (
   { model, language, page }: Readonly<{ model: Model; language: SupportedLanguage; page: Page }>,
   h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> =>
-  EffectArray.match(articlePhotos(page).slice(0, HERO_PHOTO_COUNT), {
+): ReadonlyArray<Html> => {
+  const i18n = translatorFor(language)
+  const { name, gender } = nameParts(page)
+  const seePhotosLabel = i18n._(msg`${select(gender, { other: `See photos of ${name}` })}`)
+
+  return EffectArray.match(articlePhotos(page).slice(0, HERO_PHOTO_COUNT), {
     onEmpty: () => [],
     onNonEmpty: (slides) => [
       h.div(
-        styledAttributes([h.Role("group"), h.AriaLabel("Fotos em destaque")], heroStyle),
+        styledAttributes([h.Role("group"), h.AriaLabel(i18n._(msg`Featured photos`))], heroStyle),
         slides.map((photo) =>
           h.keyed("figure")(
             photo.key,
@@ -162,7 +169,7 @@ const hero = (
                         tab: "Photos",
                       }),
                     ),
-                    h.AriaLabel(`Ver fotos ${ofName(page)}`),
+                    h.AriaLabel(seePhotosLabel),
                   ],
                   heroLinkStyle,
                 ),
@@ -186,9 +193,11 @@ const hero = (
       ),
     ],
   })
+}
 
 const bookmarkers = ({ model, language, page }: ArticleState, h: WikiArticleViewBuilder): Html => {
-  const groupLabels = bookmarkVocabularies[page.kind].groups
+  const i18n = translatorFor(language)
+  const groupLabels = translateLabels(i18n, bookmarkVocabularies[page.kind].groups)
 
   return SectionCard.view(
     {
@@ -197,7 +206,8 @@ const bookmarkers = ({ model, language, page }: ArticleState, h: WikiArticleView
       children: [
         FilterChips.view(
           {
-            label: "Filtrar por situação",
+            label: i18n._(msg`Filter by status`),
+            allLabel: i18n._(msg`All`),
             options: (["INTERESTED", "ACTIVE", "PREVIOUSLY_ACTIVE"] as const).map(
               (state) => [state, groupLabels[state]] as const,
             ),
@@ -208,8 +218,9 @@ const bookmarkers = ({ model, language, page }: ArticleState, h: WikiArticleView
         ),
         asyncView(
           {
+            i18n,
             asyncData: model.bookmarkersAsyncData,
-            loading: { label: "Carregando quem acompanha", shape: "rows", count: 2 },
+            loading: { label: i18n._(msg`Loading who follows it`), shape: "rows", count: 2 },
             onData: (all) =>
               EffectArray.match(
                 all.filter((bookmarker) =>
@@ -223,9 +234,11 @@ const bookmarkers = ({ model, language, page }: ArticleState, h: WikiArticleView
                     EmptyState.view(
                       {
                         icon: Icons.heart,
-                        title: "Ninguém por aqui ainda",
+                        title: i18n._(msg`Nobody here yet`),
                         maybeDescription: Option.some(
-                          "Salve este artigo para aparecer aqui e encontrar quem se interessa pelo mesmo.",
+                          i18n._(
+                            msg`Save this article to show up here and find people interested in it too.`,
+                          ),
                         ),
                       },
                       h,
@@ -252,26 +265,40 @@ const bookmarkers = ({ model, language, page }: ArticleState, h: WikiArticleView
   )
 }
 
-const aboutContent = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
-  EffectArray.fromOption(
+const aboutContent = (
+  { page, language }: Readonly<{ page: Page; language: SupportedLanguage }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> => {
+  const { name, gender } = nameParts(page)
+  const title = translatorFor(language)._(msg`${select(gender, { other: `About ${name}` })}`)
+
+  return EffectArray.fromOption(
     Option.map(page.content, (content) =>
       SectionCard.view(
         {
-          title: `Sobre ${aboutName(page)}`,
+          title,
           icon: Icons.bulb,
-          children: [h.div(styledAttributes([], contentStyle), [RichText.view(content, h)])],
+          children: [
+            h.div(styledAttributes([], contentStyle), [
+              RichText.view({ document: content, i18n: translatorFor(language) }, h),
+            ]),
+          ],
         },
         h,
       ),
     ),
   )
+}
 
 /** Only shown once it has posts: an empty preview would only repeat the Posts tab's empty state. */
 const publicationsPreview = (
   { model, language, page, maybeToday }: ArticleState,
   h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> =>
-  EffectArray.fromOption(
+): ReadonlyArray<Html> => {
+  const i18n = translatorFor(language)
+  const { name, gender } = nameParts(page)
+
+  return EffectArray.fromOption(
     Option.filter(
       AsyncData.getData(model.publicationsAsyncData),
       EffectArray.isReadonlyArrayNonEmpty,
@@ -279,10 +306,10 @@ const publicationsPreview = (
   ).map((publications) =>
     SectionCard.view(
       {
-        title: "Posts",
+        title: i18n._(msg`Posts`),
         icon: Icons.clipboard,
         footerLink: {
-          label: `Todos os posts sobre ${aboutName(page)}`,
+          label: i18n._(msg`${select(gender, { other: `All posts about ${name}` })}`),
           href: wikiArticleUrl(language, {
             kind: page.kind,
             handle: page.handle,
@@ -305,6 +332,7 @@ const publicationsPreview = (
       h,
     ),
   )
+}
 
 const cultivarItemStyle = Style.make({
   flex: "0 0 min(20rem, 85%)",
@@ -315,13 +343,16 @@ const cultivarItemStyle = Style.make({
 const cultivars = (
   { model, language, page }: Readonly<{ model: Model; language: SupportedLanguage; page: Page }>,
   h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> =>
-  EffectArray.fromOption(
+): ReadonlyArray<Html> => {
+  const { name, gender } = nameParts(page)
+  const title = translatorFor(language)._(msg`${select(gender, { other: `Varieties of ${name}` })}`)
+
+  return EffectArray.fromOption(
     Option.filter(AsyncData.getData(model.cultivarsAsyncData), EffectArray.isReadonlyArrayNonEmpty),
   ).map((varieties) =>
     SectionCard.view(
       {
-        title: `Variedades ${ofName(page)}`,
+        title,
         icon: Icons.layers,
         children: [
           h.div(
@@ -345,13 +376,16 @@ const cultivars = (
       h,
     ),
   )
+}
 
 /** Only shown once it has articles: an empty "related" list says nothing useful. */
 const related = (
   { model, language }: Readonly<{ model: Model; language: SupportedLanguage }>,
   h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> =>
-  EffectArray.fromOption(
+): ReadonlyArray<Html> => {
+  const i18n = translatorFor(language)
+
+  return EffectArray.fromOption(
     Option.map(
       Option.filter(AsyncData.getData(model.relatedAsyncData), EffectArray.isReadonlyArrayNonEmpty),
       (articles) => {
@@ -371,8 +405,11 @@ const related = (
             ? [
                 FilterChips.view(
                   {
-                    label: "Filtrar por tipo",
-                    options: kinds.map((kind) => [kind, wikiKindLabels[kind].plural] as const),
+                    label: i18n._(msg`Filter by kind`),
+                    allLabel: i18n._(msg`All`),
+                    options: kinds.map(
+                      (kind) => [kind, i18n._(wikiKindLabels[kind].plural)] as const,
+                    ),
                     selected: model.maybeRelatedKindFilter,
                     toMessage: (maybeKind) => Message.ClickedRelatedKindFilter({ maybeKind }),
                   },
@@ -382,7 +419,10 @@ const related = (
             : []),
           ...EffectArray.match(shown, {
             onEmpty: () => [
-              EmptyState.view({ icon: Icons.encyclopedia, title: "Nenhum artigo desse tipo" }, h),
+              EmptyState.view(
+                { icon: Icons.encyclopedia, title: i18n._(msg`No articles of this kind`) },
+                h,
+              ),
             ],
             onNonEmpty: (nonEmpty) =>
               nonEmpty.map((article) =>
@@ -407,10 +447,11 @@ const related = (
     ),
   ).map((content) =>
     SectionCard.view(
-      { title: "Artigos relacionados", icon: Icons.encyclopedia, children: [content] },
+      { title: i18n._(msg`Related articles`), icon: Icons.encyclopedia, children: [content] },
       h,
     ),
   )
+}
 
 const photosPreview = (
   { page, language }: Readonly<{ page: Page; language: SupportedLanguage }>,
@@ -418,6 +459,7 @@ const photosPreview = (
 ): ReadonlyArray<Html> => {
   const photos = articlePhotos(page)
   const remaining = photos.length - PREVIEW_PHOTO_COUNT
+  const i18n = translatorFor(language)
 
   // A single photo is already the hero's; repeating it here adds nothing.
   return photos.length <= 1
@@ -425,10 +467,10 @@ const photosPreview = (
     : [
         SectionCard.view(
           {
-            title: "Fotos",
+            title: i18n._(msg`Photos`),
             icon: Icons.gallery,
             footerLink: {
-              label: "Ver todas as fotos",
+              label: i18n._(msg`See all photos`),
               href: wikiArticleUrl(language, {
                 kind: page.kind,
                 handle: page.handle,
@@ -482,13 +524,16 @@ const photosPreview = (
 const contributionsPreview = (
   { model, language, page }: ArticleState,
   h: WikiArticleViewBuilder,
-): Html =>
-  SectionCard.view(
+): Html => {
+  const i18n = translatorFor(language)
+  const { name, gender } = nameParts(page)
+
+  return SectionCard.view(
     {
-      title: "Contribuições",
+      title: i18n._(msg`Contributions`),
       icon: Icons.users,
       footerLink: {
-        label: "Ver contribuições",
+        label: i18n._(msg`See contributions`),
         href: wikiArticleUrl(language, {
           kind: page.kind,
           handle: page.handle,
@@ -500,15 +545,18 @@ const contributionsPreview = (
           {
             element: "p",
             children: [
-              `O Gororobas é colaborativo, você também pode sugerir uma edição pra página ${ofName(page)}.`,
+              i18n._(
+                msg`${select(gender, { other: `Gororobas is collaborative: you can also suggest an edit to the page of ${name}.` })}`,
+              ),
             ],
           },
           h,
         ),
         asyncView(
           {
+            i18n,
             asyncData: model.contributorsAsyncData,
-            loading: { label: "Carregando contribuições", shape: "rows", count: 2 },
+            loading: { label: i18n._(msg`Loading contributions`), shape: "rows", count: 2 },
             onData: (contributors) =>
               contributorList(
                 {
@@ -525,8 +573,15 @@ const contributionsPreview = (
     },
     h,
   )
+}
 
-const formatMonth = (date: DateTime.Utc): string => DateTime.formatIso(date).slice(0, 7)
+const formatMonth = (date: DateTime.Utc, language: SupportedLanguage): string =>
+  DateTime.format(date, {
+    locale: intlTags[language],
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  })
 
 type ContributorRowSize = "standard" | "large"
 
@@ -541,8 +596,11 @@ const contributorRow = (
     size: ContributorRowSize
   }>,
   h: WikiArticleViewBuilder,
-): Html =>
-  ProfileRow.view(
+): Html => {
+  const i18n = translatorFor(language)
+  const month = formatMonth(contributor.lastContributedAt, language)
+
+  return ProfileRow.view(
     {
       profile: contributor.profile,
       language,
@@ -554,7 +612,9 @@ const contributorRow = (
               element: "span",
               weight: "medium",
               children: [
-                `${contributor.revisionCount} ${contributor.revisionCount === 1 ? "edição" : "edições"}`,
+                i18n._(
+                  msg`${plural(contributor.revisionCount, { one: "# edit", other: "# edits" })}`,
+                ),
               ],
             },
             h,
@@ -563,7 +623,7 @@ const contributorRow = (
             {
               element: "span",
               appearance: "footnote",
-              children: [`em ${formatMonth(contributor.lastContributedAt)}`],
+              children: [i18n._(msg`in ${month}`)],
             },
             h,
           ),
@@ -572,6 +632,7 @@ const contributorRow = (
     },
     h,
   )
+}
 
 export const contributorList = (
   {
@@ -590,8 +651,10 @@ export const contributorList = (
       EmptyState.view(
         {
           icon: Icons.users,
-          title: "Nenhuma contribuição pública ainda",
-          maybeDescription: Option.some("Que tal ser a primeira pessoa a sugerir uma edição?"),
+          title: translatorFor(language)._(msg`No public contributions yet`),
+          maybeDescription: Option.some(
+            translatorFor(language)._(msg`How about being the first person to suggest an edit?`),
+          ),
         },
         h,
       ),
@@ -611,7 +674,10 @@ export const contributorList = (
 const mapStyle = Style.make({ maxInlineSize: "24rem", marginInline: "auto" })
 
 /** Where a gazetteer place lies: its outline, inside the place containing it. */
-const placeMap = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> => {
+const placeMap = (
+  { page, language }: Readonly<{ page: Page; language: SupportedLanguage }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> => {
   if (page.kind !== "PLACE" || page.map === null) {
     return []
   }
@@ -621,7 +687,7 @@ const placeMap = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
   return [
     SectionCard.view(
       {
-        title: "Onde fica",
+        title: translatorFor(language)._(msg`Where it is`),
         icon: Icons.mapPoint,
         children: [
           h.div(styledAttributes([], mapStyle), [
@@ -630,6 +696,7 @@ const placeMap = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
                 geometry: place.geometry,
                 boundingBox: place.boundingBox,
                 label: place.name,
+                i18n: translatorFor(language),
                 ...Option.match(surroundings, {
                   onNone: () => ({}),
                   onSome: (outline) => ({
@@ -687,15 +754,26 @@ export const view = (
     isSignedIn,
   }: ArticleState & Readonly<{ isSignedIn: boolean }>,
   h: WikiArticleViewBuilder,
-): Html =>
-  h.div(styledAttributes([], sectionsStyle, layoutStyle), [
+): Html => {
+  const { name, gender } = nameParts(page)
+  const followersLabel = translatorFor(language)._(
+    msg`${select(gender, { other: `Who follows ${name}` })}`,
+  )
+
+  return h.div(styledAttributes([], sectionsStyle, layoutStyle), [
     h.div(styledAttributes([], columnStyle), [
       ...ordered({ order: 1, children: hero({ model, language, page }, h) }, h),
-      ...ordered({ order: 3, children: [Overview.view(page, h), ...placeMap(page, h)] }, h),
+      ...ordered(
+        {
+          order: 3,
+          children: [Overview.view({ page, language }, h), ...placeMap({ page, language }, h)],
+        },
+        h,
+      ),
       ...ordered({ order: 4, children: cultivars({ model, language, page }, h) }, h),
       ...ordered({ order: 4, children: ChildPlaces.view({ model, language, page }, h) }, h),
       ...ordered({ order: 6, children: ExternalData.editions({ model, page }, h) }, h),
-      ...ordered({ order: 6, children: aboutContent(page, h) }, h),
+      ...ordered({ order: 6, children: aboutContent({ page, language }, h) }, h),
       ...ordered(
         { order: 7, children: publicationsPreview({ model, language, page, maybeToday }, h) },
         h,
@@ -703,7 +781,7 @@ export const view = (
       ...ordered({ order: 8, children: related({ model, language }, h) }, h),
       ...ordered({ order: 9, children: photosPreview({ page, language }, h) }, h),
     ]),
-    h.aside(styledAttributes([h.AriaLabel(`Quem acompanha ${aboutName(page)}`)], columnStyle), [
+    h.aside(styledAttributes([h.AriaLabel(followersLabel)], columnStyle), [
       ...ordered(
         { order: 2, children: [BookmarkPicker.view({ model, language, page, isSignedIn }, h)] },
         h,
@@ -718,3 +796,4 @@ export const view = (
       ),
     ]),
   ])
+}

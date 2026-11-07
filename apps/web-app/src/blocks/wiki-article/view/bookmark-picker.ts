@@ -1,11 +1,13 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { BookmarkState } from "@gororobas/domain/common/enums"
+import { msg } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { HashMap, Option } from "effect"
 import type { Html } from "foldkit/html"
 
 import { loginUrl } from "../../../app/route"
-import { type BookmarkVocabulary, bookmarkVocabularies } from "../../../lib/vocabulary"
+import { type Translator, translateLabels, translatorFor } from "../../../lib/translations"
+import { bookmarkVocabularies } from "../../../lib/vocabulary"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
 import { bookmarkStateIcon } from "../../../ui/icons/bookmark-icons"
@@ -151,13 +153,15 @@ const signInLinkStyle = Style.make({
 
 type PickerState = Readonly<{
   page: Page
-  vocabulary: BookmarkVocabulary
+  i18n: Translator
+  /** Each state in the article kind's own words. */
+  states: Readonly<Record<BookmarkState, string>>
   maybeState: Option.Option<BookmarkState>
   isSaving: boolean
 }>
 
 const triggerContent = (
-  { page, vocabulary, maybeState }: PickerState,
+  { page, i18n, states, maybeState }: PickerState,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> => [
   Option.match(maybeState, {
@@ -166,8 +170,8 @@ const triggerContent = (
   }),
   h.span(styledAttributes([], triggerLabelStyle), [
     Option.match(maybeState, {
-      onNone: () => "Salvar na minha lista",
-      onSome: (state) => vocabulary.states[state],
+      onNone: () => i18n._(msg`Save to my list`),
+      onSome: (state) => states[state],
     }),
   ]),
   h.span(styledAttributes([h.AriaHidden(true)], chevronWellStyle), [
@@ -179,7 +183,7 @@ const triggerContent = (
 const options = (state: PickerState, h: WikiArticleViewBuilder): Html =>
   h.div(
     styledAttributes(
-      [h.Role("group"), h.AriaLabel("Sua relação com este artigo")],
+      [h.Role("group"), h.AriaLabel(state.i18n._(msg`Your relationship to this article`))],
       optionListStyle,
     ),
     [
@@ -204,9 +208,7 @@ const options = (state: PickerState, h: WikiArticleViewBuilder): Html =>
           ),
           [
             bookmarkStateIcon(state.page.kind, bookmarkState)({ mode: "outline", size: "md" }),
-            h.span(styledAttributes([], optionLabelStyle), [
-              state.vocabulary.states[bookmarkState],
-            ]),
+            h.span(styledAttributes([], optionLabelStyle), [state.states[bookmarkState]]),
             ...(isSelected ? [Icons.check({ mode: "outline", size: "sm", tone: "accent" })] : []),
           ],
         )
@@ -226,7 +228,9 @@ const options = (state: PickerState, h: WikiArticleViewBuilder): Html =>
               ),
               [
                 Icons.bookmarkX({ mode: "outline", size: "md" }),
-                h.span(styledAttributes([], optionLabelStyle), ["Remover da minha lista"]),
+                h.span(styledAttributes([], optionLabelStyle), [
+                  state.i18n._(msg`Remove from my list`),
+                ]),
               ],
             ),
           ]
@@ -244,18 +248,22 @@ export const view = (
   }: Readonly<{ model: Model; language: SupportedLanguage; page: Page; isSignedIn: boolean }>,
   h: WikiArticleViewBuilder,
 ): Html => {
-  const vocabulary = bookmarkVocabularies[page.kind]
+  const i18n = translatorFor(language)
+  const states = translateLabels(i18n, bookmarkVocabularies[page.kind].states)
 
   if (!isSignedIn) {
+    const interested = states.INTERESTED
+
     return h.a(styledAttributes([h.Href(loginUrl(language))], signInLinkStyle), [
       Icons.bookmark({ size: "md" }),
-      `${vocabulary.states.INTERESTED}? Entre para salvar`,
+      i18n._(msg`${interested}? Sign in to save`),
     ])
   }
 
   const state: PickerState = {
     page,
-    vocabulary,
+    i18n,
+    states,
     maybeState: HashMap.get(model.viewerBookmarks, page.id),
     isSaving: BookmarkSaving.guards.Saving(model.bookmarkSaving),
   }
@@ -266,7 +274,7 @@ export const view = (
         slotId: model.bookmarkPicker.id,
         model: model.bookmarkPicker,
         viewInputs: {
-          title: "Salvar na minha lista",
+          title: i18n._(msg`Save to my list`),
           trigger: {
             children: triggerContent(state, h),
             className: styledClassName(triggerStyle),
@@ -286,7 +294,8 @@ export const view = (
               appearance: "footnote",
               tone: "destructive",
               attributes: [h.Role("alert")],
-              children: [model.bookmarkSaving.error],
+              // The failure's details are for diagnostics; readers get what to do next.
+              children: [i18n._(msg`Couldn't save. Try again.`)],
             },
             h,
           ),

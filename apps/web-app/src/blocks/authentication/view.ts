@@ -1,9 +1,12 @@
+import type { MessageDescriptor } from "@lingui/core"
+import { msg } from "@lingui/core/macro"
 import { Style } from "@pleat/core"
 import { Option } from "effect"
 import type { Attribute, Html } from "foldkit/html"
 
 import { myPlacesUrl } from "../../app/route"
 import type { LanguageInputs } from "../../lib/language"
+import { translatorFor } from "../../lib/translations"
 import { AppButton } from "../../ui/app-button"
 import { AppCard } from "../../ui/app-card"
 import { AppField } from "../../ui/app-field"
@@ -13,7 +16,7 @@ import { styledAttributes } from "../../ui/pleat-attributes"
 import { measure, space } from "../../ui/theme"
 import { AuthenticationComposition, type AuthenticationViewBuilder } from "./composition"
 import { Message } from "./message"
-import { Stage } from "./model"
+import { type AuthenticationNotice, Stage } from "./model"
 
 const pageStyle = Style.make({
   display: "grid",
@@ -82,25 +85,41 @@ const textField = (
     h,
   )
 
+const notices: Readonly<Record<AuthenticationNotice, MessageDescriptor>> = {
+  LinkFailed: msg`This link didn't work. It may have expired or been opened in another browser. Enter your email to get a new one.`,
+  SendFailed: msg`We couldn't send the email. Check the address and try again.`,
+  CodeResent: msg`We sent a new email. Earlier codes no longer work.`,
+  CodeFailed: msg`This code didn't work. Check it, or resend the email to get another one.`,
+  SomethingWentWrong: msg`Something went wrong. Try again.`,
+}
+
 export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
-  (model, { language }, h): Html =>
-    h.main(
+  (model, { language }, h): Html => {
+    const i18n = translatorFor(language)
+    const noticeText = (nullableNotice: AuthenticationNotice | null) =>
+      nullableNotice === null ? null : i18n._(notices[nullableNotice])
+
+    return h.main(
       styledAttributes([], pageStyle),
       Stage.match(model.stage, {
         Restoring: () => [
           AppText.view(
-            { element: "p", attributes: [h.Role("status")], children: ["Verificando sua sessão…"] },
+            {
+              element: "p",
+              attributes: [h.Role("status")],
+              children: [i18n._(msg`Checking your session…`)],
+            },
             h,
           ),
         ],
         EnteringEmail: ({ email, isSending, error }) => [
-          heading("Entre ou crie sua conta", h),
+          heading(i18n._(msg`Sign in or create your account`), h),
           h.form(styledAttributes([h.OnSubmit(Message.SubmittedEmail())], formStyle), [
             textField(
               {
                 id: "authentication-email",
-                label: "Email",
+                label: i18n._(msg`Email`),
                 value: email,
                 attributes: [
                   h.Type("email"),
@@ -109,7 +128,7 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                   h.Attribute("autocomplete", "email"),
                 ],
                 onInput: (value) => Message.UpdatedEmail({ value }),
-                error,
+                error: noticeText(error),
               },
               h,
             ),
@@ -118,19 +137,20 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                 type: "submit",
                 tone: "primary",
                 isDisabled: isSending,
-                children: [isSending ? "Enviando…" : "Continuar com email"],
+                children: [isSending ? i18n._(msg`Sending…`) : i18n._(msg`Continue with email`)],
               },
               h,
             ),
           ]),
         ],
         AwaitingCode: ({ pending, isEnteringCode, code, isBusy, canResend, notice }) => [
-          heading("Confira seu email", h),
+          heading(i18n._(msg`Check your email`), h),
           AppText.view(
             {
               element: "p",
               children: [
-                "Para continuar, clique no link enviado para ",
+                i18n._(msg`To continue, click the link sent to`),
+                " ",
                 AppText.view({ element: "strong", attributes: [], children: [pending.email] }, h),
               ],
             },
@@ -141,7 +161,7 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                 textField(
                   {
                     id: "authentication-code",
-                    label: "Código de verificação",
+                    label: i18n._(msg`Verification code`),
                     value: code,
                     attributes: [
                       h.Type("text"),
@@ -161,7 +181,7 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                     type: "submit",
                     tone: "primary",
                     isDisabled: isBusy || code.length !== 6,
-                    children: [isBusy ? "Verificando…" : "Verificar"],
+                    children: [isBusy ? i18n._(msg`Verifying…`) : i18n._(msg`Verify`)],
                   },
                   h,
                 ),
@@ -170,7 +190,7 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                 {
                   tone: "primary",
                   onClick: Message.ClickedEnterCode(),
-                  children: ["Digitar código"],
+                  children: [i18n._(msg`Enter code`)],
                 },
                 h,
               ),
@@ -180,7 +200,7 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                 mode: "outline",
                 isDisabled: isBusy || !canResend,
                 onClick: Message.ClickedResend(),
-                children: ["Reenviar email"],
+                children: [i18n._(msg`Resend email`)],
               },
               h,
             ),
@@ -189,20 +209,20 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                 mode: "outline",
                 isDisabled: isBusy,
                 onClick: Message.ClickedUseDifferentEmail(),
-                children: ["Usar outro email"],
+                children: [i18n._(msg`Use another email`)],
               },
               h,
             ),
           ]),
-          ...status(notice, h),
+          ...status(noticeText(notice), h),
         ],
         Onboarding: ({ name, isSaving, error }) => [
-          heading("Boas-vindas ao Gororobas!", h),
+          heading(i18n._(msg`Welcome to Gororobas!`), h),
           h.form(styledAttributes([h.OnSubmit(Message.SubmittedName())], formStyle), [
             textField(
               {
                 id: "authentication-name",
-                label: "Como podemos te chamar?",
+                label: i18n._(msg`What should we call you?`),
                 value: name,
                 attributes: [
                   h.Type("text"),
@@ -211,7 +231,7 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                   h.Attribute("autocomplete", "name"),
                 ],
                 onInput: (value) => Message.UpdatedName({ value }),
-                error,
+                error: noticeText(error),
               },
               h,
             ),
@@ -220,7 +240,7 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                 type: "submit",
                 tone: "primary",
                 isDisabled: isSaving || name.trim() === "",
-                children: [isSaving ? "Salvando…" : "Continuar"],
+                children: [isSaving ? i18n._(msg`Saving…`) : i18n._(msg`Continue`)],
               },
               h,
             ),
@@ -232,18 +252,24 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
               kind: "panel",
               styles: [formStyle],
               children: [
-                heading(`Olá, ${name}`, h),
+                heading(i18n._(msg`Hi, ${name}`), h),
                 ...status(
                   connection === "Offline"
-                    ? "Você está offline ou o servidor está indisponível. Sua conta segue disponível neste aparelho; ações online esperam a sessão ser verificada."
+                    ? i18n._(
+                        msg`You're offline or the server is unavailable. Your account stays available on this device; online actions wait for the session to be verified.`,
+                      )
                     : connection === "Checking"
-                      ? "Verificando sua sessão antes de ações online…"
+                      ? i18n._(msg`Checking your session before online actions…`)
                       : null,
                   h,
                 ),
                 h.div(styledAttributes([], actionsStyle), [
                   AppButton.view(
-                    { tone: "primary", href: myPlacesUrl(language), children: ["Meus lugares"] },
+                    {
+                      tone: "primary",
+                      href: myPlacesUrl(language),
+                      children: [i18n._(msg`My places`)],
+                    },
                     h,
                   ),
                   AppButton.view(
@@ -251,7 +277,7 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
                       mode: "outline",
                       isDisabled: isSigningOut,
                       onClick: Message.ClickedSignOut(),
-                      children: ["Sair"],
+                      children: [i18n._(msg`Sign out`)],
                     },
                     h,
                   ),
@@ -262,5 +288,6 @@ export const view = AuthenticationComposition.makeView.withInputs<LanguageInputs
           ),
         ],
       }),
-    ),
+    )
+  },
 )

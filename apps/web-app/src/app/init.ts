@@ -16,6 +16,7 @@ export const init = ApplicationComposition.makeInit((flags: typeof Flags.Type, u
       route,
       language: flags.language,
       maybeLanguageRequest: Option.none(),
+      maybeUnavailableLanguage: flags.maybeUnavailableLanguage,
       languageRequestCount: 0,
       maybeToday: Option.none(),
       deviceLocation: DeviceLocation.Unrequested(),

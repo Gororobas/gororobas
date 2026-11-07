@@ -34,7 +34,8 @@ export const articlePhotos = (page: Page): ReadonlyArray<ArticlePhoto> =>
             {
               key: media.id,
               src: (width) => imageUrl(media.id, width),
-              maybeCaption: mediaCaption(media),
+              // Captions read in the language the article itself was served in.
+              maybeCaption: mediaCaption({ media, language: page.language }),
               maybeCategory: Option.fromNullishOr(media.category),
               attribution: {
                 credits: media.credits.map((credit) => ({

@@ -1,7 +1,9 @@
+import { msg } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option, String as EffectString } from "effect"
 import type { Html } from "foldkit/html"
 
+import type { Translator } from "../../../../lib/translations"
 import { AppText } from "../../../../ui/app-text"
 import { Chip } from "../../../../ui/chip"
 import * as Icons from "../../../../ui/icons"
@@ -306,17 +308,24 @@ export const identifierFact = <Id extends string>(
     Option.map(maybeId, (id) => externalLinkFact({ title, url: toUrl(id), label: id }, h)),
   )
 
-export const rangeText = (minimum: string, maximum: string): string =>
-  minimum === maximum ? minimum : `De ${minimum} a ${maximum}`
+export const rangeText = ({
+  minimum,
+  maximum,
+  i18n,
+}: Readonly<{ minimum: string; maximum: string; i18n: Translator }>): string =>
+  minimum === maximum ? minimum : i18n._(msg`From ${minimum} to ${maximum}`)
 
 /** The article's facts in one card, or nothing when it has none. */
-export const overviewCard = (facts: ReadonlyArray<Html>, h: WikiArticleViewBuilder): Html =>
+export const overviewCard = (
+  { facts, i18n }: Readonly<{ facts: ReadonlyArray<Html>; i18n: Translator }>,
+  h: WikiArticleViewBuilder,
+): Html =>
   EffectArray.match(facts, {
     onEmpty: () => h.empty,
     onNonEmpty: (nonEmpty) =>
       SectionCard.view(
         {
-          title: "Visão geral",
+          title: i18n._(msg`Overview`),
           icon: Icons.clipboardCheck,
           children: [h.div(styledAttributes([], factsStyle), nonEmpty)],
         },

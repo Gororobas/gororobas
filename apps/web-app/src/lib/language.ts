@@ -21,7 +21,8 @@ export const languageNames = {
   en: "English",
 } as const satisfies Readonly<Record<SupportedLanguage, string>>
 
-export const DEFAULT_LANGUAGE: SupportedLanguage = "pt"
+/** The first `SupportedLanguage`, for people whose saved choice and browser name none. */
+export const DEFAULT_LANGUAGE = SupportedLanguage.literals[0]
 
 /** `pt-BR` and `pt` both read as Portuguese; unsupported tags read as absent. */
 export const languageOfTag = (tag: string): Option.Option<SupportedLanguage> =>
@@ -30,7 +31,7 @@ export const languageOfTag = (tag: string): Option.Option<SupportedLanguage> =>
     Option.liftPredicate(Schema.is(SupportedLanguage)),
   )
 
-/** For paths without a language: the person's saved choice, then their browser's, then Portuguese. */
+/** For paths without a language: the person's saved choice, then their browser's, then the default. */
 export const detectLanguage = (
   maybePreference: Option.Option<SupportedLanguage>,
   browserLanguageTags: ReadonlyArray<string>,

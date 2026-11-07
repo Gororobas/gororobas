@@ -6,6 +6,7 @@ import {
   ExternalDataObservationLogPage,
   type ExternalDataProvider,
 } from "@gororobas/domain/wiki/domain"
+import { msg, plural } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { AsyncData, Block } from "foldkit"
@@ -21,7 +22,8 @@ import {
   wikiArticleUrl,
 } from "../../app/route"
 import { ClientFailure } from "../../lib/client-failure"
-import type { LanguageInputs } from "../../lib/language"
+import { type LanguageInputs, intlTags } from "../../lib/language"
+import { type Translator, translatorFor } from "../../lib/translations"
 import { wikiKindLabels } from "../../lib/vocabulary"
 import { AppButton } from "../../ui/app-button"
 import { AppText } from "../../ui/app-text"
@@ -336,8 +338,8 @@ const providerOptions: ReadonlyArray<typeof ExternalDataProvider.Type> = [
   "GOOGLE_BOOKS",
 ]
 
-const formatDateTime = (date: DateTime.Utc): string =>
-  new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium" }).format(
+const formatDateTime = (date: DateTime.Utc, language: SupportedLanguage): string =>
+  new Intl.DateTimeFormat(intlTags[language], { dateStyle: "short", timeStyle: "medium" }).format(
     DateTime.toDate(date),
   )
 
@@ -350,17 +352,19 @@ const encodeCompactJson = Schema.encodeSync(Schema.fromJsonString(Schema.Json))
 const isForbidden = (error: ClientFailure): boolean =>
   Schema.is(Schema.TaggedStruct("UnauthorizedError", {}))(error.cause)
 
+type LanguageState = Readonly<{ language: SupportedLanguage; i18n: Translator }>
+
 const filters = (
-  { language, query }: Readonly<{ language: SupportedLanguage; query: ObservationLogQuery }>,
+  { language, i18n, query }: LanguageState & Readonly<{ query: ObservationLogQuery }>,
   h: ViewBuilder,
 ): Html => {
   const reset = { ...query, currentPage: 0 }
 
   return h.div(styledAttributes([], filterGroupsStyle), [
-    h.div(styledAttributes([h.Role("group"), h.AriaLabel("Provedor")], filterRowStyle), [
+    h.div(styledAttributes([h.Role("group"), h.AriaLabel(i18n._(msg`Provider`))], filterRowStyle), [
       Chip.view(
         {
-          label: "Todos os provedores",
+          label: i18n._(msg`All providers`),
           href: observationLogUrl(language, { ...reset, provider: Option.none() }),
           appearance: Option.isNone(query.provider) ? "selectedOption" : "option",
         },
@@ -377,10 +381,10 @@ const filters = (
         ),
       ),
     ]),
-    h.div(styledAttributes([h.Role("group"), h.AriaLabel("Resultado")], filterRowStyle), [
+    h.div(styledAttributes([h.Role("group"), h.AriaLabel(i18n._(msg`Outcome`))], filterRowStyle), [
       Chip.view(
         {
-          label: "Todos os resultados",
+          label: i18n._(msg`All outcomes`),
           href: observationLogUrl(language, { ...reset, outcome: Option.none() }),
           appearance: Option.isNone(query.outcome) ? "selectedOption" : "option",
         },
@@ -388,7 +392,7 @@ const filters = (
       ),
       Chip.view(
         {
-          label: "Sucessos",
+          label: i18n._(msg`Successes`),
           href: observationLogUrl(language, { ...reset, outcome: Option.some("Success") }),
           appearance: Option.contains(query.outcome, "Success") ? "selectedOption" : "option",
         },
@@ -396,7 +400,7 @@ const filters = (
       ),
       Chip.view(
         {
-          label: "Falhas",
+          label: i18n._(msg`Failures`),
           href: observationLogUrl(language, { ...reset, outcome: Option.some("Failure") }),
           appearance: Option.contains(query.outcome, "Failure") ? "selectedOption" : "option",
         },
@@ -406,7 +410,7 @@ const filters = (
         Option.map(query.wikiArticleId, () =>
           Chip.view(
             {
-              label: "Só este artigo ✕",
+              label: `${i18n._(msg`Only this article`)} ✕`,
               href: observationLogUrl(language, { ...reset, wikiArticleId: Option.none() }),
               appearance: "selectedOption",
             },
@@ -418,7 +422,10 @@ const filters = (
   ])
 }
 
-const tallies = (page: ExternalDataObservationLogPage, h: ViewBuilder): Html =>
+const tallies = (
+  { page, language, i18n }: LanguageState & Readonly<{ page: ExternalDataObservationLogPage }>,
+  h: ViewBuilder,
+): Html =>
   h.div(
     styledAttributes([], tallyGridStyle),
     page.tallies.map((tally) =>
@@ -435,7 +442,9 @@ const tallies = (page: ExternalDataObservationLogPage, h: ViewBuilder): Html =>
           AppText.view(
             {
               element: "p",
-              children: [`${tally.successes} sucessos · ${tally.failures} falhas`],
+              children: [
+                `${i18n._(msg`${plural(tally.successes, { one: "# success", other: "# successes" })}`)} · ${i18n._(msg`${plural(tally.failures, { one: "# failure", other: "# failures" })}`)}`,
+              ],
             },
             h,
           ),
@@ -445,9 +454,12 @@ const tallies = (page: ExternalDataObservationLogPage, h: ViewBuilder): Html =>
               appearance: "footnote",
               tone: tally.articlesFailing > 0 ? "destructive" : "neutral",
               children: [
-                tally.articlesFailing === 1
-                  ? "1 artigo falhou na última busca"
-                  : `${tally.articlesFailing} artigos falharam na última busca`,
+                i18n._(
+                  msg`${plural(tally.articlesFailing, {
+                    one: "# article failed in its latest fetch",
+                    other: "# articles failed in their latest fetch",
+                  })}`,
+                ),
               ],
             },
             h,
@@ -459,7 +471,7 @@ const tallies = (page: ExternalDataObservationLogPage, h: ViewBuilder): Html =>
                   element: "p",
                   appearance: "footnote",
                   isMuted: true,
-                  children: [`Última observação: ${formatDateTime(date)}`],
+                  children: [i18n._(msg`Latest observation: ${formatDateTime(date, language)}`)],
                 },
                 h,
               ),
@@ -479,7 +491,11 @@ const detail = (
 ]
 
 const response = (
-  { model, entry }: Readonly<{ model: Model; entry: ExternalDataObservationLogEntry }>,
+  {
+    model,
+    entry,
+    i18n,
+  }: Readonly<{ model: Model; entry: ExternalDataObservationLogEntry; i18n: Translator }>,
   h: ViewBuilder,
 ) =>
   Option.match(
@@ -488,7 +504,7 @@ const response = (
       onNone: () => [
         AppButton.view(
           {
-            children: [Icons.maximize({ size: "sm" }), "Ver resposta guardada"],
+            children: [Icons.maximize({ size: "sm" }), i18n._(msg`See stored response`)],
             onClick: Message.ClickedShowResponse({ id: entry.id }),
             mode: "outline",
             tone: "neutral",
@@ -500,7 +516,7 @@ const response = (
       onSome: (open) => [
         AppButton.view(
           {
-            children: [Icons.x({ size: "sm" }), "Esconder resposta"],
+            children: [Icons.x({ size: "sm" }), i18n._(msg`Hide response`)],
             onClick: Message.ClickedHideResponse(),
             mode: "outline",
             tone: "neutral",
@@ -515,7 +531,7 @@ const response = (
                 element: "p",
                 appearance: "footnote",
                 attributes: [h.Role("status")],
-                children: ["Carregando resposta…"],
+                children: [i18n._(msg`Loading response…`)],
               },
               h,
             ),
@@ -525,7 +541,7 @@ const response = (
                 element: "p",
                 appearance: "footnote",
                 tone: "destructive",
-                children: ["Não foi possível carregar a resposta."],
+                children: [i18n._(msg`Couldn't load the response.`)],
               },
               h,
             ),
@@ -540,12 +556,13 @@ const entryView = (
   {
     model,
     language,
+    i18n,
     entry,
-  }: Readonly<{
-    model: Model
-    language: SupportedLanguage
-    entry: ExternalDataObservationLogEntry
-  }>,
+  }: LanguageState &
+    Readonly<{
+      model: Model
+      entry: ExternalDataObservationLogEntry
+    }>,
   h: ViewBuilder,
 ): Html =>
   h.keyed("li")(entry.id, styledAttributes([], entryStyle), [
@@ -557,7 +574,7 @@ const entryView = (
           outcomeBadgeStyle,
           entry.outcome === "Success" ? successBadgeStyle : failureBadgeStyle,
         ),
-        [entry.outcome === "Success" ? "Sucesso" : "Falha"],
+        [entry.outcome === "Success" ? i18n._(msg`Success`) : i18n._(msg`Failure`)],
       ),
       h.a(
         styledAttributes(
@@ -576,7 +593,7 @@ const entryView = (
           appearance: "footnote",
           isMuted: true,
           children: [
-            `${wikiKindLabels[entry.article.kind].singular} · ${formatDateTime(entry.observedAt)}`,
+            `${i18n._(wikiKindLabels[entry.article.kind].singular)} · ${formatDateTime(entry.observedAt, language)}`,
           ],
         },
         h,
@@ -585,7 +602,7 @@ const entryView = (
     h.dl(styledAttributes([], detailListStyle), [
       ...detail(
         {
-          term: "Entrada",
+          term: i18n._(msg`Input`),
           children: [h.code(styledAttributes([], codeStyle), [encodeCompactJson(entry.inputs)])],
         },
         h,
@@ -593,7 +610,7 @@ const entryView = (
       ...entry.sources.flatMap((source) =>
         detail(
           {
-            term: source.externalId.startsWith("/") ? "Requisição" : source.externalId,
+            term: source.externalId.startsWith("/") ? i18n._(msg`Request`) : source.externalId,
             children: [
               h.a(
                 styledAttributes(
@@ -614,7 +631,10 @@ const entryView = (
         ),
       ),
       ...detail(
-        { term: "Observação", children: [h.code(styledAttributes([], codeStyle), [entry.id])] },
+        {
+          term: i18n._(msg`Observation`),
+          children: [h.code(styledAttributes([], codeStyle), [entry.id])],
+        },
         h,
       ),
     ]),
@@ -625,7 +645,9 @@ const entryView = (
             element: "p",
             attributes: styledAttributes([h.Role("note")], errorStyle),
             children: [
-              `${error.message}${error.isRetryable ? "\n(temporária: será tentada de novo)" : ""}`,
+              error.isRetryable
+                ? `${error.message}\n${i18n._(msg`(temporary: it will be retried)`)}`
+                : error.message,
             ],
           },
           h,
@@ -633,13 +655,13 @@ const entryView = (
       ),
     ),
     h.div(styledAttributes([], actionsStyle), [
-      ...response({ model, entry }, h),
+      ...response({ model, entry, i18n }, h),
       ...(Option.contains(model.query.wikiArticleId, entry.article.id)
         ? []
         : [
             AppButton.view(
               {
-                children: [Icons.filter({ size: "sm" }), "Só este artigo"],
+                children: [Icons.filter({ size: "sm" }), i18n._(msg`Only this article`)],
                 href: observationLogUrl(language, {
                   ...model.query,
                   wikiArticleId: Option.some(entry.article.id),
@@ -656,7 +678,7 @@ const entryView = (
         ? [
             AppButton.view(
               {
-                children: [Icons.sledgehammer({ size: "sm" }), "Depurar artigo"],
+                children: [Icons.sledgehammer({ size: "sm" }), i18n._(msg`Debug article`)],
                 href: wikiArticleDebugUrl(language, entry.article.id),
                 mode: "bleed",
                 tone: "neutral",
@@ -672,22 +694,25 @@ const entryView = (
 const pagination = (
   {
     language,
+    i18n,
     query,
     page,
   }: Readonly<{
     language: SupportedLanguage
+    i18n: Translator
     query: ObservationLogQuery
     page: ExternalDataObservationLogPage
   }>,
   h: ViewBuilder,
 ): Html => {
   const pageCount = Math.max(1, Math.ceil(page.totalCount / page.pageSize))
+  const currentPageNumber = query.currentPage + 1
 
-  return h.nav(styledAttributes([h.AriaLabel("Páginas")], paginationStyle), [
+  return h.nav(styledAttributes([h.AriaLabel(i18n._(msg`Pages`))], paginationStyle), [
     query.currentPage > 0
       ? AppButton.view(
           {
-            children: [Icons.arrowLeft({ size: "sm" }), "Mais recentes"],
+            children: [Icons.arrowLeft({ size: "sm" }), i18n._(msg`Newer`)],
             href: observationLogUrl(language, { ...query, currentPage: query.currentPage - 1 }),
             mode: "outline",
             size: "sm",
@@ -700,14 +725,14 @@ const pagination = (
         element: "span",
         appearance: "footnote",
         isMuted: true,
-        children: [`Página ${query.currentPage + 1} de ${pageCount}`],
+        children: [i18n._(msg`Page ${currentPageNumber} of ${pageCount}`)],
       },
       h,
     ),
     query.currentPage + 1 < pageCount
       ? AppButton.view(
           {
-            children: ["Mais antigas", Icons.arrowRight({ size: "sm" })],
+            children: [i18n._(msg`Older`), Icons.arrowRight({ size: "sm" })],
             href: observationLogUrl(language, { ...query, currentPage: query.currentPage + 1 }),
             mode: "outline",
             size: "sm",
@@ -731,8 +756,10 @@ const statusText = (text: string, h: ViewBuilder): Html =>
 /** Read-only: every provider fetch, what it was asked and what it got back. */
 const view = ExternalDataAdminDashboardComposition.makeView.withInputs<LanguageInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
-  (model, { language }, h) =>
-    h.div(styledAttributes([], pageColumnStyle, pageStyle), [
+  (model, { language }, h) => {
+    const i18n = translatorFor(language)
+
+    return h.div(styledAttributes([], pageColumnStyle, pageStyle), [
       h.header(styledAttributes([], introStyle), [
         AppText.view(
           {
@@ -740,7 +767,7 @@ const view = ExternalDataAdminDashboardComposition.makeView.withInputs<LanguageI
             appearance: "xxl",
             weight: "semibold",
             lineHeight: "tight",
-            children: ["Dados externos"],
+            children: [i18n._(msg`External data`)],
           },
           h,
         ),
@@ -749,46 +776,51 @@ const view = ExternalDataAdminDashboardComposition.makeView.withInputs<LanguageI
             element: "p",
             isMuted: true,
             children: [
-              "Cada busca no Wikidata, GBIF e Google Livros, das mais recentes às mais antigas. Apenas leitura.",
+              i18n._(
+                msg`Every fetch from Wikidata, GBIF and Google Books, newest first. Read-only.`,
+              ),
             ],
           },
           h,
         ),
       ]),
       AsyncData.matchData(model.logAsyncData, {
-        onEmpty: () => statusText("Carregando observações…", h),
+        onEmpty: () => statusText(i18n._(msg`Loading observations…`), h),
         onFailure: (error) =>
           statusText(
             isForbidden(error)
-              ? "Só pessoas da moderação e da administração podem ver este registro."
-              : "Não foi possível carregar as observações.",
+              ? i18n._(msg`Only moderators and administrators can see this log.`)
+              : i18n._(msg`Couldn't load the observations.`),
             h,
           ),
         onData: (page) =>
           h.div(styledAttributes([], pageStyle), [
-            tallies(page, h),
+            tallies({ page, language, i18n }, h),
             SectionCard.view(
               {
-                title: `${page.totalCount} ${page.totalCount === 1 ? "observação" : "observações"}`,
+                title: i18n._(
+                  msg`${plural(page.totalCount, { one: "# observation", other: "# observations" })}`,
+                ),
                 icon: Icons.history,
                 children: [
-                  filters({ language, query: model.query }, h),
+                  filters({ language, i18n, query: model.query }, h),
                   EffectArray.match(page.entries, {
-                    onEmpty: () => statusText("Nenhuma observação com esses filtros.", h),
+                    onEmpty: () => statusText(i18n._(msg`No observations with these filters.`), h),
                     onNonEmpty: (entries) =>
                       h.ul(
                         styledAttributes([], entryListStyle),
-                        entries.map((entry) => entryView({ model, language, entry }, h)),
+                        entries.map((entry) => entryView({ model, language, i18n, entry }, h)),
                       ),
                   }),
-                  pagination({ language, query: model.query, page }, h),
+                  pagination({ language, i18n, query: model.query, page }, h),
                 ],
               },
               h,
             ),
           ]),
       }),
-    ]),
+    ])
+  },
 )
 
 export const layer = ExternalDataAdminDashboardBlock.makeLayer(

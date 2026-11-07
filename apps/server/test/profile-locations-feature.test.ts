@@ -341,6 +341,7 @@ const placeIsInsideNothing = () =>
       }),
   })
 
+/** A translation shares its handle with the languages before it, so any language's handle works. */
 const placeHandleNamed = SqlSchema.findOne({
   Request: Schema.String,
   Result: Schema.Struct({ handle: Handle }),
@@ -349,9 +350,10 @@ const placeHandleNamed = SqlSchema.findOne({
       (sql) => sql`
         SELECT h.handle FROM wiki_article_handles h
         JOIN wiki_article_translations t ON t.wiki_article_id = h.wiki_article_id
-          AND t.language = h.language
-        WHERE h.kind = 'PLACE' AND h.language = 'pt'
+        WHERE h.kind = 'PLACE' AND t.language = 'pt'
           AND json_extract(t.common_names, '$[0].name') = ${name}
+        ORDER BY h.handle
+        LIMIT 1
       `,
     ),
 })

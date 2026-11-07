@@ -1,9 +1,9 @@
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { ProfileId } from "@gororobas/domain/common/ids"
 import { Handle } from "@gororobas/domain/common/primitives"
 import { Effect, Function, Layer } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
-import { readerLanguage } from "../../lib/reader-language"
 import { ProfileBlock } from "./definition"
 import { Message } from "./message"
 
@@ -31,17 +31,17 @@ export const LoadPage = ProfileBlock.makeCommand("LoadPage", {
 })
 
 export const LoadPublications = ProfileBlock.makeCommand("LoadPublications", {
-  args: { ownerProfileId: ProfileId },
+  args: { ownerProfileId: ProfileId, language: SupportedLanguage },
   messages: [Message.SucceededLoadPublications, Message.FailedLoadPublications],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return ({ ownerProfileId }) =>
+    return ({ ownerProfileId, language }) =>
       api.publications
         .searchPublications({
           query: {
             ownerProfileId,
-            language: readerLanguage,
+            language,
             pageSize: PUBLICATIONS_PAGE_SIZE,
             currentPage: 0,
           },
@@ -72,38 +72,34 @@ export const LoadPhotos = ProfileBlock.makeCommand("LoadPhotos", {
 })
 
 export const LoadContributions = ProfileBlock.makeCommand("LoadContributions", {
-  args: { handle: Handle },
+  args: { handle: Handle, language: SupportedLanguage },
   messages: [Message.SucceededLoadContributions, Message.FailedLoadContributions],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return ({ handle }) =>
-      api.profiles
-        .listProfileWikiContributions({ params: { handle }, query: { language: readerLanguage } })
-        .pipe(
-          Effect.match({
-            onFailure: (error) => Message.FailedLoadContributions({ error: { cause: error } }),
-            onSuccess: (contributions) => Message.SucceededLoadContributions({ contributions }),
-          }),
-        )
+    return ({ handle, language }) =>
+      api.profiles.listProfileWikiContributions({ params: { handle }, query: { language } }).pipe(
+        Effect.match({
+          onFailure: (error) => Message.FailedLoadContributions({ error: { cause: error } }),
+          onSuccess: (contributions) => Message.SucceededLoadContributions({ contributions }),
+        }),
+      )
   },
 })
 
 export const LoadBookmarks = ProfileBlock.makeCommand("LoadBookmarks", {
-  args: { handle: Handle },
+  args: { handle: Handle, language: SupportedLanguage },
   messages: [Message.SucceededLoadBookmarks, Message.FailedLoadBookmarks],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return ({ handle }) =>
-      api.profiles
-        .listProfileBookmarks({ params: { handle }, query: { language: readerLanguage } })
-        .pipe(
-          Effect.match({
-            onFailure: (error) => Message.FailedLoadBookmarks({ error: { cause: error } }),
-            onSuccess: (bookmarks) => Message.SucceededLoadBookmarks({ bookmarks }),
-          }),
-        )
+    return ({ handle, language }) =>
+      api.profiles.listProfileBookmarks({ params: { handle }, query: { language } }).pipe(
+        Effect.match({
+          onFailure: (error) => Message.FailedLoadBookmarks({ error: { cause: error } }),
+          onSuccess: (bookmarks) => Message.SucceededLoadBookmarks({ bookmarks }),
+        }),
+      )
   },
 })
 

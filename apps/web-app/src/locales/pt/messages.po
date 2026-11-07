@@ -1,21 +1,648 @@
 msgid ""
 msgstr ""
-"POT-Creation-Date: 2026-11-05 21:52-0500\n"
-"MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
-"Content-Transfer-Encoding: 8bit\n"
-"X-Generator: @lingui/cli\n"
-"Language: pt\n"
+
+#: src/blocks/search/view.ts
+msgid "“{text}”"
+msgstr "“{text}”"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "(temporary: it will be retried)"
+msgstr "(temporária: será tentada de novo)"
+
+#. placeholder {0}: tally.articlesFailing
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "{0, plural, one {# article failed in its latest fetch} other {# articles failed in their latest fetch}}"
+msgstr "{0, plural, one {# artigo falhou na última busca} other {# artigos falharam na última busca}}"
+
+#. placeholder {0}: contributor.revisionCount
+#: src/blocks/wiki-article/view/about.ts
+msgid "{0, plural, one {# edit} other {# edits}}"
+msgstr "{0, plural, one {# edição} other {# edições}}"
+
+#. placeholder {0}: tally.failures
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "{0, plural, one {# failure} other {# failures}}"
+msgstr "{0, plural, one {# falha} other {# falhas}}"
+
+#. placeholder {0}: page.totalCount
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "{0, plural, one {# observation} other {# observations}}"
+msgstr "{0, plural, one {# observação} other {# observações}}"
+
+#. placeholder {0}: tally.successes
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "{0, plural, one {# success} other {# successes}}"
+msgstr "{0, plural, one {# sucesso} other {# sucessos}}"
+
+#. placeholder {0}: credits.length
+#: src/ui/media-credit/view.ts
+msgid "{0, plural, one {Author} other {Authors}}"
+msgstr "{0, plural, one {Autoria} other {Autorias}}"
+
+#. placeholder {0}: all.length
+#: src/blocks/wiki-article/view/external-data.ts
+msgid "{0, plural, one {Edition} other {Editions}}"
+msgstr "{0, plural, one {Edição} other {Edições}}"
+
+#. placeholder {0}: nameGender(parent)
+#: src/blocks/wiki-article/view/view.ts
+msgid "{0, select, other {{kind} in}}"
+msgstr "{0, select, female {{kind} na} male {{kind} no} other {{kind} em}}"
+
+#. placeholder {0}: nameGender(page)
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "{0, select, other {Also known as}}"
+msgstr "{0, select, female {Também conhecida como} other {Também conhecido como}}"
+
+#. placeholder {0}: nameParts(page).gender
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "{0, select, other {Height when fully grown}}"
+msgstr "{0, select, female {Altura quando adulta} other {Altura quando adulto}}"
+
+#. placeholder {0}: formatElevation(elevation, language)
+#: src/blocks/profile-locations-editor/view.ts
+msgid "{0} of altitude, from the device. Only you see it."
+msgstr "{0} de altitude, pelo aparelho. Só você vê."
+
+#. placeholder {0}: sectionsLabel({ language, page })
+#: src/blocks/wiki-article/view/view.ts
+msgid "{0}, shortcut"
+msgstr "{0}, atalho"
+
+#: src/blocks/search/view.ts
+msgid "{count, plural, one {# result for} other {# results for}}"
+msgstr "{count, plural, one {# resultado para} other {# resultados para}}"
+
+#: src/blocks/search/view.ts
+msgid "{count}+ results for"
+msgstr "{count}+ resultados para"
+
+#: src/ui/wiki-article-row/view.ts
+msgid "{gender, select, other {{kind} of {name}}}"
+msgstr "{gender, select, female {{kind} da {name}} male {{kind} do {name}} other {{kind} de {name}}}"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "{gender, select, other {{name}'s value, may differ in this variety}}"
+msgstr "{gender, select, female {Valor da {name}, pode variar nesta variedade} male {Valor do {name}, pode variar nesta variedade} other {Valor de {name}, pode variar nesta variedade}}"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "{gender, select, other {About {name}}}"
+msgstr "{gender, select, female {Sobre a {name}} male {Sobre o {name}} other {Sobre {name}}}"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "{gender, select, other {All posts about {name}}}"
+msgstr "{gender, select, female {Todos os posts sobre a {name}} male {Todos os posts sobre o {name}} other {Todos os posts sobre {name}}}"
+
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "{gender, select, other {Gororobas is collaborative: each person below helped build the page of {name}.}}"
+msgstr "{gender, select, female {O Gororobas é colaborativo: cada pessoa abaixo ajudou a construir a página da {name}.} male {O Gororobas é colaborativo: cada pessoa abaixo ajudou a construir a página do {name}.} other {O Gororobas é colaborativo: cada pessoa abaixo ajudou a construir a página de {name}.}}"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "{gender, select, other {Gororobas is collaborative: you can also suggest an edit to the page of {name}.}}"
+msgstr "{gender, select, female {O Gororobas é colaborativo, você também pode sugerir uma edição pra página da {name}.} male {O Gororobas é colaborativo, você também pode sugerir uma edição pra página do {name}.} other {O Gororobas é colaborativo, você também pode sugerir uma edição pra página de {name}.}}"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "{gender, select, other {Inherited from {name}}}"
+msgstr "{gender, select, female {Herdado da {name}} male {Herdado do {name}} other {Herdado de {name}}}"
+
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "{gender, select, other {No posts about {name} yet}}"
+msgstr "{gender, select, female {Ainda não há posts sobre a {name}} male {Ainda não há posts sobre o {name}} other {Ainda não há posts sobre {name}}}"
+
+#: src/blocks/wiki-article/view/tabs.ts
+#: src/blocks/wiki-article/view/view.ts
+msgid "{gender, select, other {Photos of {name}}}"
+msgstr "{gender, select, female {Fotos da {name}} male {Fotos do {name}} other {Fotos de {name}}}"
+
+#: src/blocks/wiki-article/view/child-places.ts
+msgid "{gender, select, other {Places in {name}}}"
+msgstr "{gender, select, female {Lugares na {name}} male {Lugares no {name}} other {Lugares em {name}}}"
+
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "{gender, select, other {Posts about {name}}}"
+msgstr "{gender, select, female {Posts sobre a {name}} male {Posts sobre o {name}} other {Posts sobre {name}}}"
+
+#: src/blocks/wiki-article/view/view.ts
+msgid "{gender, select, other {Sections of {name}}}"
+msgstr "{gender, select, female {Seções da {name}} male {Seções do {name}} other {Seções de {name}}}"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "{gender, select, other {See photos of {name}}}"
+msgstr "{gender, select, female {Ver fotos da {name}} male {Ver fotos do {name}} other {Ver fotos de {name}}}"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "{gender, select, other {Varieties of {name}}}"
+msgstr "{gender, select, female {Variedades da {name}} male {Variedades do {name}} other {Variedades de {name}}}"
+
+#: src/blocks/wiki-article/view/view.ts
+msgid "{gender, select, other {Variety of}}"
+msgstr "{gender, select, female {Variedade da} male {Variedade do} other {Variedade de}}"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "{gender, select, other {Who follows {name}}}"
+msgstr "{gender, select, female {Quem acompanha a {name}} male {Quem acompanha o {name}} other {Quem acompanha {name}}}"
+
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "{interested}? Sign in to save"
+msgstr "{interested}? Entre para salvar"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "{minimum, plural, one {# day} other {# days}}"
+msgstr "{minimum, plural, one {# dia} other {# dias}}"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "{minimum} to {maximum} days"
+msgstr "De {minimum} a {maximum} dias"
+
+#: src/blocks/profile/view/collections.ts
+msgid "{name} hasn't posted here yet"
+msgstr "{name} ainda não publicou por aqui"
+
+#: src/blocks/profile/view/home.ts
+msgid "{name} hasn't shared anything here yet"
+msgstr "{name} ainda não compartilhou nada por aqui"
 
 #: src/app/view.ts
 msgid "{name}'s account"
 msgstr "Conta de {name}"
 
+#: src/blocks/profile/view/collections.ts
+msgid "{revisionCount, plural, one {# approved edit} other {# approved edits}}"
+msgstr "{revisionCount, plural, one {# edição aprovada} other {# edições aprovadas}}"
+
+#: src/blocks/wiki-article/view/child-places.ts
+msgid "{totalCount, plural, one {Showing {shownCount} of # place} other {Showing {shownCount} of # places}}"
+msgstr "{totalCount, plural, one {Mostrando {shownCount} de # lugar} other {Mostrando {shownCount} de # lugares}}"
+
+#: src/app/view.ts
+msgid "{unavailableName} couldn't load, so Gororobas is in {currentName} for now."
+msgstr "Não foi possível carregar {unavailableName}, então o Gororobas está em {currentName} por enquanto."
+
+#: src/lib/vocabulary.ts
+msgid "A technique that joins parts of two different plants to combine desirable traits. One part (the scion) is inserted into another plant (the rootstock) so they grow together. Much of the commercial production of many fruit trees is done this way (cacao, citrus, mulberries, etc.)."
+msgstr "Técnica de unir partes de duas plantas diferentes para combinar características desejáveis. Uma parte (o enxerto ou clone) é inserida em outra planta (o porta-enxerto ou cavalo) para que cresçam juntas. Grande parte da produção comercial de muitas frutíferas é feita assim (cacau, cítricas, amoras, etc.)."
+
+#: src/blocks/profile/view/home.ts
+msgctxt "profile bio"
+msgid "About"
+msgstr "Sobre"
+
+#: src/blocks/wiki-article/view/shared.ts
+msgctxt "wiki article tab"
+msgid "About"
+msgstr "Sobre"
+
+#: src/lib/vocabulary.ts
+msgid "Academic work"
+msgstr "Trabalho acadêmico"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Add place"
+msgstr "Adicionar lugar"
+
+#: src/blocks/search/view.ts
+msgctxt "search idea's query"
+msgid "agroforestry"
+msgstr "agrofloresta"
+
+#: src/blocks/search/view.ts
+msgid "Agroforestry"
+msgstr "Agrofloresta"
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/search/view.ts
+#: src/blocks/wiki-article/view/about.ts
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "All"
+msgstr "Todos"
+
+#: src/blocks/search/view.ts
+msgctxt "every type of content"
+msgid "All"
+msgstr "Tudo"
+
+#: src/blocks/profile/view/home.ts
+msgid "All contributions"
+msgstr "Todas as contribuições"
+
+#: src/blocks/search/view.ts
+msgid "All filters"
+msgstr "Todos os filtros"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "All outcomes"
+msgstr "Todos os resultados"
+
+#: src/blocks/profile/view/home.ts
+msgid "All posts"
+msgstr "Todas as publicações"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "All providers"
+msgstr "Todos os provedores"
+
+#: src/blocks/search/view.ts
+msgid "All types"
+msgstr "Todos os tipos"
+
+#: src/blocks/search/view.ts
+msgid "among people"
+msgstr "entre a gente"
+
+#: src/blocks/search/view.ts
+msgid "among plants"
+msgstr "entre as plantas"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgid "Angiosperms"
+msgstr "Angiospermas"
+
+#: src/lib/vocabulary.ts
+msgid "Animal"
+msgstr "Animal"
+
+#: src/lib/vocabulary.ts
+msgid "Animal feed"
+msgstr "Alimento animal"
+
+#: src/lib/vocabulary.ts
+msgid "Animals"
+msgstr "Animais"
+
+#: src/lib/vocabulary.ts
+msgid "Annual"
+msgstr "Anual"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Anyone. If it's the most recent, it shows on your profile."
+msgstr "Qualquer pessoa. Se for o mais recente, aparece no seu perfil."
+
+#: src/lib/vocabulary.ts
+msgid "Aquaculture"
+msgstr "Aquicultura"
+
+#: src/lib/vocabulary.ts
+msgid "Are there"
+msgstr "Estão por lá"
+
+#: src/lib/vocabulary.ts
+msgid "Article"
+msgstr "Artigo"
+
+#: src/blocks/wiki-article-debug/wiki-article-debug.ts
+msgid "Article data loaded"
+msgstr "Dados do artigo carregados"
+
+#: src/blocks/wiki-article-debug/wiki-article-debug.ts
+msgid "Article debugging"
+msgstr "Depuração do artigo"
+
+#: src/blocks/search/view.ts
+msgid "Article kinds"
+msgstr "Tipos de artigo"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Articles {name} helped write, with approved edits."
+msgstr "Artigos que {name} ajudou a escrever, com edições aprovadas."
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Authors"
+msgstr "Autoria"
+
+#: src/lib/vocabulary.ts
+msgid "Bark"
+msgstr "Casca"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Between {minimum}ºC and {maximum}ºC"
+msgstr "Entre {minimum}ºC e {maximum}ºC"
+
+#: src/lib/vocabulary.ts
+msgid "Biennial"
+msgstr "Bienal"
+
+#: src/lib/vocabulary.ts
+msgid "Biome"
+msgstr "Bioma"
+
+#: src/lib/vocabulary.ts
+msgid "Book"
+msgstr "Livro"
+
+#: src/lib/vocabulary.ts
+msgid "Books"
+msgstr "Livros"
+
+#: src/blocks/search/view.ts
+msgid "Browse everything"
+msgstr "Navegue por tudo"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgid "Bryophytes"
+msgstr "Briófitas"
+
+#: src/lib/vocabulary.ts
+msgid "Bulb"
+msgstr "Bulbo"
+
+#: src/lib/vocabulary.ts
+msgid "Bulbs are short underground stems wrapped in fleshy leaves, like onions and garlic. We plant the whole bulb or its cloves, and each grows into a new plant."
+msgstr "Bulbos são caules subterrâneos curtos envoltos em folhas carnudas, como os da cebola e do alho. Plantamos o bulbo inteiro ou seus dentes, e cada um origina uma nova planta."
+
+#: src/lib/vocabulary.ts
+msgid "Business"
+msgstr "Empresa"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: src/blocks/search/filters.ts
+msgid "Category"
+msgstr "Categoria"
+
+#: src/blocks/authentication/view.ts
+msgid "Check your email"
+msgstr "Confira seu email"
+
+#: src/blocks/authentication/view.ts
+msgid "Checking your session before online actions…"
+msgstr "Verificando sua sessão antes de ações online…"
+
+#: src/blocks/authentication/view.ts
+msgid "Checking your session…"
+msgstr "Verificando sua sessão…"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Choose a municipality, state or country"
+msgstr "Escolher um município, estado ou país"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Choose a place from the list or use the device's location."
+msgstr "Escolha um lugar da lista ou use a localização do aparelho."
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Class"
+msgstr "Classe"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgid "Classification"
+msgstr "Classificação"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgid "Classification: {names}"
+msgstr "Classificação: {names}"
+
+#: src/blocks/search/view.ts
+msgid "Clear filters"
+msgstr "Limpar filtros"
+
+#: src/blocks/search/view.ts
+msgid "Clear search"
+msgstr "Limpar busca"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Close"
+msgstr "Fechar"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Close without saving"
+msgstr "Fechar sem salvar"
+
+#: src/lib/vocabulary.ts
+msgid "Collective"
+msgstr "Coletivo"
+
+#: src/lib/vocabulary.ts
+msgid "Community"
+msgstr "Comunidade"
+
+#: src/lib/vocabulary.ts
+msgid "Composting"
+msgstr "Compostagem"
+
+#: src/lib/vocabulary.ts
+msgid "Concept"
+msgstr "Conceito"
+
+#: src/lib/vocabulary.ts
+msgid "Concepts"
+msgstr "Conceitos"
+
+#: src/lib/vocabulary.ts
+msgid "Construction"
+msgstr "Construção"
+
+#: src/blocks/search/view.ts
+msgid "Content type"
+msgstr "Tipo de conteúdo"
+
+#: src/blocks/authentication/view.ts
+msgid "Continue"
+msgstr "Continuar"
+
+#: src/blocks/authentication/view.ts
+msgid "Continue with email"
+msgstr "Continuar com email"
+
+#: src/blocks/profile/view/view.ts
+#: src/blocks/wiki-article/view/about.ts
+#: src/blocks/wiki-article/view/shared.ts
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "Contributions"
+msgstr "Contribuições"
+
+#: src/lib/vocabulary.ts
+msgid "Cooperative"
+msgstr "Cooperativa"
+
+#: src/lib/vocabulary.ts
+msgid "Cosmetic"
+msgstr "Cosmético"
+
+#: src/blocks/profile/view/shared.ts
+#: src/blocks/wiki-article/view/shared.ts
+msgid "Couldn't load right now"
+msgstr "Não foi possível carregar agora"
+
+#: src/blocks/wiki-article/view/view.ts
+msgid "Couldn't load the article right now"
+msgstr "Não foi possível carregar o artigo agora"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Couldn't load the observations."
+msgstr "Não foi possível carregar as observações."
+
+#: src/blocks/profile/view/view.ts
+msgid "Couldn't load the profile right now"
+msgstr "Não foi possível carregar o perfil agora"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Couldn't load the response."
+msgstr "Não foi possível carregar a resposta."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Couldn't load this place. Try again."
+msgstr "Não foi possível carregar esse lugar. Tente novamente."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Couldn't load your places. Try again in a moment."
+msgstr "Não foi possível carregar seus lugares. Tente novamente em instantes."
+
+#: src/blocks/wiki-article-debug/wiki-article-debug.ts
+msgid "Couldn't load: {error}"
+msgstr "Não foi possível carregar: {error}"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Couldn't remove it. Try again."
+msgstr "Não foi possível remover. Tente novamente."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Couldn't save the place. Try again."
+msgstr "Não foi possível salvar o lugar. Tente novamente."
+
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Couldn't save. Try again."
+msgstr "Não foi possível salvar. Tente novamente."
+
+#: src/blocks/search/view.ts
+msgid "Couldn't search right now"
+msgstr "Não foi possível buscar agora"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+#: src/lib/vocabulary.ts
+msgid "Country"
+msgstr "País"
+
+#: src/lib/vocabulary.ts
+msgid "Course"
+msgstr "Curso"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+#: src/ui/media-credit/view.ts
+msgid "Credits"
+msgstr "Créditos"
+
+#: src/lib/vocabulary.ts
+msgid "Cutting"
+msgstr "Estaca"
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "Data from {name}"
+msgstr "Dados do {name}"
+
+#: src/lib/vocabulary.ts
+msgid "Dataset"
+msgstr "Base de dados"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Dates are optional, and the year is enough."
+msgstr "As datas são opcionais, e o ano basta."
+
+#: src/lib/vocabulary.ts
+msgid "Day to day"
+msgstr "No dia a dia"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+#: src/blocks/wiki-article/view/view.ts
+msgid "Debug article"
+msgstr "Depurar artigo"
+
 #: src/app/view.ts
 msgid "Debugging | Gororobas"
 msgstr "Depuração | Gororobas"
 
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Describe it in my own words"
+msgstr "Descrever com minhas palavras"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Describe where you are."
+msgstr "Descreva onde você está."
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Directed by"
+msgstr "Direção"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Dissolved"
+msgstr "Encerramento"
+
+#: src/lib/vocabulary.ts
+msgid "Division"
+msgstr "Divisão"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Domain"
+msgstr "Domínio"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Don't keep it"
+msgstr "Não guardar"
+
+#: src/lib/vocabulary.ts
+#: src/ui/publication-card/view.ts
+msgid "Draft"
+msgstr "Tração"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "E.g.: farm on the road to Sáchica"
+msgstr "Ex.: sítio na estrada para Sáchica"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "E.g.: Online, Traveling around, Somewhere in Argentina"
+msgstr "Ex.: Online, Viajando por aí, Algum canto da Argentina"
+
+#: src/lib/vocabulary.ts
+msgid "Ecoregion"
+msgstr "Ecorregião"
+
+#: src/lib/vocabulary.ts
+msgid "Ecosystem"
+msgstr "Ecossistema"
+
+#: src/lib/vocabulary.ts
+msgid "Ecosystem service"
+msgstr "Serviço ecossistêmico"
+
+#: src/blocks/search/filters.ts
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Edible parts"
+msgstr "Partes comestíveis"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Edit"
+msgstr "Editar"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Edit {title}"
+msgstr "Editar {title}"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Edit place"
+msgstr "Editar lugar"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Edition"
+msgstr "Edição"
+
+#: src/lib/vocabulary.ts
+msgid "Educational institution"
+msgstr "Instituição de ensino"
+
+#: src/blocks/authentication/view.ts
+msgid "Email"
+msgstr "Email"
+
+#: src/lib/vocabulary.ts
+msgctxt "agroforestry stratum"
+msgid "Emergent"
+msgstr "Emergente"
+
 #: src/app/view.ts
+#: src/blocks/search/view.ts
 msgid "Encyclopedia"
 msgstr "Enciclopédia"
 
@@ -23,29 +650,782 @@ msgstr "Enciclopédia"
 msgid "Encyclopedia | Gororobas"
 msgstr "Enciclopédia | Gororobas"
 
+#: src/blocks/profile/view/collections.ts
+msgid "Encyclopedia contributions"
+msgstr "Contribuições na enciclopédia"
+
+#: src/blocks/authentication/view.ts
+msgid "Enter code"
+msgstr "Digitar código"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Enter the end year."
+msgstr "Informe o ano de fim."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Enter the start year."
+msgstr "Informe o ano de início."
+
+#: src/lib/vocabulary.ts
+msgid "Events"
+msgstr "Eventos"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Every encyclopedia page welcomes suggested edits."
+msgstr "Toda página da enciclopédia aceita sugestões de edição."
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Every fetch from Wikidata, GBIF and Google Books, newest first. Read-only."
+msgstr "Cada busca no Wikidata, GBIF e Google Livros, das mais recentes às mais antigas. Apenas leitura."
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "External data"
+msgstr "Dados externos"
+
 #: src/app/view.ts
 msgid "External data | Gororobas"
 msgstr "Dados externos | Gororobas"
+
+#: src/blocks/wiki-article-debug/wiki-article-debug.ts
+msgid "External data observations for this article"
+msgstr "Observações de dados externos deste artigo"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Failure"
+msgstr "Falha"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Failures"
+msgstr "Falhas"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Family"
+msgstr "Família"
+
+#: src/lib/vocabulary.ts
+msgid "Farm"
+msgstr "Sítio ou roça"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "Featured photos"
+msgstr "Fotos em destaque"
+
+#: src/lib/vocabulary.ts
+msgid "Film"
+msgstr "Filme"
+
+#: src/lib/vocabulary.ts
+msgid "Films"
+msgstr "Filmes"
+
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "Filter by category"
+msgstr "Filtrar por categoria"
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "Filter by format"
+msgstr "Filtrar por formato"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "Filter by kind"
+msgstr "Filtrar por tipo"
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/wiki-article/view/about.ts
+msgid "Filter by status"
+msgstr "Filtrar por situação"
+
+#: src/lib/vocabulary.ts
+msgid "Flower"
+msgstr "Flor"
+
+#: src/lib/vocabulary.ts
+msgid "Forest floor plants, which survive without direct light"
+msgstr "Plantas de solo de floresta, sobrevivem sem luz direta"
+
+#: src/blocks/search/filters.ts
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Format"
+msgstr "Formato"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Founded"
+msgstr "Fundação"
+
+#: src/blocks/wiki-article/view/overview/facts.ts
+msgid "From {minimum} to {maximum}"
+msgstr "De {minimum} a {maximum}"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "From planting until it dies or is harvested"
+msgstr "Duração do plantio até a morte ou colheita"
+
+#: src/lib/vocabulary.ts
+msgid "Fruit"
+msgstr "Fruto"
+
+#: src/ui/rich-text/view.ts
+msgid "Gallery"
+msgstr "Galeria"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Genres"
+msgstr "Gêneros"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Genus"
+msgstr "Gênero"
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "Global Biodiversity Information Facility, an open network of biodiversity data. Its classification follows the Catalogue of Life, and each photo keeps its own license and authorship."
+msgstr "Global Biodiversity Information Facility, rede aberta de dados sobre biodiversidade. A classificação segue o Catálogo da Vida, e cada foto mantém sua própria licença e autoria."
 
 #: src/app/view.ts
 msgid "Gororobas: home"
 msgstr "Gororobas: início"
 
+#: src/lib/vocabulary.ts
+msgid "Graft"
+msgstr "Enxerto"
+
+#: src/lib/vocabulary.ts
+msgid "Grazing"
+msgstr "Pastejo"
+
+#: src/lib/vocabulary.ts
+msgctxt "agroforestry stratum"
+msgid "Ground"
+msgstr "Rasteiro"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgid "Group"
+msgstr "Grupo"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgid "Gymnosperms"
+msgstr "Gimnospermas"
+
+#: src/lib/vocabulary.ts
+msgid "Hand tool"
+msgstr "Ferramenta manual"
+
+#: src/lib/vocabulary.ts
+msgid "Harvest"
+msgstr "Colheita"
+
+#: src/lib/vocabulary.ts
+msgid "Have been there"
+msgstr "Já estiveram lá"
+
+#: src/lib/vocabulary.ts
+msgid "Have planted it"
+msgstr "Já plantaram"
+
+#: src/lib/vocabulary.ts
+msgid "Have practiced it"
+msgstr "Já praticaram"
+
+#: src/lib/vocabulary.ts
+msgid "Have raised them"
+msgstr "Já criaram"
+
+#: src/lib/vocabulary.ts
+msgid "Have read it"
+msgstr "Já leram"
+
+#: src/lib/vocabulary.ts
+msgid "Have taken part"
+msgstr "Já participaram"
+
+#: src/lib/vocabulary.ts
+msgid "Have used it"
+msgstr "Já usaram"
+
+#: src/lib/vocabulary.ts
+msgid "Have watched it"
+msgstr "Já assistiram"
+
+#: src/blocks/authentication/view.ts
+msgid "Hi, {name}"
+msgstr "Olá, {name}"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Hide response"
+msgstr "Esconder resposta"
+
+#: src/lib/vocabulary.ts
+msgctxt "agroforestry stratum"
+msgid "High"
+msgstr "Alto"
+
+#: src/blocks/profile/view/view.ts
+msgctxt "profile tab"
+msgid "Home"
+msgstr "Início"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "How about being the first person to suggest an edit?"
+msgstr "Que tal ser a primeira pessoa a sugerir uma edição?"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "How long until we start harvesting"
+msgstr "Quanto tempo até começarmos a colher"
+
+#: src/lib/vocabulary.ts
+msgid "Human food"
+msgstr "Alimento humano"
+
+#: src/lib/vocabulary.ts
+msgid "I take part"
+msgstr "Participo"
+
+#: src/lib/vocabulary.ts
+msgid "I want to get to know them"
+msgstr "Quero conhecer"
+
+#: src/lib/vocabulary.ts
+msgid "I want to learn it"
+msgstr "Quero aprender"
+
+#: src/lib/vocabulary.ts
+msgid "I want to plant it"
+msgstr "Quero plantar"
+
+#: src/lib/vocabulary.ts
+msgid "I want to raise them"
+msgstr "Quero criar"
+
+#: src/lib/vocabulary.ts
+msgid "I want to read it"
+msgstr "Quero ler"
+
+#: src/lib/vocabulary.ts
+msgid "I want to visit"
+msgstr "Quero conhecer"
+
+#: src/lib/vocabulary.ts
+msgid "I want to watch it"
+msgstr "Quero assistir"
+
+#: src/lib/vocabulary.ts
+msgid "I'm interested"
+msgstr "Tenho interesse"
+
+#: src/lib/vocabulary.ts
+msgid "I'm planting it"
+msgstr "Estou plantando"
+
+#: src/lib/vocabulary.ts
+msgid "I'm practicing it"
+msgstr "Estou praticando"
+
+#: src/lib/vocabulary.ts
+msgid "I'm raising them"
+msgstr "Estou criando"
+
+#: src/lib/vocabulary.ts
+msgid "I'm reading it"
+msgstr "Estou lendo"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "I'm still in this place"
+msgstr "Ainda estou neste lugar"
+
+#: src/lib/vocabulary.ts
+msgid "I'm there"
+msgstr "Estou por lá"
+
+#: src/lib/vocabulary.ts
+msgid "I'm using it"
+msgstr "Estou usando"
+
+#: src/lib/vocabulary.ts
+msgid "I'm watching it"
+msgstr "Estou assistindo"
+
+#: src/lib/vocabulary.ts
+msgid "I've been there"
+msgstr "Já estive lá"
+
+#: src/lib/vocabulary.ts
+msgid "I've planted it"
+msgstr "Já plantei"
+
+#: src/lib/vocabulary.ts
+msgid "I've practiced it"
+msgstr "Já pratiquei"
+
+#: src/lib/vocabulary.ts
+msgid "I've raised them"
+msgstr "Já criei"
+
+#: src/lib/vocabulary.ts
+msgid "I've read it"
+msgstr "Já li"
+
+#: src/lib/vocabulary.ts
+msgid "I've taken part"
+msgstr "Já participei"
+
+#: src/lib/vocabulary.ts
+msgid "I've used it"
+msgstr "Já usei"
+
+#: src/lib/vocabulary.ts
+msgid "I've watched it"
+msgstr "Já assisti"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Ideal temperature"
+msgstr "Temperatura ideal"
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "Identifier"
+msgstr "Identificador"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "in {month}"
+msgstr "em {month}"
+
+#: src/lib/relative-dates.ts
+msgid "In {month}"
+msgstr "Em {month}"
+
+#: src/blocks/search/view.ts
+msgid "in everything"
+msgstr "em tudo"
+
+#: src/blocks/search/view.ts
+msgid "in posts"
+msgstr "nos posts"
+
+#: src/blocks/search/view.ts
+msgid "in the encyclopedia"
+msgstr "na enciclopédia"
+
+#: src/blocks/profile/view/home.ts
+msgid "In the encyclopedia"
+msgstr "Na enciclopédia"
+
+#. placeholder {0}: place.matchedName
+#: src/blocks/profile-locations-editor/view.ts
+msgid "includes {0}"
+msgstr "inclui {0}"
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "Information on published editions, from the Google Books catalog."
+msgstr "Informações das edições publicadas, segundo o catálogo do Google Livros."
+
+#: src/lib/vocabulary.ts
+msgid "Infrastructure"
+msgstr "Infraestrutura"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Input"
+msgstr "Entrada"
+
+#: src/lib/vocabulary.ts
+msgid "Interested"
+msgstr "Têm interesse"
+
+#: src/lib/vocabulary.ts
+msgid "Interests"
+msgstr "Interesses"
+
+#: src/lib/vocabulary.ts
+msgid "Irrigation"
+msgstr "Irrigação"
+
+#: src/blocks/wiki-article/view/view.ts
+msgid "It may have been renamed. Try finding it through search."
+msgstr "Ele pode ter mudado de nome. Tente encontrá-lo pela busca."
+
+#: src/blocks/profile/view/view.ts
+msgid "It may have moved to another address, or not be visible to you."
+msgstr "Ele pode ter mudado de endereço, ou não estar visível para você."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Keep"
+msgstr "Manter"
+
+#: src/blocks/search/filters.ts
+msgid "Kind"
+msgstr "Tipo"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Kind of organization"
+msgstr "Tipo de organização"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Kind of place"
+msgstr "Tipo de lugar"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Kingdom"
+msgstr "Reino"
+
+#: src/lib/vocabulary.ts
+msgid "Landform"
+msgstr "Relevo"
+
+#: src/blocks/wiki-article/view/external-data.ts
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Language"
+msgstr "Idioma"
+
 #: src/app/view.ts
+#: src/blocks/wiki-article/view/overview/index.ts
 msgid "Languages"
 msgstr "Idiomas"
+
+#. placeholder {0}: formatDateTime(date, language)
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Latest observation: {0}"
+msgstr "Última observação: {0}"
+
+#: src/lib/vocabulary.ts
+msgid "Leaf"
+msgstr "Folha"
+
+#: src/blocks/search/view.ts
+msgctxt "search idea's query"
+msgid "learnings"
+msgstr "aprendizados"
+
+#: src/blocks/search/view.ts
+msgid "Learnings"
+msgstr "Aprendizados"
+
+#: src/ui/media-credit/view.ts
+msgid "License"
+msgstr "Licença"
+
+#: src/ui/media-credit/view.ts
+msgid "license {license}"
+msgstr "licença {license}"
+
+#: src/blocks/search/filters.ts
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Lifecycle"
+msgstr "Ciclo de vida"
+
+#: src/lib/vocabulary.ts
+msgid "Livestock"
+msgstr "Criação"
+
+#: src/blocks/wiki-article/view/view.ts
+msgid "Loading article"
+msgstr "Carregando artigo"
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/profile/view/home.ts
+#: src/blocks/wiki-article/view/about.ts
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "Loading contributions"
+msgstr "Carregando contribuições"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Loading observations…"
+msgstr "Carregando observações…"
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/profile/view/home.ts
+msgid "Loading photos"
+msgstr "Carregando fotos"
+
+#: src/blocks/wiki-article/view/child-places.ts
+msgid "Loading places"
+msgstr "Carregando lugares"
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/profile/view/home.ts
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "Loading posts"
+msgstr "Carregando posts"
+
+#: src/blocks/profile/view/view.ts
+msgid "Loading profile"
+msgstr "Carregando perfil"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Loading response…"
+msgstr "Carregando resposta…"
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/profile/view/home.ts
+msgid "Loading saved articles"
+msgstr "Carregando salvos"
+
+#: src/blocks/wiki-article-debug/wiki-article-debug.ts
+msgid "Loading the article's data…"
+msgstr "Carregando dados do artigo…"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "Loading who follows it"
+msgstr "Carregando quem acompanha"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Loading your places…"
+msgstr "Carregando seus lugares…"
+
+#: src/blocks/wiki-article/view/child-places.ts
+msgid "Loading…"
+msgstr "Carregando…"
+
+#: src/lib/vocabulary.ts
+msgid "Locality"
+msgstr "Localidade"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Locating…"
+msgstr "Localizando…"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Looking for the municipality you're in…"
+msgstr "Procurando o município onde você está…"
+
+#: src/lib/vocabulary.ts
+msgctxt "agroforestry stratum"
+msgid "Low"
+msgstr "Baixo"
+
+#: src/lib/vocabulary.ts
+msgid "Machinery"
+msgstr "Maquinário"
 
 #: src/app/view.ts
 msgid "Main navigation"
 msgstr "Navegação principal"
 
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Main uses"
+msgstr "Principais usos"
+
+#: src/lib/vocabulary.ts
+msgid "Measurement"
+msgstr "Medição"
+
+#: src/lib/vocabulary.ts
+msgid "Media"
+msgstr "Mídia"
+
+#: src/lib/vocabulary.ts
+msgid "Medicinal"
+msgstr "Medicinal"
+
+#: src/lib/vocabulary.ts
+msgctxt "agroforestry stratum"
+msgid "Medium"
+msgstr "Médio"
+
+#. placeholder {0}: config.label
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Month ({0})"
+msgstr "Mês ({0})"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Month (optional)"
+msgstr "Mês (opcional)"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "More actions for {title}"
+msgstr "Mais ações para {title}"
+
+#: src/lib/vocabulary.ts
+msgid "Municipality"
+msgstr "Município"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Municipality, state or country"
+msgstr "Município, estado ou país"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "My geographic itinerary"
+msgstr "Meu itinerário geográfico"
+
+#: src/blocks/authentication/view.ts
+msgid "My places"
+msgstr "Meus lugares"
+
 #: src/app/view.ts
 msgid "My places | Gororobas"
 msgstr "Meus lugares | Gororobas"
 
+#: src/lib/vocabulary.ts
+msgid "Network"
+msgstr "Rede"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "New place in the itinerary"
+msgstr "Novo lugar no itinerário"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Newer"
+msgstr "Mais recentes"
+
+#: src/blocks/wiki-article/view/external-data.ts
+msgid "No article in {readerLanguageName} yet"
+msgstr "Ainda sem artigo em {readerLanguageName}"
+
+#: src/blocks/search/view.ts
+msgid "No articles found"
+msgstr "Nenhum artigo encontrado"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "No articles of this kind"
+msgstr "Nenhum artigo desse tipo"
+
+#: src/blocks/profile/view/collections.ts
+msgid "No encyclopedia contributions yet"
+msgstr "Nenhuma contribuição na enciclopédia ainda"
+
+#: src/lib/vocabulary.ts
+msgid "No interest"
+msgstr "Sem interesse"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "No observations with these filters."
+msgstr "Nenhuma observação com esses filtros."
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "No photos here yet"
+msgstr "Nenhuma foto por aqui ainda"
+
+#: src/blocks/wiki-article/view/child-places.ts
+msgid "No places here yet"
+msgstr "Nenhum lugar por aqui ainda"
+
+#: src/blocks/search/view.ts
+msgid "No posts found"
+msgstr "Nenhum post encontrado"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "No public contributions yet"
+msgstr "Nenhuma contribuição pública ainda"
+
+#: src/blocks/search/view.ts
+msgid "Nobody found"
+msgstr "Ninguém encontrado"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "Nobody here yet"
+msgstr "Ninguém por aqui ainda"
+
+#: src/lib/vocabulary.ts
+msgid "Nonprofit"
+msgstr "ONG"
+
+#: src/lib/vocabulary.ts
+msgid "Not interested"
+msgstr "Não tenho interesse"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Nothing saved here yet"
+msgstr "Nada salvo por aqui ainda"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Observation"
+msgstr "Observação"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Older"
+msgstr "Mais antigas"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "On your profile"
+msgstr "No seu perfil"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Only moderators and administrators can see this log."
+msgstr "Só pessoas da moderação e da administração podem ver este registro."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Only people in the Gororobas community."
+msgstr "Só pessoas da comunidade Gororobas."
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Only this article"
+msgstr "Só este artigo"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Only you. It helps Gororobas show you what's relevant."
+msgstr "Só você. Ajuda a Gororobas a te mostrar o que é relevante."
+
 #: src/app/view.ts
 msgid "Open search"
 msgstr "Abrir busca"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Order"
+msgstr "Ordem"
+
+#: src/lib/vocabulary.ts
+msgid "Organic matter"
+msgstr "Matéria orgânica"
+
+#: src/lib/vocabulary.ts
+msgid "Organization"
+msgstr "Organização"
+
+#: src/blocks/search/view.ts
+#: src/lib/vocabulary.ts
+msgid "Organizations"
+msgstr "Organizações"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Origin"
+msgstr "Origem"
+
+#: src/lib/vocabulary.ts
+msgid "Ornamental"
+msgstr "Ornamental"
+
+#: src/lib/vocabulary.ts
+msgctxt "organization category"
+msgid "Other"
+msgstr "Outro"
+
+#: src/lib/vocabulary.ts
+msgctxt "resource format"
+msgid "Other"
+msgstr "Outro"
+
+#: src/lib/vocabulary.ts
+msgctxt "wiki article kind"
+msgid "Other"
+msgstr "Outro"
+
+#: src/lib/vocabulary.ts
+msgctxt "wiki article kind"
+msgid "Others"
+msgstr "Outros"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Outcome"
+msgstr "Resultado"
+
+#: src/ui/place-outline/view.ts
+msgid "Outline of {label}"
+msgstr "Contorno de {label}"
+
+#. placeholder {0}: surroundings.label
+#: src/ui/place-outline/view.ts
+msgid "Outline of {label} in {0}"
+msgstr "Contorno de {label} em {0}"
+
+#: src/blocks/wiki-article/view/overview/facts.ts
+msgid "Overview"
+msgstr "Visão geral"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Page {currentPageNumber} of {pageCount}"
+msgstr "Página {currentPageNumber} de {pageCount}"
 
 #: src/app/view.ts
 msgid "Page not found"
@@ -55,19 +1435,363 @@ msgstr "Página não encontrada"
 msgid "Page not found | Gororobas"
 msgstr "Página não encontrada | Gororobas"
 
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+#: src/blocks/wiki-article/view/external-data.ts
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Pages"
+msgstr "Páginas"
+
+#: src/lib/vocabulary.ts
+msgid "Past"
+msgstr "Já fez parte"
+
 #: src/app/view.ts
+#: src/blocks/search/view.ts
 msgid "People"
 msgstr "Gente"
+
+#: src/lib/vocabulary.ts
+msgctxt "profile type"
+msgid "People"
+msgstr "Pessoas"
 
 #: src/app/view.ts
 msgid "People | Gororobas"
 msgstr "Gente | Gororobas"
 
+#: src/lib/vocabulary.ts
+msgid "Perennial"
+msgstr "Perene"
+
+#: src/lib/vocabulary.ts
+msgid "Pest control"
+msgstr "Controle de pragas"
+
+#: src/ui/media-credit/view.ts
+msgid "Photo by {names}"
+msgstr "Foto de {names}"
+
+#: src/blocks/wiki-article/view/attribution.ts
+#: src/ui/media-credit/view.ts
+msgid "Photo credits"
+msgstr "Créditos da foto"
+
+#: src/blocks/profile/view/home.ts
+#: src/blocks/profile/view/view.ts
+#: src/blocks/wiki-article/view/about.ts
+#: src/blocks/wiki-article/view/shared.ts
+msgid "Photos"
+msgstr "Fotos"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Photos by {name}"
+msgstr "Fotos de {name}"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Photos shared in the encyclopedia or in posts show up here."
+msgstr "Fotos enviadas para a enciclopédia ou em publicações aparecem aqui."
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Phylum"
+msgstr "Filo"
+
+#: src/lib/vocabulary.ts
+msgid "Place"
+msgstr "Lugar"
+
+#: src/lib/vocabulary.ts
+msgid "Places"
+msgstr "Lugares"
+
+#: src/lib/vocabulary.ts
+msgid "Plant"
+msgstr "Planta"
+
+#: src/blocks/search/filters.ts
+#: src/lib/vocabulary.ts
+msgid "Planting"
+msgstr "Plantio"
+
+#: src/lib/vocabulary.ts
+msgid "Planting a piece (a cutting) of a plant's stem, leaf or root. The cutting grows roots and develops into a new plant, genetically identical to the original. Used for roses, cassava and many others."
+msgstr "Plantar um pedaço (estaca ou rama) do caule, folha ou raiz de uma planta. A estaca cria raízes e se desenvolve em uma nova planta geneticamente idêntica à original. Usado em roseiras, mandioca e muitas outras."
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Planting and propagation methods"
+msgstr "Métodos de plantio e propagação"
+
+#: src/lib/vocabulary.ts
+msgid "Planting it"
+msgstr "Plantando"
+
+#: src/lib/vocabulary.ts
+msgid "Plants"
+msgstr "Plantas"
+
+#: src/lib/vocabulary.ts
+msgid "Plants that only stand below the emergent stratum - they tolerate up to ~40% shade over the day"
+msgstr "Plantas que só ficam abaixo das de estrato emergente - toleram até ~40% de sombra ao longo do dia"
+
+#: src/lib/vocabulary.ts
+msgid "Plants that should stand above all others and get the most light - they tolerate up to ~20% shade over the day"
+msgstr "Plantas que devem estar acima de todas as outras e receber o máximo de luz - toleram até ~20% de sombra ao longo do dia"
+
+#: src/lib/vocabulary.ts
+msgid "Plants that stand below the high stratum - they tolerate up to ~60% shade over the day"
+msgstr "Plantas que ficam abaixo das de estrato alto - toleram até ~60% de sombra ao longo do dia"
+
+#: src/lib/vocabulary.ts
+msgid "Plants that stand below the medium stratum - they tolerate up to ~80% shade over the day"
+msgstr "Plantas que ficam abaixo das de estrato médio - toleram até ~80% de sombra ao longo do dia"
+
+#: src/lib/vocabulary.ts
+msgid "Plants we grow for more than 2 years, such as fruit trees. \"Perennial\" doesn't mean forever: we eventually replant many of them to keep them productive, such as coffee, bananas and grapevines."
+msgstr "Plantas que cultivamos por mais de 2 anos, como árvores frutíferas. \"Perene\" não significa pra sempre: muitas delas replantamos eventualmente para maximizar a produção, como o café, a banana, a parreira, etc."
+
+#: src/lib/vocabulary.ts
+msgid "Plants we remove or harvest between 6 months and 1 year, or that die naturally in that time"
+msgstr "Plantas que removemos ou colhemos entre 6 meses e 1 ano ou que morrem naturalmente nesse período"
+
+#: src/lib/vocabulary.ts
+msgid "Plants we remove or harvest within 1 to 2 years, or that die naturally in that time"
+msgstr "Plantas que removemos ou colhemos em 1 a 2 anos ou que morrem naturalmente nesse período"
+
+#: src/lib/vocabulary.ts
+msgid "Plants we remove or harvest within 6 months, or that die naturally in that time"
+msgstr "Plantas que removemos ou colhemos em até 6 meses ou que morrem naturalmente nesse período"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Plants, books and places someone wants to get to know or already lives with show up here."
+msgstr "Plantas, livros e lugares que alguém quer conhecer ou já vive aparecem aqui."
+
+#: src/lib/vocabulary.ts
+msgid "Podcast"
+msgstr "Podcast"
+
+#: src/lib/vocabulary.ts
+msgid "Pollinator"
+msgstr "Polinizador"
+
 #: src/app/view.ts
+#: src/blocks/profile/view/home.ts
+#: src/blocks/profile/view/view.ts
+#: src/blocks/search/view.ts
+#: src/blocks/wiki-article/view/about.ts
+#: src/blocks/wiki-article/view/shared.ts
 msgid "Posts"
 msgstr "Posts"
 
+#: src/lib/vocabulary.ts
+msgctxt "publication kind"
+msgid "Posts"
+msgstr "Postagens"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Posts and events show up here as soon as they're shared."
+msgstr "Posts e eventos aparecem aqui assim que forem compartilhados."
+
+#: src/blocks/profile/view/collections.ts
+msgid "Posts by {name}"
+msgstr "Publicações de {name}"
+
+#: src/blocks/profile/view/home.ts
+msgid "Posts, photos and saved articles show up here as soon as they're shared."
+msgstr "Publicações, fotos e artigos salvos aparecem aqui assim que forem compartilhados."
+
+#: src/lib/vocabulary.ts
+msgid "Practicing it"
+msgstr "Praticando"
+
+#: src/lib/vocabulary.ts
+msgid "Private"
+msgstr "Privado"
+
+#: src/lib/vocabulary.ts
+msgid "Processing"
+msgstr "Beneficiamento"
+
+#: src/blocks/search/filters.ts
+msgid "Profile"
+msgstr "Perfil"
+
+#: src/lib/vocabulary.ts
+msgid "Protected area"
+msgstr "Área protegida"
+
+#: src/lib/vocabulary.ts
+msgid "Protection"
+msgstr "Proteção"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Provider"
+msgstr "Provedor"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgid "Pteridophytes"
+msgstr "Pteridófitas"
+
+#: src/lib/vocabulary.ts
+msgid "Public"
+msgstr "Público"
+
+#: src/lib/vocabulary.ts
+msgid "Public agency"
+msgstr "Órgão público"
+
+#: src/ui/media-credit/licenses.ts
+msgid "Public domain"
+msgstr "Domínio público"
+
+#: src/blocks/wiki-article/view/external-data.ts
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Published"
+msgstr "Publicação"
+
+#: src/blocks/wiki-article/view/external-data.ts
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Publisher"
+msgstr "Editora"
+
+#: src/lib/vocabulary.ts
+msgid "Raising them"
+msgstr "Criando"
+
+#: src/blocks/wiki-article/view/external-data.ts
+msgid "Read on Wikipedia"
+msgstr "Ler na Wikipédia"
+
+#: src/lib/vocabulary.ts
+msgid "Reading it"
+msgstr "Lendo"
+
+#: src/blocks/search/view.ts
+msgid "Recent searches"
+msgstr "Buscas recentes"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "Related articles"
+msgstr "Artigos relacionados"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Released"
+msgstr "Lançamento"
+
+#: src/blocks/wiki-article-debug/wiki-article-debug.ts
+msgid "Reload"
+msgstr "Recarregar"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Remove"
+msgstr "Remover"
+
+#. placeholder {0}: recent.text
+#: src/blocks/search/view.ts
+msgid "Remove {0} from recent searches"
+msgstr "Remover {0} das buscas recentes"
+
+#. placeholder {0}: selected.label
+#: src/blocks/search/view.ts
+msgid "Remove filter {0}"
+msgstr "Remover filtro {0}"
+
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Remove from my list"
+msgstr "Remover da minha lista"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Remove from the itinerary"
+msgstr "Remover do itinerário"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Remove this place from your itinerary?"
+msgstr "Remover este lugar do seu itinerário?"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Removing…"
+msgstr "Removendo…"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Request"
+msgstr "Requisição"
+
+#: src/lib/vocabulary.ts
+msgid "Research"
+msgstr "Pesquisa"
+
+#: src/blocks/authentication/view.ts
+msgid "Resend email"
+msgstr "Reenviar email"
+
+#: src/lib/vocabulary.ts
+msgid "Resource"
+msgstr "Recurso"
+
+#: src/lib/vocabulary.ts
+msgid "Resources"
+msgstr "Recursos"
+
+#: src/blocks/search/view.ts
+msgid "Results for"
+msgstr "Resultados para"
+
+#: src/lib/vocabulary.ts
+msgid "Rhizome"
+msgstr "Rizoma"
+
+#: src/lib/vocabulary.ts
+msgid "Rhizomes are underground stems that (also) grow sideways and put out roots and shoots. We cut pieces and plant them, each growing into a new plant. Bananas are the classic example, but also turmeric, ginger and bamboo."
+msgstr "Rizomas são caules subterrâneos que crescem (também) horizontalmente e emitem raízes e brotos. Cortamos pedaços e plantamos, cada um originando uma nova planta. Banana é o exemplo clássico, mas também a cúrcuma, gengibre e bambu"
+
+#: src/lib/vocabulary.ts
+msgid "Ritual"
+msgstr "Ritualístico"
+
+#: src/blocks/search/filters.ts
+msgid "Roles"
+msgstr "Papéis"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Roles in the agroecosystem"
+msgstr "Papéis no agroecossistema"
+
+#: src/lib/vocabulary.ts
+msgid "Root"
+msgstr "Raiz"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Save changes"
+msgstr "Salvar alterações"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "Save this article to show up here and find people interested in it too."
+msgstr "Salve este artigo para aparecer aqui e encontrar quem se interessa pelo mesmo."
+
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Save to my list"
+msgstr "Salvar na minha lista"
+
+#: src/blocks/profile/view/home.ts
+#: src/blocks/profile/view/view.ts
+msgctxt "profile collection"
+msgid "Saved"
+msgstr "Salvos"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Saved by {name}"
+msgstr "Salvos por {name}"
+
+#: src/blocks/authentication/view.ts
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Saving…"
+msgstr "Salvando…"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Scientific names"
+msgstr "Nomes científicos"
+
 #: src/app/view.ts
+#: src/blocks/search/view.ts
 msgid "Search"
 msgstr "Buscar"
 
@@ -75,7 +1799,114 @@ msgstr "Buscar"
 msgid "Search | Gororobas"
 msgstr "Busca | Gororobas"
 
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Search by name: Villa de Leyva, Viçosa, Boyacá…"
+msgstr "Busque pelo nome: Villa de Leyva, Viçosa, Boyacá…"
+
+#: src/blocks/search/view.ts
+msgid "Search ideas"
+msgstr "Ideias de buscas"
+
+#: src/blocks/profile/view/view.ts
+msgid "Search people"
+msgstr "Buscar pessoas"
+
+#: src/blocks/search/view.ts
+msgid "Search plants, posts and people"
+msgstr "Buscar plantas, posts e pessoas"
+
+#: src/blocks/wiki-article/view/view.ts
+msgid "Search the encyclopedia"
+msgstr "Buscar na enciclopédia"
+
+#: src/blocks/search/view.ts
+msgid "Searching"
+msgstr "Buscando"
+
+#: src/blocks/profile/view/view.ts
+msgid "Sections of {name}'s profile"
+msgstr "Seções do perfil de {name}"
+
+#: src/blocks/search/view.ts
+msgid "See all"
+msgstr "Ver todos"
+
+#: src/blocks/profile/view/home.ts
+#: src/blocks/wiki-article/view/about.ts
+msgid "See all photos"
+msgstr "Ver todas as fotos"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "See contributions"
+msgstr "Ver contribuições"
+
+#: src/blocks/profile/view/home.ts
+msgid "See everything saved"
+msgstr "Ver todos os salvos"
+
+#: src/blocks/wiki-article/view/attribution.ts
+#: src/blocks/wiki-article/view/external-data.ts
+msgid "See on Google Books"
+msgstr "Ver no Google Livros"
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "See on the Catalogue of Life"
+msgstr "Ver no Catálogo da Vida"
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "See on Wikidata"
+msgstr "Ver no Wikidata"
+
+#: src/blocks/search/view.ts
+msgid "See results"
+msgstr "Ver resultados"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "See stored response"
+msgstr "Ver resposta guardada"
+
+#: src/ui/media-credit/view.ts
+msgid "See the original post"
+msgstr "Ver a publicação original"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "See the place's page"
+msgstr "Ver página do lugar"
+
+#: src/blocks/wiki-article/view/view.ts
+msgid "See this article's stored data"
+msgstr "Ver os dados guardados deste artigo"
+
+#: src/lib/vocabulary.ts
+msgid "Seed"
+msgstr "Semente"
+
+#: src/lib/vocabulary.ts
+msgid "Seed disperser"
+msgstr "Dispersor de sementes"
+
+#: src/lib/vocabulary.ts
+msgid "Seedling"
+msgstr "Muda"
+
+#: src/lib/vocabulary.ts
+msgid "Semiannual"
+msgstr "Semestral"
+
+#: src/blocks/authentication/view.ts
+msgid "Sending…"
+msgstr "Enviando…"
+
+#: src/blocks/wiki-article/view/child-places.ts
+msgid "Show more places"
+msgstr "Mostrar mais lugares"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Shows next to the place's name, for those who can see it."
+msgstr "Aparece junto ao nome do lugar, para quem pode vê-lo."
+
 #: src/app/view.ts
+#: src/blocks/profile-locations-editor/view.ts
 msgid "Sign in"
 msgstr "Entrar"
 
@@ -83,6 +1914,422 @@ msgstr "Entrar"
 msgid "Sign in | Gororobas"
 msgstr "Entrar | Gororobas"
 
+#: src/blocks/authentication/view.ts
+msgid "Sign in or create your account"
+msgstr "Entre ou crie sua conta"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Sign in to your account to record your places."
+msgstr "Entre na sua conta para registrar seus lugares."
+
+#: src/blocks/authentication/view.ts
+msgid "Sign out"
+msgstr "Sair"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Since"
+msgstr "Desde"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Since {start}"
+msgstr "Desde {start}"
+
+#: src/lib/vocabulary.ts
+msgid "Social media"
+msgstr "Rede social"
+
+#: src/lib/vocabulary.ts
+msgid "Social movement"
+msgstr "Movimento social"
+
+#: src/lib/vocabulary.ts
+msgid "Soil preparation"
+msgstr "Preparo do solo"
+
+#: src/blocks/authentication/view.ts
+msgid "Something went wrong. Try again."
+msgstr "Algo deu errado. Tente novamente."
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "Source: {name}"
+msgstr "Fonte: {name}"
+
+#: src/lib/vocabulary.ts
+msgid "Sown straight into the soil, or into seedlings to be transplanted"
+msgstr "Sejam plantadas diretamente no solo, ou em mudas a serem transplantadas"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Species"
+msgstr "Espécie"
+
+#: src/lib/vocabulary.ts
+msgid "Splitting a clump into parts that each have roots and shoots, each growing into a new plant. Common for grasses, herbs such as lemon balm and many ornamentals."
+msgstr "Separar uma touceira em partes que tenham raízes e brotos, cada uma originando uma nova planta. Comum em capins, ervas como a cidreira e muitas ornamentais."
+
+#: src/lib/vocabulary.ts
+msgid "Sprout"
+msgstr "Broto"
+
+#: src/lib/vocabulary.ts
+msgid "State or department"
+msgstr "Estado ou departamento"
+
+#: src/lib/vocabulary.ts
+msgid "Stem"
+msgstr "Caule"
+
+#: src/lib/vocabulary.ts
+msgid "Storage"
+msgstr "Armazenamento"
+
+#: src/blocks/search/filters.ts
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Stratum"
+msgstr "Estrato"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Subfamily"
+msgstr "Subfamília"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Subkingdom"
+msgstr "Sub-reino"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Subtribe"
+msgstr "Subtribo"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Success"
+msgstr "Sucesso"
+
+#: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
+msgid "Successes"
+msgstr "Sucessos"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Suggested kind"
+msgstr "Tipo sugerido"
+
+#: src/lib/vocabulary.ts
+msgid "Take part"
+msgstr "Participam"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Tell where you grow, where you've lived or where you're passing through."
+msgstr "Conte onde você cultiva, onde já viveu ou por onde está passando."
+
+#: src/lib/vocabulary.ts
+msgid "Territory"
+msgstr "Território"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "The end can't come before the start."
+msgstr "O fim não pode vir antes do começo."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "The end year needs four digits, like 2024."
+msgstr "O ano de fim precisa ter quatro dígitos, como 2024."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "The start year needs four digits, like 2024."
+msgstr "O ano de início precisa ter quatro dígitos, como 2024."
+
+#: src/ui/publication-card/view.ts
+msgid "Themes"
+msgstr "Temas"
+
 #: src/app/view.ts
 msgid "There is nothing at {path}."
 msgstr "Não há nada em {path}."
+
+#: src/blocks/authentication/view.ts
+msgid "This code didn't work. Check it, or resend the email to get another one."
+msgstr "Esse código não funcionou. Confira ou reenvie o email para receber outro."
+
+#: src/blocks/authentication/view.ts
+msgid "This link didn't work. It may have expired or been opened in another browser. Enter your email to get a new one."
+msgstr "Esse link não funcionou. Ele pode ter expirado ou sido aberto em outro navegador. Digite seu email para receber um novo."
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Time to harvest"
+msgstr "Tempo até produzir"
+
+#: src/blocks/authentication/view.ts
+msgid "To continue, click the link sent to"
+msgstr "Para continuar, clique no link enviado para"
+
+#: src/lib/vocabulary.ts
+msgid "Tool"
+msgstr "Ferramenta"
+
+#: src/lib/vocabulary.ts
+msgid "Tools"
+msgstr "Ferramentas"
+
+#: src/blocks/wiki-article/view/classification.ts
+msgctxt "taxonomic rank"
+msgid "Tribe"
+msgstr "Tribo"
+
+#: src/app/view.ts
+msgid "Try again"
+msgstr "Tentar de novo"
+
+#: src/blocks/search/view.ts
+msgid "Try again in a moment."
+msgstr "Tente novamente em instantes."
+
+#: src/blocks/search/view.ts
+msgid "Try other words, or remove some filters."
+msgstr "Tente outras palavras, ou tire alguns filtros."
+
+#: src/blocks/profile/view/shared.ts
+#: src/blocks/profile/view/view.ts
+#: src/blocks/wiki-article/view/shared.ts
+#: src/blocks/wiki-article/view/view.ts
+msgid "Try reloading the page in a moment."
+msgstr "Tente recarregar a página em instantes."
+
+#: src/lib/vocabulary.ts
+msgid "Tuber"
+msgstr "Tubérculo"
+
+#: src/lib/vocabulary.ts
+msgid "Tubers are thickened underground stems that store nutrients and have buds that sprout. Planting by tuber means planting the whole tuber or pieces of it, each growing into a new plant. Our ancestors planted a whole lot of potatoes and yams this way."
+msgstr "Tubérculos são caules subterrâneos engrossados que armazenam nutrientes e possuem gemas que originam brotos. O plantio por tubérculo consiste em plantar o tubérculo inteiro ou seccionado, cada parte gerando uma nova planta. Nossas ancestrais já plantaram muuuita batata e inhame assim."
+
+#: src/blocks/search/view.ts
+msgid "Type at least {MINIMUM_WORD_LENGTH} letters to search."
+msgstr "Digite pelo menos {MINIMUM_WORD_LENGTH} letras para buscar."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Until"
+msgstr "Até"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Until {end}"
+msgstr "Até {end}"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Until someone classifies this article"
+msgstr "Enquanto ninguém classifica este artigo"
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "Updated on"
+msgstr "Atualizado em"
+
+#: src/blocks/authentication/view.ts
+msgid "Use another email"
+msgstr "Usar outro email"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Use my location"
+msgstr "Usar minha localização"
+
+#: src/blocks/search/filters.ts
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Uses"
+msgstr "Usos"
+
+#: src/lib/vocabulary.ts
+msgid "Using it"
+msgstr "Usando"
+
+#: src/lib/vocabulary.ts
+msgid "Varieties"
+msgstr "Variedades"
+
+#: src/lib/vocabulary.ts
+msgid "Variety"
+msgstr "Variedade"
+
+#: src/blocks/authentication/view.ts
+msgid "Verification code"
+msgstr "Código de verificação"
+
+#: src/blocks/authentication/view.ts
+msgid "Verify"
+msgstr "Verificar"
+
+#: src/blocks/authentication/view.ts
+msgid "Verifying…"
+msgstr "Verificando…"
+
+#: src/blocks/wiki-article/view/overview/plant.ts
+msgid "Vertical layer, by how much light it needs"
+msgstr "Camada vertical conforme necessidade de luz"
+
+#: src/lib/vocabulary.ts
+#: src/ui/rich-text/view.ts
+msgid "Video"
+msgstr "Vídeo"
+
+#: src/lib/vocabulary.ts
+msgid "Want to get to know them"
+msgstr "Querem conhecer"
+
+#: src/lib/vocabulary.ts
+msgid "Want to learn it"
+msgstr "Querem aprender"
+
+#: src/lib/vocabulary.ts
+msgid "Want to plant it"
+msgstr "Querem plantar"
+
+#: src/lib/vocabulary.ts
+msgid "Want to raise them"
+msgstr "Querem criar"
+
+#: src/lib/vocabulary.ts
+msgid "Want to read it"
+msgstr "Querem ler"
+
+#: src/lib/vocabulary.ts
+msgid "Want to visit"
+msgstr "Querem conhecer"
+
+#: src/lib/vocabulary.ts
+msgid "Want to watch it"
+msgstr "Querem assistir"
+
+#: src/lib/vocabulary.ts
+msgid "Watching it"
+msgstr "Assistindo"
+
+#: src/lib/vocabulary.ts
+msgid "Watershed"
+msgstr "Bacia hidrográfica"
+
+#: src/blocks/wiki-article/view/view.ts
+msgid "We couldn't find this article in the encyclopedia"
+msgstr "Não encontramos esse artigo na enciclopédia"
+
+#: src/blocks/profile/view/view.ts
+msgid "We couldn't find this profile"
+msgstr "Não encontramos esse perfil"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "We couldn't get the device's location. Check that the browser has permission, or search for the place by name."
+msgstr "Não conseguimos a localização do aparelho. Confira se o navegador tem permissão, ou busque o lugar pelo nome."
+
+#: src/blocks/authentication/view.ts
+msgid "We couldn't send the email. Check the address and try again."
+msgstr "Não conseguimos enviar o email. Confira o endereço e tente novamente."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "We don't have a map of this region yet. Search for the place by name or describe where you are."
+msgstr "Ainda não temos o mapa dessa região. Busque o lugar pelo nome ou descreva onde você está."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "We only keep this whole place, never your coordinates."
+msgstr "Guardamos apenas este lugar inteiro, nunca suas coordenadas."
+
+#: src/blocks/authentication/view.ts
+msgid "We sent a new email. Earlier codes no longer work."
+msgstr "Enviamos um novo email. Os códigos anteriores não funcionam mais."
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Website"
+msgstr "Site"
+
+#: src/blocks/authentication/view.ts
+msgid "Welcome to Gororobas!"
+msgstr "Boas-vindas ao Gororobas!"
+
+#: src/blocks/profile/view/home.ts
+msgid "What {name} follows"
+msgstr "O que {name} acompanha"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "What do you call this place? (optional)"
+msgstr "Como você chama esse lugar? (opcional)"
+
+#: src/blocks/authentication/view.ts
+msgid "What should we call you?"
+msgstr "Como podemos te chamar?"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "When"
+msgstr "Quando"
+
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "When someone shares an experience, it shows up here."
+msgstr "Quando alguém compartilhar uma experiência, ela aparece aqui."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Where"
+msgstr "Onde"
+
+#: src/blocks/wiki-article/view/about.ts
+msgid "Where it is"
+msgstr "Onde fica"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Where to access it"
+msgstr "Onde acessar"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Where to find it"
+msgstr "Onde encontrar"
+
+#: src/blocks/wiki-article/view/overview/index.ts
+msgid "Where to watch it"
+msgstr "Onde assistir"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Where you are, in your own words"
+msgstr "Onde você está, com suas palavras"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Where you grow, where you've lived, where you're passing through. Each place only shows to whoever you choose, and we only keep the municipality, never your coordinates."
+msgstr "Onde você cultiva, onde já viveu, por onde está passando. Cada lugar aparece só para quem você escolher, e guardamos apenas o município, nunca suas coordenadas."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Who can see it"
+msgstr "Quem pode ver"
+
+#: src/blocks/wiki-article/view/attribution.ts
+msgid "Wikimedia's free and collaborative knowledge base. Its data is in the public domain (CC0)."
+msgstr "Base de conhecimento livre e colaborativa da Wikimedia. Seus dados estão em domínio público (CC0)."
+
+#: src/blocks/wiki-article/view/external-data.ts
+msgid "Wikipedia"
+msgstr "Wikipédia"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Year"
+msgstr "Ano"
+
+#. placeholder {0}: config.label
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Year ({0})"
+msgstr "Ano ({0})"
+
+#: src/blocks/authentication/view.ts
+msgid "You're offline or the server is unavailable. Your account stays available on this device; online actions wait for the session to be verified."
+msgstr "Você está offline ou o servidor está indisponível. Sua conta segue disponível neste aparelho; ações online esperam a sessão ser verificada."
+
+#: src/lib/vocabulary.ts
+msgid "Young, already rooted plants that we transplant to where they will grow"
+msgstr "Plantas jovens, já enraizadas, que transplantamos para o lugar onde vão crescer"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Your itinerary is still empty."
+msgstr "Seu itinerário ainda está vazio."
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Your places, from oldest to most recent"
+msgstr "Seus lugares, do mais antigo ao mais recente"
+
+#: src/blocks/profile-locations-editor/view.ts
+msgid "Your profile doesn't show a place right now, because the most recent one isn't public."
+msgstr "Seu perfil não mostra um lugar agora, porque o mais recente não é público."
+
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Your relationship to this article"
+msgstr "Sua relação com este artigo"

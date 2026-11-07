@@ -55,8 +55,8 @@ describe("enrichment", () => {
 
         expect(requested).toEqual([
           `link inference for publication ${publication.id}`,
-          `es translation for publication ${publication.id}`,
           `en translation for publication ${publication.id}`,
+          `es translation for publication ${publication.id}`,
         ])
       }).pipe(Effect.provide(EnrichmentTestEnvironment)),
   )

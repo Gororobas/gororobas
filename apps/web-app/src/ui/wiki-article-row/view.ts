@@ -1,13 +1,15 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { BookmarkState } from "@gororobas/domain/common/enums"
 import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
+import { msg, select } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
 import { wikiArticleUrl } from "../../app/route"
+import { type Translator, translatorFor } from "../../lib/translations"
 import { bookmarkVocabularies, wikiKindLabels } from "../../lib/vocabulary"
-import { ofName, primaryName } from "../../lib/wiki-article-names"
+import { nameParts, primaryName } from "../../lib/wiki-article-names"
 import { externalImageUrl, imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import * as Icons from "../icons"
@@ -134,18 +136,22 @@ export type WikiArticleRowConfig = Readonly<{
   isCard?: boolean
 }>
 
-/** "Variedade do Milho" when a cultivar's plant is known, otherwise the kind's name. */
-const kindLabel = (article: WikiArticleQueriedCardData): string =>
-  Option.match(article.parentPlantName, {
-    onNone: () => wikiKindLabels[article.kind].singular,
-    onSome: (parent) =>
-      `${wikiKindLabels[article.kind].singular} ${ofName({ commonNames: [parent], handle: parent.name })}`,
-  })
+/** "Variety of Corn" when a cultivar's plant is known, otherwise the kind's name. */
+const kindLabel = (article: WikiArticleQueriedCardData, i18n: Translator): string => {
+  const kind = i18n._(wikiKindLabels[article.kind].singular)
 
-const bookmarkLabel = (config: WikiArticleRowConfig): Option.Option<string> =>
-  Option.map(
-    config.maybeBookmarkState ?? Option.none(),
-    (state) => bookmarkVocabularies[config.article.kind].states[state],
+  return Option.match(article.parentPlantName, {
+    onNone: () => kind,
+    onSome: (parentName) => {
+      const { name, gender } = nameParts({ commonNames: [parentName], handle: parentName.name })
+      return i18n._(msg`${select(gender, { other: `${kind} of ${name}` })}`)
+    },
+  })
+}
+
+const bookmarkLabel = (config: WikiArticleRowConfig, i18n: Translator): Option.Option<string> =>
+  Option.map(config.maybeBookmarkState ?? Option.none(), (state) =>
+    i18n._(bookmarkVocabularies[config.article.kind].states[state]),
   )
 
 /** The article's main photo, or a provider's while it has none. */
@@ -182,7 +188,7 @@ const card = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Message>): H
           element: "span",
           appearance: "caption",
           styles: [cardKindStyle],
-          children: [kindLabel(article)],
+          children: [kindLabel(article, translatorFor(config.language))],
         },
         h,
       ),
@@ -211,7 +217,7 @@ const card = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Message>): H
       ),
     ]),
     ...EffectArray.fromOption(
-      Option.map(bookmarkLabel(config), (label) =>
+      Option.map(bookmarkLabel(config, translatorFor(config.language)), (label) =>
         h.span(styledAttributes([h.Title(label), h.AriaLabel(label)], cardBookmarkStyle), [
           Icons.bookmarkCheck({ size: "md", mode: "duotone" }),
         ]),
@@ -233,7 +239,14 @@ export const view = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Messa
   return h.a(styledAttributes([h.Href(wikiArticleUrl(config.language, article))], rowStyle), [
     Thumbnail.view({ maybeSrc: thumbnailSrc(article), alt: name }, h),
     h.div(styledAttributes([], textStyle), [
-      AppText.view({ appearance: "caption", isMuted: true, children: [kindLabel(article)] }, h),
+      AppText.view(
+        {
+          appearance: "caption",
+          isMuted: true,
+          children: [kindLabel(article, translatorFor(config.language))],
+        },
+        h,
+      ),
       AppText.view(
         {
           element: "span",
@@ -252,7 +265,7 @@ export const view = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Messa
       ),
     ]),
     ...EffectArray.fromOption(
-      Option.map(bookmarkLabel(config), (label) =>
+      Option.map(bookmarkLabel(config, translatorFor(config.language)), (label) =>
         h.span(styledAttributes([h.Title(label), h.AriaLabel(label)], bookmarkStyle), [
           Icons.bookmarkCheck({ size: "md" }),
         ]),

@@ -15,12 +15,23 @@ export const PendingCode = Schema.Struct({
 
 export type PendingCode = typeof PendingCode.Type
 
+/** What went wrong or happened, which the view says in the reader's language. */
+export const AuthenticationNotice = Schema.Literals([
+  "LinkFailed",
+  "SendFailed",
+  "CodeResent",
+  "CodeFailed",
+  "SomethingWentWrong",
+])
+
+export type AuthenticationNotice = typeof AuthenticationNotice.Type
+
 export const Stage = defineTaggedUnion({
   Restoring: {},
   EnteringEmail: {
     email: Schema.String,
     isSending: Schema.Boolean,
-    error: Schema.NullOr(Schema.String),
+    error: Schema.NullOr(AuthenticationNotice),
   },
   AwaitingCode: {
     pending: PendingCode,
@@ -28,12 +39,12 @@ export const Stage = defineTaggedUnion({
     code: Schema.String,
     isBusy: Schema.Boolean,
     canResend: Schema.Boolean,
-    notice: Schema.NullOr(Schema.String),
+    notice: Schema.NullOr(AuthenticationNotice),
   },
   Onboarding: {
     name: Schema.String,
     isSaving: Schema.Boolean,
-    error: Schema.NullOr(Schema.String),
+    error: Schema.NullOr(AuthenticationNotice),
   },
   SignedIn: {
     name: Schema.String,
@@ -50,13 +61,13 @@ export type Model = typeof Model.Type
 export const isSignedIn = (model: Model) =>
   Predicate.isTagged(model.stage, "SignedIn") || Predicate.isTagged(model.stage, "Onboarding")
 
-export const enteringEmail = (email = "", error: string | null = null) =>
+export const enteringEmail = (email = "", error: AuthenticationNotice | null = null) =>
   Stage.EnteringEmail({ email, isSending: false, error })
 
 export const awaitingCode = (input: {
   readonly pending: PendingCode
   readonly canResend: boolean
-  readonly notice?: string
+  readonly notice?: AuthenticationNotice
 }) =>
   Stage.AwaitingCode({
     pending: input.pending,

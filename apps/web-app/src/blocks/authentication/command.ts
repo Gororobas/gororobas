@@ -121,7 +121,7 @@ const signInWithCode = Effect.fn(function* (pending: PendingCode, code: string) 
   return yield* fetchProfileName.pipe(Effect.orElseSucceed(() => null))
 })
 
-const genericError = "Algo deu errado. Tente novamente."
+const genericError = "SomethingWentWrong" as const
 
 export const RestoreSession = AuthenticationBlock.makeCommand("RestoreSession", {
   messages: [Message.CompletedRestoreSession],
@@ -178,7 +178,7 @@ export const SendCode = AuthenticationBlock.makeCommand("SendCode", {
         Effect.map((pending) => Message.SucceededSendCode({ pending })),
         Effect.orElseSucceed(() =>
           Message.FailedSendCode({
-            error: "Não conseguimos enviar o email. Confira o endereço e tente novamente.",
+            error: "SendFailed",
           }),
         ),
       )
@@ -219,7 +219,7 @@ export const VerifyCode = AuthenticationBlock.makeCommand("VerifyCode", {
         Effect.map((name) => Message.SucceededVerifyCode({ name })),
         Effect.orElseSucceed(() =>
           Message.FailedVerifyCode({
-            error: "Esse código não funcionou. Confira ou reenvie o email para receber outro.",
+            error: "CodeFailed",
           }),
         ),
       )

@@ -1,6 +1,7 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { CreditedMediaAssetRow } from "@gororobas/domain/media-assets/domain"
 import type { ProfilePageData } from "@gororobas/domain/profiles/domain"
+import { msg } from "@lingui/core/macro"
 import { Style } from "@pleat/core"
 import { Array as EffectArray, type DateTime, Option } from "effect"
 import { AsyncData } from "foldkit"
@@ -8,6 +9,7 @@ import type { Html } from "foldkit/html"
 
 import type { ClientFailure } from "../../../lib/client-failure"
 import { mediaCaption } from "../../../lib/media-caption"
+import type { Translator } from "../../../lib/translations"
 import { imageUrl } from "../../../media-urls"
 import { EmptyState } from "../../../ui/empty-state"
 import * as Icons from "../../../ui/icons"
@@ -47,7 +49,9 @@ export const asyncView = <A>(
     asyncData,
     loading,
     onData,
+    i18n,
   }: Readonly<{
+    i18n: Translator
     asyncData: AsyncData.AsyncData<A, ClientFailure>
     loading: Readonly<{ label: string; shape: LoadingShape; count?: number }>
     onData: (data: A) => Html
@@ -60,8 +64,8 @@ export const asyncView = <A>(
       EmptyState.view(
         {
           icon: Icons.alertCircle,
-          title: "Não foi possível carregar agora",
-          maybeDescription: Option.some("Tente recarregar a página em instantes."),
+          title: i18n._(msg`Couldn't load right now`),
+          maybeDescription: Option.some(i18n._(msg`Try reloading the page in a moment.`)),
         },
         h,
       ),
@@ -69,16 +73,20 @@ export const asyncView = <A>(
   })
 
 /** Only images are shown as photos; the gallery sizes each by its own dimensions. */
-export const galleryPhotos = (
-  media: ReadonlyArray<CreditedMediaAssetRow>,
-): ReadonlyArray<GalleryPhoto> =>
+export const galleryPhotos = ({
+  media,
+  language,
+}: Readonly<{
+  media: ReadonlyArray<CreditedMediaAssetRow>
+  language: SupportedLanguage
+}>): ReadonlyArray<GalleryPhoto> =>
   media.flatMap((asset): ReadonlyArray<GalleryPhoto> =>
     asset.format === "IMAGE"
       ? [
           {
             key: asset.id,
             src: (width) => imageUrl(asset.id, width),
-            maybeCaption: mediaCaption(asset),
+            maybeCaption: mediaCaption({ media: asset, language }),
             maybeDimensions: Option.some({
               width: asset.metadata.originalWidth,
               height: asset.metadata.originalHeight,

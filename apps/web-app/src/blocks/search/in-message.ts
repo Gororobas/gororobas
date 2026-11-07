@@ -1,10 +1,10 @@
 import { defineMessageUnion } from "foldkit/message"
 
-import { SearchQuery } from "../../app/route"
+import { AnsweredSearch, SearchQuery } from "../../app/search-query"
 
 /** What the app tells search, through its Binding's `informQueryChange` and `informOpenedResult`. */
 export const InMessage = defineMessageUnion({
-  InformedOfQueryChange: { query: SearchQuery },
+  InformedOfQueryChange: { search: AnsweredSearch },
   /** The app reports leaving search through one of its results. */
   InformedOfOpenedResult: { query: SearchQuery },
 })

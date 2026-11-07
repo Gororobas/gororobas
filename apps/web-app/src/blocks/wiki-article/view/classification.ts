@@ -1,8 +1,11 @@
 import type { GbifClassification } from "@gororobas/domain/wiki/domain"
+import type { MessageDescriptor } from "@lingui/core"
+import { msg } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option, Order, String as EffectString } from "effect"
 import type { Html } from "foldkit/html"
 
+import { type Translator, translatorFor } from "../../../lib/translations"
 import * as Icons from "../../../ui/icons"
 import { styledAttributes, styledClassName } from "../../../ui/pleat-attributes"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
@@ -27,7 +30,7 @@ import {
 import type { Page } from "./shared"
 
 type Rank = Readonly<{
-  label: string
+  maybeLabel: Option.Option<MessageDescriptor>
   /** Shown in the one-line breadcrumb, not only in the full classification. */
   isInBreadcrumb: boolean
   /** Family and subfamily say the most about a plant's kin, so they stand out. */
@@ -36,8 +39,11 @@ type Rank = Readonly<{
   isItalic: boolean
 }>
 
-const rank = (label: string, flags: Partial<Omit<Rank, "label">> = {}): Rank => ({
-  label,
+const rank = (
+  maybeLabel: Option.Option<MessageDescriptor>,
+  flags: Partial<Omit<Rank, "maybeLabel">> = {},
+): Rank => ({
+  maybeLabel,
   isInBreadcrumb: flags.isInBreadcrumb ?? false,
   isEmphasized: flags.isEmphasized ?? false,
   isItalic: flags.isItalic ?? false,
@@ -45,18 +51,54 @@ const rank = (label: string, flags: Partial<Omit<Rank, "label">> = {}): Rank => 
 
 /** From broadest to narrowest; GBIF reports ranks in upper case. */
 const ranks: ReadonlyArray<readonly [string, Rank]> = [
-  ["DOMAIN", rank("Domínio")],
-  ["KINGDOM", rank("Reino", { isInBreadcrumb: true })],
-  ["SUBKINGDOM", rank("Sub-reino")],
-  ["PHYLUM", rank("Filo")],
-  ["CLASS", rank("Classe", { isInBreadcrumb: true })],
-  ["ORDER", rank("Ordem", { isInBreadcrumb: true })],
-  ["FAMILY", rank("Família", { isInBreadcrumb: true, isEmphasized: true })],
-  ["SUBFAMILY", rank("Subfamília", { isInBreadcrumb: true, isEmphasized: true })],
-  ["TRIBE", rank("Tribo")],
-  ["SUBTRIBE", rank("Subtribo")],
-  ["GENUS", rank("Gênero", { isInBreadcrumb: true, isItalic: true })],
-  ["SPECIES", rank("Espécie", { isItalic: true })],
+  ["DOMAIN", rank(Option.some(msg({ message: "Domain", context: "taxonomic rank" })))],
+  [
+    "KINGDOM",
+    rank(Option.some(msg({ message: "Kingdom", context: "taxonomic rank" })), {
+      isInBreadcrumb: true,
+    }),
+  ],
+  ["SUBKINGDOM", rank(Option.some(msg({ message: "Subkingdom", context: "taxonomic rank" })))],
+  ["PHYLUM", rank(Option.some(msg({ message: "Phylum", context: "taxonomic rank" })))],
+  [
+    "CLASS",
+    rank(Option.some(msg({ message: "Class", context: "taxonomic rank" })), {
+      isInBreadcrumb: true,
+    }),
+  ],
+  [
+    "ORDER",
+    rank(Option.some(msg({ message: "Order", context: "taxonomic rank" })), {
+      isInBreadcrumb: true,
+    }),
+  ],
+  [
+    "FAMILY",
+    rank(Option.some(msg({ message: "Family", context: "taxonomic rank" })), {
+      isInBreadcrumb: true,
+      isEmphasized: true,
+    }),
+  ],
+  [
+    "SUBFAMILY",
+    rank(Option.some(msg({ message: "Subfamily", context: "taxonomic rank" })), {
+      isInBreadcrumb: true,
+      isEmphasized: true,
+    }),
+  ],
+  ["TRIBE", rank(Option.some(msg({ message: "Tribe", context: "taxonomic rank" })))],
+  ["SUBTRIBE", rank(Option.some(msg({ message: "Subtribe", context: "taxonomic rank" })))],
+  [
+    "GENUS",
+    rank(Option.some(msg({ message: "Genus", context: "taxonomic rank" })), {
+      isInBreadcrumb: true,
+      isItalic: true,
+    }),
+  ],
+  [
+    "SPECIES",
+    rank(Option.some(msg({ message: "Species", context: "taxonomic rank" })), { isItalic: true }),
+  ],
 ]
 
 const rankOf = (taxonRank: string): Rank =>
@@ -65,8 +107,15 @@ const rankOf = (taxonRank: string): Rank =>
       EffectArray.findFirst(ranks, ([known]) => known === taxonRank),
       ([, known]) => known,
     ),
-    () => rank(EffectString.capitalize(EffectString.toLowerCase(taxonRank))),
+    () => rank(Option.none()),
   )
+
+/** Ranks GBIF reports beyond the known ones read as written, such as "Section". */
+const rankLabel = (taxonRank: string, i18n: Translator): string =>
+  Option.match(rankOf(taxonRank).maybeLabel, {
+    onNone: () => EffectString.capitalize(EffectString.toLowerCase(taxonRank)),
+    onSome: (label) => i18n._(label),
+  })
 
 const rankIndex = (taxonRank: string): number => {
   const index = ranks.findIndex(([known]) => known === taxonRank)
@@ -78,18 +127,18 @@ const byRank = Order.mapInput(Order.Number, (entry: GbifClassification) =>
 )
 
 /** GBIF names groups in English. */
-const taxonomyGroupNames: ReadonlyArray<readonly [string, string]> = [
-  ["Angiosperms", "Angiospermas"],
-  ["Gymnosperms", "Gimnospermas"],
-  ["Pteridophytes", "Pteridófitas"],
-  ["Bryophytes", "Briófitas"],
+const taxonomyGroupNames: ReadonlyArray<readonly [string, MessageDescriptor]> = [
+  ["Angiosperms", msg`Angiosperms`],
+  ["Gymnosperms", msg`Gymnosperms`],
+  ["Pteridophytes", msg`Pteridophytes`],
+  ["Bryophytes", msg`Bryophytes`],
 ]
 
-const taxonomyGroupName = (group: string): string =>
+const taxonomyGroupName = (group: string, i18n: Translator): string =>
   Option.getOrElse(
     Option.map(
       EffectArray.findFirst(taxonomyGroupNames, ([english]) => english === group),
-      ([, portuguese]) => portuguese,
+      ([, name]) => i18n._(name),
     ),
     () => group,
   )
@@ -179,9 +228,11 @@ const fullClassification = (
   {
     classification,
     taxonomyGroup,
+    i18n,
   }: Readonly<{
     classification: ReadonlyArray<GbifClassification>
     taxonomyGroup: string | null
+    i18n: Translator
   }>,
   h: WikiArticleViewBuilder,
 ): Html =>
@@ -189,11 +240,11 @@ const fullClassification = (
     ...(taxonomyGroup === null
       ? []
       : [
-          h.dt(styledAttributes([], termStyle), ["Grupo"]),
-          h.dd(styledAttributes([], definitionStyle), [taxonomyGroupName(taxonomyGroup)]),
+          h.dt(styledAttributes([], termStyle), [i18n._(msg`Group`)]),
+          h.dd(styledAttributes([], definitionStyle), [taxonomyGroupName(taxonomyGroup, i18n)]),
         ]),
     ...classification.flatMap((entry) => [
-      h.dt(styledAttributes([], termStyle), [rankOf(entry.taxonRank).label]),
+      h.dt(styledAttributes([], termStyle), [rankLabel(entry.taxonRank, i18n)]),
       h.dd(styledAttributes([], definitionStyle, ...nameStyles(entry)), [entry.scientificName]),
     ]),
   ])
@@ -209,25 +260,30 @@ export const view = (
     ),
   ).map((taxonomy) => {
     const classification = EffectArray.sort(taxonomy.classification, byRank)
+    const i18n = translatorFor(model.language)
+    const names = classification.map((entry) => entry.scientificName).join(", ")
 
     return h.block(
       ClassificationBinding.embedView({
         slotId: model.classification.id,
         model: model.classification,
         viewInputs: {
-          title: "Classificação",
+          title: i18n._(msg`Classification`),
           trigger: {
             children: breadcrumb(classification, h),
             className: styledClassName(triggerStyle),
-            ariaLabel: `Classificação: ${classification.map((entry) => entry.scientificName).join(", ")}`,
+            ariaLabel: i18n._(msg`Classification: ${names}`),
           },
           toContent: () => [
             h.div(styledAttributes([], contentStyle), [
-              fullClassification({ classification, taxonomyGroup: taxonomy.taxonomyGroup }, h),
+              fullClassification(
+                { classification, taxonomyGroup: taxonomy.taxonomyGroup, i18n },
+                h,
+              ),
               ...EffectArray.fromOption(
                 Option.map(findCredit(page, "GBIF"), (credit) => [
                   h.hr(styledAttributes([h.AriaHidden(true)], ruleStyle)),
-                  attributionDetails(credit, h),
+                  attributionDetails({ credit, language: model.language }, h),
                 ]),
               ).flat(),
             ]),

@@ -1,8 +1,10 @@
+import { msg, select } from "@lingui/core/macro"
 import { Array as EffectArray, Option } from "effect"
 import type { Html } from "foldkit/html"
 
+import { translateLabels, translatorFor } from "../../../lib/translations"
 import { publicationKindLabels } from "../../../lib/vocabulary"
-import { aboutName, ofName } from "../../../lib/wiki-article-names"
+import { nameParts } from "../../../lib/wiki-article-names"
 import { AppText } from "../../../ui/app-text"
 import { EmptyState } from "../../../ui/empty-state"
 import { FilterChips } from "../../../ui/filter-chips"
@@ -21,19 +23,24 @@ import { type ArticleState, asyncView, listStyle, sectionsStyle } from "./shared
 export const publications = (
   { model, language, page, maybeToday }: ArticleState,
   h: WikiArticleViewBuilder,
-): Html =>
-  h.div(styledAttributes([], sectionsStyle), [
+): Html => {
+  const i18n = translatorFor(language)
+  const { name, gender } = nameParts(page)
+  const kindLabels = translateLabels(i18n, publicationKindLabels)
+
+  return h.div(styledAttributes([], sectionsStyle), [
     SectionCard.view(
       {
-        title: `Posts sobre ${aboutName(page)}`,
+        title: i18n._(msg`${select(gender, { other: `Posts about ${name}` })}`),
         icon: Icons.clipboard,
         isBare: true,
         children: [
           FilterChips.view(
             {
-              label: "Filtrar por formato",
+              label: i18n._(msg`Filter by format`),
+              allLabel: i18n._(msg`All`),
               options: (["POST", "EVENT"] as const).map(
-                (kind) => [kind, publicationKindLabels[kind]] as const,
+                (kind) => [kind, kindLabels[kind]] as const,
               ),
               selected: model.maybePublicationKindFilter,
               toMessage: (maybeKind) => Message.ClickedPublicationKindFilter({ maybeKind }),
@@ -42,8 +49,9 @@ export const publications = (
           ),
           asyncView(
             {
+              i18n,
               asyncData: model.publicationsAsyncData,
-              loading: { label: "Carregando posts", shape: "cards" },
+              loading: { label: i18n._(msg`Loading posts`), shape: "cards" },
               onData: (all) =>
                 EffectArray.match(
                   all.filter((publication) =>
@@ -57,9 +65,11 @@ export const publications = (
                       EmptyState.view(
                         {
                           icon: Icons.clipboard,
-                          title: `Ainda não há posts sobre ${aboutName(page)}`,
+                          title: i18n._(
+                            msg`${select(gender, { other: `No posts about ${name} yet` })}`,
+                          ),
                           maybeDescription: Option.some(
-                            "Quando alguém compartilhar uma experiência, ela aparece aqui.",
+                            i18n._(msg`When someone shares an experience, it shows up here.`),
                           ),
                           size: "roomy",
                         },
@@ -86,8 +96,14 @@ export const publications = (
       h,
     ),
   ])
+}
 
-export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): Html => {
+export const photos = (
+  { model, language, page }: ArticleState,
+  h: WikiArticleViewBuilder,
+): Html => {
+  const i18n = translatorFor(language)
+  const { name, gender } = nameParts(page)
   const all = articlePhotos(page)
   const categories = EffectArray.dedupe(
     EffectArray.getSomes(all.map((photo) => photo.maybeCategory)),
@@ -103,7 +119,7 @@ export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder)
   return h.div(styledAttributes([], sectionsStyle), [
     SectionCard.view(
       {
-        title: `Fotos ${ofName(page)}`,
+        title: i18n._(msg`${select(gender, { other: `Photos of ${name}` })}`),
         icon: Icons.gallery,
         isBare: true,
         children: [
@@ -111,7 +127,8 @@ export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder)
             ? [
                 FilterChips.view(
                   {
-                    label: "Filtrar por categoria",
+                    label: i18n._(msg`Filter by category`),
+                    allLabel: i18n._(msg`All`),
                     options: categories.map((category) => [category, category] as const),
                     selected: model.maybePhotoCategoryFilter,
                     toMessage: (maybeCategory) =>
@@ -124,7 +141,7 @@ export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder)
           EffectArray.match(shown, {
             onEmpty: () =>
               EmptyState.view(
-                { icon: Icons.gallery, title: "Nenhuma foto por aqui ainda", size: "roomy" },
+                { icon: Icons.gallery, title: i18n._(msg`No photos here yet`), size: "roomy" },
                 h,
               ),
             onNonEmpty: ([featured, ...rest]) =>
@@ -157,11 +174,14 @@ export const photos = ({ model, page }: ArticleState, h: WikiArticleViewBuilder)
 export const contributions = (
   { model, language, page }: ArticleState,
   h: WikiArticleViewBuilder,
-): Html =>
-  h.div(styledAttributes([], sectionsStyle), [
+): Html => {
+  const i18n = translatorFor(language)
+  const { name, gender } = nameParts(page)
+
+  return h.div(styledAttributes([], sectionsStyle), [
     SectionCard.view(
       {
-        title: "Contribuições",
+        title: i18n._(msg`Contributions`),
         icon: Icons.users,
         isBare: true,
         children: [
@@ -169,15 +189,18 @@ export const contributions = (
             {
               element: "p",
               children: [
-                `O Gororobas é colaborativo: cada pessoa abaixo ajudou a construir a página ${ofName(page)}.`,
+                i18n._(
+                  msg`${select(gender, { other: `Gororobas is collaborative: each person below helped build the page of ${name}.` })}`,
+                ),
               ],
             },
             h,
           ),
           asyncView(
             {
+              i18n,
               asyncData: model.contributorsAsyncData,
-              loading: { label: "Carregando contribuições", shape: "rows" },
+              loading: { label: i18n._(msg`Loading contributions`), shape: "rows" },
               onData: (contributors) =>
                 contributorList({ contributors, language, size: "large" }, h),
             },
@@ -188,3 +211,4 @@ export const contributions = (
       h,
     ),
   ])
+}

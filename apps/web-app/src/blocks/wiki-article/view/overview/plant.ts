@@ -1,14 +1,19 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type {
   WikiArticleQueriedPageData,
   WikiCultivarParentPlant,
   WikiPlantArticle,
 } from "@gororobas/domain/wiki/domain"
+import type { MessageDescriptor } from "@lingui/core"
+import { msg, plural, select } from "@lingui/core/macro"
 import { Style } from "@pleat/core"
 import { Array as EffectArray, Function, Match, Number as EffectNumber, Option } from "effect"
 import * as Length from "effect-units/Length"
 import * as Temperature from "effect-units/Temperature"
 import type { Html } from "foldkit/html"
 
+import { intlTags } from "../../../../lib/language"
+import { type Translator, translateLabels } from "../../../../lib/translations"
 import {
   ediblePartLabels,
   lifecycleExplainers,
@@ -19,7 +24,7 @@ import {
   stratumExplainers,
   stratumLabels,
 } from "../../../../lib/vocabulary"
-import { agreeingWith, ofName } from "../../../../lib/wiki-article-names"
+import { nameParts } from "../../../../lib/wiki-article-names"
 import { styledAttributes } from "../../../../ui/pleat-attributes"
 import { fontSize, fontWeight, radius, space, tones } from "../../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../../composition"
@@ -32,7 +37,10 @@ type PlantAttributes = PlantPage["attributes"]
 type Range<A> = Readonly<{ minimum: A; maximum: A }>
 
 /** A trait's value, and for cultivars, a note when it comes from the parent plant. */
-type Trait<A> = Readonly<{ maybeValue: Option.Option<A>; maybeNote: Option.Option<string> }>
+type Trait<A> = Readonly<{
+  maybeValue: Option.Option<A>
+  maybeNote: Option.Option<MessageDescriptor>
+}>
 
 /** What plants and their cultivars both describe, each trait absent until someone records it. */
 export type PlantTraits = Readonly<{
@@ -94,7 +102,7 @@ const fromMinMax = <A>({ min, max }: Readonly<{ min: A; max: A }>): Range<A> => 
  * as possibly different, since it's the best guess a grower has.
  */
 export const cultivarTraits = ({ attributes, parentPlant }: CultivarPage): PlantTraits => {
-  const parentName = Option.map(parentPlant, ({ card }) => ofName(card))
+  const maybeParentName = Option.map(parentPlant, ({ card }) => nameParts(card))
   const parentValues = Option.map(parentPlant, (parent: WikiCultivarParentPlant) => ({
     ...parent.attributes,
     ...ranges(parent.attributes),
@@ -116,11 +124,18 @@ export const cultivarTraits = ({ attributes, parentPlant }: CultivarPage): Plant
         Value: ({ value }) => own(Option.some(toValue(value))),
         Inherit: () => ({
           maybeValue: inParent,
-          maybeNote: Option.map(parentName, (name) => `Herdado ${name}`),
+          maybeNote: Option.map(
+            maybeParentName,
+            ({ name, gender }) => msg`${select(gender, { other: `Inherited from ${name}` })}`,
+          ),
         }),
         Unknown: () => ({
           maybeValue: inParent,
-          maybeNote: Option.map(parentName, (name) => `Valor ${name}, pode variar nesta variedade`),
+          maybeNote: Option.map(
+            maybeParentName,
+            ({ name, gender }) =>
+              msg`${select(gender, { other: `${name}'s value, may differ in this variety` })}`,
+          ),
         }),
       }),
     )
@@ -212,16 +227,22 @@ const warmthColors = [
   tones.secondary.ramp[300],
 ] as const
 
-const formatLength = (length: Length.Length): string => {
+const formatLength = (length: Length.Length, language: SupportedLanguage): string => {
   const centimeters = Length.inCentimeters(length)
   return centimeters >= 100
-    ? `${EffectNumber.round(Length.inMeters(length), 1).toLocaleString("pt-BR")}m`
+    ? `${EffectNumber.round(Length.inMeters(length), 1).toLocaleString(intlTags[language])}m`
     : `${Math.round(centimeters)}cm`
 }
 
-const temperatureScale = ({ minimum, maximum }: Range<number>, h: WikiArticleViewBuilder): Html =>
+const temperatureScale = (
+  { minimum, maximum, i18n }: Range<number> & Readonly<{ i18n: Translator }>,
+  h: WikiArticleViewBuilder,
+): Html =>
   h.div(
-    styledAttributes([h.Role("img"), h.AriaLabel(`Entre ${minimum}ºC e ${maximum}ºC`)], scaleStyle),
+    styledAttributes(
+      [h.Role("img"), h.AriaLabel(i18n._(msg`Between ${minimum}ºC and ${maximum}ºC`))],
+      scaleStyle,
+    ),
     [
       ...EffectArray.makeBy(TEMPERATURE_SEGMENTS, (index) => {
         const start = index * TEMPERATURE_STEP
@@ -261,106 +282,123 @@ const temperatureScale = ({ minimum, maximum }: Range<number>, h: WikiArticleVie
 
 /** What a grower needs at a glance, in the order people ask about it. */
 export const facts = (
-  { page, traits }: Readonly<{ page: PlantPage | CultivarPage; traits: PlantTraits }>,
+  {
+    page,
+    traits,
+    language,
+    i18n,
+  }: Readonly<{
+    page: PlantPage | CultivarPage
+    traits: PlantTraits
+    language: SupportedLanguage
+    i18n: Translator
+  }>,
   h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> => [
-  ...(page.kind === "PLANT" ? textFact({ title: "Origem", maybeText: page.origin }, h) : []),
-  ...chipFact(
-    {
-      id: "usage",
-      title: "Principais usos",
-      maybeValues: traits.usage.maybeValue,
-      maybeNote: traits.usage.maybeNote,
-      labels: plantUsageLabels,
-    },
-    h,
-  ),
-  ...chipFact(
-    {
-      id: "edible-parts",
-      title: "Partes comestíveis",
-      maybeValues: traits.edibleParts.maybeValue,
-      maybeNote: traits.edibleParts.maybeNote,
-      labels: ediblePartLabels,
-    },
-    h,
-  ),
-  ...chipFact(
-    {
-      id: "stratum",
-      title: "Estrato",
-      maybeDescription: Option.some("Camada vertical conforme necessidade de luz"),
-      maybeValues: traits.strata.maybeValue,
-      maybeNote: traits.strata.maybeNote,
-      labels: stratumLabels,
-      explainers: stratumExplainers,
-    },
-    h,
-  ),
-  ...chipFact(
-    {
-      id: "lifecycle",
-      title: "Ciclo de vida",
-      maybeDescription: Option.some("Duração do plantio até a morte ou colheita"),
-      maybeValues: traits.lifecycles.maybeValue,
-      maybeNote: traits.lifecycles.maybeNote,
-      labels: lifecycleLabels,
-      explainers: lifecycleExplainers,
-    },
-    h,
-  ),
-  ...chipFact(
-    {
-      id: "planting-method",
-      title: "Métodos de plantio e propagação",
-      maybeValues: traits.plantingMethods.maybeValue,
-      maybeNote: traits.plantingMethods.maybeNote,
-      labels: plantingMethodLabels,
-      explainers: plantingMethodExplainers,
-    },
-    h,
-  ),
-  ...textFact(
-    {
-      title: "Tempo até produzir",
-      maybeDescription: Option.some("Quanto tempo até começarmos a colher"),
-      maybeText: Option.map(
-        traits.developmentCycle.maybeValue,
-        ({ minimum, maximum }) => `${rangeText(`${minimum}`, `${maximum}`)} dias`,
-      ),
-      maybeNote: traits.developmentCycle.maybeNote,
-    },
-    h,
-  ),
-  ...textFact(
-    {
-      title: agreeingWith(page, {
-        feminine: "Altura quando adulta",
-        otherwise: "Altura quando adulto",
-      }),
-      maybeText: Option.map(traits.height.maybeValue, ({ minimum, maximum }) =>
-        rangeText(formatLength(minimum), formatLength(maximum)),
-      ),
-      maybeNote: traits.height.maybeNote,
-    },
-    h,
-  ),
-  ...EffectArray.fromOption(
-    Option.map(traits.temperature.maybeValue, ({ minimum, maximum }) =>
-      fact(
-        {
-          title: "Temperatura ideal",
-          maybeNote: traits.temperature.maybeNote,
-          content: temperatureScale(
-            {
-              minimum: Math.round(Temperature.inDegreesCelsius(minimum)),
-              maximum: Math.round(Temperature.inDegreesCelsius(maximum)),
-            },
-            h,
-          ),
-        },
-        h,
+): ReadonlyArray<Html> => {
+  const note = <A>(trait: Trait<A>) =>
+    Option.map(trait.maybeNote, (descriptor) => i18n._(descriptor))
+  const range = (minimum: string, maximum: string) => rangeText({ minimum, maximum, i18n })
+
+  return [
+    ...(page.kind === "PLANT"
+      ? textFact({ title: i18n._(msg`Origin`), maybeText: page.origin }, h)
+      : []),
+    ...chipFact(
+      {
+        id: "usage",
+        title: i18n._(msg`Main uses`),
+        maybeValues: traits.usage.maybeValue,
+        maybeNote: note(traits.usage),
+        labels: translateLabels(i18n, plantUsageLabels),
+      },
+      h,
+    ),
+    ...chipFact(
+      {
+        id: "edible-parts",
+        title: i18n._(msg`Edible parts`),
+        maybeValues: traits.edibleParts.maybeValue,
+        maybeNote: note(traits.edibleParts),
+        labels: translateLabels(i18n, ediblePartLabels),
+      },
+      h,
+    ),
+    ...chipFact(
+      {
+        id: "stratum",
+        title: i18n._(msg`Stratum`),
+        maybeDescription: Option.some(i18n._(msg`Vertical layer, by how much light it needs`)),
+        maybeValues: traits.strata.maybeValue,
+        maybeNote: note(traits.strata),
+        labels: translateLabels(i18n, stratumLabels),
+        explainers: translateLabels(i18n, stratumExplainers),
+      },
+      h,
+    ),
+    ...chipFact(
+      {
+        id: "lifecycle",
+        title: i18n._(msg`Lifecycle`),
+        maybeDescription: Option.some(i18n._(msg`From planting until it dies or is harvested`)),
+        maybeValues: traits.lifecycles.maybeValue,
+        maybeNote: note(traits.lifecycles),
+        labels: translateLabels(i18n, lifecycleLabels),
+        explainers: translateLabels(i18n, lifecycleExplainers),
+      },
+      h,
+    ),
+    ...chipFact(
+      {
+        id: "planting-method",
+        title: i18n._(msg`Planting and propagation methods`),
+        maybeValues: traits.plantingMethods.maybeValue,
+        maybeNote: note(traits.plantingMethods),
+        labels: translateLabels(i18n, plantingMethodLabels),
+        explainers: translateLabels(i18n, plantingMethodExplainers),
+      },
+      h,
+    ),
+    ...textFact(
+      {
+        title: i18n._(msg`Time to harvest`),
+        maybeDescription: Option.some(i18n._(msg`How long until we start harvesting`)),
+        maybeText: Option.map(traits.developmentCycle.maybeValue, ({ minimum, maximum }) =>
+          minimum === maximum
+            ? i18n._(msg`${plural(minimum, { one: "# day", other: "# days" })}`)
+            : i18n._(msg`${minimum} to ${maximum} days`),
+        ),
+        maybeNote: note(traits.developmentCycle),
+      },
+      h,
+    ),
+    ...textFact(
+      {
+        title: i18n._(msg`${select(nameParts(page).gender, { other: "Height when fully grown" })}`),
+        maybeText: Option.map(traits.height.maybeValue, ({ minimum, maximum }) =>
+          range(formatLength(minimum, language), formatLength(maximum, language)),
+        ),
+        maybeNote: note(traits.height),
+      },
+      h,
+    ),
+    ...EffectArray.fromOption(
+      Option.map(traits.temperature.maybeValue, ({ minimum, maximum }) =>
+        fact(
+          {
+            title: i18n._(msg`Ideal temperature`),
+            maybeNote: note(traits.temperature),
+            content: temperatureScale(
+              {
+                minimum: Math.round(Temperature.inDegreesCelsius(minimum)),
+                maximum: Math.round(Temperature.inDegreesCelsius(maximum)),
+                i18n,
+              },
+              h,
+            ),
+          },
+          h,
+        ),
       ),
     ),
-  ),
-]
+  ]
+}

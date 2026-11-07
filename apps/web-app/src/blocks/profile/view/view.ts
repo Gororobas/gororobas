@@ -1,11 +1,15 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
+import type { MessageDescriptor } from "@lingui/core"
+import { msg } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { type DateTime, Match, Option } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { type ProfileTab, profileUrl, searchUrl, wikiArticleUrl } from "../../../app/route"
+import { peopleScope } from "../../../app/search-query"
 import type { LanguageInputs } from "../../../lib/language"
+import { translatorFor } from "../../../lib/translations"
 import { imageUrl } from "../../../media-urls"
 import { AppText } from "../../../ui/app-text"
 import { EmptyState } from "../../../ui/empty-state"
@@ -64,12 +68,14 @@ const locationLinkStyle = Style.make({
 
 const statusStyle = Style.make({ paddingBlock: space[6] })
 
-const tabEntries: ReadonlyArray<readonly [ProfileTab, string, (config?: IconConfig) => Html]> = [
-  ["Home", "Início", Icons.home],
-  ["Publications", "Publicações", Icons.clipboard],
-  ["Photos", "Fotos", Icons.gallery],
-  ["Contributions", "Contribuições", Icons.encyclopedia],
-  ["Bookmarks", "Salvos", Icons.bookmark],
+const tabEntries: ReadonlyArray<
+  readonly [ProfileTab, MessageDescriptor, (config?: IconConfig) => Html]
+> = [
+  ["Home", msg({ message: "Home", context: "profile tab" }), Icons.home],
+  ["Publications", msg`Posts`, Icons.clipboard],
+  ["Photos", msg`Photos`, Icons.gallery],
+  ["Contributions", msg`Contributions`, Icons.encyclopedia],
+  ["Bookmarks", msg({ message: "Saved", context: "profile collection" }), Icons.bookmark],
 ]
 
 /** Where the profile is, leading to that place's article when it's one. */
@@ -112,8 +118,11 @@ const location = (
 const header = (
   { language, page, tab }: Readonly<{ language: SupportedLanguage; page: Page; tab: ProfileTab }>,
   h: ProfileViewBuilder,
-): Html =>
-  h.div(styledAttributes([], headerBandStyle, toneStyle("primary")), [
+): Html => {
+  const i18n = translatorFor(language)
+  const { name } = page
+
+  return h.div(styledAttributes([], headerBandStyle, toneStyle("primary")), [
     h.header(styledAttributes([], pageColumnStyle, headerStyle), [
       h.div(styledAttributes([], identityStyle), [
         profileAvatar(
@@ -143,11 +152,11 @@ const header = (
       ]),
       TabNavigation.view(
         {
-          ariaLabel: `Seções do perfil de ${page.name}`,
+          ariaLabel: i18n._(msg`Sections of ${name}'s profile`),
           styles: [pageColumnBleedStyle],
           items: tabEntries.map(([entry, label, icon]) => ({
             key: entry,
-            label,
+            label: i18n._(label),
             href: profileUrl(language, { handle: page.handle, tab: entry }),
             isCurrent: entry === tab,
             maybeIcon: icon,
@@ -157,6 +166,7 @@ const header = (
       ),
     ]),
   ])
+}
 
 export type ViewInputs = LanguageInputs &
   Readonly<{
@@ -170,7 +180,10 @@ export const view = ProfileComposition.makeView.withInputs<ViewInputs>(
     AsyncData.matchData(model.pageAsyncData, {
       onEmpty: () =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
-          LoadingState.view({ label: "Carregando perfil", shape: "page", count: 2 }, h),
+          LoadingState.view(
+            { label: translatorFor(language)._(msg`Loading profile`), shape: "page", count: 2 },
+            h,
+          ),
         ]),
       onFailure: (error) =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
@@ -178,13 +191,15 @@ export const view = ProfileComposition.makeView.withInputs<ViewInputs>(
             ? EmptyState.view(
                 {
                   icon: Icons.user,
-                  title: "Não encontramos esse perfil",
+                  title: translatorFor(language)._(msg`We couldn't find this profile`),
                   maybeDescription: Option.some(
-                    "Ele pode ter mudado de endereço, ou não estar visível para você.",
+                    translatorFor(language)._(
+                      msg`It may have moved to another address, or not be visible to you.`,
+                    ),
                   ),
                   maybeAction: Option.some({
-                    label: "Buscar pessoas",
-                    href: searchUrl(language, { type: Option.some("people") }),
+                    label: translatorFor(language)._(msg`Search people`),
+                    href: searchUrl(language, { scope: peopleScope() }),
                   }),
                   size: "roomy",
                 },
@@ -193,8 +208,10 @@ export const view = ProfileComposition.makeView.withInputs<ViewInputs>(
             : EmptyState.view(
                 {
                   icon: Icons.alertCircle,
-                  title: "Não foi possível carregar o perfil agora",
-                  maybeDescription: Option.some("Tente recarregar a página em instantes."),
+                  title: translatorFor(language)._(msg`Couldn't load the profile right now`),
+                  maybeDescription: Option.some(
+                    translatorFor(language)._(msg`Try reloading the page in a moment.`),
+                  ),
                   size: "roomy",
                 },
                 h,

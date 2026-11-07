@@ -1,18 +1,24 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { PartialDate } from "@gororobas/domain/common/utils/dates"
 import { DateTime, Match } from "effect"
 
-const formatMonth = DateTime.format({ locale: "pt-BR", month: "long", timeZone: "UTC" })
+import { intlTags } from "./language"
 
-const monthName = (month: number): string =>
-  formatMonth(DateTime.makeUnsafe({ year: 2000, month, day: 1 }))
+const formatter = (language: SupportedLanguage, options: Intl.DateTimeFormatOptions) =>
+  DateTime.format({ locale: intlTags[language], timeZone: "UTC", ...options })
 
-/** Reads a date only as precisely as it was recorded: "1987", "março de 1987", "12 de março de 1987". */
-export const formatPartialDate = (date: PartialDate): string =>
+/** Reads a date only as precisely as it was recorded: "1987", "March 1987", "March 12, 1987". */
+export const formatPartialDate = (date: PartialDate, language: SupportedLanguage): string =>
   Match.value(date).pipe(
     Match.discriminatorsExhaustive("precision")({
       year: ({ year }) => `${year}`,
-      month: ({ year, month }) => `${monthName(month)} de ${year}`,
-      day: ({ year, month, day }) => `${day} de ${monthName(month)} de ${year}`,
-      time: ({ year, month, day }) => `${day} de ${monthName(month)} de ${year}`,
+      month: ({ year, month }) =>
+        formatter(language, { year: "numeric", month: "long" })(
+          DateTime.makeUnsafe({ year, month, day: 1 }),
+        ),
+      day: ({ year, month, day }) =>
+        formatter(language, { dateStyle: "long" })(DateTime.makeUnsafe({ year, month, day })),
+      time: ({ year, month, day }) =>
+        formatter(language, { dateStyle: "long" })(DateTime.makeUnsafe({ year, month, day })),
     }),
   )

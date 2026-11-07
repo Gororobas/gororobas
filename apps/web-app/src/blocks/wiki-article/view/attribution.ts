@@ -1,8 +1,13 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { ExternalDataAttribution } from "@gororobas/domain/wiki/domain"
+import type { MessageDescriptor } from "@lingui/core"
+import { msg } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, Option } from "effect"
 import type { Html } from "foldkit/html"
 
+import { intlTags } from "../../../lib/language"
+import { translatorFor } from "../../../lib/translations"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
 import { MediaCredit } from "../../../ui/media-credit"
@@ -86,22 +91,24 @@ export const detailListStyle = Style.make({
 export const termStyle = Style.make({ color: tones.neutral.shade[700] })
 export const definitionStyle = Style.make({ margin: 0 })
 
-const providerDescriptions: Readonly<Record<ExternalDataAttribution["provider"], string>> = {
-  WIKIDATA:
-    "Base de conhecimento livre e colaborativa da Wikimedia. Seus dados estão em domínio público (CC0).",
-  GBIF: "Global Biodiversity Information Facility, rede aberta de dados sobre biodiversidade. A classificação segue o Catálogo da Vida, e cada foto mantém sua própria licença e autoria.",
-  GOOGLE_BOOKS: "Informações das edições publicadas, segundo o catálogo do Google Livros.",
+const providerDescriptions: Readonly<
+  Record<ExternalDataAttribution["provider"], MessageDescriptor>
+> = {
+  WIKIDATA: msg`Wikimedia's free and collaborative knowledge base. Its data is in the public domain (CC0).`,
+  GBIF: msg`Global Biodiversity Information Facility, an open network of biodiversity data. Its classification follows the Catalogue of Life, and each photo keeps its own license and authorship.`,
+  GOOGLE_BOOKS: msg`Information on published editions, from the Google Books catalog.`,
 }
 
 /** Where each provider's link leads: GBIF's taxa are Catalogue of Life's. */
-const providerLinkLabels: Readonly<Record<ExternalDataAttribution["provider"], string>> = {
-  WIKIDATA: "Ver no Wikidata",
-  GBIF: "Ver no Catálogo da Vida",
-  GOOGLE_BOOKS: "Ver no Google Livros",
-}
+const providerLinkLabels: Readonly<Record<ExternalDataAttribution["provider"], MessageDescriptor>> =
+  {
+    WIKIDATA: msg`See on Wikidata`,
+    GBIF: msg`See on the Catalogue of Life`,
+    GOOGLE_BOOKS: msg`See on Google Books`,
+  }
 
-const formatDate = (date: DateTime.Utc): string =>
-  new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeZone: "UTC" }).format(
+const formatDate = (date: DateTime.Utc, language: SupportedLanguage): string =>
+  new Intl.DateTimeFormat(intlTags[language], { dateStyle: "long", timeZone: "UTC" }).format(
     DateTime.toDate(date),
   )
 
@@ -119,33 +126,37 @@ export const findCredit = (
 
 /** What a provider is, when its data was read and where readers can check it. */
 export const attributionDetails = (
-  credit: ExternalDataAttribution,
+  { credit, language }: Readonly<{ credit: ExternalDataAttribution; language: SupportedLanguage }>,
   h: WikiArticleViewBuilder,
 ): Html => {
   const name = ProviderMark.names[credit.provider]
+  const i18n = translatorFor(language)
 
   return h.div(styledAttributes([], detailsStyle), [
     h.div(styledAttributes([], headerStyle), [
       ProviderMark.view(credit.provider),
-      AppText.view({ element: "p", weight: "semibold", children: [`Dados do ${name}`] }, h),
+      AppText.view(
+        { element: "p", weight: "semibold", children: [i18n._(msg`Data from ${name}`)] },
+        h,
+      ),
     ]),
     AppText.view(
       {
         element: "p",
         appearance: "footnote",
         lineHeight: "relaxed",
-        children: [providerDescriptions[credit.provider]],
+        children: [i18n._(providerDescriptions[credit.provider])],
       },
       h,
     ),
     h.dl(styledAttributes([], detailListStyle), [
-      h.dt(styledAttributes([], termStyle), ["Identificador"]),
+      h.dt(styledAttributes([], termStyle), [i18n._(msg`Identifier`)]),
       h.dd(styledAttributes([], definitionStyle), [credit.externalId]),
-      h.dt(styledAttributes([], termStyle), ["Atualizado em"]),
-      h.dd(styledAttributes([], definitionStyle), [formatDate(credit.observedAt)]),
+      h.dt(styledAttributes([], termStyle), [i18n._(msg`Updated on`)]),
+      h.dd(styledAttributes([], definitionStyle), [formatDate(credit.observedAt, language)]),
     ]),
     h.a(styledAttributes(externalLinkAttributes(credit.url, h), externalLinkStyle), [
-      providerLinkLabels[credit.provider],
+      i18n._(providerLinkLabels[credit.provider]),
       Icons.arrowRight({ size: "sm" }),
     ]),
   ])
@@ -158,6 +169,7 @@ export const attribution = (
 ): ReadonlyArray<Html> => {
   const provider = attributedSectionProviders[section]
   const name = ProviderMark.names[provider]
+  const i18n = translatorFor(model.language)
   const maybeInstance = EffectArray.findFirst(
     model.attributions,
     (instance) => instance.id === attributionId(section),
@@ -173,16 +185,16 @@ export const attribution = (
             slotId: instance.id,
             model: instance,
             viewInputs: {
-              title: `Dados do ${name}`,
+              title: i18n._(msg`Data from ${name}`),
               trigger: {
                 children: [
                   ProviderMark.view(provider),
                   ...(ProviderMark.isWordmark[provider] ? [] : [name]),
                 ],
                 className: styledClassName(triggerStyle),
-                ariaLabel: `Fonte: ${name}`,
+                ariaLabel: i18n._(msg`Source: ${name}`),
               },
-              toContent: () => [attributionDetails(credit, h)],
+              toContent: () => [attributionDetails({ credit, language: model.language }, h)],
               anchor: { placement: "bottom-end", gap: 6, padding: 8 },
               panelClassName: styledClassName(panelStyle),
               tone: "primary",
@@ -201,9 +213,12 @@ export const photoCredit = (
     corner = "bottomStart",
   }: Readonly<{ model: Model; photo: ArticlePhoto; corner?: "bottomStart" | "topEnd" }>,
   h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> =>
-  EffectArray.isReadonlyArrayEmpty(photo.attribution.credits) &&
-  Option.isNone(photo.attribution.maybeLicenseUrl)
+): ReadonlyArray<Html> => {
+  const i18n = translatorFor(model.language)
+  const { attribution: photoAttribution } = photo
+
+  return EffectArray.isReadonlyArrayEmpty(photo.attribution.credits) &&
+    Option.isNone(photo.attribution.maybeLicenseUrl)
     ? []
     : EffectArray.fromOption(
         Option.map(
@@ -215,13 +230,15 @@ export const photoCredit = (
                 slotId: instance.id,
                 model: instance,
                 viewInputs: {
-                  title: "Créditos da foto",
+                  title: i18n._(msg`Photo credits`),
                   trigger: {
-                    children: MediaCredit.badgeChildren(photo.attribution, h),
+                    children: MediaCredit.badgeChildren({ attribution: photoAttribution, i18n }, h),
                     className: styledClassName(MediaCredit.badgeStyle({ corner })),
-                    ariaLabel: MediaCredit.badgeLabel(photo.attribution),
+                    ariaLabel: MediaCredit.badgeLabel({ attribution: photoAttribution, i18n }),
                   },
-                  toContent: () => [MediaCredit.details(photo.attribution, h)],
+                  toContent: () => [
+                    MediaCredit.details({ attribution: photoAttribution, i18n }, h),
+                  ],
                   anchor: {
                     placement: corner === "bottomStart" ? "top-start" : "bottom-end",
                     gap: 6,
@@ -234,3 +251,4 @@ export const photoCredit = (
             ),
         ),
       )
+}

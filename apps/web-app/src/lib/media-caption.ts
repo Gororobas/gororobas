@@ -1,12 +1,22 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
+import { languageFallbackOrder } from "@gororobas/domain/common/language-fallback"
 import type { MediaAssetRow } from "@gororobas/domain/media-assets/domain"
 import { tiptapToText } from "@gororobas/domain/rich-text/tiptap-to-text"
-import { Option, String as EffectString } from "effect"
+import { Array as EffectArray, Option, String as EffectString } from "effect"
 
-import { readerLanguage } from "./reader-language"
-
-/** The description of media in the reader's language, as plain text. */
-export const mediaCaption = (media: Pick<MediaAssetRow, "descriptions">): Option.Option<string> =>
-  Option.fromNullishOr(media.descriptions[readerLanguage]).pipe(
-    Option.map((document) => EffectString.trim(tiptapToText(document))),
-    Option.filter(EffectString.isNonEmpty),
+/** The description of media as plain text, in `language` or else the next one that has it. */
+export const mediaCaption = ({
+  media,
+  language,
+}: Readonly<{
+  media: Pick<MediaAssetRow, "descriptions">
+  language: SupportedLanguage
+}>): Option.Option<string> =>
+  EffectArray.findFirst(languageFallbackOrder(language), (candidate) =>
+    Option.filter(
+      Option.map(Option.fromNullishOr(media.descriptions[candidate]), (document) =>
+        EffectString.trim(tiptapToText(document)),
+      ),
+      EffectString.isNonEmpty,
+    ),
   )

@@ -4,11 +4,11 @@ import { UrlRequest } from "foldkit/navigation"
 import { modifyFields } from "foldkit/struct"
 import { toString as urlToString } from "foldkit/url"
 
-import { changeRouteStep } from "./change-route"
-import { FocusSearchField, LoadExternal, NavigateInternal, SaveLanguagePreference } from "./command"
+import { changeRouteStep, settleLanguageRequestStep } from "./change-route"
+import { FocusSearchField, LoadExternal, NavigateInternal } from "./command"
 import { ApplicationComposition, ProfileLocationsEditorBinding, SearchBinding } from "./composition"
 import { makeCommandsStep, makeFieldsStep, makeNoopStep } from "./definition"
-import { ApplicationRoute, searchQueryOf, searchUrl, urlToLocatedRoute } from "./route"
+import { ApplicationRoute, searchUrl, urlToLocatedRoute } from "./route"
 
 export const update = ApplicationComposition.makeUpdate({
   ClickedLink: (model, { request }) =>
@@ -22,7 +22,7 @@ export const update = ApplicationComposition.makeUpdate({
         const rememberSearch =
           ApplicationRoute.guards.Search(route) &&
           !ApplicationRoute.guards.Search(urlToLocatedRoute(url).route)
-            ? [SearchBinding.informOpenedResult({ query: searchQueryOf(route) })]
+            ? [SearchBinding.informOpenedResult({ query: route.query })]
             : []
 
         return Update.combineSteps([navigate, ...rememberSearch])(model)
@@ -48,22 +48,10 @@ export const update = ApplicationComposition.makeUpdate({
   })),
   CompletedReplaceUrl: makeNoopStep(),
   CompletedSaveLanguagePreference: makeNoopStep(),
-  /** A slower, earlier request finishing after a newer one must not switch the app back. */
   CompletedLoadTranslations: (model, { language, requestNumber }) =>
-    Option.exists(model.maybeLanguageRequest, (request) => request.number === requestNumber)
-      ? {
-          model: modifyFields(model, {
-            language: () => language,
-            maybeLanguageRequest: () => Option.none(),
-          }),
-          commands: [SaveLanguagePreference({ language })],
-        }
-      : { model },
-  /** The app stays readable in its current language; following a language link again retries. */
+    settleLanguageRequestStep({ requestNumber, maybeLoadedLanguage: Option.some(language) })(model),
   FailedLoadTranslations: (model, { requestNumber }) =>
-    Option.exists(model.maybeLanguageRequest, (request) => request.number === requestNumber)
-      ? { model: modifyFields(model, { maybeLanguageRequest: () => Option.none() }) }
-      : { model },
+    settleLanguageRequestStep({ requestNumber, maybeLoadedLanguage: Option.none() })(model),
   CompletedLocateDevice: (model, { deviceLocation }) =>
     Update.combineSteps([
       makeFieldsStep(() => ({ deviceLocation: () => deviceLocation })),

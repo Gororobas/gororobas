@@ -1,7 +1,7 @@
 import { Duration, Effect, Option, Schema, Stream } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
-import { SearchQuery } from "../../app/route"
+import { AnsweredSearch, SearchScope } from "../../app/search-query"
 import { streamViewerBookmarks } from "../../lib/viewer-bookmarks"
 import { previewCapacity } from "../../ui/styles/result-grid"
 import { SearchBlock } from "./definition"
@@ -23,7 +23,7 @@ export const PUBLICATIONS_SEARCH_PAGE_SIZE = 30
 export const subscriptions = SearchBlock.makeSubscriptions((entry) => ({
   results: entry(
     "SearchContent",
-    { maybeAnsweredQuery: Schema.Option(SearchQuery) },
+    { maybeAnsweredSearch: Schema.Option(AnsweredSearch) },
     {
       messages: [
         Message.SucceededSearchWiki,
@@ -33,29 +33,32 @@ export const subscriptions = SearchBlock.makeSubscriptions((entry) => ({
         Message.SucceededSearchProfiles,
         Message.FailedSearchProfiles,
       ],
-      modelToDependencies: (model) => ({ maybeAnsweredQuery: model.maybeAnsweredQuery }),
+      modelToDependencies: (model) => ({ maybeAnsweredSearch: model.maybeAnsweredSearch }),
       handler: function* () {
         const api = yield* GororobasApiClient
 
-        return ({ maybeAnsweredQuery }) =>
-          Option.match(maybeAnsweredQuery, {
+        return ({ maybeAnsweredSearch }) =>
+          Option.match(maybeAnsweredSearch, {
             onNone: () => Stream.empty,
-            onSome: (query) => {
-              const wiki = api.wiki.searchWikiArticles({ query: wikiSearchParams(query) }).pipe(
-                Effect.match({
-                  onFailure: (error) => Message.FailedSearchWiki({ error: { cause: error } }),
-                  onSuccess: (articles) => Message.SucceededSearchWiki({ articles }),
-                }),
-              )
+            onSome: ({ query, language }) => {
+              const wiki = api.wiki
+                .searchWikiArticles({ query: wikiSearchParams({ query, language }) })
+                .pipe(
+                  Effect.match({
+                    onFailure: (error) => Message.FailedSearchWiki({ error: { cause: error } }),
+                    onSuccess: (articles) => Message.SucceededSearchWiki({ articles }),
+                  }),
+                )
 
               const publications = api.publications
                 .searchPublications({
-                  query: publicationSearchParams(
+                  query: publicationSearchParams({
                     query,
-                    Option.isSome(query.type)
-                      ? PUBLICATIONS_SEARCH_PAGE_SIZE
-                      : previewCapacity(publicationsShownAt),
-                  ),
+                    language,
+                    pageSize: SearchScope.guards.Everything(query.scope)
+                      ? previewCapacity(publicationsShownAt)
+                      : PUBLICATIONS_SEARCH_PAGE_SIZE,
+                  }),
                 })
                 .pipe(
                   Effect.match({

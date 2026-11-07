@@ -1,17 +1,23 @@
+# In order, stopping at the first failure: the fixers rewrite and stage files, so the checks after
+# them must not read those files while they change.
 pre-commit:
-  parallel: true
-  commands:
-    oxfmt:
+  piped: true
+  jobs:
+    - name: oxfmt
       glob: "*.{ts,tsx,css}"
       run: pnpm run format {staged_files}
       stage_fixed: true
-    oxlint:
+    - name: oxlint
       glob: "{apps,packages}/*.{ts,tsx,css}"
       run: pnpm exec effect-tsgo --tsrs-lint oxlint --fix --config=./oxlint.config.ts --quiet {staged_files}
       stage_fixed: true
-    type-check:
+    - name: translations
+      glob: "apps/web-app/src/*.{ts,po}"
+      run: pnpm run check-translations
+    - name: type-check
       glob: "*.{ts,tsx}"
       run: pnpm run type-check
-    test:
+    - name: test
       glob: "*.{ts,tsx,feature}"
       run: pnpm run test
+

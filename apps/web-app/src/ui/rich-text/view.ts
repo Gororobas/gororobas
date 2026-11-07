@@ -6,10 +6,12 @@ import type {
   TiptapListItemNode,
   TiptapMark,
 } from "@gororobas/domain/rich-text/domain"
+import { msg } from "@lingui/core/macro"
 import { Style } from "@pleat/core"
 import { Array as EffectArray, Function, Match, Option, Predicate } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
+import type { Translator } from "../../lib/translations"
 import { audioUrl, imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import { styledAttributes } from "../pleat-attributes"
@@ -117,7 +119,10 @@ const inlineContent = <Message>(
   h: HtmlBuilder<Message>,
 ) => (content ?? []).map((node) => inline(node, h))
 
-const galleryItem = <Message>(item: MediaGalleryItem, h: HtmlBuilder<Message>): Html => {
+const galleryItem = <Message>(
+  { item, i18n }: Readonly<{ item: MediaGalleryItem; i18n: Translator }>,
+  h: HtmlBuilder<Message>,
+): Html => {
   const caption = Option.fromNullishOr(item.caption)
 
   const media = Match.value(item).pipe(
@@ -141,7 +146,7 @@ const galleryItem = <Message>(item: MediaGalleryItem, h: HtmlBuilder<Message>): 
         h.Attribute("preload", "none"),
       ]),
     ),
-    Match.when({ source: "MEDIA_ASSET" }, () => h.span([], ["Vídeo"])),
+    Match.when({ source: "MEDIA_ASSET" }, () => h.span([], [i18n._(msg`Video`)])),
     Match.when({ source: "EXTERNAL_EMBED", provider: "YOUTUBE" }, ({ providerData }) =>
       h.a(
         styledAttributes(
@@ -186,13 +191,19 @@ const galleryItem = <Message>(item: MediaGalleryItem, h: HtmlBuilder<Message>): 
   ])
 }
 
-const listItem = <Message>(node: TiptapListItemNode, h: HtmlBuilder<Message>): Html =>
+const listItem = <Message>(
+  { node, i18n }: Readonly<{ node: TiptapListItemNode; i18n: Translator }>,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.li(
     [],
-    node.content.map((child) => block(child, h)),
+    node.content.map((child) => block({ node: child, i18n }, h)),
   )
 
-const block = <Message>(node: TiptapBlockNode, h: HtmlBuilder<Message>): Html =>
+const block = <Message>(
+  { node, i18n }: Readonly<{ node: TiptapBlockNode; i18n: Translator }>,
+  h: HtmlBuilder<Message>,
+): Html =>
   Match.value(node).pipe(
     Match.withReturnType<Html>(),
     Match.discriminatorsExhaustive("type")({
@@ -212,34 +223,37 @@ const block = <Message>(node: TiptapBlockNode, h: HtmlBuilder<Message>): Html =>
       horizontalRule: () => h.hr(styledAttributes([], ruleStyle)),
       mediaGallery: ({ attrs }) =>
         h.div(
-          styledAttributes([h.Role("group"), h.AriaLabel("Galeria")], galleryStyle),
-          attrs.items.map((item) => galleryItem(item, h)),
+          styledAttributes([h.Role("group"), h.AriaLabel(i18n._(msg`Gallery`))], galleryStyle),
+          attrs.items.map((item) => galleryItem({ item, i18n }, h)),
         ),
       blockquote: ({ content }) =>
         AppText.view(
           {
             element: "blockquote",
             attributes: styledAttributes([], quoteStyle),
-            children: content.map((child) => block(child, h)),
+            children: content.map((child) => block({ node: child, i18n }, h)),
           },
           h,
         ),
       bulletList: ({ content }) =>
         h.ul(
           styledAttributes([], listStyle, bulletListStyle),
-          content.map((item) => listItem(item, h)),
+          content.map((item) => listItem({ node: item, i18n }, h)),
         ),
       orderedList: ({ content }) =>
         h.ol(
           styledAttributes([], listStyle, orderedListStyle),
-          content.map((item) => listItem(item, h)),
+          content.map((item) => listItem({ node: item, i18n }, h)),
         ),
     }),
   )
 
 /** Renders stored rich text with the app's typography. */
-export const view = <Message>(document: TiptapDocument, h: HtmlBuilder<Message>): Html =>
+export const view = <Message>(
+  { document, i18n }: Readonly<{ document: TiptapDocument; i18n: Translator }>,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.div(
     styledAttributes([], documentStyle),
-    document.content.map((node) => block(node, h)),
+    document.content.map((node) => block({ node, i18n }, h)),
   )

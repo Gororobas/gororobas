@@ -1,16 +1,17 @@
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { msg } from "@lingui/core/macro"
 import { Style } from "@pleat/core"
-import { Option } from "effect"
+import { Array as EffectArray, Option } from "effect"
 import type { Document, Html } from "foldkit/html"
 
 import { isSignedIn, viewerName } from "../blocks/authentication"
-import { intlTags, languageNames, supportedLanguages } from "../lib/language"
+import { intlTags, languageNames } from "../lib/language"
 import { type Translator, translatorFor } from "../lib/translations"
 import * as AppShell from "../ui/app-shell"
 import { AppText } from "../ui/app-text"
 import * as Icons from "../ui/icons"
 import { styledAttributes } from "../ui/pleat-attributes"
-import { measure, space } from "../ui/theme"
+import { measure, space, toneColors, toneStyle } from "../ui/theme"
 import {
   ApplicationComposition,
   type ApplicationViewBuilder,
@@ -21,17 +22,19 @@ import {
   SearchBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
+  profileKey,
   wikiArticleKey,
 } from "./composition"
 import { Message } from "./message"
 import type { Model } from "./model"
+import { ApplicationRoute, applicationRouteUrl, loginUrl, searchUrl } from "./route"
 import {
-  ApplicationRoute,
   type SearchType,
-  applicationRouteUrl,
-  loginUrl,
-  searchUrl,
-} from "./route"
+  peopleScope,
+  publicationsScope,
+  scopeType,
+  wikiScope,
+} from "./search-query"
 
 // SHARED STYLES
 
@@ -59,7 +62,7 @@ const notFoundStyle = Style.make({ display: "grid", rowGap: space[3], padding: s
 // NAVIGATION
 
 const isSearchType = (route: ApplicationRoute, type: SearchType) =>
-  ApplicationRoute.guards.Search(route) && Option.contains(route.type, type)
+  ApplicationRoute.guards.Search(route) && Option.contains(scopeType(route.query.scope), type)
 
 const navigationItems = (
   model: typeof Model.Type,
@@ -67,20 +70,20 @@ const navigationItems = (
 ): ReadonlyArray<AppShell.NavigationItem> => [
   {
     label: i18n._(msg`Encyclopedia`),
-    href: searchUrl(model.language, { type: Option.some("wiki") }),
+    href: searchUrl(model.language, { scope: wikiScope() }),
     icon: Icons.encyclopedia,
     isCurrent:
       isSearchType(model.route, "wiki") || ApplicationRoute.guards.WikiArticle(model.route),
   },
   {
     label: i18n._(msg`Posts`),
-    href: searchUrl(model.language, { type: Option.some("publications") }),
+    href: searchUrl(model.language, { scope: publicationsScope() }),
     icon: Icons.clipboard,
     isCurrent: isSearchType(model.route, "publications"),
   },
   {
     label: i18n._(msg`People`),
-    href: searchUrl(model.language, { type: Option.some("people") }),
+    href: searchUrl(model.language, { scope: peopleScope() }),
     icon: Icons.users,
     isCurrent: isSearchType(model.route, "people") || ApplicationRoute.guards.Profile(model.route),
   },
@@ -88,7 +91,7 @@ const navigationItems = (
 
 /** The current page in every language, so switching keeps people where they are. */
 const languageLinks = (model: typeof Model.Type): ReadonlyArray<AppShell.LanguageLink> =>
-  supportedLanguages.map((language) => ({
+  SupportedLanguage.literals.map((language) => ({
     label: language.toUpperCase(),
     name: languageNames[language],
     href: applicationRouteUrl(language, model.route),
@@ -127,6 +130,45 @@ const header = (
   )
 }
 
+const noticeStyle = Style.make({
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "baseline",
+  columnGap: space[3],
+  rowGap: space[1],
+  paddingBlock: space[2],
+  paddingInline: space[4],
+  backgroundColor: toneColors.backgroundMuted,
+})
+
+/** Says which language failed to load, and retries it through its link. */
+const languageNotice = (
+  { model, i18n }: Readonly<{ model: typeof Model.Type; i18n: Translator }>,
+  h: ApplicationViewBuilder,
+): ReadonlyArray<Html> =>
+  EffectArray.fromOption(
+    Option.map(model.maybeUnavailableLanguage, (unavailable) => {
+      const unavailableName = languageNames[unavailable]
+      const currentName = languageNames[model.language]
+
+      return h.div(styledAttributes([h.Role("alert")], toneStyle("secondary"), noticeStyle), [
+        AppText.view(
+          {
+            element: "p",
+            appearance: "footnote",
+            children: [
+              i18n._(
+                msg`${unavailableName} couldn't load, so Gororobas is in ${currentName} for now.`,
+              ),
+            ],
+          },
+          h,
+        ),
+        h.a([h.Href(applicationRouteUrl(unavailable, model.route))], [i18n._(msg`Try again`)]),
+      ])
+    }),
+  )
+
 const notFound = (
   { path, i18n }: Readonly<{ path: string; i18n: Translator }>,
   h: ApplicationViewBuilder,
@@ -157,7 +199,7 @@ const page = (
   const language = model.language
 
   return ApplicationRoute.match(model.route, {
-    Search: ({ _tag, ...query }) =>
+    Search: ({ query }) =>
       h.block(
         SearchBinding.embedView({
           slotId: "search",
@@ -174,7 +216,7 @@ const page = (
       Option.match(model.maybeWikiArticle, {
         onNone: () => h.empty,
         onSome: (article) =>
-          article.articleKey === wikiArticleKey(route)
+          article.articleKey === wikiArticleKey(language, route)
             ? h.block(
                 WikiArticleBinding.embedView({
                   key: article.articleKey,
@@ -194,10 +236,10 @@ const page = (
       Option.match(model.maybeProfile, {
         onNone: () => h.empty,
         onSome: (profile) =>
-          profile.handle === route.handle
+          profile.profileKey === profileKey(language, route.handle)
             ? h.block(
                 ProfileBinding.embedView({
-                  key: profile.handle,
+                  key: profile.profileKey,
                   slotId: "profile",
                   model: profile.model,
                   viewInputs: { language, tab: route.tab, maybeToday: model.maybeToday },
@@ -303,6 +345,7 @@ export const view = ApplicationComposition.makeView((model, h): Document => {
               h,
             ),
           ]),
+      ...languageNotice({ model, i18n }, h),
       h.main(styledAttributes([], mainStyle), [page({ model, i18n }, h)]),
       ...(isSearching
         ? []

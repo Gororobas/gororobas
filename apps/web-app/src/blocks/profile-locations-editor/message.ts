@@ -6,6 +6,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 
 import { ClientFailure } from "../../lib/client-failure"
+import { FormError } from "./model"
 import { DeviceLookup, FormMode } from "./model"
 
 export const DateField = Schema.Literals(["startYear", "startMonth", "endYear", "endMonth"])
@@ -39,13 +40,13 @@ export const Message = defineMessageUnion({
 
   SubmittedForm: {},
   SucceededSaveLocation: {},
-  FailedSaveLocation: { message: Schema.String },
+  FailedSaveLocation: { error: FormError },
 
   ClickedDeleteLocation: { id: ProfileLocationId },
   ConfirmedDeleteLocation: { id: ProfileLocationId },
   CancelledDeleteLocation: {},
   SucceededDeleteLocation: {},
-  FailedDeleteLocation: { message: Schema.String },
+  FailedDeleteLocation: {},
 })
 
 export const OutMessage = defineMessageUnion({

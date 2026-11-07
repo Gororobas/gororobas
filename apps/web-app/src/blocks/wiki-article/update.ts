@@ -31,7 +31,7 @@ export const update = WikiArticleComposition.makeUpdate({
         model: modifyFields(stepModel, {
           pageAsyncData: () => PageResult.Success({ data: page }),
         }),
-        commands: [LoadPublications({ wikiArticleId: page.id })],
+        commands: [LoadPublications({ wikiArticleId: page.id, language: stepModel.language })],
       })),
       ...articlePhotos(page).map(({ creditId }) =>
         makeStep((stepModel) =>
@@ -97,6 +97,7 @@ export const update = WikiArticleComposition.makeUpdate({
           commands: [
             LoadChildPlaces({
               lookup: model.lookup,
+              language: model.language,
               currentPage: Math.floor(loaded.places.length / CHILD_PLACES_PAGE_SIZE),
             }),
           ],

@@ -21,6 +21,21 @@ export const DeviceLookup = Schema.Literals(["Idle", "Locating", "Unavailable", 
 
 export type DeviceLookup = typeof DeviceLookup.Type
 
+/** Why the form can't be saved, which the view says in the reader's language. */
+export const FormError = Schema.Literals([
+  "PlaceLoadFailed",
+  "StartYearMissing",
+  "StartYearInvalid",
+  "EndYearMissing",
+  "EndYearInvalid",
+  "FreeTextMissing",
+  "PlaceMissing",
+  "EndBeforeStart",
+  "SaveFailed",
+])
+
+export type FormError = typeof FormError.Type
+
 export const Form = Schema.Struct({
   maybeEditingId: Schema.Option(ProfileLocationId),
   mode: FormMode,
@@ -39,7 +54,7 @@ export const Form = Schema.Struct({
   endMonth: Schema.String,
   visibility: InformationVisibility,
   isSaving: Schema.Boolean,
-  maybeError: Schema.Option(Schema.String),
+  maybeError: Schema.Option(FormError),
 })
 
 export type Form = typeof Form.Type
@@ -54,7 +69,8 @@ export const Model = Schema.Struct({
   /** Removing asks first: the entry waiting for that answer. */
   maybeConfirmingDeleteId: Schema.Option(ProfileLocationId),
   maybeDeletingId: Schema.Option(ProfileLocationId),
-  maybeListError: Schema.Option(Schema.String),
+  /** Only removing an entry fails in the list itself. */
+  maybeListError: Schema.Option(Schema.Literal("DeleteFailed")),
 })
 
 export type Model = typeof Model.Type

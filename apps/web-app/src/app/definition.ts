@@ -11,8 +11,14 @@ import { AuthenticationClient, SessionAccess } from "../session-access"
 import { Message } from "./message"
 import { Model } from "./model"
 
-/** The language the app boots in, whose translations have already loaded. */
-export const Flags = Schema.Struct({ language: SupportedLanguage })
+/**
+ * The language the app boots in, whose translations have already loaded. When the one people asked
+ * for failed to load, the app boots in the default language and says so.
+ */
+export const Flags = Schema.Struct({
+  language: SupportedLanguage,
+  maybeUnavailableLanguage: Schema.Option(SupportedLanguage),
+})
 
 export const ApplicationKey = Symbol("Application")
 

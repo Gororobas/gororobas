@@ -7,7 +7,7 @@ import { type Url, fromString as urlFromString } from "foldkit/url"
 import { ApplicationBlock, layer } from "./app/block"
 import { Flags } from "./app/definition"
 import { urlToLocatedRoute } from "./app/route"
-import { detectLanguage } from "./lib/language"
+import { DEFAULT_LANGUAGE, detectLanguage } from "./lib/language"
 import { LanguagePreferenceStore } from "./lib/language-preference"
 import { Translations } from "./lib/translations"
 import { ApplicationLayer } from "./services"
@@ -16,7 +16,8 @@ Sheet.mount()
 
 /**
  * The first render already speaks the person's language: its catalog loads before init, and a path
- * without a language is redirected by init to the detected one.
+ * without a language is redirected by init to the detected one. Flags never fail: a catalog that
+ * can't load leaves the app in the default language, with a notice saying so.
  */
 const flags = Effect.gen(function* () {
   const maybeLanguageInPath = Option.flatMap(
@@ -33,9 +34,13 @@ const flags = Effect.gen(function* () {
       ),
   })
 
-  // Without its catalog the app has no copy to show, so a failed load is a defect.
-  yield* Effect.orDie(Translations.use((translations) => translations.load(language)))
-  return Flags.make({ language })
+  // The default language's catalog is bundled, so a failed load still boots, in that language.
+  return yield* Translations.use((translations) => translations.load(language)).pipe(
+    Effect.as(Flags.make({ language, maybeUnavailableLanguage: Option.none() })),
+    Effect.orElseSucceed(() =>
+      Flags.make({ language: DEFAULT_LANGUAGE, maybeUnavailableLanguage: Option.some(language) }),
+    ),
+  )
 })
 
 const program = Program.make({

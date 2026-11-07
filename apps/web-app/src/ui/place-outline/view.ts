@@ -1,7 +1,9 @@
 import type { AreaGeometry, BoundingBox } from "@gororobas/domain/places/geometry"
+import { msg } from "@lingui/core/macro"
 import { Style } from "@pleat/core"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
+import type { Translator } from "../../lib/translations"
 import { styledAttributes } from "../pleat-attributes"
 import { radius, tones } from "../theme"
 
@@ -84,6 +86,7 @@ export const view = <Message>(
     Readonly<{
       label: string
       surroundings?: Outline & Readonly<{ label: string }>
+      i18n: Translator
       styles?: ReadonlyArray<Style.Style>
     }>,
   h: HtmlBuilder<Message>,
@@ -93,10 +96,11 @@ export const view = <Message>(
     surroundings === undefined
       ? config.boundingBox
       : enclosingBox(config.boundingBox, surroundings.boundingBox)
+  const { label, i18n } = config
   const description =
     surroundings === undefined
-      ? `Contorno de ${config.label}`
-      : `Contorno de ${config.label} em ${surroundings.label}`
+      ? i18n._(msg`Outline of ${label}`)
+      : i18n._(msg`Outline of ${label} in ${surroundings.label}`)
 
   return h.svg(
     styledAttributes(

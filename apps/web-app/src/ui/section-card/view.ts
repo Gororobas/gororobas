@@ -83,7 +83,7 @@ const footerLinkStyle = Style.make({
 export type SectionCardConfig = Readonly<{
   title: string
   icon: (config?: IconConfig) => Html
-  /** Controls beside the title, such as "Editar página". */
+  /** Controls beside the title, such as "Edit page". */
   actions?: ReadonlyArray<Html>
   children: ReadonlyArray<Html>
   footerLink?: Readonly<{ label: string; href: string }>

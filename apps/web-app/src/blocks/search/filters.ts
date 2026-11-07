@@ -1,9 +1,23 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { ProfileSearchParams } from "@gororobas/domain/profiles/domain"
 import type { ApiPublicationSearchParams } from "@gororobas/domain/publications/domain"
 import type { WikiSearchParams } from "@gororobas/domain/wiki/domain"
+import type { MessageDescriptor } from "@lingui/core"
+import { msg } from "@lingui/core/macro"
 import { Array as EffectArray, Match, Option, Record, Schema, String as EffectString } from "effect"
 
-import { type SearchQuery, type SearchType, emptySearchQuery } from "../../app/route"
+import {
+  type SearchQuery,
+  SearchScope,
+  type SearchType,
+  type WikiKindFilters,
+  peopleScope,
+  publicationsScope,
+  scopeType,
+  unfilteredKind,
+  wikiScope,
+} from "../../app/search-query"
+import type { Translator } from "../../lib/translations"
 import {
   animalRoleLabels,
   ediblePartLabels,
@@ -50,140 +64,184 @@ export type FilterGroup = Readonly<{
   selectedCount: number
 }>
 
-type ListField =
-  | "plantUsages"
-  | "edibleParts"
-  | "plantLifecycles"
-  | "strata"
-  | "plantingMethods"
-  | "animalRoles"
-  | "toolUsages"
-  | "resourceFormats"
-  | "entityTypes"
+type FilterInputs = Readonly<{ query: SearchQuery; i18n: Translator }>
 
-const listGroup = <Field extends ListField>({
+const toggled = <A>(selected: ReadonlyArray<A>, value: A): ReadonlyArray<A> =>
+  selected.includes(value)
+    ? selected.filter((candidate) => candidate !== value)
+    : [...selected, value]
+
+/** Multiple-choice filters within one kind, each option toggling its value in `selected`. */
+const listGroup = <Value extends string>({
   query,
+  i18n,
   id,
   label,
   labels,
-}: Readonly<{
-  query: SearchQuery
-  id: Field
-  label: string
-  labels: Readonly<Record<SearchQuery[Field][number], string>>
-}>): FilterGroup => {
-  const selected: ReadonlyArray<string> = query[id]
-
-  const options = Record.toEntries(labels).map(([value, optionLabel]): FilterOption => ({
-    label: optionLabel,
+  selected,
+  toFilters,
+}: FilterInputs &
+  Readonly<{
+    id: FilterGroupId
+    label: MessageDescriptor
+    labels: Readonly<Record<Value, MessageDescriptor>>
+    selected: ReadonlyArray<Value>
+    toFilters: (next: ReadonlyArray<Value>) => WikiKindFilters
+  }>): FilterGroup => ({
+  id,
+  label: i18n._(label),
+  selectedCount: selected.length,
+  options: Record.toEntries(labels).map(([value, optionLabel]): FilterOption => ({
+    label: i18n._(optionLabel),
     isSelected: selected.includes(value),
     toggledQuery: {
       ...query,
-      [id]: selected.includes(value)
-        ? selected.filter((candidate) => candidate !== value)
-        : [...selected, value],
+      scope: SearchScope.cases.Wiki.make({
+        maybeKind: Option.some(toFilters(toggled(selected, value))),
+      }),
     },
-  }))
-
-  return { id, label, options, selectedCount: selected.length }
-}
-
-/** Every kind-specific filter cleared, as when the article kind changes. */
-const withoutKindFilters = (query: SearchQuery): SearchQuery => ({
-  ...emptySearchQuery,
-  text: query.text,
-  type: query.type,
-  wikiKind: query.wikiKind,
+  })),
 })
 
-const wikiKindGroup = (query: SearchQuery): FilterGroup => ({
+const wikiKindGroup = ({
+  query,
+  i18n,
+  maybeKind,
+}: FilterInputs & Readonly<{ maybeKind: Option.Option<WikiKindFilters> }>): FilterGroup => ({
   id: "wikiKind",
-  label: "Tipo",
-  selectedCount: Option.isSome(query.wikiKind) ? 1 : 0,
+  label: i18n._(msg`Kind`),
+  selectedCount: Option.isSome(maybeKind) ? 1 : 0,
   options: Record.toEntries(wikiKindLabels).map(([kind, labels]) => {
-    const isSelected = Option.contains(query.wikiKind, kind)
+    const isSelected = Option.exists(maybeKind, (filters) => filters.kind === kind)
 
     return {
-      label: labels.plural,
+      label: i18n._(labels.plural),
       isSelected,
-      toggledQuery: withoutKindFilters({
+      // Changing the kind clears the filters only the previous kind offered.
+      toggledQuery: {
         ...query,
-        wikiKind: isSelected ? Option.none() : Option.some(kind),
-      }),
+        scope: wikiScope(isSelected ? Option.none() : Option.some(kind)),
+      },
     }
   }),
 })
 
-const wikiKindFilterGroups = (query: SearchQuery): ReadonlyArray<FilterGroup> =>
-  Option.match(query.wikiKind, {
-    onNone: () => [],
-    onSome: (kind) =>
-      Match.value(kind).pipe(
-        Match.withReturnType<ReadonlyArray<FilterGroup>>(),
-        Match.when("PLANT", () => [
-          listGroup({ query, id: "plantUsages", label: "Usos", labels: plantUsageLabels }),
-          listGroup({
-            query,
-            id: "edibleParts",
-            label: "Partes comestíveis",
-            labels: ediblePartLabels,
-          }),
-          listGroup({
-            query,
-            id: "plantLifecycles",
-            label: "Ciclo de vida",
-            labels: lifecycleLabels,
-          }),
-          listGroup({ query, id: "strata", label: "Estrato", labels: stratumLabels }),
-          listGroup({
-            query,
-            id: "plantingMethods",
-            label: "Plantio",
-            labels: plantingMethodLabels,
-          }),
-        ]),
-        Match.when("ANIMAL", () => [
-          listGroup({ query, id: "animalRoles", label: "Papéis", labels: animalRoleLabels }),
-        ]),
-        Match.when("TOOL", () => [
-          listGroup({ query, id: "toolUsages", label: "Usos", labels: toolUsageLabels }),
-        ]),
-        Match.when("RESOURCE", () => [
-          listGroup({
-            query,
-            id: "resourceFormats",
-            label: "Formato",
-            labels: resourceFormatLabels,
-          }),
-        ]),
-        Match.when("NOTEWORTHY_ENTITY", () => [
-          listGroup({ query, id: "entityTypes", label: "Categoria", labels: entityTypeLabels }),
-        ]),
-        Match.orElse(() => []),
-      ),
-  })
+const kindFilterGroups = (
+  inputs: FilterInputs,
+  filters: WikiKindFilters,
+): ReadonlyArray<FilterGroup> =>
+  Match.value(filters).pipe(
+    Match.withReturnType<ReadonlyArray<FilterGroup>>(),
+    Match.discriminators("kind")({
+      PLANT: (plant) => [
+        listGroup({
+          ...inputs,
+          id: "plantUsages",
+          label: msg`Uses`,
+          labels: plantUsageLabels,
+          selected: plant.plantUsages,
+          toFilters: (plantUsages) => ({ ...plant, plantUsages }),
+        }),
+        listGroup({
+          ...inputs,
+          id: "edibleParts",
+          label: msg`Edible parts`,
+          labels: ediblePartLabels,
+          selected: plant.edibleParts,
+          toFilters: (edibleParts) => ({ ...plant, edibleParts }),
+        }),
+        listGroup({
+          ...inputs,
+          id: "plantLifecycles",
+          label: msg`Lifecycle`,
+          labels: lifecycleLabels,
+          selected: plant.plantLifecycles,
+          toFilters: (plantLifecycles) => ({ ...plant, plantLifecycles }),
+        }),
+        listGroup({
+          ...inputs,
+          id: "strata",
+          label: msg`Stratum`,
+          labels: stratumLabels,
+          selected: plant.strata,
+          toFilters: (strata) => ({ ...plant, strata }),
+        }),
+        listGroup({
+          ...inputs,
+          id: "plantingMethods",
+          label: msg`Planting`,
+          labels: plantingMethodLabels,
+          selected: plant.plantingMethods,
+          toFilters: (plantingMethods) => ({ ...plant, plantingMethods }),
+        }),
+      ],
+      ANIMAL: (animal) => [
+        listGroup({
+          ...inputs,
+          id: "animalRoles",
+          label: msg`Roles`,
+          labels: animalRoleLabels,
+          selected: animal.animalRoles,
+          toFilters: (animalRoles) => ({ ...animal, animalRoles }),
+        }),
+      ],
+      TOOL: (tool) => [
+        listGroup({
+          ...inputs,
+          id: "toolUsages",
+          label: msg`Uses`,
+          labels: toolUsageLabels,
+          selected: tool.toolUsages,
+          toFilters: (toolUsages) => ({ ...tool, toolUsages }),
+        }),
+      ],
+      RESOURCE: (resource) => [
+        listGroup({
+          ...inputs,
+          id: "resourceFormats",
+          label: msg`Format`,
+          labels: resourceFormatLabels,
+          selected: resource.resourceFormats,
+          toFilters: (resourceFormats) => ({ ...resource, resourceFormats }),
+        }),
+      ],
+      NOTEWORTHY_ENTITY: (entity) => [
+        listGroup({
+          ...inputs,
+          id: "entityTypes",
+          label: msg`Category`,
+          labels: entityTypeLabels,
+          selected: entity.entityTypes,
+          toFilters: (entityTypes) => ({ ...entity, entityTypes }),
+        }),
+      ],
+    }),
+    Match.orElse(() => []),
+  )
 
 const singleGroup = <Value extends string>({
+  i18n,
   id,
   label,
   labels,
   selected,
   toQuery,
 }: Readonly<{
+  i18n: Translator
   id: "publicationKind" | "profileType"
-  label: string
-  labels: Readonly<Record<Value, string>>
+  label: MessageDescriptor
+  labels: Readonly<Record<Value, MessageDescriptor>>
   selected: Option.Option<Value>
   toQuery: (next: Option.Option<Value>) => SearchQuery
 }>): FilterGroup => ({
   id,
-  label,
+  label: i18n._(label),
   selectedCount: Option.isSome(selected) ? 1 : 0,
   options: Record.toEntries(labels).map(([value, optionLabel]) => {
     const isSelected = Option.contains(selected, value)
 
     return {
-      label: optionLabel,
+      label: i18n._(optionLabel),
       isSelected,
       toggledQuery: toQuery(isSelected ? Option.none() : Option.some(value)),
     }
@@ -192,64 +250,63 @@ const singleGroup = <Value extends string>({
 
 /** The one choice a search type narrows by first, shown inline: an article's kind, a post's
  *  format or a profile's type. */
-export const primaryFilterGroup = (query: SearchQuery): Option.Option<FilterGroup> =>
-  Option.map(query.type, (type) =>
-    Match.value(type).pipe(
-      Match.withReturnType<FilterGroup>(),
-      Match.when("wiki", () => wikiKindGroup(query)),
-      Match.when("publications", () =>
+export const primaryFilterGroup = ({ query, i18n }: FilterInputs): Option.Option<FilterGroup> =>
+  SearchScope.match(query.scope, {
+    Everything: () => Option.none(),
+    Wiki: ({ maybeKind }) => Option.some(wikiKindGroup({ query, i18n, maybeKind })),
+    Publications: ({ maybeKind }) =>
+      Option.some(
         singleGroup({
+          i18n,
           id: "publicationKind",
-          label: "Formato",
+          label: msg`Format`,
           labels: publicationKindLabels,
-          selected: query.publicationKind,
-          toQuery: (next) => ({ ...query, publicationKind: next }),
+          selected: maybeKind,
+          toQuery: (next) => ({ ...query, scope: publicationsScope(next) }),
         }),
       ),
-      Match.when("people", () =>
+    People: ({ maybeType }) =>
+      Option.some(
         singleGroup({
+          i18n,
           id: "profileType",
-          label: "Perfil",
+          label: msg`Profile`,
           labels: profileTypeLabels,
-          selected: query.profileType,
-          toQuery: (next) => ({ ...query, profileType: next }),
+          selected: maybeType,
+          toQuery: (next) => ({ ...query, scope: peopleScope(next) }),
         }),
       ),
-      Match.exhaustive,
-    ),
-  )
+  })
 
 /** Filters that open once the primary choice is made, such as a plant's uses. */
-export const secondaryFilterGroups = (query: SearchQuery): ReadonlyArray<FilterGroup> =>
-  Option.contains(query.type, "wiki") ? wikiKindFilterGroups(query) : []
-
-/** Every filter a search type offers, in order of importance. */
-export const filterGroups = (query: SearchQuery): ReadonlyArray<FilterGroup> => [
-  ...Option.toArray(primaryFilterGroup(query)),
-  ...secondaryFilterGroups(query),
-]
+export const secondaryFilterGroups = (inputs: FilterInputs): ReadonlyArray<FilterGroup> =>
+  SearchScope.guards.Wiki(inputs.query.scope)
+    ? Option.match(inputs.query.scope.maybeKind, {
+        onNone: () => [],
+        onSome: (filters) => kindFilterGroups(inputs, filters),
+      })
+    : []
 
 const selectedCount = (groups: ReadonlyArray<FilterGroup>): number =>
   EffectArray.reduce(groups, 0, (total, group) => total + group.selectedCount)
 
-export const activeFilterCount = (query: SearchQuery): number => selectedCount(filterGroups(query))
-
-export const activeSecondaryFilterCount = (query: SearchQuery): number =>
-  selectedCount(secondaryFilterGroups(query))
-
-/** Keeps the text and type, dropping every filter. */
-export const clearedFilters = (query: SearchQuery): SearchQuery => ({
-  ...emptySearchQuery,
-  text: query.text,
-  type: query.type,
-})
+export const activeSecondaryFilterCount = (inputs: FilterInputs): number =>
+  selectedCount(secondaryFilterGroups(inputs))
 
 /** Keeps the primary choice, dropping the filters that depend on it. */
-export const clearedSecondaryFilters = withoutKindFilters
+export const clearedSecondaryFilters = (query: SearchQuery): SearchQuery =>
+  SearchScope.guards.Wiki(query.scope)
+    ? {
+        ...query,
+        scope: SearchScope.cases.Wiki.make({
+          maybeKind: Option.map(query.scope.maybeKind, (filters) => unfilteredKind(filters.kind)),
+        }),
+      }
+    : query
 
 /** No text and no type: the page offers ways in instead of results. */
 export const isBrowsing = (query: SearchQuery): boolean =>
-  Option.isNone(query.type) && Option.isNone(nonEmptyText(query))
+  SearchScope.guards.Everything(query.scope) && Option.isNone(nonEmptyText(query))
 
 /** The server's trigram indexes can't match shorter words. */
 export const MINIMUM_WORD_LENGTH = 3
@@ -265,7 +322,7 @@ export const isTextTooShort = (query: SearchQuery): boolean =>
 export const isResultTypeShown = (query: SearchQuery, type: SearchType): boolean =>
   !isBrowsing(query) &&
   !isTextTooShort(query) &&
-  Option.match(query.type, { onNone: () => true, onSome: (shown) => shown === type })
+  Option.match(scopeType(query.scope), { onNone: () => true, onSome: (shown) => shown === type })
 
 // API PARAMETERS
 
@@ -282,62 +339,71 @@ const optionalList = <Key extends string, Value>(
 ): Partial<Record<Key, ReadonlyArray<Value>>> =>
   EffectArray.isReadonlyArrayNonEmpty(values) ? Record.singleton(key, values) : {}
 
-export const wikiSearchParams = (query: SearchQuery): WikiSearchParams => {
-  const base = { language: "pt" as const, ...optionalText(query) }
+type ApiInputs = Readonly<{ query: SearchQuery; language: SupportedLanguage }>
 
-  return Option.match(query.wikiKind, {
+/** Overviews search every kind; only a chosen kind sends its filters. */
+export const wikiSearchParams = ({ query, language }: ApiInputs): WikiSearchParams => {
+  const base = { language, ...optionalText(query) }
+  const maybeKind = SearchScope.guards.Wiki(query.scope) ? query.scope.maybeKind : Option.none()
+
+  return Option.match(maybeKind, {
     onNone: () => base,
-    onSome: (kind): WikiSearchParams =>
-      Match.value(kind).pipe(
+    onSome: (filters): WikiSearchParams =>
+      Match.value(filters).pipe(
         Match.withReturnType<WikiSearchParams>(),
-        Match.when("PLANT", (plant) => ({
-          ...base,
-          kind: plant,
-          ...optionalList("plantUsages", query.plantUsages),
-          ...optionalList("edibleParts", query.edibleParts),
-          ...optionalList("plantLifecycles", query.plantLifecycles),
-          ...optionalList("strata", query.strata),
-          ...optionalList("plantingMethods", query.plantingMethods),
-        })),
-        Match.when("ANIMAL", (animal) => ({
-          ...base,
-          kind: animal,
-          ...optionalList("animalRoles", query.animalRoles),
-        })),
-        Match.when("TOOL", (tool) => ({
-          ...base,
-          kind: tool,
-          ...optionalList("toolUsages", query.toolUsages),
-        })),
-        Match.when("RESOURCE", (resource) => ({
-          ...base,
-          kind: resource,
-          ...optionalList("resourceFormats", query.resourceFormats),
-        })),
-        Match.when("NOTEWORTHY_ENTITY", (entity) => ({
-          ...base,
-          kind: entity,
-          ...optionalList("entityTypes", query.entityTypes),
-        })),
-        Match.when("BOOK", (book) => ({ ...base, kind: book })),
-        Match.when("FILM", (film) => ({ ...base, kind: film })),
-        Match.orElse((other) => ({ ...base, kind: other })),
+        Match.discriminators("kind")({
+          PLANT: (plant) => ({
+            ...base,
+            kind: plant.kind,
+            ...optionalList("plantUsages", plant.plantUsages),
+            ...optionalList("edibleParts", plant.edibleParts),
+            ...optionalList("plantLifecycles", plant.plantLifecycles),
+            ...optionalList("strata", plant.strata),
+            ...optionalList("plantingMethods", plant.plantingMethods),
+          }),
+          ANIMAL: (animal) => ({
+            ...base,
+            kind: animal.kind,
+            ...optionalList("animalRoles", animal.animalRoles),
+          }),
+          TOOL: (tool) => ({
+            ...base,
+            kind: tool.kind,
+            ...optionalList("toolUsages", tool.toolUsages),
+          }),
+          RESOURCE: (resource) => ({
+            ...base,
+            kind: resource.kind,
+            ...optionalList("resourceFormats", resource.resourceFormats),
+          }),
+          NOTEWORTHY_ENTITY: (entity) => ({
+            ...base,
+            kind: entity.kind,
+            ...optionalList("entityTypes", entity.entityTypes),
+          }),
+        }),
+        Match.orElse((other) => ({ ...base, kind: other.kind })),
       ),
   })
 }
 
-export const publicationSearchParams = (
-  query: SearchQuery,
-  pageSize: number,
-): typeof ApiPublicationSearchParams.Type => ({
+export const publicationSearchParams = ({
+  query,
+  language,
+  pageSize,
+}: ApiInputs & Readonly<{ pageSize: number }>): typeof ApiPublicationSearchParams.Type => ({
   ...optionalText(query),
-  ...Option.match(query.publicationKind, { onNone: () => ({}), onSome: (kind) => ({ kind }) }),
-  language: "pt",
+  ...(SearchScope.guards.Publications(query.scope)
+    ? Option.match(query.scope.maybeKind, { onNone: () => ({}), onSome: (kind) => ({ kind }) })
+    : {}),
+  language,
   pageSize,
   currentPage: 0,
 })
 
 export const profileSearchParams = (query: SearchQuery): ProfileSearchParams => ({
   ...optionalText(query),
-  ...Option.match(query.profileType, { onNone: () => ({}), onSome: (type) => ({ type }) }),
+  ...(SearchScope.guards.People(query.scope)
+    ? Option.match(query.scope.maybeType, { onNone: () => ({}), onSome: (type) => ({ type }) })
+    : {}),
 })

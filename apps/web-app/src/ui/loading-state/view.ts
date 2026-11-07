@@ -62,7 +62,7 @@ const panelStyle = Style.make({
 export type LoadingShape = "lines" | "rows" | "cards" | "tiles" | "page"
 
 export type LoadingStateConfig = Readonly<{
-  /** Announced to assistive technology, such as "Carregando posts". */
+  /** Announced to assistive technology, such as "Loading posts". */
   label: string
   shape: LoadingShape
   count?: number

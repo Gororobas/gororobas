@@ -1,6 +1,8 @@
+import { msg, plural } from "@lingui/core/macro"
 import { Array as EffectArray, Option } from "effect"
 import type { Html } from "foldkit/html"
 
+import { type Translator, translatorFor } from "../../../lib/translations"
 import { profileBookmarkStateLabels, publicationKindLabels } from "../../../lib/vocabulary"
 import { AppText } from "../../../ui/app-text"
 import { EmptyState } from "../../../ui/empty-state"
@@ -24,11 +26,12 @@ import {
 
 const bookmarkStates = ["INTERESTED", "ACTIVE", "PREVIOUSLY_ACTIVE"] as const
 
-/** "3 edições, a última em 2026-04". */
+/** "3 approved edits". */
 export const contributionSummary = ({
   revisionCount,
-}: Readonly<{ revisionCount: number }>): string =>
-  `${revisionCount} ${revisionCount === 1 ? "edição aprovada" : "edições aprovadas"}`
+  i18n,
+}: Readonly<{ revisionCount: number; i18n: Translator }>): string =>
+  i18n._(msg`${plural(revisionCount, { one: "# approved edit", other: "# approved edits" })}`)
 
 const page = (
   {
@@ -45,17 +48,21 @@ const page = (
 export const publications = (
   { model, language, page: profile, maybeToday }: ProfileState,
   h: ProfileViewBuilder,
-): Html =>
-  page(
+): Html => {
+  const i18n = translatorFor(language)
+  const name = profile.name
+
+  return page(
     {
-      title: `Publicações de ${profile.name}`,
+      title: i18n._(msg`Posts by ${name}`),
       icon: Icons.clipboard,
       children: [
         FilterChips.view(
           {
-            label: "Filtrar por formato",
+            label: i18n._(msg`Filter by format`),
+            allLabel: i18n._(msg`All`),
             options: (["POST", "EVENT"] as const).map(
-              (kind) => [kind, publicationKindLabels[kind]] as const,
+              (kind) => [kind, i18n._(publicationKindLabels[kind])] as const,
             ),
             selected: model.maybePublicationKindFilter,
             toMessage: (maybeKind) => Message.ClickedPublicationKindFilter({ maybeKind }),
@@ -64,8 +71,9 @@ export const publications = (
         ),
         asyncView(
           {
+            i18n,
             asyncData: model.publicationsAsyncData,
-            loading: { label: "Carregando publicações", shape: "cards" },
+            loading: { label: i18n._(msg`Loading posts`), shape: "cards" },
             onData: (all) =>
               EffectArray.match(
                 all.filter((publication) =>
@@ -79,9 +87,9 @@ export const publications = (
                     EmptyState.view(
                       {
                         icon: Icons.clipboard,
-                        title: `${profile.name} ainda não publicou por aqui`,
+                        title: i18n._(msg`${name} hasn't posted here yet`),
                         maybeDescription: Option.some(
-                          "Posts e eventos aparecem aqui assim que forem compartilhados.",
+                          i18n._(msg`Posts and events show up here as soon as they're shared.`),
                         ),
                         size: "roomy",
                       },
@@ -107,26 +115,34 @@ export const publications = (
     },
     h,
   )
+}
 
-export const photos = ({ model, page: profile }: ProfileState, h: ProfileViewBuilder): Html =>
-  page(
+export const photos = (
+  { model, language, page: profile }: ProfileState,
+  h: ProfileViewBuilder,
+): Html => {
+  const i18n = translatorFor(language)
+  const name = profile.name
+
+  return page(
     {
-      title: `Fotos de ${profile.name}`,
+      title: i18n._(msg`Photos by ${name}`),
       icon: Icons.gallery,
       children: [
         asyncView(
           {
+            i18n,
             asyncData: model.photosAsyncData,
-            loading: { label: "Carregando fotos", shape: "tiles", count: 6 },
+            loading: { label: i18n._(msg`Loading photos`), shape: "tiles", count: 6 },
             onData: (media) =>
-              EffectArray.match(galleryPhotos(media), {
+              EffectArray.match(galleryPhotos({ media, language }), {
                 onEmpty: () =>
                   EmptyState.view(
                     {
                       icon: Icons.gallery,
-                      title: "Nenhuma foto por aqui ainda",
+                      title: i18n._(msg`No photos here yet`),
                       maybeDescription: Option.some(
-                        "Fotos enviadas para a enciclopédia ou em publicações aparecem aqui.",
+                        i18n._(msg`Photos shared in the encyclopedia or in posts show up here.`),
                       ),
                       size: "roomy",
                     },
@@ -142,36 +158,41 @@ export const photos = ({ model, page: profile }: ProfileState, h: ProfileViewBui
     },
     h,
   )
+}
 
 export const contributions = (
   { model, language, page: profile }: ProfileState,
   h: ProfileViewBuilder,
-): Html =>
-  page(
+): Html => {
+  const i18n = translatorFor(language)
+  const name = profile.name
+
+  return page(
     {
-      title: "Contribuições na enciclopédia",
+      title: i18n._(msg`Encyclopedia contributions`),
       icon: Icons.encyclopedia,
       children: [
         AppText.view(
           {
             element: "p",
-            children: [`Artigos que ${profile.name} ajudou a escrever, com edições aprovadas.`],
+            children: [i18n._(msg`Articles ${name} helped write, with approved edits.`)],
           },
           h,
         ),
         asyncView(
           {
+            i18n,
             asyncData: model.contributionsAsyncData,
-            loading: { label: "Carregando contribuições", shape: "rows" },
+            loading: { label: i18n._(msg`Loading contributions`), shape: "rows" },
             onData: (all) =>
               EffectArray.match(all, {
                 onEmpty: () =>
                   EmptyState.view(
                     {
                       icon: Icons.encyclopedia,
-                      title: "Nenhuma contribuição na enciclopédia ainda",
+                      title: i18n._(msg`No encyclopedia contributions yet`),
                       maybeDescription: Option.some(
-                        "Toda página da enciclopédia aceita sugestões de edição.",
+                        i18n._(msg`Every encyclopedia page welcomes suggested edits.`),
                       ),
                       size: "roomy",
                     },
@@ -189,7 +210,9 @@ export const contributions = (
                             {
                               article: contribution.article,
                               language,
-                              maybeSubtitle: Option.some(contributionSummary(contribution)),
+                              maybeSubtitle: Option.some(
+                                contributionSummary({ ...contribution, i18n }),
+                              ),
                             },
                             h,
                           ),
@@ -205,21 +228,26 @@ export const contributions = (
     },
     h,
   )
+}
 
 export const bookmarks = (
   { model, language, page: profile }: ProfileState,
   h: ProfileViewBuilder,
-): Html =>
-  page(
+): Html => {
+  const i18n = translatorFor(language)
+  const name = profile.name
+
+  return page(
     {
-      title: `Salvos por ${profile.name}`,
+      title: i18n._(msg`Saved by ${name}`),
       icon: Icons.bookmark,
       children: [
         FilterChips.view(
           {
-            label: "Filtrar por situação",
+            label: i18n._(msg`Filter by status`),
+            allLabel: i18n._(msg`All`),
             options: bookmarkStates.map(
-              (state) => [state, profileBookmarkStateLabels[state]] as const,
+              (state) => [state, i18n._(profileBookmarkStateLabels[state])] as const,
             ),
             selected: model.maybeBookmarkStateFilter,
             toMessage: (maybeState) => Message.ClickedBookmarkStateFilter({ maybeState }),
@@ -228,8 +256,9 @@ export const bookmarks = (
         ),
         asyncView(
           {
+            i18n,
             asyncData: model.bookmarksAsyncData,
-            loading: { label: "Carregando salvos", shape: "tiles", count: 6 },
+            loading: { label: i18n._(msg`Loading saved articles`), shape: "tiles", count: 6 },
             onData: (all) =>
               EffectArray.match(
                 all.filter((bookmark) =>
@@ -243,9 +272,11 @@ export const bookmarks = (
                     EmptyState.view(
                       {
                         icon: Icons.bookmark,
-                        title: "Nada salvo por aqui ainda",
+                        title: i18n._(msg`Nothing saved here yet`),
                         maybeDescription: Option.some(
-                          "Plantas, livros e lugares que alguém quer conhecer ou já vive aparecem aqui.",
+                          i18n._(
+                            msg`Plants, books and places someone wants to get to know or already lives with show up here.`,
+                          ),
                         ),
                         size: "roomy",
                       },
@@ -281,3 +312,4 @@ export const bookmarks = (
     },
     h,
   )
+}

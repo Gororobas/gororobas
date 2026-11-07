@@ -15,260 +15,317 @@ import {
   type ToolUsage,
 } from "@gororobas/domain/common/enums"
 import type { WikiArticleKind } from "@gororobas/domain/wiki/domain"
+import type { MessageDescriptor } from "@lingui/core"
+import { msg } from "@lingui/core/macro"
 
-/** UI copy is pt-BR until the interface is localized. */
+/** Labels for the domain's values, which views translate with their language's `Translator`. */
+type Labels<Value extends string> = Readonly<Record<Value, MessageDescriptor>>
 
 export const wikiKindLabels: Readonly<
-  Record<WikiArticleKind, Readonly<{ singular: string; plural: string }>>
+  Record<WikiArticleKind, Readonly<{ singular: MessageDescriptor; plural: MessageDescriptor }>>
 > = {
-  PLANT: { singular: "Planta", plural: "Plantas" },
-  PLANT_CULTIVAR: { singular: "Variedade", plural: "Variedades" },
-  ANIMAL: { singular: "Animal", plural: "Animais" },
-  BOOK: { singular: "Livro", plural: "Livros" },
-  FILM: { singular: "Filme", plural: "Filmes" },
-  CONCEPT: { singular: "Conceito", plural: "Conceitos" },
-  PLACE: { singular: "Lugar", plural: "Lugares" },
-  TOOL: { singular: "Ferramenta", plural: "Ferramentas" },
-  RESOURCE: { singular: "Recurso", plural: "Recursos" },
-  NOTEWORTHY_ENTITY: { singular: "Organização", plural: "Organizações" },
-  UNCATEGORIZED: { singular: "Outro", plural: "Outros" },
+  PLANT: { singular: msg`Plant`, plural: msg`Plants` },
+  PLANT_CULTIVAR: { singular: msg`Variety`, plural: msg`Varieties` },
+  ANIMAL: { singular: msg`Animal`, plural: msg`Animals` },
+  BOOK: { singular: msg`Book`, plural: msg`Books` },
+  FILM: { singular: msg`Film`, plural: msg`Films` },
+  CONCEPT: { singular: msg`Concept`, plural: msg`Concepts` },
+  PLACE: { singular: msg`Place`, plural: msg`Places` },
+  TOOL: { singular: msg`Tool`, plural: msg`Tools` },
+  RESOURCE: { singular: msg`Resource`, plural: msg`Resources` },
+  NOTEWORTHY_ENTITY: { singular: msg`Organization`, plural: msg`Organizations` },
+  UNCATEGORIZED: {
+    singular: msg({ message: "Other", context: "wiki article kind" }),
+    plural: msg({ message: "Others", context: "wiki article kind" }),
+  },
 }
 
-export const placeKindLabels: Readonly<Record<PlaceKind, string>> = {
-  COUNTRY: "País",
-  STATE: "Estado ou departamento",
-  MUNICIPALITY: "Município",
-  LOCALITY: "Localidade",
-  BIOME: "Bioma",
-  ECOREGION: "Ecorregião",
-  ECOSYSTEM: "Ecossistema",
-  WATERSHED: "Bacia hidrográfica",
-  PROTECTED_AREA: "Área protegida",
-  LANDFORM: "Relevo",
+export const placeKindLabels: Labels<PlaceKind> = {
+  COUNTRY: msg`Country`,
+  STATE: msg`State or department`,
+  MUNICIPALITY: msg`Municipality`,
+  LOCALITY: msg`Locality`,
+  BIOME: msg`Biome`,
+  ECOREGION: msg`Ecoregion`,
+  ECOSYSTEM: msg`Ecosystem`,
+  WATERSHED: msg`Watershed`,
+  PROTECTED_AREA: msg`Protected area`,
+  LANDFORM: msg`Landform`,
 }
 
-export const informationVisibilityLabels: Readonly<Record<InformationVisibility, string>> = {
-  PUBLIC: "Público",
-  COMMUNITY: "Comunidade",
-  PRIVATE: "Privado",
+export const informationVisibilityLabels: Labels<InformationVisibility> = {
+  PUBLIC: msg`Public`,
+  COMMUNITY: msg`Community`,
+  PRIVATE: msg`Private`,
 }
 
-export const plantUsageLabels: Readonly<Record<PlantUsage, string>> = {
-  HUMAN_FEED: "Alimento humano",
-  ANIMAL_FEED: "Alimento animal",
-  CONSTRUCTION: "Construção",
-  COSMETIC: "Cosmético",
-  ORGANIC_MATTER: "Matéria orgânica",
-  MEDICINAL: "Medicinal",
-  ORNAMENTAL: "Ornamental",
-  RITUALISTIC: "Ritualístico",
-  ECOSYSTEM_SERVICE: "Serviço ecossistêmico",
+export const plantUsageLabels: Labels<PlantUsage> = {
+  HUMAN_FEED: msg`Human food`,
+  ANIMAL_FEED: msg`Animal feed`,
+  CONSTRUCTION: msg`Construction`,
+  COSMETIC: msg`Cosmetic`,
+  ORGANIC_MATTER: msg`Organic matter`,
+  MEDICINAL: msg`Medicinal`,
+  ORNAMENTAL: msg`Ornamental`,
+  RITUALISTIC: msg`Ritual`,
+  ECOSYSTEM_SERVICE: msg`Ecosystem service`,
 }
 
-export const ediblePartLabels: Readonly<Record<EdiblePlantPart, string>> = {
-  FRUIT: "Fruto",
-  FLOWER: "Flor",
-  LEAF: "Folha",
-  STEM: "Caule",
-  SEED: "Semente",
-  BARK: "Casca",
-  BULB: "Bulbo",
-  SPROUT: "Broto",
-  ROOT: "Raiz",
-  TUBER: "Tubérculo",
-  RHIZOME: "Rizoma",
+export const ediblePartLabels: Labels<EdiblePlantPart> = {
+  FRUIT: msg`Fruit`,
+  FLOWER: msg`Flower`,
+  LEAF: msg`Leaf`,
+  STEM: msg`Stem`,
+  SEED: msg`Seed`,
+  BARK: msg`Bark`,
+  BULB: msg`Bulb`,
+  SPROUT: msg`Sprout`,
+  ROOT: msg`Root`,
+  TUBER: msg`Tuber`,
+  RHIZOME: msg`Rhizome`,
 }
 
-export const lifecycleLabels: Readonly<Record<PlantLifecycle, string>> = {
-  SEMIANNUAL: "Semestral",
-  ANNUAL: "Anual",
-  BIENNIAL: "Bienal",
-  PERENNIAL: "Perene",
+export const lifecycleLabels: Labels<PlantLifecycle> = {
+  SEMIANNUAL: msg`Semiannual`,
+  ANNUAL: msg`Annual`,
+  BIENNIAL: msg`Biennial`,
+  PERENNIAL: msg`Perennial`,
 }
 
-export const stratumLabels: Readonly<Record<AgroforestryStratum, string>> = {
-  EMERGENT: "Emergente",
-  HIGH: "Alto",
-  MEDIUM: "Médio",
-  LOW: "Baixo",
-  GROUND: "Rasteiro",
+export const stratumLabels: Labels<AgroforestryStratum> = {
+  EMERGENT: msg({ message: "Emergent", context: "agroforestry stratum" }),
+  HIGH: msg({ message: "High", context: "agroforestry stratum" }),
+  MEDIUM: msg({ message: "Medium", context: "agroforestry stratum" }),
+  LOW: msg({ message: "Low", context: "agroforestry stratum" }),
+  GROUND: msg({ message: "Ground", context: "agroforestry stratum" }),
 }
 
 // Explainers from gororobas.com's encyclopedia, shown beside each value.
 
-export const stratumExplainers: Readonly<Record<AgroforestryStratum, string>> = {
-  EMERGENT:
-    "Plantas que devem estar acima de todas as outras e receber o máximo de luz - toleram até ~20% de sombra ao longo do dia",
-  HIGH: "Plantas que só ficam abaixo das de estrato emergente - toleram até ~40% de sombra ao longo do dia",
-  MEDIUM:
-    "Plantas que ficam abaixo das de estrato alto - toleram até ~60% de sombra ao longo do dia",
-  LOW: "Plantas que ficam abaixo das de estrato médio - toleram até ~80% de sombra ao longo do dia",
-  GROUND: "Plantas de solo de floresta, sobrevivem sem luz direta",
+export const stratumExplainers: Labels<AgroforestryStratum> = {
+  EMERGENT: msg`Plants that should stand above all others and get the most light - they tolerate up to ~20% shade over the day`,
+  HIGH: msg`Plants that only stand below the emergent stratum - they tolerate up to ~40% shade over the day`,
+  MEDIUM: msg`Plants that stand below the high stratum - they tolerate up to ~60% shade over the day`,
+  LOW: msg`Plants that stand below the medium stratum - they tolerate up to ~80% shade over the day`,
+  GROUND: msg`Forest floor plants, which survive without direct light`,
 }
 
-export const lifecycleExplainers: Readonly<Record<PlantLifecycle, string>> = {
-  SEMIANNUAL:
-    "Plantas que removemos ou colhemos em até 6 meses ou que morrem naturalmente nesse período",
-  ANNUAL:
-    "Plantas que removemos ou colhemos entre 6 meses e 1 ano ou que morrem naturalmente nesse período",
-  BIENNIAL:
-    "Plantas que removemos ou colhemos em 1 a 2 anos ou que morrem naturalmente nesse período",
-  PERENNIAL:
-    'Plantas que cultivamos por mais de 2 anos, como árvores frutíferas. "Perene" não significa pra sempre: muitas delas replantamos eventualmente para maximizar a produção, como o café, a banana, a parreira, etc.',
+export const lifecycleExplainers: Labels<PlantLifecycle> = {
+  SEMIANNUAL: msg`Plants we remove or harvest within 6 months, or that die naturally in that time`,
+  ANNUAL: msg`Plants we remove or harvest between 6 months and 1 year, or that die naturally in that time`,
+  BIENNIAL: msg`Plants we remove or harvest within 1 to 2 years, or that die naturally in that time`,
+  PERENNIAL: msg`Plants we grow for more than 2 years, such as fruit trees. "Perennial" doesn't mean forever: we eventually replant many of them to keep them productive, such as coffee, bananas and grapevines.`,
 }
 
-export const plantingMethodExplainers: Readonly<Record<PlantingMethod, string>> = {
-  SEED: "Sejam plantadas diretamente no solo, ou em mudas a serem transplantadas",
-  SEEDLING: "Plantas jovens, já enraizadas, que transplantamos para o lugar onde vão crescer",
-  STEM_CUTTING:
-    "Plantar um pedaço (estaca ou rama) do caule, folha ou raiz de uma planta. A estaca cria raízes e se desenvolve em uma nova planta geneticamente idêntica à original. Usado em roseiras, mandioca e muitas outras.",
-  RHIZOME:
-    "Rizomas são caules subterrâneos que crescem (também) horizontalmente e emitem raízes e brotos. Cortamos pedaços e plantamos, cada um originando uma nova planta. Banana é o exemplo clássico, mas também a cúrcuma, gengibre e bambu",
-  TUBER:
-    "Tubérculos são caules subterrâneos engrossados que armazenam nutrientes e possuem gemas que originam brotos. O plantio por tubérculo consiste em plantar o tubérculo inteiro ou seccionado, cada parte gerando uma nova planta. Nossas ancestrais já plantaram muuuita batata e inhame assim.",
-  GRAFT:
-    "Técnica de unir partes de duas plantas diferentes para combinar características desejáveis. Uma parte (o enxerto ou clone) é inserida em outra planta (o porta-enxerto ou cavalo) para que cresçam juntas. Grande parte da produção comercial de muitas frutíferas é feita assim (cacau, cítricas, amoras, etc.).",
-  BULB: "Bulbos são caules subterrâneos curtos envoltos em folhas carnudas, como os da cebola e do alho. Plantamos o bulbo inteiro ou seus dentes, e cada um origina uma nova planta.",
-  DIVISION:
-    "Separar uma touceira em partes que tenham raízes e brotos, cada uma originando uma nova planta. Comum em capins, ervas como a cidreira e muitas ornamentais.",
+export const plantingMethodExplainers: Labels<PlantingMethod> = {
+  SEED: msg`Sown straight into the soil, or into seedlings to be transplanted`,
+  SEEDLING: msg`Young, already rooted plants that we transplant to where they will grow`,
+  STEM_CUTTING: msg`Planting a piece (a cutting) of a plant's stem, leaf or root. The cutting grows roots and develops into a new plant, genetically identical to the original. Used for roses, cassava and many others.`,
+  RHIZOME: msg`Rhizomes are underground stems that (also) grow sideways and put out roots and shoots. We cut pieces and plant them, each growing into a new plant. Bananas are the classic example, but also turmeric, ginger and bamboo.`,
+  TUBER: msg`Tubers are thickened underground stems that store nutrients and have buds that sprout. Planting by tuber means planting the whole tuber or pieces of it, each growing into a new plant. Our ancestors planted a whole lot of potatoes and yams this way.`,
+  GRAFT: msg`A technique that joins parts of two different plants to combine desirable traits. One part (the scion) is inserted into another plant (the rootstock) so they grow together. Much of the commercial production of many fruit trees is done this way (cacao, citrus, mulberries, etc.).`,
+  BULB: msg`Bulbs are short underground stems wrapped in fleshy leaves, like onions and garlic. We plant the whole bulb or its cloves, and each grows into a new plant.`,
+  DIVISION: msg`Splitting a clump into parts that each have roots and shoots, each growing into a new plant. Common for grasses, herbs such as lemon balm and many ornamentals.`,
 }
 
-export const plantingMethodLabels: Readonly<Record<PlantingMethod, string>> = {
-  SEED: "Semente",
-  SEEDLING: "Muda",
-  STEM_CUTTING: "Estaca",
-  RHIZOME: "Rizoma",
-  TUBER: "Tubérculo",
-  GRAFT: "Enxerto",
-  BULB: "Bulbo",
-  DIVISION: "Divisão",
+export const plantingMethodLabels: Labels<PlantingMethod> = {
+  SEED: msg`Seed`,
+  SEEDLING: msg`Seedling`,
+  STEM_CUTTING: msg`Cutting`,
+  RHIZOME: msg`Rhizome`,
+  TUBER: msg`Tuber`,
+  GRAFT: msg`Graft`,
+  BULB: msg`Bulb`,
+  DIVISION: msg`Division`,
 }
 
-export const animalRoleLabels: Readonly<Record<AnimalRole, string>> = {
-  POLLINATOR: "Polinizador",
-  PEST_CONTROL: "Controle de pragas",
-  GRAZER: "Pastejo",
-  LIVESTOCK: "Criação",
-  DRAFT_ANIMAL: "Tração",
-  AQUACULTURE: "Aquicultura",
-  COMPOSTING: "Compostagem",
-  SEED_DISPERSER: "Dispersor de sementes",
+export const animalRoleLabels: Labels<AnimalRole> = {
+  POLLINATOR: msg`Pollinator`,
+  PEST_CONTROL: msg`Pest control`,
+  GRAZER: msg`Grazing`,
+  LIVESTOCK: msg`Livestock`,
+  DRAFT_ANIMAL: msg`Draft`,
+  AQUACULTURE: msg`Aquaculture`,
+  COMPOSTING: msg`Composting`,
+  SEED_DISPERSER: msg`Seed disperser`,
 }
 
-export const toolUsageLabels: Readonly<Record<ToolUsage, string>> = {
-  HAND_TOOL: "Ferramenta manual",
-  IRRIGATION: "Irrigação",
-  SOIL_PREPARATION: "Preparo do solo",
-  PLANTING: "Plantio",
-  HARVEST: "Colheita",
-  PROCESSING: "Beneficiamento",
-  STORAGE: "Armazenamento",
-  MEASUREMENT: "Medição",
-  PROTECTION: "Proteção",
-  MACHINERY: "Maquinário",
-  INFRASTRUCTURE: "Infraestrutura",
+export const toolUsageLabels: Labels<ToolUsage> = {
+  HAND_TOOL: msg`Hand tool`,
+  IRRIGATION: msg`Irrigation`,
+  SOIL_PREPARATION: msg`Soil preparation`,
+  PLANTING: msg`Planting`,
+  HARVEST: msg`Harvest`,
+  PROCESSING: msg`Processing`,
+  STORAGE: msg`Storage`,
+  MEASUREMENT: msg`Measurement`,
+  PROTECTION: msg`Protection`,
+  MACHINERY: msg`Machinery`,
+  INFRASTRUCTURE: msg`Infrastructure`,
 }
 
-export const resourceFormatLabels: Readonly<Record<typeof ResourceFormat.Type, string>> = {
-  SOCIAL_MEDIA: "Rede social",
-  VIDEO: "Vídeo",
-  ARTICLE: "Artigo",
-  PODCAST: "Podcast",
-  COURSE: "Curso",
-  ACADEMIC_WORK: "Trabalho acadêmico",
-  DATASET: "Base de dados",
-  OTHER: "Outro",
+export const resourceFormatLabels: Labels<typeof ResourceFormat.Type> = {
+  SOCIAL_MEDIA: msg`Social media`,
+  VIDEO: msg`Video`,
+  ARTICLE: msg`Article`,
+  PODCAST: msg`Podcast`,
+  COURSE: msg`Course`,
+  ACADEMIC_WORK: msg`Academic work`,
+  DATASET: msg`Dataset`,
+  OTHER: msg({ message: "Other", context: "resource format" }),
 }
 
-export const entityTypeLabels: Readonly<Record<typeof NoteworthyEntityType.Type, string>> = {
-  COLLECTIVE: "Coletivo",
-  COOPERATIVE: "Cooperativa",
-  FARM: "Sítio ou roça",
-  TERRITORY: "Território",
-  SOCIAL_MOVEMENT: "Movimento social",
-  NETWORK: "Rede",
-  NONPROFIT: "ONG",
-  EDUCATIONAL_INSTITUTION: "Instituição de ensino",
-  RESEARCH_ORGANIZATION: "Pesquisa",
-  PUBLIC_AGENCY: "Órgão público",
-  MEDIA_ORGANIZATION: "Mídia",
-  BUSINESS: "Empresa",
-  OTHER: "Outro",
+export const entityTypeLabels: Labels<typeof NoteworthyEntityType.Type> = {
+  COLLECTIVE: msg`Collective`,
+  COOPERATIVE: msg`Cooperative`,
+  FARM: msg`Farm`,
+  TERRITORY: msg`Territory`,
+  SOCIAL_MOVEMENT: msg`Social movement`,
+  NETWORK: msg`Network`,
+  NONPROFIT: msg`Nonprofit`,
+  EDUCATIONAL_INSTITUTION: msg`Educational institution`,
+  RESEARCH_ORGANIZATION: msg`Research`,
+  PUBLIC_AGENCY: msg`Public agency`,
+  MEDIA_ORGANIZATION: msg`Media`,
+  BUSINESS: msg`Business`,
+  OTHER: msg({ message: "Other", context: "organization category" }),
 }
 
-export const publicationKindLabels: Readonly<Record<PublicationKind, string>> = {
-  POST: "Postagens",
-  EVENT: "Eventos",
+export const publicationKindLabels: Labels<PublicationKind> = {
+  POST: msg({ message: "Posts", context: "publication kind" }),
+  EVENT: msg`Events`,
 }
 
-export const profileTypeLabels: Readonly<Record<ProfileType, string>> = {
-  PERSON: "Pessoas",
-  ORGANIZATION: "Organizações",
+export const profileTypeLabels: Labels<ProfileType> = {
+  PERSON: msg({ message: "People", context: "profile type" }),
+  ORGANIZATION: msg`Organizations`,
 }
 
 /** A bookmark's states in the words of what the article is about: a book is read, a plant planted. */
 export type BookmarkVocabulary = Readonly<{
-  /** Someone's own relationship to the article, such as "Quero ler". */
-  states: Readonly<Record<BookmarkState, string>>
-  /** How others' bookmarks are grouped on the article's page, such as "Querem ler". */
-  groups: Readonly<Record<BookmarkState, string>>
+  /** Someone's own relationship to the article, such as "I want to read it". */
+  states: Labels<BookmarkState>
+  /** How others' bookmarks are grouped on the article's page, such as "Want to read it". */
+  groups: Labels<BookmarkState>
 }>
 
 const vocabulary = (
-  states: Omit<Record<BookmarkState, string>, "INDIFFERENT">,
-  groups: Omit<Record<BookmarkState, string>, "INDIFFERENT">,
+  states: Omit<Labels<BookmarkState>, "INDIFFERENT">,
+  groups: Omit<Labels<BookmarkState>, "INDIFFERENT">,
 ): BookmarkVocabulary => ({
-  states: { ...states, INDIFFERENT: "Não tenho interesse" },
-  groups: { ...groups, INDIFFERENT: "Sem interesse" },
+  states: { ...states, INDIFFERENT: msg`Not interested` },
+  groups: { ...groups, INDIFFERENT: msg`No interest` },
 })
 
 const plantVocabulary = vocabulary(
-  { INTERESTED: "Quero plantar", ACTIVE: "Estou plantando", PREVIOUSLY_ACTIVE: "Já plantei" },
-  { INTERESTED: "Querem plantar", ACTIVE: "Plantando", PREVIOUSLY_ACTIVE: "Já plantaram" },
+  {
+    INTERESTED: msg`I want to plant it`,
+    ACTIVE: msg`I'm planting it`,
+    PREVIOUSLY_ACTIVE: msg`I've planted it`,
+  },
+  {
+    INTERESTED: msg`Want to plant it`,
+    ACTIVE: msg`Planting it`,
+    PREVIOUSLY_ACTIVE: msg`Have planted it`,
+  },
 )
 
 const usageVocabulary = vocabulary(
-  { INTERESTED: "Tenho interesse", ACTIVE: "Estou usando", PREVIOUSLY_ACTIVE: "Já usei" },
-  { INTERESTED: "Têm interesse", ACTIVE: "Usando", PREVIOUSLY_ACTIVE: "Já usaram" },
+  {
+    INTERESTED: msg`I'm interested`,
+    ACTIVE: msg`I'm using it`,
+    PREVIOUSLY_ACTIVE: msg`I've used it`,
+  },
+  {
+    INTERESTED: msg`Interested`,
+    ACTIVE: msg`Using it`,
+    PREVIOUSLY_ACTIVE: msg`Have used it`,
+  },
 )
 
 export const bookmarkVocabularies: Readonly<Record<WikiArticleKind, BookmarkVocabulary>> = {
   PLANT: plantVocabulary,
   PLANT_CULTIVAR: plantVocabulary,
   ANIMAL: vocabulary(
-    { INTERESTED: "Quero criar", ACTIVE: "Estou criando", PREVIOUSLY_ACTIVE: "Já criei" },
-    { INTERESTED: "Querem criar", ACTIVE: "Criando", PREVIOUSLY_ACTIVE: "Já criaram" },
+    {
+      INTERESTED: msg`I want to raise them`,
+      ACTIVE: msg`I'm raising them`,
+      PREVIOUSLY_ACTIVE: msg`I've raised them`,
+    },
+    {
+      INTERESTED: msg`Want to raise them`,
+      ACTIVE: msg`Raising them`,
+      PREVIOUSLY_ACTIVE: msg`Have raised them`,
+    },
   ),
   BOOK: vocabulary(
-    { INTERESTED: "Quero ler", ACTIVE: "Estou lendo", PREVIOUSLY_ACTIVE: "Já li" },
-    { INTERESTED: "Querem ler", ACTIVE: "Lendo", PREVIOUSLY_ACTIVE: "Já leram" },
+    {
+      INTERESTED: msg`I want to read it`,
+      ACTIVE: msg`I'm reading it`,
+      PREVIOUSLY_ACTIVE: msg`I've read it`,
+    },
+    {
+      INTERESTED: msg`Want to read it`,
+      ACTIVE: msg`Reading it`,
+      PREVIOUSLY_ACTIVE: msg`Have read it`,
+    },
   ),
   FILM: vocabulary(
-    { INTERESTED: "Quero assistir", ACTIVE: "Estou assistindo", PREVIOUSLY_ACTIVE: "Já assisti" },
-    { INTERESTED: "Querem assistir", ACTIVE: "Assistindo", PREVIOUSLY_ACTIVE: "Já assistiram" },
+    {
+      INTERESTED: msg`I want to watch it`,
+      ACTIVE: msg`I'm watching it`,
+      PREVIOUSLY_ACTIVE: msg`I've watched it`,
+    },
+    {
+      INTERESTED: msg`Want to watch it`,
+      ACTIVE: msg`Watching it`,
+      PREVIOUSLY_ACTIVE: msg`Have watched it`,
+    },
   ),
   CONCEPT: vocabulary(
-    { INTERESTED: "Quero aprender", ACTIVE: "Estou praticando", PREVIOUSLY_ACTIVE: "Já pratiquei" },
-    { INTERESTED: "Querem aprender", ACTIVE: "Praticando", PREVIOUSLY_ACTIVE: "Já praticaram" },
+    {
+      INTERESTED: msg`I want to learn it`,
+      ACTIVE: msg`I'm practicing it`,
+      PREVIOUSLY_ACTIVE: msg`I've practiced it`,
+    },
+    {
+      INTERESTED: msg`Want to learn it`,
+      ACTIVE: msg`Practicing it`,
+      PREVIOUSLY_ACTIVE: msg`Have practiced it`,
+    },
   ),
   PLACE: vocabulary(
-    { INTERESTED: "Quero conhecer", ACTIVE: "Estou por lá", PREVIOUSLY_ACTIVE: "Já estive lá" },
-    { INTERESTED: "Querem conhecer", ACTIVE: "Estão por lá", PREVIOUSLY_ACTIVE: "Já estiveram lá" },
+    {
+      INTERESTED: msg`I want to visit`,
+      ACTIVE: msg`I'm there`,
+      PREVIOUSLY_ACTIVE: msg`I've been there`,
+    },
+    {
+      INTERESTED: msg`Want to visit`,
+      ACTIVE: msg`Are there`,
+      PREVIOUSLY_ACTIVE: msg`Have been there`,
+    },
   ),
   TOOL: usageVocabulary,
   RESOURCE: usageVocabulary,
   NOTEWORTHY_ENTITY: vocabulary(
-    { INTERESTED: "Quero conhecer", ACTIVE: "Participo", PREVIOUSLY_ACTIVE: "Já participei" },
-    { INTERESTED: "Querem conhecer", ACTIVE: "Participam", PREVIOUSLY_ACTIVE: "Já participaram" },
+    {
+      INTERESTED: msg`I want to get to know them`,
+      ACTIVE: msg`I take part`,
+      PREVIOUSLY_ACTIVE: msg`I've taken part`,
+    },
+    {
+      INTERESTED: msg`Want to get to know them`,
+      ACTIVE: msg`Take part`,
+      PREVIOUSLY_ACTIVE: msg`Have taken part`,
+    },
   ),
   UNCATEGORIZED: usageVocabulary,
 }
 
 /** A profile's bookmarks of every kind of article, grouped in words that suit them all. */
-export const profileBookmarkStateLabels: Readonly<
-  Record<Exclude<BookmarkState, "INDIFFERENT">, string>
-> = {
-  INTERESTED: "Interesses",
-  ACTIVE: "No dia a dia",
-  PREVIOUSLY_ACTIVE: "Já fez parte",
+export const profileBookmarkStateLabels: Labels<Exclude<BookmarkState, "INDIFFERENT">> = {
+  INTERESTED: msg`Interests`,
+  ACTIVE: msg`Day to day`,
+  PREVIOUSLY_ACTIVE: msg`Past`,
 }

@@ -39,7 +39,7 @@ export type ExplainedChipConfig = Readonly<{
   explainer: string
 }>
 
-/** A value chip whose explainer opens beside it, such as what an "Emergente" stratum means. */
+/** A value chip whose explainer opens beside it, such as what an "Emergent" stratum means. */
 export const view = <Message>(
   { id, label, explainer }: ExplainedChipConfig,
   h: HtmlBuilder<Message>,

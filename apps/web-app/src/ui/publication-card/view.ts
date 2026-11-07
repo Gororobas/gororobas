@@ -1,12 +1,14 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { ApiPublicationCardData } from "@gororobas/domain/publications/domain"
 import { tiptapToText } from "@gororobas/domain/rich-text/tiptap-to-text"
+import { msg } from "@lingui/core/macro"
 import { Color, Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
 import { wikiArticleUrl } from "../../app/route"
 import { formatFullDate, formatRelativeDate } from "../../lib/relative-dates"
+import { translatorFor } from "../../lib/translations"
 import { primaryName } from "../../lib/wiki-article-names"
 import { audioUrl, imageUrl } from "../../media-urls"
 import { AppText, type AppTextAppearance } from "../app-text"
@@ -145,15 +147,15 @@ export const view = <Message>(
           weight: "medium",
           styles: [Style.make({ flexShrink: 0 })],
           attributes: EffectArray.fromOption(
-            Option.map(maybePublishedAt, (date) => h.Title(formatFullDate(date))),
+            Option.map(maybePublishedAt, (date) => h.Title(formatFullDate(date, language))),
           ),
           children: [
             Option.match(maybePublishedAt, {
-              onNone: () => "Rascunho",
+              onNone: () => translatorFor(language)._(msg`Draft`),
               onSome: (date) =>
                 Option.match(maybeToday, {
-                  onNone: () => formatFullDate(date),
-                  onSome: (today) => formatRelativeDate(date, today),
+                  onNone: () => formatFullDate(date, language),
+                  onSome: (today) => formatRelativeDate({ date, today, language }),
                 }),
             }),
           ],
@@ -161,7 +163,7 @@ export const view = <Message>(
         h,
       ),
       h.div(
-        styledAttributes([h.AriaLabel("Temas")], tagsRowStyle),
+        styledAttributes([h.AriaLabel(translatorFor(language)._(msg`Themes`))], tagsRowStyle),
         publication.concepts.map((concept) =>
           h.keyed("a")(
             concept.id,

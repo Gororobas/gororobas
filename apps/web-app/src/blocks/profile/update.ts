@@ -14,7 +14,7 @@ import {
 export const update = ProfileComposition.makeUpdate({
   SucceededLoadPage: (model, { page }) => ({
     model: modifyFields(model, { pageAsyncData: () => PageResult.Success({ data: page }) }),
-    commands: [LoadPublications({ ownerProfileId: page.id })],
+    commands: [LoadPublications({ ownerProfileId: page.id, language: model.language })],
   }),
   FailedLoadPage: makeFieldsStep.fromMessage(({ error }) => ({
     pageAsyncData: () => PageResult.Failure({ error }),

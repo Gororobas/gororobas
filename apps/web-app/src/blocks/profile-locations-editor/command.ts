@@ -61,8 +61,6 @@ export const FocusElement = ProfileLocationsEditorBlock.makeCommand("FocusElemen
   },
 })
 
-const SAVE_FAILED = "Não foi possível salvar o lugar. Tente novamente."
-
 /** A year, and optionally a month: how precisely people remember when they lived somewhere. */
 export const DateParts = Schema.Struct({ year: Schema.Int, maybeMonth: Schema.Option(Schema.Int) })
 export type DateParts = typeof DateParts.Type
@@ -102,9 +100,9 @@ export const SaveLocation = ProfileLocationsEditorBlock.makeCommand("SaveLocatio
       const toMessage = Effect.match({
         onFailure: (error: { readonly _tag: string }) =>
           Message.FailedSaveLocation({
-            message: Predicate.isTagged(error, "InvalidProfileLocationDatesError")
-              ? "O fim não pode vir antes do começo."
-              : SAVE_FAILED,
+            error: Predicate.isTagged(error, "InvalidProfileLocationDatesError")
+              ? "EndBeforeStart"
+              : "SaveFailed",
           }),
         onSuccess: () => Message.SucceededSaveLocation(),
       })
@@ -126,8 +124,7 @@ export const DeleteLocation = ProfileLocationsEditorBlock.makeCommand("DeleteLoc
     return ({ id }) =>
       api.profiles.deleteMyLocation({ params: { id } }).pipe(
         Effect.match({
-          onFailure: () =>
-            Message.FailedDeleteLocation({ message: "Não foi possível remover. Tente novamente." }),
+          onFailure: () => Message.FailedDeleteLocation(),
           onSuccess: () => Message.SucceededDeleteLocation(),
         }),
       )

@@ -1,3 +1,4 @@
+import { msg } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
 import { AsyncData } from "foldkit"
@@ -5,6 +6,7 @@ import type { Html } from "foldkit/html"
 
 import { profileUrl } from "../../../app/route"
 import type { ClientFailure } from "../../../lib/client-failure"
+import { type Translator, translatorFor } from "../../../lib/translations"
 import { EmptyState } from "../../../ui/empty-state"
 import * as Icons from "../../../ui/icons"
 import type { IconConfig } from "../../../ui/icons"
@@ -88,6 +90,8 @@ const bioStyle = Style.make({ color: toneColors.foreground })
 const sample = <A>(
   {
     title,
+    loadingLabel,
+    i18n,
     icon,
     asyncData,
     footerLink,
@@ -95,6 +99,8 @@ const sample = <A>(
     render,
   }: Readonly<{
     title: string
+    loadingLabel: string
+    i18n: Translator
     icon: (config?: IconConfig) => Html
     asyncData: AsyncData.AsyncData<ReadonlyArray<A>, ClientFailure>
     footerLink: Readonly<{ label: string; href: string }>
@@ -114,9 +120,10 @@ const sample = <A>(
             children: [
               asyncView(
                 {
+                  i18n,
                   asyncData,
                   loading: {
-                    label: `Carregando ${title.toLowerCase()}`,
+                    label: loadingLabel,
                     shape: loadingShape,
                     count: 2,
                   },
@@ -131,28 +138,39 @@ const sample = <A>(
         ),
       ]
 
-const bio = ({ page }: ProfileState, h: ProfileViewBuilder): ReadonlyArray<Html> =>
+const bio = ({ page, language }: ProfileState, h: ProfileViewBuilder): ReadonlyArray<Html> =>
   page.bio === null
     ? []
     : [
         SectionCard.view(
           {
-            title: "Sobre",
+            title: translatorFor(language)._(msg({ message: "About", context: "profile bio" })),
             icon: Icons.user,
-            children: [h.div(styledAttributes([], bioStyle), [RichText.view(page.bio, h)])],
+            children: [
+              h.div(styledAttributes([], bioStyle), [
+                RichText.view({ document: page.bio, i18n: translatorFor(language) }, h),
+              ]),
+            ],
           },
           h,
         ),
       ]
 
-const publications = ({ model, language, page, maybeToday }: ProfileState, h: ProfileViewBuilder) =>
-  sample(
+const publications = (
+  { model, language, page, maybeToday }: ProfileState,
+  h: ProfileViewBuilder,
+) => {
+  const i18n = translatorFor(language)
+
+  return sample(
     {
-      title: "Publicações",
+      i18n,
+      title: i18n._(msg`Posts`),
+      loadingLabel: i18n._(msg`Loading posts`),
       icon: Icons.clipboard,
       asyncData: model.publicationsAsyncData,
       footerLink: {
-        label: "Todas as publicações",
+        label: i18n._(msg`All posts`),
         href: profileUrl(language, { handle: page.handle, tab: "Publications" }),
       },
       loadingShape: "cards",
@@ -170,20 +188,25 @@ const publications = ({ model, language, page, maybeToday }: ProfileState, h: Pr
     },
     h,
   )
+}
 
-const photos = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) =>
-  sample(
+const photos = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) => {
+  const i18n = translatorFor(language)
+
+  return sample(
     {
-      title: "Fotos",
+      i18n,
+      title: i18n._(msg`Photos`),
+      loadingLabel: i18n._(msg`Loading photos`),
       icon: Icons.gallery,
       asyncData: model.photosAsyncData,
       footerLink: {
-        label: "Ver todas as fotos",
+        label: i18n._(msg`See all photos`),
         href: profileUrl(language, { handle: page.handle, tab: "Photos" }),
       },
       loadingShape: "tiles",
       render: (media) => {
-        const all = galleryPhotos(media)
+        const all = galleryPhotos({ media, language })
         const remaining = all.length - PREVIEW_PHOTO_COUNT
 
         return h.div(styledAttributes([], photoStripStyle, cardBleedStyle), [
@@ -224,15 +247,20 @@ const photos = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) 
     },
     h,
   )
+}
 
-const bookmarks = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) =>
-  sample(
+const bookmarks = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) => {
+  const i18n = translatorFor(language)
+
+  return sample(
     {
-      title: "Salvos",
+      i18n,
+      title: i18n._(msg({ message: "Saved", context: "profile collection" })),
+      loadingLabel: i18n._(msg`Loading saved articles`),
       icon: Icons.bookmark,
       asyncData: model.bookmarksAsyncData,
       footerLink: {
-        label: "Ver todos os salvos",
+        label: i18n._(msg`See everything saved`),
         href: profileUrl(language, { handle: page.handle, tab: "Bookmarks" }),
       },
       loadingShape: "rows",
@@ -259,15 +287,20 @@ const bookmarks = ({ model, language, page }: ProfileState, h: ProfileViewBuilde
     },
     h,
   )
+}
 
-const contributions = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) =>
-  sample(
+const contributions = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) => {
+  const i18n = translatorFor(language)
+
+  return sample(
     {
-      title: "Na enciclopédia",
+      i18n,
+      title: i18n._(msg`In the encyclopedia`),
+      loadingLabel: i18n._(msg`Loading contributions`),
       icon: Icons.encyclopedia,
       asyncData: model.contributionsAsyncData,
       footerLink: {
-        label: "Todas as contribuições",
+        label: i18n._(msg`All contributions`),
         href: profileUrl(language, { handle: page.handle, tab: "Contributions" }),
       },
       loadingShape: "rows",
@@ -283,7 +316,7 @@ const contributions = ({ model, language, page }: ProfileState, h: ProfileViewBu
                   {
                     article: contribution.article,
                     language,
-                    maybeSubtitle: Option.some(contributionSummary(contribution)),
+                    maybeSubtitle: Option.some(contributionSummary({ ...contribution, i18n })),
                   },
                   h,
                 ),
@@ -294,6 +327,7 @@ const contributions = ({ model, language, page }: ProfileState, h: ProfileViewBu
     },
     h,
   )
+}
 
 /** Once everything has loaded empty and there's no bio, one message replaces the sections. */
 const isEmptyProfile = ({ model, page }: ProfileState): boolean =>
@@ -304,15 +338,18 @@ const isEmptyProfile = ({ model, page }: ProfileState): boolean =>
   isEmptyData(model.contributionsAsyncData)
 
 /** A sample of everything the profile shares, each linking to its tab. */
-export const view = (state: ProfileState, h: ProfileViewBuilder): Html =>
-  isEmptyProfile(state)
+export const view = (state: ProfileState, h: ProfileViewBuilder): Html => {
+  const i18n = translatorFor(state.language)
+  const { name } = state.page
+
+  return isEmptyProfile(state)
     ? h.div(styledAttributes([], sectionsStyle), [
         EmptyState.view(
           {
             icon: Icons.sprout,
-            title: `${state.page.name} ainda não compartilhou nada por aqui`,
+            title: i18n._(msg`${name} hasn't shared anything here yet`),
             maybeDescription: Option.some(
-              "Publicações, fotos e artigos salvos aparecem aqui assim que forem compartilhados.",
+              i18n._(msg`Posts, photos and saved articles show up here as soon as they're shared.`),
             ),
             size: "roomy",
           },
@@ -325,8 +362,9 @@ export const view = (state: ProfileState, h: ProfileViewBuilder): Html =>
           ...publications(state, h),
           ...photos(state, h),
         ]),
-        h.aside(
-          styledAttributes([h.AriaLabel(`O que ${state.page.name} acompanha`)], columnStyle),
-          [...bookmarks(state, h), ...contributions(state, h)],
-        ),
+        h.aside(styledAttributes([h.AriaLabel(i18n._(msg`What ${name} follows`))], columnStyle), [
+          ...bookmarks(state, h),
+          ...contributions(state, h),
+        ]),
       ])
+}

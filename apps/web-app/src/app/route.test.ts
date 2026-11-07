@@ -2,21 +2,27 @@ import { describe, expect, it } from "@effect/vitest"
 import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { Handle } from "@gororobas/domain/common/primitives"
 import { WikiArticleKind } from "@gororobas/domain/wiki/domain"
-import { Array as EffectArray, Option, Schema, String as EffectString } from "effect"
+import { Array as EffectArray, Match, Option, Schema, String as EffectString } from "effect"
 import { fromString } from "foldkit/url"
 
 import {
   ApplicationRoute,
   ProfileTab,
-  SearchQuery,
   WikiArticleTab,
-  emptySearchQuery,
   languageRedirectUrl,
   profileUrl,
   searchUrl,
   urlToLocatedRoute,
   wikiArticleUrl,
 } from "./route"
+import {
+  SearchQuery,
+  SearchScope,
+  type WikiKindFilters,
+  emptySearchQuery,
+  everything,
+  wikiScope,
+} from "./search-query"
 
 const urlOf = (path: string) => Option.getOrThrow(fromString(`http://localhost${path}`))
 
@@ -27,20 +33,43 @@ const located = (language: SupportedLanguage, route: ApplicationRoute) => ({
   route,
 })
 
-/** What survives the URL: text that isn't blank, as typed, and each list value once. */
+/** Each filter value once, as a comma-separated parameter keeps it. */
+const dedupedFilters = (filters: WikiKindFilters): WikiKindFilters =>
+  Match.value(filters).pipe(
+    Match.withReturnType<WikiKindFilters>(),
+    Match.discriminators("kind")({
+      PLANT: (plant) => ({
+        ...plant,
+        plantUsages: EffectArray.dedupe(plant.plantUsages),
+        edibleParts: EffectArray.dedupe(plant.edibleParts),
+        plantLifecycles: EffectArray.dedupe(plant.plantLifecycles),
+        strata: EffectArray.dedupe(plant.strata),
+        plantingMethods: EffectArray.dedupe(plant.plantingMethods),
+      }),
+      ANIMAL: (animal) => ({ ...animal, animalRoles: EffectArray.dedupe(animal.animalRoles) }),
+      TOOL: (tool) => ({ ...tool, toolUsages: EffectArray.dedupe(tool.toolUsages) }),
+      RESOURCE: (resource) => ({
+        ...resource,
+        resourceFormats: EffectArray.dedupe(resource.resourceFormats),
+      }),
+      NOTEWORTHY_ENTITY: (entity) => ({
+        ...entity,
+        entityTypes: EffectArray.dedupe(entity.entityTypes),
+      }),
+    }),
+    Match.orElse((unfiltered) => unfiltered),
+  )
+
+/** What survives the URL: text that isn't blank, as typed, and each filter value once. */
 const normalized = (query: SearchQuery): SearchQuery => ({
-  ...query,
   text: Option.filter(query.text, (text) => EffectString.isNonEmpty(EffectString.trim(text))),
-  plantUsages: EffectArray.dedupe(query.plantUsages),
-  plantLifecycles: EffectArray.dedupe(query.plantLifecycles),
-  plantingMethods: EffectArray.dedupe(query.plantingMethods),
-  strata: EffectArray.dedupe(query.strata),
-  edibleParts: EffectArray.dedupe(query.edibleParts),
-  animalRoles: EffectArray.dedupe(query.animalRoles),
-  toolUsages: EffectArray.dedupe(query.toolUsages),
-  resourceFormats: EffectArray.dedupe(query.resourceFormats),
-  entityTypes: EffectArray.dedupe(query.entityTypes),
+  scope: SearchScope.guards.Wiki(query.scope)
+    ? wikiScopeWith(Option.map(query.scope.maybeKind, dedupedFilters))
+    : query.scope,
 })
+
+const wikiScopeWith = (maybeKind: Option.Option<WikiKindFilters>) =>
+  SearchScope.cases.Wiki.make({ maybeKind })
 
 const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
 
@@ -64,15 +93,55 @@ describe("search URLs", () => {
     [SupportedLanguage, TypedSearchQuery],
     ([language, query]) => {
       expect(parse(searchUrl(language, query))).toEqual(
-        located(language, ApplicationRoute.Search(normalized(query))),
+        located(language, ApplicationRoute.Search({ query: normalized(query) })),
       )
     },
   )
 
   it("reads unknown filter values as absent instead of failing the page", () => {
-    expect(parse("/pt/buscar?t=recipes&tipo=planetas&usos=medicinal,levitation").route).toEqual(
-      ApplicationRoute.Search({ ...emptySearchQuery, plantUsages: ["MEDICINAL"] }),
+    expect(parse("/pt/buscar?secao=enciclopedia&tipo=planetas&usos=medicinal").route).toEqual(
+      ApplicationRoute.Search({ query: { ...emptySearchQuery, scope: wikiScope() } }),
     )
+
+    expect(
+      parse("/en/search?section=encyclopedia&kind=plants&uses=medicinal,levitation").route,
+    ).toEqual(
+      ApplicationRoute.Search({
+        query: {
+          ...emptySearchQuery,
+          scope: wikiScopeWith(
+            Option.some({
+              kind: "PLANT",
+              plantUsages: ["MEDICINAL"],
+              edibleParts: [],
+              plantLifecycles: [],
+              strata: [],
+              plantingMethods: [],
+            }),
+          ),
+        },
+      }),
+    )
+  })
+
+  it("ignores filters the chosen type and kind don't offer", () => {
+    expect(parse("/en/search?planting=seed&profile=person").route).toEqual(
+      ApplicationRoute.Search({ query: { ...emptySearchQuery, scope: everything } }),
+    )
+
+    expect(parse("/en/search?section=encyclopedia&kind=books&planting=seed").route).toEqual(
+      ApplicationRoute.Search({
+        query: { ...emptySearchQuery, scope: wikiScope(Option.some("BOOK")) },
+      }),
+    )
+  })
+
+  it("names parameters in each language", () => {
+    const query = { ...emptySearchQuery, scope: wikiScope(Option.some("PLANT")) }
+
+    expect(searchUrl("pt", query)).toBe("/pt/buscar?secao=enciclopedia&tipo=vegetais")
+    expect(searchUrl("es", query)).toBe("/es/buscar?seccion=enciclopedia&tipo=vegetales")
+    expect(searchUrl("en", query)).toBe("/en/search?section=encyclopedia&kind=plants")
   })
 })
 

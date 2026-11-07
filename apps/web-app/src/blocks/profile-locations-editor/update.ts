@@ -25,7 +25,7 @@ import {
 } from "./composition"
 import { makeFieldsStep, makeStep } from "./definition"
 import { OutMessage } from "./message"
-import { Form, Locations, type Model } from "./model"
+import { Form, type FormError, Locations, type Model } from "./model"
 
 /** New entries default to how the person shared their latest addition, or to private. */
 const defaultVisibility = (model: Model): InformationVisibility =>
@@ -101,15 +101,15 @@ const dateParts = ({
 }: Readonly<{
   year: string
   month: string
-  name: "início" | "fim"
-}>): Result.Result<Option.Option<DateParts>, string> => {
+  name: "Start" | "End"
+}>): Result.Result<Option.Option<DateParts>, FormError> => {
   if (year.trim() === "") {
-    return month === "" ? Result.succeed(Option.none()) : Result.fail(`Informe o ano de ${name}.`)
+    return month === "" ? Result.succeed(Option.none()) : Result.fail(`${name}YearMissing` as const)
   }
 
   const yearNumber = Number(year)
   if (!Number.isInteger(yearNumber) || yearNumber < 1900 || yearNumber > 2100) {
-    return Result.fail(`O ano de ${name} precisa ter quatro dígitos, como 2024.`)
+    return Result.fail(`${name}YearInvalid` as const)
   }
 
   return Result.succeed(
@@ -224,7 +224,7 @@ export const update = ProfileLocationsEditorComposition.makeUpdate.withContext(
     FailedLoadPlace: (model) => ({
       model: withForm(model, (form) => ({
         ...form,
-        maybeError: Option.some("Não foi possível carregar esse lugar. Tente novamente."),
+        maybeError: Option.some("PlaceLoadFailed"),
       })),
     }),
 
@@ -259,21 +259,21 @@ export const update = ProfileLocationsEditorComposition.makeUpdate.withContext(
       Option.match(model.maybeForm, {
         onNone: () => ({ model }),
         onSome: (form) => {
-          const fail = (error: string) => ({
+          const fail = (error: FormError) => ({
             model: withForm(model, (current) => ({ ...current, maybeError: Option.some(error) })),
           })
-          const start = dateParts({ year: form.startYear, month: form.startMonth, name: "início" })
+          const start = dateParts({ year: form.startYear, month: form.startMonth, name: "Start" })
           if (Result.isFailure(start)) return fail(start.failure)
           const end = form.isOngoing
             ? Result.succeed(Option.none<DateParts>())
-            : dateParts({ year: form.endYear, month: form.endMonth, name: "fim" })
+            : dateParts({ year: form.endYear, month: form.endMonth, name: "End" })
           if (Result.isFailure(end)) return fail(end.failure)
 
           if (form.mode === "FreeText" && form.freeText.trim() === "") {
-            return fail("Descreva onde você está.")
+            return fail("FreeTextMissing")
           }
           if (form.mode === "Place" && Option.isNone(form.maybePlace)) {
-            return fail("Escolha um lugar da lista ou use a localização do aparelho.")
+            return fail("PlaceMissing")
           }
 
           const place =
@@ -311,11 +311,11 @@ export const update = ProfileLocationsEditorComposition.makeUpdate.withContext(
         reloadCount: (count) => count + 1,
       }),
     }),
-    FailedSaveLocation: (model, { message }) => ({
+    FailedSaveLocation: (model, { error }) => ({
       model: withForm(model, (form) => ({
         ...form,
         isSaving: false,
-        maybeError: Option.some(message),
+        maybeError: Option.some(error),
       })),
     }),
 
@@ -348,10 +348,10 @@ export const update = ProfileLocationsEditorComposition.makeUpdate.withContext(
         reloadCount: (count) => count + 1,
       }),
     }),
-    FailedDeleteLocation: (model, { message }) => ({
+    FailedDeleteLocation: (model) => ({
       model: modifyFields(model, {
         maybeDeletingId: () => Option.none(),
-        maybeListError: () => Option.some(message),
+        maybeListError: () => Option.some("DeleteFailed" as const),
       }),
     }),
   }),
