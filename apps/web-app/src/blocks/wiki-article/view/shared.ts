@@ -12,7 +12,7 @@ import { type Translator, translatorFor } from "../../../lib/translations"
 import { EmptyState } from "../../../ui/empty-state"
 import * as Icons from "../../../ui/icons"
 import type { IconConfig } from "../../../ui/icons"
-import { type LoadingShape, LoadingState } from "../../../ui/loading-state"
+import { LoadingState, type LoadingStateConfig } from "../../../ui/loading-state"
 import { pageColumnBleedStyle } from "../../../ui/styles/page-column"
 import { TabNavigation } from "../../../ui/tab-navigation"
 import { breakpoint, space } from "../../../ui/theme"
@@ -66,7 +66,7 @@ export const tabs = (
 
   const entries: ReadonlyArray<readonly [WikiArticleTab, string]> = [
     ["About", i18n._(msg({ message: "About", context: "wiki article tab" }))],
-    ["Publications", i18n._(msg`Posts`)],
+    ["Publications", i18n._(msg`Publications`)],
     ["Photos", i18n._(msg`Photos`)],
     ["Contributions", i18n._(msg`Contributions`)],
   ]
@@ -98,7 +98,7 @@ export const asyncView = <A>(
   }: Readonly<{
     i18n: Translator
     asyncData: AsyncData.AsyncData<A, ClientFailure>
-    loading: Readonly<{ label: string; shape: LoadingShape; count?: number }>
+    loading: LoadingStateConfig
     onData: (data: A) => Html
   }>,
   h: WikiArticleViewBuilder,

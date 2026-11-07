@@ -10,6 +10,7 @@ import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
 import { DeviceLocation } from "../lib/device-location"
+import { PopoverDrawerBlock } from "../ui/popover-drawer"
 import { LocateDevice } from "./command"
 import { ApplicationBlock } from "./definition"
 import type { Model } from "./model"
@@ -17,6 +18,12 @@ import { ApplicationRoute } from "./route"
 
 export const AuthenticationBinding = ApplicationBlock.makeBinding(AuthenticationBlock, {
   field: "authentication",
+})
+
+/** The app bar's menu: a globe for visitors, their avatar for people signed in. */
+export const SettingsMenuBinding = ApplicationBlock.makeBinding(PopoverDrawerBlock, {
+  field: "settingsMenu",
+  init: { contextToArgs: () => [{ id: "app-settings-menu" }] },
 })
 
 export const SearchBinding = ApplicationBlock.makeBinding(SearchBlock, {
@@ -39,7 +46,7 @@ export const WikiArticleBinding = ApplicationBlock.makeBinding(WikiArticleBlock,
   field: "maybeWikiArticle",
   key: "articleKey",
   childField: "model",
-  delivery: { when: isWikiArticleRouteFor },
+  delivery: { when: isWikiArticleRouteFor, toUpdateContext: (model) => [model.language] },
   subscriptions: { when: isWikiArticleRouteFor },
 })
 
@@ -65,7 +72,7 @@ export const ProfileBinding = ApplicationBlock.makeBinding(ProfileBlock, {
   field: "maybeProfile",
   key: "profileKey",
   childField: "model",
-  delivery: { when: isProfileRouteFor },
+  delivery: { when: isProfileRouteFor, toUpdateContext: (model) => [model.language] },
   subscriptions: { when: isProfileRouteFor },
 })
 
@@ -104,6 +111,7 @@ export const ProfileLocationsEditorBinding = ApplicationBlock.makeBinding(
 export const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [
     AuthenticationBinding,
+    SettingsMenuBinding,
     SearchBinding,
     WikiArticleBinding,
     WikiArticleDebugBinding,

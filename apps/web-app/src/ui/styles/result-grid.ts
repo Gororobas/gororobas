@@ -31,6 +31,23 @@ export const previewCapacity = (shownAt: (columns: ColumnCount) => number): numb
   Math.max(...columnSteps.map(({ columns }) => shownAt(columns)))
 
 /**
+ * Hides a preview's link to the rest at the column counts whose preview already shows all `count`
+ * results. Container queries read the nearest container, so give the link's section
+ * `resultGridContainerStyle` too.
+ */
+export const morePreviewedStyle = ({
+  shownAt,
+  count,
+}: Readonly<{ shownAt: (columns: ColumnCount) => number; count: number }>) =>
+  columnSteps.reduce(
+    (style, { columns, query }) =>
+      count <= shownAt(columns)
+        ? style.pipe(Style.when(When.container(query), { display: "none" }))
+        : style,
+    Style.make({}),
+  )
+
+/**
  * Hides items past the ones a preview shows at the current column count, so a preview always
  * ends on a full row when there are more results than it shows.
  */

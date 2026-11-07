@@ -10,6 +10,7 @@ import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
 import { DeviceLocation } from "../lib/device-location"
+import { PopoverDrawerBlock } from "../ui/popover-drawer"
 import { ApplicationRoute } from "./route"
 
 export const WikiArticleDebugInstance = Schema.Struct({
@@ -48,6 +49,8 @@ export const Model = Schema.Struct({
   maybeUnavailableLanguage: Schema.Option(SupportedLanguage),
   languageRequestCount: Schema.Int,
   authentication: AuthenticationBlock.Model,
+  /** Where people choose the language they read in, and reach their account once signed in. */
+  settingsMenu: PopoverDrawerBlock.Model,
   search: SearchBlock.Model,
   /** Today's date, read once at startup, for relative dates such as "3 days ago". */
   maybeToday: Schema.Option(Schema.DateTimeUtc),

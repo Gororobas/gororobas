@@ -9,6 +9,7 @@ import {
   OrganizationRow,
   PersonId,
   PlatformAccessLevel,
+  InformationVisibility,
   ProfileVisibility,
   stringToHandle,
   type Handle,
@@ -115,6 +116,13 @@ const insertPerson = (input: {
       visibility: input.isPersona
         ? "PUBLIC"
         : yield* pickWeighted(ProfileVisibility.literals, { PUBLIC: 4, COMMUNITY: 1 }),
+      bookmarksVisibility: input.isPersona
+        ? "PUBLIC"
+        : yield* pickWeighted(InformationVisibility.literals, {
+            PUBLIC: 4,
+            COMMUNITY: 2,
+            PRIVATE: 1,
+          }),
       createdAt: now,
       updatedAt: now,
     })
@@ -287,6 +295,7 @@ const seedOrganization = (
           bio: (yield* chance(0.8)) ? yield* shortText("pt") : null,
           photoId: null,
           visibility: yield* pickWeighted(ProfileVisibility.literals, { PUBLIC: 5, COMMUNITY: 1 }),
+          bookmarksVisibility: "PUBLIC",
           createdAt: now,
           updatedAt: now,
         })

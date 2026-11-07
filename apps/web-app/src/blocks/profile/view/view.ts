@@ -72,7 +72,7 @@ const tabEntries: ReadonlyArray<
   readonly [ProfileTab, MessageDescriptor, (config?: IconConfig) => Html]
 > = [
   ["Home", msg({ message: "Home", context: "profile tab" }), Icons.home],
-  ["Publications", msg`Posts`, Icons.clipboard],
+  ["Publications", msg`Publications`, Icons.clipboard],
   ["Photos", msg`Photos`, Icons.gallery],
   ["Contributions", msg`Contributions`, Icons.encyclopedia],
   ["Bookmarks", msg({ message: "Saved", context: "profile collection" }), Icons.bookmark],
@@ -154,13 +154,15 @@ const header = (
         {
           ariaLabel: i18n._(msg`Sections of ${name}'s profile`),
           styles: [pageColumnBleedStyle],
-          items: tabEntries.map(([entry, label, icon]) => ({
-            key: entry,
-            label: i18n._(label),
-            href: profileUrl(language, { handle: page.handle, tab: entry }),
-            isCurrent: entry === tab,
-            maybeIcon: icon,
-          })),
+          items: tabEntries
+            .filter(([entry]) => entry !== "Bookmarks" || page.areBookmarksVisible)
+            .map(([entry, label, icon]) => ({
+              key: entry,
+              label: i18n._(label),
+              href: profileUrl(language, { handle: page.handle, tab: entry }),
+              isCurrent: entry === tab,
+              maybeIcon: icon,
+            })),
         },
         h,
       ),
@@ -179,12 +181,10 @@ export const view = ProfileComposition.makeView.withInputs<ViewInputs>(
   (model, { language, tab, maybeToday }, h): Html =>
     AsyncData.matchData(model.pageAsyncData, {
       onEmpty: () =>
-        h.div(styledAttributes([], pageColumnStyle, statusStyle), [
-          LoadingState.view(
-            { label: translatorFor(language)._(msg`Loading profile`), shape: "page", count: 2 },
-            h,
-          ),
-        ]),
+        LoadingState.page(
+          { label: translatorFor(language)._(msg`Loading profile`), media: "round" },
+          h,
+        ),
       onFailure: (error) =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
           error.cause === "NotFound"

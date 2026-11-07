@@ -2,6 +2,9 @@ import {
   Handle,
   Policies,
   type ProfileBookmark,
+  type ProfileBookmarksQuery,
+  type ProfileCollectionQuery,
+  type ProfilePhotosQuery,
   type ProfilePageData,
   type ProfileWikiContribution,
   SessionContext,
@@ -21,6 +24,7 @@ import { WikiArticlesRepository } from "../wiki/repository.js"
 import {
   findPageLocation,
   listBookmarkedArticles,
+  listBookmarkedKinds,
   listContributedArticles,
   listVisiblePhotos,
 } from "./queries.js"
@@ -59,7 +63,20 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
       Effect.gen(function* () {
         const profile = yield* findReadable(handle)
         const { location } = yield* findPageLocation({ profileId: profile.id, language })
-        return { ...profile, location } satisfies ProfilePageData
+        const areBookmarksVisible = yield* Policies.profiles.canReadBookmarks(profile).pipe(
+          Effect.as(true),
+          Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
+        )
+        const bookmarkedKinds = areBookmarksVisible
+          ? (yield* listBookmarkedKinds(profile.id)).map(({ kind }) => kind)
+          : []
+
+        return {
+          ...profile,
+          location,
+          areBookmarksVisible,
+          bookmarkedKinds,
+        } satisfies ProfilePageData
       })
 
     /** Articles' cards in `language`, keyed by their ID; unpublished articles have none. */
@@ -73,10 +90,11 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
             .listCardsByIds({ wikiArticleIds, language })
             .pipe(Effect.map((cards) => HashMap.fromIterable(cards.map((card) => [card.id, card]))))
 
-    const listBookmarks = (handle: Handle, language: SupportedLanguage) =>
+    const listBookmarks = (handle: Handle, { language, ...filters }: ProfileBookmarksQuery) =>
       Effect.gen(function* () {
         const profile = yield* findReadable(handle)
-        const bookmarks = yield* listBookmarkedArticles(profile.id)
+        yield* Policies.profiles.canReadBookmarks(profile)
+        const bookmarks = yield* listBookmarkedArticles({ profileId: profile.id, ...filters })
         const cards = yield* cardsById(
           bookmarks.map((bookmark) => bookmark.wikiArticleId),
           language,
@@ -92,10 +110,16 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
         )
       })
 
-    const listWikiContributions = (handle: Handle, language: SupportedLanguage) =>
+    const listWikiContributions = (
+      handle: Handle,
+      { language, currentPage }: ProfileCollectionQuery,
+    ) =>
       Effect.gen(function* () {
         const profile = yield* findReadable(handle)
-        const contributions = yield* listContributedArticles(profile.id)
+        const contributions = yield* listContributedArticles({
+          profileId: profile.id,
+          currentPage,
+        })
         const cards = yield* cardsById(
           contributions.map((contribution) => contribution.wikiArticleId),
           language,
@@ -111,10 +135,13 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
         )
       })
 
-    const listPhotos = (handle: Handle) =>
+    const listPhotos = (handle: Handle, { currentPage }: ProfilePhotosQuery) =>
       Effect.gen(function* () {
         const profile = yield* findReadable(handle)
-        const photos = yield* listVisiblePhotos(yield* SessionContext)(profile.id)
+        const photos = yield* listVisiblePhotos(yield* SessionContext)({
+          profileId: profile.id,
+          currentPage,
+        })
         return yield* withMediaCredits(photos)
       })
 

@@ -10,7 +10,8 @@ import { type Translator, translatorFor } from "../lib/translations"
 import * as AppShell from "../ui/app-shell"
 import { AppText } from "../ui/app-text"
 import * as Icons from "../ui/icons"
-import { styledAttributes } from "../ui/pleat-attributes"
+import { styledAttributes, styledClassName } from "../ui/pleat-attributes"
+import { profileAvatar } from "../ui/profile-avatar/view"
 import { measure, space, toneColors, toneStyle } from "../ui/theme"
 import {
   ApplicationComposition,
@@ -20,6 +21,7 @@ import {
   ProfileBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
+  SettingsMenuBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
   profileKey,
@@ -76,7 +78,7 @@ const navigationItems = (
       isSearchType(model.route, "wiki") || ApplicationRoute.guards.WikiArticle(model.route),
   },
   {
-    label: i18n._(msg`Posts`),
+    label: i18n._(msg`Publications`),
     href: searchUrl(model.language, { scope: publicationsScope() }),
     icon: Icons.clipboard,
     isCurrent: isSearchType(model.route, "publications"),
@@ -92,14 +94,67 @@ const navigationItems = (
 /** The current page in every language, so switching keeps people where they are. */
 const languageLinks = (model: typeof Model.Type): ReadonlyArray<AppShell.LanguageLink> =>
   SupportedLanguage.literals.map((language) => ({
-    label: language.toUpperCase(),
     name: languageNames[language],
     href: applicationRouteUrl(language, model.route),
     hreflang: intlTags[language],
     isCurrent: language === model.language,
   }))
 
-/** Search takes over the app bar: no navigation, languages or account compete with the field. */
+/**
+ * One menu for settings: visitors open it from a globe, beside signing in; people signed in from
+ * their avatar, with their account first.
+ */
+const settingsMenu = (
+  { model, i18n }: Readonly<{ model: typeof Model.Type; i18n: Translator }>,
+  h: ApplicationViewBuilder,
+): ReadonlyArray<Html> => {
+  const maybeName = viewerName(model.authentication)
+  const languagesLabel = i18n._(msg`Language`)
+  const currentLanguage = languageNames[model.language]
+
+  return [
+    h.block(
+      SettingsMenuBinding.embedView({
+        slotId: model.settingsMenu.id,
+        model: model.settingsMenu,
+        viewInputs: {
+          title: Option.getOrElse(maybeName, () => languagesLabel),
+          trigger: Option.match(maybeName, {
+            onNone: () => ({
+              children: [Icons.globe({ size: "md" })],
+              className: styledClassName(AppShell.globeTriggerStyle),
+              ariaLabel: i18n._(msg`Language: ${currentLanguage}`),
+            }),
+            onSome: (name) => ({
+              children: [profileAvatar({ name, maybePhotoUrl: Option.none(), size: "compact" }, h)],
+              className: styledClassName(AppShell.avatarTriggerStyle),
+              ariaLabel: i18n._(msg`${name}'s menu`),
+            }),
+          }),
+          toContent: () =>
+            AppShell.menuContent(
+              {
+                maybeAccount: Option.map(maybeName, () => ({
+                  label: i18n._(msg`Your account`),
+                  href: loginUrl(model.language),
+                })),
+                languagesLabel,
+                languages: languageLinks(model),
+              },
+              h,
+            ),
+          anchor: { placement: "bottom-end", gap: 6, padding: 8 },
+          panelClassName: styledClassName(AppShell.menuPanelStyle),
+        },
+      }),
+    ),
+    ...(Option.isNone(maybeName)
+      ? [AppShell.signInButton({ label: i18n._(msg`Sign in`), href: loginUrl(model.language) }, h)]
+      : []),
+  ]
+}
+
+/** Search takes over the app bar: no navigation, settings or account compete with the field. */
 const header = (
   { model, i18n, search }: Readonly<{ model: typeof Model.Type; i18n: Translator; search: Html }>,
   h: ApplicationViewBuilder,
@@ -111,20 +166,9 @@ const header = (
       homeHref: searchUrl(model.language),
       homeLabel: i18n._(msg`Gororobas: home`),
       navigationLabel: i18n._(msg`Main navigation`),
-      languagesLabel: i18n._(msg`Languages`),
-      languages: isSearching ? [] : languageLinks(model),
       search,
       navigation: isSearching ? [] : navigationItems(model, i18n),
-      maybeAccount: isSearching
-        ? Option.none()
-        : Option.some({
-            href: loginUrl(model.language),
-            signInLabel: i18n._(msg`Sign in`),
-            maybeViewer: Option.map(viewerName(model.authentication), (name) => ({
-              name,
-              accountLabel: i18n._(msg`${name}'s account`),
-            })),
-          }),
+      trailing: isSearching ? [] : settingsMenu({ model, i18n }, h),
     },
     h,
   )

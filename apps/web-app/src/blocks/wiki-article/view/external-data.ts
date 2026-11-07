@@ -2,17 +2,16 @@ import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { BookEdition, ExternalLink } from "@gororobas/domain/wiki/domain"
 import { msg, plural } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
-import { Array as EffectArray, Option, Order, String as EffectString } from "effect"
+import { Array as EffectArray, Option, Order } from "effect"
 import type { Html } from "foldkit/html"
 
-import { intlTags } from "../../../lib/language"
+import { languageName } from "../../../lib/language"
 import { type Translator, translatorFor } from "../../../lib/translations"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { SectionCard } from "../../../ui/section-card"
-import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
-import { borderWidth, fontWeight, radius, space, toneColors, tones } from "../../../ui/theme"
+import { borderWidth, space, toneColors } from "../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../composition"
 import type { Model } from "../model"
 import {
@@ -23,31 +22,19 @@ import {
   externalLinkStyle,
   termStyle,
 } from "./attribution"
-import { fact } from "./overview/facts"
+import { fact, linkStyle } from "./overview/facts"
 import type { Page } from "./shared"
 
-type SectionState = Readonly<{ model: Model; page: Page }>
+type SectionState = Readonly<{ model: Model; language: SupportedLanguage; page: Page }>
 
 type LanguageState = Readonly<{ language: SupportedLanguage; i18n: Translator }>
 
-const linkListStyle = Style.make({ display: "flex", flexWrap: "wrap", gap: space[2] })
-
-const languageLinkStyle = Style.make({
-  display: "inline-flex",
-  alignItems: "center",
-  gap: space[2],
-  paddingBlock: space[2],
-  paddingInline: space[3],
-  borderRadius: radius.full,
-  cornerShape: "squircle",
-  backgroundColor: tones.primary.ramp[400],
-  color: tones.neutral.ramp[900],
-  fontWeight: fontWeight.medium,
-  outline: "none",
-}).pipe(
-  Style.when(When.hover, { filter: "brightness(0.96)" }),
-  Style.when(When.focusVisible, focusRingDeclarations),
-)
+const linkListStyle = Style.make({
+  display: "flex",
+  flexWrap: "wrap",
+  columnGap: space[4],
+  rowGap: space[2],
+})
 
 const editionListStyle = Style.make({ display: "grid", rowGap: space[4] })
 
@@ -57,17 +44,6 @@ const editionStyle = Style.make({
   paddingBlockEnd: space[4],
   borderBlockEnd: `${borderWidth.hairline} solid ${toneColors.border}`,
 }).pipe(Style.when(When.lastChild, { paddingBlockEnd: 0, borderBlockEnd: "none" }))
-
-/** A language's name in the reader's language, such as "Inglês" for `en` in Portuguese. */
-const languageName = (code: string, readerLanguage: SupportedLanguage): string =>
-  EffectString.capitalize(
-    Option.getOrElse(
-      Option.fromNullishOr(
-        new Intl.DisplayNames([intlTags[readerLanguage]], { type: "language" }).of(code),
-      ),
-      () => code,
-    ),
-  )
 
 const byLanguageName = (readerLanguage: SupportedLanguage) =>
   Order.mapInput(Order.String, (link: ExternalLink) => languageName(link.language, readerLanguage))
@@ -80,9 +56,9 @@ const wikipediaLink = (
     link.language,
     styledAttributes(
       [...externalLinkAttributes(link.url, h), h.Attribute("hreflang", link.language)],
-      languageLinkStyle,
+      linkStyle,
     ),
-    [label, Icons.arrowRight({ size: "sm" })],
+    [Icons.link({ size: "sm" }), label],
   )
 
 /**
@@ -166,10 +142,9 @@ const editionDetails = ({
 
 /** A book's editions, in the article's main column. */
 export const editions = (
-  { model, page }: SectionState,
+  { model, language, page }: SectionState,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> => {
-  const { language } = model
   const i18n = translatorFor(language)
 
   return EffectArray.match(page.externalData.bookEditions, {
@@ -179,7 +154,7 @@ export const editions = (
         {
           title: i18n._(msg`${plural(all.length, { one: "Edition", other: "Editions" })}`),
           icon: Icons.book,
-          actions: attribution({ model, page, section: "Editions" }, h),
+          actions: attribution({ model, language, page, section: "Editions" }, h),
           children: [
             h.div(
               styledAttributes([], editionListStyle),

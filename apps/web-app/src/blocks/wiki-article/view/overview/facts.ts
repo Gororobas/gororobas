@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { msg } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option, String as EffectString } from "effect"
@@ -11,6 +12,7 @@ import { styledAttributes } from "../../../../ui/pleat-attributes"
 import { SectionCard } from "../../../../ui/section-card"
 import { focusRingDeclarations } from "../../../../ui/styles/focus-ring"
 import { borderWidth, breakpoint, duration, radius, space, tones } from "../../../../ui/theme"
+import { UntranslatedNotice } from "../../../../ui/untranslated-notice"
 import type { WikiArticleViewBuilder } from "../../composition"
 
 const factsStyle = Style.make({ display: "grid" })
@@ -39,7 +41,8 @@ const chipsStyle = Style.make({ display: "flex", flexWrap: "wrap", gap: space[2]
 const namesStyle = Style.make({ display: "flex", flexWrap: "wrap", columnGap: space[3] })
 
 /** Underlined links, inside Gororobas or out. */
-const linkStyle = Style.make({
+/** Links out of Gororobas, such as where to find a book or its Wikipedia article. */
+export const linkStyle = Style.make({
   display: "inline-flex",
   alignItems: "center",
   gap: space[1],
@@ -233,7 +236,7 @@ export const textFact = (
 
 /** Names listed side by side, such as other common names. */
 export const namesFact = (
-  { title, names }: Readonly<{ title: string; names: ReadonlyArray<string> }>,
+  { title, names, maybeNote }: Readonly<{ title: string; names: ReadonlyArray<string> }> & FactNote,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> =>
   EffectArray.match(names, {
@@ -250,6 +253,7 @@ export const namesFact = (
             },
             h,
           ),
+          ...(maybeNote === undefined ? {} : { maybeNote }),
         },
         h,
       ),
@@ -332,3 +336,21 @@ export const overviewCard = (
         h,
       ),
   })
+
+/**
+ * For facts the article's translation holds, such as other names or a plant's origin: what to note
+ * when the reader's language has none and they read in another.
+ */
+export const untranslatedNote = ({
+  contentLanguage,
+  readerLanguage,
+  i18n,
+}: Readonly<{
+  contentLanguage: SupportedLanguage
+  readerLanguage: SupportedLanguage
+  i18n: Translator
+}>): Option.Option<string> =>
+  Option.map(
+    UntranslatedNotice.maybeFallbackLanguage({ contentLanguage, readerLanguage }),
+    (fallback) => UntranslatedNotice.label({ contentLanguage: fallback, readerLanguage, i18n }),
+  )

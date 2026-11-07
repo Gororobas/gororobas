@@ -71,6 +71,8 @@ const insertPublicationImage = (input: {
   ownerProfileId: ProfileId
   publicationId: PublicationId
   moderationStatus: ModerationStatus
+  /** Only people take photos: organizations' media credits someone else, or no one. */
+  isTakenByOwner: boolean
 }) =>
   Effect.gen(function* () {
     const id = yield* IdGen.make(MediaAssetId)
@@ -97,6 +99,18 @@ const insertPublicationImage = (input: {
           mediaAssetId: id,
         })}`,
     )
+
+    // Credited to who took it, which is what puts it among their profile's photos.
+    if (input.isTakenByOwner) {
+      yield* SqlClient.SqlClient.use(
+        (sql) =>
+          sql`INSERT INTO media_asset_credits ${sql.insert({
+            mediaAssetId: id,
+            orderIndex: 0,
+            personId: input.ownerProfileId,
+          })}`,
+      )
+    }
 
     return id
   })
@@ -194,15 +208,22 @@ describe("content visibility", () => {
                 ownerProfileId,
                 publicationId: id,
                 moderationStatus: imageModerationStatus,
+                isTakenByOwner: ownerType === "PERSON",
               })
 
               const isOwnerAccount =
                 session.type === "ACCOUNT" && session.personId === ownerProfileId
-              const photos = yield* listVisiblePhotos(session)(ownerProfileId)
+              const photos = yield* listVisiblePhotos(session)({
+                profileId: ownerProfileId,
+                currentPage: 0,
+              })
 
               expect(photos.some((photo) => photo.id === imageId)).toBe(
-                canView && (imageModerationStatus !== "CENSORED" || isOwnerAccount),
+                ownerType === "PERSON" &&
+                  canView &&
+                  (imageModerationStatus !== "CENSORED" || isOwnerAccount),
               )
+
               return true
             }),
         }),

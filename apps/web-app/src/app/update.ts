@@ -6,7 +6,12 @@ import { toString as urlToString } from "foldkit/url"
 
 import { changeRouteStep, settleLanguageRequestStep } from "./change-route"
 import { FocusSearchField, LoadExternal, NavigateInternal } from "./command"
-import { ApplicationComposition, ProfileLocationsEditorBinding, SearchBinding } from "./composition"
+import {
+  ApplicationComposition,
+  ProfileLocationsEditorBinding,
+  SearchBinding,
+  SettingsMenuBinding,
+} from "./composition"
 import { makeCommandsStep, makeFieldsStep, makeNoopStep } from "./definition"
 import { ApplicationRoute, searchUrl, urlToLocatedRoute } from "./route"
 
@@ -39,7 +44,9 @@ export const update = ApplicationComposition.makeUpdate({
           model: modifyFields(model, { isSearchFieldFocusPending: () => true }),
           commands: [NavigateInternal({ url: searchUrl(model.language) })],
         },
-  ChangedUrl: (model, { url }) => changeRouteStep(url)(model),
+  // Choosing a language, or the account, navigates: the menu closes behind it.
+  ChangedUrl: (model, { url }) =>
+    Update.combineSteps([SettingsMenuBinding.requestClose(), changeRouteStep(url)])(model),
   CompletedFocusSearchField: makeNoopStep(),
   CompletedNavigateInternal: makeNoopStep(),
   CompletedLoadExternal: makeNoopStep(),

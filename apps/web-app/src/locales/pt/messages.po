@@ -142,10 +142,6 @@ msgstr "{gender, select, female {Variedade da} male {Variedade do} other {Varied
 msgid "{gender, select, other {Who follows {name}}}"
 msgstr "{gender, select, female {Quem acompanha a {name}} male {Quem acompanha o {name}} other {Quem acompanha {name}}}"
 
-#: src/blocks/wiki-article/view/bookmark-picker.ts
-msgid "{interested}? Sign in to save"
-msgstr "{interested}? Entre para salvar"
-
 #: src/blocks/wiki-article/view/overview/plant.ts
 msgid "{minimum, plural, one {# day} other {# days}}"
 msgstr "{minimum, plural, one {# dia} other {# dias}}"
@@ -155,16 +151,20 @@ msgid "{minimum} to {maximum} days"
 msgstr "De {minimum} a {maximum} dias"
 
 #: src/blocks/profile/view/collections.ts
-msgid "{name} hasn't posted here yet"
-msgstr "{name} ainda não publicou por aqui"
+msgid "{name} hasn't published here yet"
+msgstr "{name} ainda não publicou aqui"
 
 #: src/blocks/profile/view/home.ts
 msgid "{name} hasn't shared anything here yet"
 msgstr "{name} ainda não compartilhou nada por aqui"
 
+#: src/blocks/profile/view/collections.ts
+msgid "{name} keeps what they save to themselves"
+msgstr "{name} guarda para si o que salva"
+
 #: src/app/view.ts
-msgid "{name}'s account"
-msgstr "Conta de {name}"
+msgid "{name}'s menu"
+msgstr "Menu de {name}"
 
 #: src/blocks/profile/view/collections.ts
 msgid "{revisionCount, plural, one {# approved edit} other {# approved edits}}"
@@ -233,13 +233,13 @@ msgstr "Todos os filtros"
 msgid "All outcomes"
 msgstr "Todos os resultados"
 
-#: src/blocks/profile/view/home.ts
-msgid "All posts"
-msgstr "Todas as publicações"
-
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "All providers"
 msgstr "Todos os provedores"
+
+#: src/blocks/profile/view/home.ts
+msgid "All publications"
+msgstr "Todas as publicações"
 
 #: src/blocks/search/view.ts
 msgid "All types"
@@ -460,6 +460,10 @@ msgstr "Cooperativa"
 #: src/lib/vocabulary.ts
 msgid "Cosmetic"
 msgstr "Cosmético"
+
+#: src/blocks/profile/view/shared.ts
+msgid "Couldn't load more. Try again"
+msgstr "Não deu para carregar mais. Tente de novo"
 
 #: src/blocks/profile/view/shared.ts
 #: src/blocks/wiki-article/view/shared.ts
@@ -728,6 +732,7 @@ msgstr "Filtrar por categoria"
 msgid "Filter by format"
 msgstr "Filtrar por formato"
 
+#: src/blocks/profile/view/collections.ts
 #: src/blocks/wiki-article/view/about.ts
 msgid "Filter by kind"
 msgstr "Filtrar por tipo"
@@ -994,13 +999,18 @@ msgstr "em {month}"
 msgid "In {month}"
 msgstr "Em {month}"
 
+#: src/ui/untranslated-notice/view.ts
+msgctxt "untranslated content"
+msgid "In {shown}"
+msgstr "Em {shown}"
+
 #: src/blocks/search/view.ts
 msgid "in everything"
 msgstr "em tudo"
 
 #: src/blocks/search/view.ts
-msgid "in posts"
-msgstr "nos posts"
+msgid "in publications"
+msgstr "em publicações"
 
 #: src/blocks/search/view.ts
 msgid "in the encyclopedia"
@@ -1051,6 +1061,10 @@ msgstr "Ele pode ter mudado de endereço, ou não estar visível para você."
 msgid "Keep"
 msgstr "Manter"
 
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Keep track of what you want to get to know, and what you already live with"
+msgstr "Acompanhe o que você quer conhecer e com o que já convive"
+
 #: src/blocks/search/filters.ts
 msgid "Kind"
 msgstr "Tipo"
@@ -1072,12 +1086,16 @@ msgstr "Reino"
 msgid "Landform"
 msgstr "Relevo"
 
+#: src/app/view.ts
 #: src/blocks/wiki-article/view/external-data.ts
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Language"
 msgstr "Idioma"
 
 #: src/app/view.ts
+msgid "Language: {currentLanguage}"
+msgstr "Idioma: {currentLanguage}"
+
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Languages"
 msgstr "Idiomas"
@@ -1141,15 +1159,15 @@ msgstr "Carregando fotos"
 msgid "Loading places"
 msgstr "Carregando lugares"
 
-#: src/blocks/profile/view/collections.ts
-#: src/blocks/profile/view/home.ts
-#: src/blocks/wiki-article/view/tabs.ts
-msgid "Loading posts"
-msgstr "Carregando posts"
-
 #: src/blocks/profile/view/view.ts
 msgid "Loading profile"
 msgstr "Carregando perfil"
+
+#: src/blocks/profile/view/collections.ts
+#: src/blocks/profile/view/home.ts
+#: src/blocks/wiki-article/view/tabs.ts
+msgid "Loading publications"
+msgstr "Carregando publicações"
 
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Loading response…"
@@ -1222,6 +1240,10 @@ msgctxt "agroforestry stratum"
 msgid "Medium"
 msgstr "Médio"
 
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Meet people near you who share the same interests"
+msgstr "Encontre pessoas perto de você com os mesmos interesses"
+
 #. placeholder {0}: config.label
 #: src/blocks/profile-locations-editor/view.ts
 msgid "Month ({0})"
@@ -1283,6 +1305,14 @@ msgstr "Nenhum artigo desse tipo"
 msgid "No encyclopedia contributions yet"
 msgstr "Nenhuma contribuição na enciclopédia ainda"
 
+#: src/blocks/search/view.ts
+msgid "No events found"
+msgstr "Nenhum evento encontrado"
+
+#: src/blocks/profile/view/collections.ts
+msgid "No events here yet"
+msgstr "Nenhum evento aqui ainda"
+
 #: src/lib/vocabulary.ts
 msgid "No interest"
 msgstr "Sem interesse"
@@ -1304,9 +1334,17 @@ msgstr "Nenhum lugar por aqui ainda"
 msgid "No posts found"
 msgstr "Nenhum post encontrado"
 
+#: src/blocks/profile/view/collections.ts
+msgid "No posts here yet"
+msgstr "Nenhuma postagem aqui ainda"
+
 #: src/blocks/wiki-article/view/about.ts
 msgid "No public contributions yet"
 msgstr "Nenhuma contribuição pública ainda"
+
+#: src/blocks/search/view.ts
+msgid "No publications found"
+msgstr "Nenhuma publicação encontrada"
 
 #: src/blocks/search/view.ts
 msgid "Nobody found"
@@ -1319,6 +1357,10 @@ msgstr "Ninguém por aqui ainda"
 #: src/lib/vocabulary.ts
 msgid "Nonprofit"
 msgstr "ONG"
+
+#: src/ui/untranslated-notice/view.ts
+msgid "Not in {missing} yet: shown in {shown}"
+msgstr "Ainda não está em {missing}: mostrado em {shown}"
 
 #: src/lib/vocabulary.ts
 msgid "Not interested"
@@ -1471,7 +1513,6 @@ msgstr "Controle de pragas"
 msgid "Photo by {names}"
 msgstr "Foto de {names}"
 
-#: src/blocks/wiki-article/view/attribution.ts
 #: src/ui/media-credit/view.ts
 msgid "Photo credits"
 msgstr "Créditos da foto"
@@ -1484,12 +1525,12 @@ msgid "Photos"
 msgstr "Fotos"
 
 #: src/blocks/profile/view/collections.ts
-msgid "Photos by {name}"
-msgstr "Fotos de {name}"
+msgid "Photos {name} took show up here once they're shared."
+msgstr "As fotos que {name} tirou aparecem aqui assim que forem compartilhadas."
 
 #: src/blocks/profile/view/collections.ts
-msgid "Photos shared in the encyclopedia or in posts show up here."
-msgstr "Fotos enviadas para a enciclopédia ou em publicações aparecem aqui."
+msgid "Photos by {name}"
+msgstr "Fotos de {name}"
 
 #: src/blocks/wiki-article/view/classification.ts
 msgctxt "taxonomic rank"
@@ -1573,15 +1614,6 @@ msgstr "Podcast"
 msgid "Pollinator"
 msgstr "Polinizador"
 
-#: src/app/view.ts
-#: src/blocks/profile/view/home.ts
-#: src/blocks/profile/view/view.ts
-#: src/blocks/search/view.ts
-#: src/blocks/wiki-article/view/about.ts
-#: src/blocks/wiki-article/view/shared.ts
-msgid "Posts"
-msgstr "Posts"
-
 #: src/lib/vocabulary.ts
 msgctxt "publication kind"
 msgid "Posts"
@@ -1590,14 +1622,6 @@ msgstr "Postagens"
 #: src/blocks/profile/view/collections.ts
 msgid "Posts and events show up here as soon as they're shared."
 msgstr "Posts e eventos aparecem aqui assim que forem compartilhados."
-
-#: src/blocks/profile/view/collections.ts
-msgid "Posts by {name}"
-msgstr "Publicações de {name}"
-
-#: src/blocks/profile/view/home.ts
-msgid "Posts, photos and saved articles show up here as soon as they're shared."
-msgstr "Publicações, fotos e artigos salvos aparecem aqui assim que forem compartilhados."
 
 #: src/lib/vocabulary.ts
 msgid "Practicing it"
@@ -1642,6 +1666,23 @@ msgstr "Órgão público"
 #: src/ui/media-credit/licenses.ts
 msgid "Public domain"
 msgstr "Domínio público"
+
+#: src/app/view.ts
+#: src/blocks/profile/view/home.ts
+#: src/blocks/profile/view/view.ts
+#: src/blocks/search/view.ts
+#: src/blocks/wiki-article/view/about.ts
+#: src/blocks/wiki-article/view/shared.ts
+msgid "Publications"
+msgstr "Publicações"
+
+#: src/blocks/profile/view/collections.ts
+msgid "Publications by {name}"
+msgstr "Publicações de {name}"
+
+#: src/blocks/profile/view/home.ts
+msgid "Publications, photos and saved articles show up here as soon as they're shared."
+msgstr "Publicações, fotos e artigos salvos aparecem aqui assim que forem compartilhados."
 
 #: src/blocks/wiki-article/view/external-data.ts
 #: src/blocks/wiki-article/view/overview/index.ts
@@ -1812,8 +1853,8 @@ msgid "Search people"
 msgstr "Buscar pessoas"
 
 #: src/blocks/search/view.ts
-msgid "Search plants, posts and people"
-msgstr "Buscar plantas, posts e pessoas"
+msgid "Search plants, publications and people"
+msgstr "Busque plantas, publicações e pessoas"
 
 #: src/blocks/wiki-article/view/view.ts
 msgid "Search the encyclopedia"
@@ -1897,6 +1938,10 @@ msgstr "Semestral"
 msgid "Sending…"
 msgstr "Enviando…"
 
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Share your journey on your profile, if you choose to"
+msgstr "Compartilhe sua caminhada no seu perfil, se quiser"
+
 #: src/blocks/wiki-article/view/child-places.ts
 msgid "Show more places"
 msgstr "Mostrar mais lugares"
@@ -1913,6 +1958,10 @@ msgstr "Entrar"
 #: src/app/view.ts
 msgid "Sign in | Gororobas"
 msgstr "Entrar | Gororobas"
+
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Sign in or create an account"
+msgstr "Entre ou crie uma conta"
 
 #: src/blocks/authentication/view.ts
 msgid "Sign in or create your account"
@@ -2318,9 +2367,17 @@ msgstr "Você está offline ou o servidor está indisponível. Sua conta segue d
 msgid "Young, already rooted plants that we transplant to where they will grow"
 msgstr "Plantas jovens, já enraizadas, que transplantamos para o lugar onde vão crescer"
 
+#: src/app/view.ts
+msgid "Your account"
+msgstr "Sua conta"
+
 #: src/blocks/profile-locations-editor/view.ts
 msgid "Your itinerary is still empty."
 msgstr "Seu itinerário ainda está vazio."
+
+#: src/blocks/wiki-article/view/bookmark-picker.ts
+msgid "Your list lives in your Gororobas account, so it follows you anywhere."
+msgstr "Sua lista fica na sua conta do Gororobas, e te acompanha em qualquer lugar."
 
 #: src/blocks/profile-locations-editor/view.ts
 msgid "Your places, from oldest to most recent"

@@ -3,11 +3,11 @@ import { Array as EffectArray, Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
 import { AppButton } from "../app-button"
+import { AppText } from "../app-text"
 import type { IconConfig } from "../icons"
 import * as Icons from "../icons"
 import * as Logo from "../logo"
 import { styledAttributes } from "../pleat-attributes"
-import { profileAvatar } from "../profile-avatar/view"
 import { focusRingDeclarations } from "../styles/focus-ring"
 import { pageColumnStyle } from "../styles/page-column"
 import { blur } from "../theme"
@@ -17,6 +17,7 @@ import {
   controlSize,
   duration,
   fontSize,
+  fontWeight,
   measure,
   radius,
   space,
@@ -54,12 +55,6 @@ const spacerStyle = Style.make({ inlineSize: space[2], flexShrink: 0 }).pipe(
 const desktopNavigationStyle = Style.make({ display: "none" }).pipe(
   Style.when(breakpoint.lg, { display: "flex", alignItems: "center", gap: space[1] }),
 )
-
-const accountLinkStyle = Style.make({
-  flexShrink: 0,
-  borderRadius: radius.full,
-  outline: "none",
-}).pipe(Style.when(When.focusVisible, focusRingDeclarations))
 
 /** The search field's surface, shared by the search link and the live field. */
 export const searchSurfaceStyle = Style.make({
@@ -156,9 +151,6 @@ export type NavigationItem = Readonly<{
   isCurrent: boolean
 }>
 
-/** `accountLabel` names the link to the viewer's account, such as "Conta de Ana". */
-export type Viewer = Readonly<{ name: string; accountLabel: string }>
-
 const navigationLinks = <Message>(
   items: ReadonlyArray<NavigationItem>,
   h: HtmlBuilder<Message>,
@@ -202,15 +194,8 @@ export const searchLink = <Message>(
     ],
   )
 
-export type Account = Readonly<{
-  href: string
-  signInLabel: string
-  maybeViewer: Option.Option<Viewer>
-}>
-
-/** One language in the switcher: a short `label` (PT) and its `name` in that language (Português). */
+/** One language in the menu: its `name` in that language (Português), linking to this page in it. */
 export type LanguageLink = Readonly<{
-  label: string
   name: string
   href: string
   hreflang: string
@@ -221,63 +206,155 @@ export type HeaderConfig = Readonly<{
   homeHref: string
   homeLabel: string
   navigationLabel: string
-  languagesLabel: string
-  languages: ReadonlyArray<LanguageLink>
   /** The search control: a link to search, or the live field on the search page. */
   search: Html
   navigation: ReadonlyArray<NavigationItem>
-  /** Omitted while searching, so the field has the bar to itself. */
-  maybeAccount: Option.Option<Account>
+  /** The settings menu and sign-in, left out while searching so the field has the bar to itself. */
+  trailing: ReadonlyArray<Html>
 }>
 
-const languageLinksStyle = Style.make({ display: "flex", gap: space[1], flexShrink: 0 })
+/** A globe for visitors' menu: the convention people look for to change language. */
+export const globeTriggerStyle = Style.make({
+  display: "inline-grid",
+  placeItems: "center",
+  flexShrink: 0,
+  blockSize: controlSize.sm,
+  aspectRatio: "1",
+  border: "none",
+  borderRadius: radius.full,
+  backgroundColor: "transparent",
+  color: toneColors.foreground,
+  cursor: "pointer",
+  outline: "none",
+}).pipe(
+  Style.when(When.hover, { backgroundColor: toneColors.hover }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
 
-const languageLinks = <Message>(
-  { label, languages }: Readonly<{ label: string; languages: ReadonlyArray<LanguageLink> }>,
+/** The signed-in person's avatar, opening the same menu with their account in it. */
+export const avatarTriggerStyle = Style.make({
+  display: "inline-flex",
+  flexShrink: 0,
+  padding: 0,
+  border: "none",
+  borderRadius: radius.full,
+  backgroundColor: "transparent",
+  cursor: "pointer",
+  outline: "none",
+}).pipe(Style.when(When.focusVisible, focusRingDeclarations))
+
+export const menuPanelStyle = Style.make({
+  inlineSize: "min(16rem, calc(100vw - 2rem))",
+  padding: space[2],
+})
+
+const menuSectionStyle = Style.make({ display: "grid", rowGap: space[1] })
+
+const menuSectionTitleStyle = Style.make({
+  paddingInline: space[3],
+  paddingBlock: space[1],
+  color: toneColors.foregroundMuted,
+})
+
+const menuItemStyle = Style.make({
+  display: "flex",
+  alignItems: "center",
+  gap: space[3],
+  minBlockSize: controlSize.md,
+  paddingInline: space[3],
+  borderRadius: radius.full,
+  cornerShape: "squircle",
+  color: toneColors.foreground,
+  fontSize: fontSize.regular,
+  textDecoration: "none",
+  outline: "none",
+}).pipe(
+  Style.when(When.hover, { backgroundColor: toneColors.hover }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
+
+const currentMenuItemStyle = Style.make({ fontWeight: fontWeight.semibold })
+const menuItemLabelStyle = Style.make({ flex: 1 })
+
+const menuRuleStyle = Style.make({
+  blockSize: borderWidth.hairline,
+  marginBlock: space[2],
+  marginInline: space[3],
+  border: "none",
+  backgroundColor: toneColors.border,
+})
+
+/** What the settings menu holds: the account once signed in, then every language. */
+export const menuContent = <Message>(
+  {
+    maybeAccount,
+    languagesLabel,
+    languages,
+  }: Readonly<{
+    maybeAccount: Option.Option<Readonly<{ label: string; href: string }>>
+    languagesLabel: string
+    languages: ReadonlyArray<LanguageLink>
+  }>,
   h: HtmlBuilder<Message>,
-): Html =>
-  h.nav(
-    styledAttributes([h.AriaLabel(label)], languageLinksStyle),
-    languages.map((language) =>
-      AppButton.view(
-        {
-          children: [language.label],
-          ariaLabel: language.name,
-          title: language.name,
-          href: language.href,
-          attributes: [h.Hreflang(language.hreflang), h.Lang(language.hreflang)],
-          ariaCurrent: language.isCurrent ? "true" : "false",
-          tone: "neutral",
-          mode: language.isCurrent ? "faded" : "bleed",
-          size: "sm",
-        },
-        h,
+): ReadonlyArray<Html> => [
+  ...EffectArray.fromOption(
+    Option.map(maybeAccount, (account) =>
+      h.a(styledAttributes([h.Href(account.href)], menuItemStyle), [
+        Icons.user({ size: "md" }),
+        h.span(styledAttributes([], menuItemLabelStyle), [account.label]),
+      ]),
+    ),
+  ),
+  ...(Option.isSome(maybeAccount)
+    ? [h.hr(styledAttributes([h.AriaHidden(true)], menuRuleStyle))]
+    : []),
+  h.nav(styledAttributes([h.AriaLabel(languagesLabel)], menuSectionStyle), [
+    // Visitors' menu is only languages, already named by its title.
+    ...(Option.isSome(maybeAccount)
+      ? [
+          h.span(styledAttributes([h.AriaHidden(true)], menuSectionTitleStyle), [
+            AppText.view(
+              {
+                element: "span",
+                appearance: "footnote",
+                weight: "semibold",
+                children: [languagesLabel],
+              },
+              h,
+            ),
+          ]),
+        ]
+      : []),
+    ...languages.map((language) =>
+      h.keyed("a")(
+        language.hreflang,
+        styledAttributes(
+          [
+            h.Href(language.href),
+            h.Hreflang(language.hreflang),
+            h.Lang(language.hreflang),
+            h.AriaCurrent(language.isCurrent ? "true" : "false"),
+          ],
+          menuItemStyle,
+          ...(language.isCurrent ? [currentMenuItemStyle] : []),
+        ),
+        [
+          h.span(styledAttributes([], menuItemLabelStyle), [language.name]),
+          ...(language.isCurrent
+            ? [Icons.check({ mode: "outline", size: "sm", tone: "accent" })]
+            : []),
+        ],
       ),
     ),
-  )
+  ]),
+]
 
-const accountView = <Message>(account: Account, h: HtmlBuilder<Message>): Html =>
-  Option.match(account.maybeViewer, {
-    onNone: () =>
-      AppButton.view(
-        {
-          children: [account.signInLabel],
-          href: account.href,
-          tone: "primary",
-          mode: "outline",
-          size: "sm",
-        },
-        h,
-      ),
-    onSome: (viewer) =>
-      h.a(
-        styledAttributes(
-          [h.Href(account.href), h.AriaLabel(viewer.accountLabel)],
-          accountLinkStyle,
-        ),
-        [profileAvatar({ name: viewer.name, maybePhotoUrl: Option.none(), size: "compact" }, h)],
-      ),
-  })
+/** Visitors' way into an account, beside the menu. */
+export const signInButton = <Message>(
+  { label, href }: Readonly<{ label: string; href: string }>,
+  h: HtmlBuilder<Message>,
+): Html =>
+  AppButton.view({ children: [label], href, tone: "primary", mode: "outline", size: "sm" }, h)
 
 export const header = <Message>(config: HeaderConfig, h: HtmlBuilder<Message>): Html =>
   h.header(styledAttributes([], appBarStyle), [
@@ -292,12 +369,7 @@ export const header = <Message>(config: HeaderConfig, h: HtmlBuilder<Message>): 
         styledAttributes([h.AriaLabel(config.navigationLabel)], desktopNavigationStyle),
         navigationLinks(config.navigation, h),
       ),
-      ...(EffectArray.isReadonlyArrayNonEmpty(config.languages)
-        ? [languageLinks({ label: config.languagesLabel, languages: config.languages }, h)]
-        : []),
-      ...EffectArray.fromOption(
-        Option.map(config.maybeAccount, (account) => accountView(account, h)),
-      ),
+      ...config.trailing,
     ]),
   ])
 

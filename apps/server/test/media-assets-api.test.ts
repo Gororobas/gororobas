@@ -31,7 +31,7 @@ const insertPerson = (input: { id: string; email: string; handle: string; access
   SqlClient.SqlClient.use((sql) =>
     sql`INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at) VALUES (${input.id}, ${input.email}, 1, ${input.id}, ${timestamp}, ${timestamp}, ${timestamp})`.pipe(
       Effect.andThen(
-        sql`INSERT INTO profiles (id, type, handle, name, searchable_text, visibility, created_at, updated_at) VALUES (${input.id}, 'PERSON', ${input.handle}, ${input.handle}, ${input.handle}, 'PUBLIC', ${timestamp}, ${timestamp})`,
+        sql`INSERT INTO profiles (id, type, handle, name, searchable_text, visibility, bookmarks_visibility, created_at, updated_at) VALUES (${input.id}, 'PERSON', ${input.handle}, ${input.handle}, ${input.handle}, 'PUBLIC', 'PUBLIC', ${timestamp}, ${timestamp})`,
       ),
       Effect.andThen(
         sql`INSERT INTO people (id, access_level) VALUES (${input.id}, ${input.accessLevel})`,

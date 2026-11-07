@@ -1,4 +1,4 @@
-import type { CreditedProfile } from "@gororobas/domain/media-assets/domain"
+import type { CreditedMediaAssetRow, CreditedProfile } from "@gororobas/domain/media-assets/domain"
 import { msg, plural } from "@lingui/core/macro"
 import { Color, Recipe, Style, When } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
@@ -8,7 +8,8 @@ import type { Translator } from "../../lib/translations"
 import { imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import * as Icons from "../icons"
-import { styledAttributes } from "../pleat-attributes"
+import { styledAttributes, styledClassName } from "../pleat-attributes"
+import type { ViewInputs as PopoverDrawerViewInputs } from "../popover-drawer"
 import { profileAvatar } from "../profile-avatar/view"
 import { focusRingDeclarations } from "../styles/focus-ring"
 import {
@@ -42,40 +43,43 @@ export type MediaAttribution = Readonly<{
 
 export type MediaDimensions = Readonly<{ width: number; height: number }>
 
+/** Who to credit for media uploaded here: the people and lines its uploader named. */
+export const uploadedMediaAttribution = (media: CreditedMediaAssetRow): MediaAttribution => ({
+  credits: media.credits.map((credit) => ({
+    maybeProfile: Option.fromNullishOr(credit.profile),
+    maybeLine: Option.fromNullishOr(credit.creditLine),
+    maybeUrl: Option.fromNullishOr(credit.creditUrl),
+  })),
+  maybeLicenseUrl: Option.none(),
+  maybeSourceUrl: Option.none(),
+})
+
+/** Whether there's anything to credit: media without credits or a license shows no badge. */
+export const hasCredits = (attribution: MediaAttribution): boolean =>
+  EffectArray.isReadonlyArrayNonEmpty(attribution.credits) ||
+  Option.isSome(attribution.maybeLicenseUrl)
+
 const creditName = (credit: MediaCredit): string =>
   Option.match(credit.maybeProfile, {
     onSome: (profile) => profile.name,
     onNone: () => Option.getOrElse(credit.maybeLine, () => ""),
   })
 
-/** Over a corner of a photo, legible on any image. */
-export const badgeStyle = Recipe.make({
-  name: "MediaCreditBadge",
+/**
+ * Pins the badge to a corner of its photo. It positions a wrapper rather than the badge itself:
+ * popovers lift their open trigger above their backdrop with an inline `position: relative`, which
+ * would pull an absolutely positioned badge out of its corner.
+ */
+export const cornerStyle = Recipe.make({
+  name: "MediaCreditCorner",
+  // A grid track that can shrink, so long credits truncate within the photo instead of overflowing
+  // through the popover's wrappers.
   base: Style.make({
     position: "absolute",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: space[1],
+    display: "grid",
+    gridTemplateColumns: "minmax(0, auto)",
     maxInlineSize: `calc(100% - 2 * ${space[2]})`,
-    paddingBlock: space[1],
-    paddingInline: space[2],
-    border: "none",
-    borderRadius: radius.full,
-    cornerShape: "squircle",
-    // Over photos, so the same in light and dark modes.
-    backgroundColor: Color.alpha(tones.neutral.ramp[900], 0.62),
-    backdropFilter: blur.chrome,
-    color: tones.neutral.ramp[50],
-    fontSize: fontSize.caption,
-    fontWeight: fontWeight.medium,
-    cursor: "pointer",
-    outline: "none",
-    transitionProperty: "background-color",
-    transitionDuration: duration.control,
-  }).pipe(
-    Style.when(When.hover, { backgroundColor: Color.alpha(tones.neutral.ramp[900], 0.8) }),
-    Style.when(When.focusVisible, focusRingDeclarations),
-  ),
+  }),
   variants: {
     corner: {
       bottomStart: { insetInlineStart: space[2], insetBlockEnd: space[2] },
@@ -86,7 +90,34 @@ export const badgeStyle = Recipe.make({
   defaults: { corner: "bottomStart" },
 })
 
+/** Legible on any image. */
+export const badgeStyle = Style.make({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: space[1],
+  maxInlineSize: "100%",
+  paddingBlock: space[1],
+  paddingInline: space[2],
+  border: "none",
+  borderRadius: radius.full,
+  cornerShape: "squircle",
+  // Over photos, so the same in light and dark modes.
+  backgroundColor: Color.alpha(tones.neutral.ramp[900], 0.62),
+  backdropFilter: blur.chrome,
+  color: tones.neutral.ramp[50],
+  fontSize: fontSize.caption,
+  fontWeight: fontWeight.medium,
+  cursor: "pointer",
+  outline: "none",
+  transitionProperty: "background-color",
+  transitionDuration: duration.control,
+}).pipe(
+  Style.when(When.hover, { backgroundColor: Color.alpha(tones.neutral.ramp[900], 0.8) }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
+
 const badgeLabelStyle = Style.make({
+  minInlineSize: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -267,3 +298,39 @@ export const details = <Message>(
       ),
     ),
   ])
+
+const panelStyle = Style.make({ inlineSize: "min(20rem, calc(100vw - 2rem))" })
+
+/**
+ * What a `PopoverDrawer` needs to credit a photo: a badge that opens the details, in a popover by
+ * the badge or a drawer on touch screens. Render it inside `corner` to pin it to the photo.
+ */
+export const popoverDrawerInputs = <Message>(
+  {
+    attribution,
+    i18n,
+    corner = "bottomStart",
+  }: Readonly<{
+    attribution: MediaAttribution
+    i18n: Translator
+    corner?: "bottomStart" | "topEnd"
+  }>,
+  h: HtmlBuilder<Message>,
+): PopoverDrawerViewInputs => ({
+  title: i18n._(msg`Photo credits`),
+  trigger: {
+    children: badgeChildren({ attribution, i18n }, h),
+    className: styledClassName(badgeStyle),
+    ariaLabel: badgeLabel({ attribution, i18n }),
+  },
+  toContent: () => [details({ attribution, i18n }, h)],
+  anchor: { placement: corner === "bottomStart" ? "top-start" : "bottom-end", gap: 6, padding: 8 },
+  panelClassName: styledClassName(panelStyle),
+  tone: "primary",
+})
+
+/** Pins a credit badge, such as a `PopoverDrawer` built from `popoverDrawerInputs`, to a corner. */
+export const corner = <Message>(
+  { corner = "bottomStart", badge }: Readonly<{ corner?: "bottomStart" | "topEnd"; badge: Html }>,
+  h: HtmlBuilder<Message>,
+): Html => h.div(styledAttributes([], cornerStyle({ corner })), [badge])

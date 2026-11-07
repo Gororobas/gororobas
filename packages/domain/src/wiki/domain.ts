@@ -67,21 +67,18 @@ const WikiArticleKindWithoutSearchFilters = Schema.Literals(
   ),
 )
 
-export const WikiSearchParams = Schema.Union([
-  Schema.Struct({
-    kind: Schema.optional(Schema.Undefined),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
-  }),
+/**
+ * A chosen article kind with the filters only that kind offers, such as a plant's uses. The source
+ * of truth for what searches can filter: clients build their filter UIs and URLs from it.
+ */
+export const WikiKindSearchFilters = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("PLANT"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
-    plantUsages: Schema.optional(Schema.Array(PlantUsage)),
-    plantLifecycles: Schema.optional(Schema.Array(PlantLifecycle)),
-    plantingMethods: Schema.optional(Schema.Array(PlantingMethod)),
-    strata: Schema.optional(Schema.Array(AgroforestryStratum)),
-    edibleParts: Schema.optional(Schema.Array(EdiblePlantPart)),
+    plantUsages: Schema.optionalKey(Schema.Array(PlantUsage)),
+    plantLifecycles: Schema.optionalKey(Schema.Array(PlantLifecycle)),
+    plantingMethods: Schema.optionalKey(Schema.Array(PlantingMethod)),
+    strata: Schema.optionalKey(Schema.Array(AgroforestryStratum)),
+    edibleParts: Schema.optionalKey(Schema.Array(EdiblePlantPart)),
     developmentCycleMin: Schema.optional(IntNonNegative),
     developmentCycleMax: Schema.optional(IntNonNegative),
     heightMin: Schema.optional(Centimeters),
@@ -126,8 +123,6 @@ export const WikiSearchParams = Schema.Union([
   ),
   Schema.Struct({
     kind: Schema.Literal("BOOK"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
     publicationDateMin: Schema.optional(PartialDate),
     publicationDateMax: Schema.optional(PartialDate),
     pageCountMin: Schema.optional(IntNonNegative),
@@ -135,16 +130,12 @@ export const WikiSearchParams = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal("FILM"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
     releaseDateMin: Schema.optional(PartialDate),
     releaseDateMax: Schema.optional(PartialDate),
   }),
   Schema.Struct({
     kind: Schema.Literal("NOTEWORTHY_ENTITY"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
-    entityTypes: Schema.optional(Schema.Array(NoteworthyEntityType)),
+    entityTypes: Schema.optionalKey(Schema.Array(NoteworthyEntityType)),
     foundedDateMin: Schema.optional(PartialDate),
     foundedDateMax: Schema.optional(PartialDate),
     dissolvedDateMin: Schema.optional(PartialDate),
@@ -152,8 +143,6 @@ export const WikiSearchParams = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal("NOTEWORTHY_PERSON"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
     birthDateMin: Schema.optional(PartialDate),
     birthDateMax: Schema.optional(PartialDate),
     deathDateMin: Schema.optional(PartialDate),
@@ -161,33 +150,57 @@ export const WikiSearchParams = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal("ANIMAL"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
-    animalRoles: Schema.optional(Schema.Array(AnimalRole)),
+    animalRoles: Schema.optionalKey(Schema.Array(AnimalRole)),
   }),
   Schema.Struct({
     kind: Schema.Literal("TOOL"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
-    toolUsages: Schema.optional(Schema.Array(ToolUsage)),
+    toolUsages: Schema.optionalKey(Schema.Array(ToolUsage)),
   }),
   Schema.Struct({
     kind: Schema.Literal("RESOURCE"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
-    resourceFormats: Schema.optional(Schema.Array(ResourceFormat)),
+    resourceFormats: Schema.optionalKey(Schema.Array(ResourceFormat)),
   }),
   Schema.Struct({
     kind: Schema.Literal("CONTENT_PRODUCER"),
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
-    contentChannelTypes: Schema.optional(Schema.Array(ContentChannelType)),
+    contentChannelTypes: Schema.optionalKey(Schema.Array(ContentChannelType)),
   }),
   Schema.Struct({
     kind: WikiArticleKindWithoutSearchFilters,
-    language: WikiSearchLanguage,
-    text: WikiSearchText,
   }),
+])
+
+export type WikiKindSearchFilters = typeof WikiKindSearchFilters.Type
+
+const searchTextFields = { language: WikiSearchLanguage, text: WikiSearchText }
+
+const [
+  plantSearchFilters,
+  bookSearchFilters,
+  filmSearchFilters,
+  noteworthyEntitySearchFilters,
+  noteworthyPersonSearchFilters,
+  animalSearchFilters,
+  toolSearchFilters,
+  resourceSearchFilters,
+  contentProducerSearchFilters,
+  withoutFiltersSearchFilters,
+] = WikiKindSearchFilters.members
+
+/** Adds the text fields to a kind's filters. Checks only read the filters, so they still hold. */
+const withSearchText = { unsafePreserveChecks: true }
+
+export const WikiSearchParams = Schema.Union([
+  Schema.Struct({ kind: Schema.optional(Schema.Undefined), ...searchTextFields }),
+  plantSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  bookSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  filmSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  noteworthyEntitySearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  noteworthyPersonSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  animalSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  toolSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  resourceSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  contentProducerSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
+  withoutFiltersSearchFilters.mapFields(Struct.assign(searchTextFields), withSearchText),
 ])
 
 export type WikiSearchParams = typeof WikiSearchParams.Type

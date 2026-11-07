@@ -25,6 +25,7 @@ import {
   namesFact,
   overviewCard,
   textFact,
+  untranslatedNote,
 } from "./facts"
 import * as Plant from "./plant"
 
@@ -52,7 +53,7 @@ export const scientificNames = (page: Page): ReadonlyArray<string> =>
 type FactInputs = Readonly<{ page: Page; language: SupportedLanguage; i18n: Translator }>
 
 const namingFacts = (
-  { page, i18n }: FactInputs,
+  { page, language, i18n }: FactInputs,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> => {
   const allScientificNames = scientificNames(page)
@@ -62,6 +63,11 @@ const namingFacts = (
       {
         title: i18n._(msg`${select(nameGender(page), { other: "Also known as" })}`),
         names: EffectArray.drop(page.commonNames, 1).map((name) => name.name),
+        maybeNote: untranslatedNote({
+          contentLanguage: page.language,
+          readerLanguage: language,
+          i18n,
+        }),
       },
       h,
     ),

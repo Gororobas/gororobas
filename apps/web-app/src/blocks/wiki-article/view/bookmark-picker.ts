@@ -8,6 +8,7 @@ import type { Html } from "foldkit/html"
 import { loginUrl } from "../../../app/route"
 import { type Translator, translateLabels, translatorFor } from "../../../lib/translations"
 import { bookmarkVocabularies } from "../../../lib/vocabulary"
+import { AppButton } from "../../../ui/app-button"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
 import { bookmarkStateIcon } from "../../../ui/icons/bookmark-icons"
@@ -138,18 +139,16 @@ const separatorStyle = Style.make({
   backgroundColor: toneColors.border,
 })
 
-const signInLinkStyle = Style.make({
+const signInStyle = Style.make({ display: "grid", rowGap: space[3], padding: space[2] })
+const benefitListStyle = Style.make({ display: "grid", rowGap: space[2], margin: 0, padding: 0 })
+
+const benefitStyle = Style.make({
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: space[2],
-  blockSize: controlSize.lg,
-  paddingInline: space[4],
-  borderRadius: radius.full,
-  cornerShape: "squircle",
-  backgroundColor: tones.primary.ramp[400],
-  color: tones.neutral.ramp[900],
-  outline: "none",
-}).pipe(Style.when(When.focusVisible, focusRingDeclarations))
+  listStyle: "none",
+  color: toneColors.foreground,
+})
 
 type PickerState = Readonly<{
   page: Page
@@ -238,6 +237,46 @@ const options = (state: PickerState, h: WikiArticleViewBuilder): Html =>
     ],
   )
 
+/** Why saving needs an account, and what it brings, for readers who aren't signed in. */
+const signIn = (
+  { language, i18n }: Readonly<{ language: SupportedLanguage; i18n: Translator }>,
+  h: WikiArticleViewBuilder,
+): Html =>
+  h.div(styledAttributes([], signInStyle), [
+    AppText.view(
+      {
+        element: "p",
+        lineHeight: "relaxed",
+        children: [
+          i18n._(msg`Your list lives in your Gororobas account, so it follows you anywhere.`),
+        ],
+      },
+      h,
+    ),
+    h.ul(
+      styledAttributes([], benefitListStyle),
+      [
+        i18n._(msg`Keep track of what you want to get to know, and what you already live with`),
+        i18n._(msg`Meet people near you who share the same interests`),
+        i18n._(msg`Share your journey on your profile, if you choose to`),
+      ].map((benefit) =>
+        h.li(styledAttributes([], benefitStyle), [
+          Icons.check({ mode: "outline", size: "sm", tone: "accent" }),
+          AppText.view({ element: "span", appearance: "footnote", children: [benefit] }, h),
+        ]),
+      ),
+    ),
+    AppButton.view(
+      {
+        href: loginUrl(language),
+        tone: "primary",
+        isFullWidth: true,
+        children: [i18n._(msg`Sign in or create an account`)],
+      },
+      h,
+    ),
+  ])
+
 /** Someone's own relationship to the article, chosen in a popover or a drawer. */
 export const view = (
   {
@@ -250,15 +289,6 @@ export const view = (
 ): Html => {
   const i18n = translatorFor(language)
   const states = translateLabels(i18n, bookmarkVocabularies[page.kind].states)
-
-  if (!isSignedIn) {
-    const interested = states.INTERESTED
-
-    return h.a(styledAttributes([h.Href(loginUrl(language))], signInLinkStyle), [
-      Icons.bookmark({ size: "md" }),
-      i18n._(msg`${interested}? Sign in to save`),
-    ])
-  }
 
   const state: PickerState = {
     page,
@@ -280,7 +310,7 @@ export const view = (
             className: styledClassName(triggerStyle),
             isDisabled: state.isSaving,
           },
-          toContent: () => [options(state, h)],
+          toContent: () => [isSignedIn ? options(state, h) : signIn({ language, i18n }, h)],
           panelClassName: styledClassName(bookmarkPanelStyle),
           tone: "primary",
         },

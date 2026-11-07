@@ -1,9 +1,15 @@
+import type { PublicationKind } from "@gororobas/domain/common/enums"
+import type { MessageDescriptor } from "@lingui/core"
 import { msg, plural } from "@lingui/core/macro"
 import { Array as EffectArray, Option } from "effect"
 import type { Html } from "foldkit/html"
 
 import { type Translator, translatorFor } from "../../../lib/translations"
-import { profileBookmarkStateLabels, publicationKindLabels } from "../../../lib/vocabulary"
+import {
+  profileBookmarkStateLabels,
+  publicationKindLabels,
+  wikiKindLabels,
+} from "../../../lib/vocabulary"
 import { AppText } from "../../../ui/app-text"
 import { EmptyState } from "../../../ui/empty-state"
 import { FilterChips } from "../../../ui/filter-chips"
@@ -17,12 +23,18 @@ import type { ProfileViewBuilder } from "../composition"
 import { Message } from "../message"
 import {
   type ProfileState,
-  asyncView,
   cardGridStyle,
   galleryPhotos,
   listStyle,
+  pagedView,
+  photoCredit,
   sectionsStyle,
 } from "./shared"
+
+const noPublicationsOfKind: Readonly<Record<PublicationKind, MessageDescriptor>> = {
+  POST: msg`No posts here yet`,
+  EVENT: msg`No events here yet`,
+}
 
 const bookmarkStates = ["INTERESTED", "ACTIVE", "PREVIOUSLY_ACTIVE"] as const
 
@@ -54,7 +66,7 @@ export const publications = (
 
   return page(
     {
-      title: i18n._(msg`Posts by ${name}`),
+      title: i18n._(msg`Publications by ${name}`),
       icon: Icons.clipboard,
       children: [
         FilterChips.view(
@@ -69,45 +81,44 @@ export const publications = (
           },
           h,
         ),
-        asyncView(
+        pagedView(
           {
             i18n,
+            collection: "Publications",
             asyncData: model.publicationsAsyncData,
-            loading: { label: i18n._(msg`Loading posts`), shape: "cards" },
-            onData: (all) =>
-              EffectArray.match(
-                all.filter((publication) =>
-                  Option.match(model.maybePublicationKindFilter, {
-                    onNone: () => true,
-                    onSome: (kind) => publication.kind === kind,
-                  }),
-                ),
-                {
-                  onEmpty: () =>
-                    EmptyState.view(
-                      {
-                        icon: Icons.clipboard,
-                        title: i18n._(msg`${name} hasn't posted here yet`),
-                        maybeDescription: Option.some(
-                          i18n._(msg`Posts and events show up here as soon as they're shared.`),
-                        ),
-                        size: "roomy",
-                      },
-                      h,
-                    ),
-                  onNonEmpty: (shown) =>
-                    h.div(
-                      styledAttributes([], listStyle),
-                      shown.map((publication) =>
-                        h.keyed("div")(
-                          publication.id,
-                          [],
-                          [PublicationCard.view({ language, publication, maybeToday }, h)],
-                        ),
+            loading: {
+              label: i18n._(msg`Loading publications`),
+              skeleton: PublicationCard.skeletons(2, h),
+            },
+            onItems: (all) =>
+              EffectArray.match(all, {
+                onEmpty: () =>
+                  EmptyState.view(
+                    {
+                      icon: Icons.clipboard,
+                      title: Option.match(model.maybePublicationKindFilter, {
+                        onNone: () => i18n._(msg`${name} hasn't published here yet`),
+                        onSome: (kind) => i18n._(noPublicationsOfKind[kind]),
+                      }),
+                      maybeDescription: Option.some(
+                        i18n._(msg`Posts and events show up here as soon as they're shared.`),
+                      ),
+                      size: "roomy",
+                    },
+                    h,
+                  ),
+                onNonEmpty: (shown) =>
+                  h.div(
+                    styledAttributes([], listStyle),
+                    shown.map((publication) =>
+                      h.keyed("div")(
+                        publication.id,
+                        [],
+                        [PublicationCard.view({ language, publication, maybeToday }, h)],
                       ),
                     ),
-                },
-              ),
+                  ),
+              }),
           },
           h,
         ),
@@ -129,12 +140,13 @@ export const photos = (
       title: i18n._(msg`Photos by ${name}`),
       icon: Icons.gallery,
       children: [
-        asyncView(
+        pagedView(
           {
             i18n,
+            collection: "Photos",
             asyncData: model.photosAsyncData,
             loading: { label: i18n._(msg`Loading photos`), shape: "tiles", count: 6 },
-            onData: (media) =>
+            onItems: (media) =>
               EffectArray.match(galleryPhotos({ media, language }), {
                 onEmpty: () =>
                   EmptyState.view(
@@ -142,14 +154,21 @@ export const photos = (
                       icon: Icons.gallery,
                       title: i18n._(msg`No photos here yet`),
                       maybeDescription: Option.some(
-                        i18n._(msg`Photos shared in the encyclopedia or in posts show up here.`),
+                        i18n._(msg`Photos ${name} took show up here once they're shared.`),
                       ),
                       size: "roomy",
                     },
                     h,
                   ),
                 onNonEmpty: (shown) =>
-                  PhotoGallery.masonry({ photos: shown, columnCount: model.photoColumnCount }, h),
+                  PhotoGallery.masonry(
+                    {
+                      photos: shown,
+                      columnCount: model.photoColumnCount,
+                      overlay: (photo) => photoCredit({ model, photo, i18n }, h),
+                    },
+                    h,
+                  ),
               }),
           },
           h,
@@ -179,12 +198,13 @@ export const contributions = (
           },
           h,
         ),
-        asyncView(
+        pagedView(
           {
             i18n,
+            collection: "Contributions",
             asyncData: model.contributionsAsyncData,
             loading: { label: i18n._(msg`Loading contributions`), shape: "rows" },
-            onData: (all) =>
+            onItems: (all) =>
               EffectArray.match(all, {
                 onEmpty: () =>
                   EmptyState.view(
@@ -241,74 +261,94 @@ export const bookmarks = (
     {
       title: i18n._(msg`Saved by ${name}`),
       icon: Icons.bookmark,
-      children: [
-        FilterChips.view(
-          {
-            label: i18n._(msg`Filter by status`),
-            allLabel: i18n._(msg`All`),
-            options: bookmarkStates.map(
-              (state) => [state, i18n._(profileBookmarkStateLabels[state])] as const,
-            ),
-            selected: model.maybeBookmarkStateFilter,
-            toMessage: (maybeState) => Message.ClickedBookmarkStateFilter({ maybeState }),
-          },
-          h,
-        ),
-        asyncView(
-          {
-            i18n,
-            asyncData: model.bookmarksAsyncData,
-            loading: { label: i18n._(msg`Loading saved articles`), shape: "tiles", count: 6 },
-            onData: (all) =>
-              EffectArray.match(
-                all.filter((bookmark) =>
-                  Option.match(model.maybeBookmarkStateFilter, {
-                    onNone: () => true,
-                    onSome: (state) => bookmark.state === state,
-                  }),
+      children: profile.areBookmarksVisible
+        ? [
+            ...(profile.bookmarkedKinds.length > 1
+              ? [
+                  FilterChips.view(
+                    {
+                      label: i18n._(msg`Filter by kind`),
+                      allLabel: i18n._(msg`All`),
+                      options: profile.bookmarkedKinds.map(
+                        (kind) => [kind, i18n._(wikiKindLabels[kind].plural)] as const,
+                      ),
+                      selected: model.maybeBookmarkKindFilter,
+                      toMessage: (maybeKind) => Message.ClickedBookmarkKindFilter({ maybeKind }),
+                    },
+                    h,
+                  ),
+                ]
+              : []),
+            FilterChips.view(
+              {
+                label: i18n._(msg`Filter by status`),
+                allLabel: i18n._(msg`All`),
+                options: bookmarkStates.map(
+                  (state) => [state, i18n._(profileBookmarkStateLabels[state])] as const,
                 ),
-                {
-                  onEmpty: () =>
-                    EmptyState.view(
-                      {
-                        icon: Icons.bookmark,
-                        title: i18n._(msg`Nothing saved here yet`),
-                        maybeDescription: Option.some(
-                          i18n._(
-                            msg`Plants, books and places someone wants to get to know or already lives with show up here.`,
+                selected: model.maybeBookmarkStateFilter,
+                toMessage: (maybeState) => Message.ClickedBookmarkStateFilter({ maybeState }),
+              },
+              h,
+            ),
+            pagedView(
+              {
+                i18n,
+                collection: "Bookmarks",
+                asyncData: model.bookmarksAsyncData,
+                loading: { label: i18n._(msg`Loading saved articles`), shape: "tiles", count: 6 },
+                onItems: (shown) =>
+                  EffectArray.match(shown, {
+                    onEmpty: () =>
+                      EmptyState.view(
+                        {
+                          icon: Icons.bookmark,
+                          title: i18n._(msg`Nothing saved here yet`),
+                          maybeDescription: Option.some(
+                            i18n._(
+                              msg`Plants, books and places someone wants to get to know or already lives with show up here.`,
+                            ),
+                          ),
+                          size: "roomy",
+                        },
+                        h,
+                      ),
+                    onNonEmpty: (nonEmpty) =>
+                      h.div(
+                        styledAttributes([], cardGridStyle),
+                        nonEmpty.map((bookmark) =>
+                          h.keyed("div")(
+                            bookmark.article.id,
+                            [],
+                            [
+                              WikiArticleRow.view(
+                                {
+                                  article: bookmark.article,
+                                  language,
+                                  maybeBookmarkState: Option.some(bookmark.state),
+                                  isCard: true,
+                                },
+                                h,
+                              ),
+                            ],
                           ),
                         ),
-                        size: "roomy",
-                      },
-                      h,
-                    ),
-                  onNonEmpty: (shown) =>
-                    h.div(
-                      styledAttributes([], cardGridStyle),
-                      shown.map((bookmark) =>
-                        h.keyed("div")(
-                          bookmark.article.id,
-                          [],
-                          [
-                            WikiArticleRow.view(
-                              {
-                                article: bookmark.article,
-                                language,
-                                maybeBookmarkState: Option.some(bookmark.state),
-                                isCard: true,
-                              },
-                              h,
-                            ),
-                          ],
-                        ),
                       ),
-                    ),
-                },
-              ),
-          },
-          h,
-        ),
-      ],
+                  }),
+              },
+              h,
+            ),
+          ]
+        : [
+            EmptyState.view(
+              {
+                icon: Icons.lock,
+                title: i18n._(msg`${name} keeps what they save to themselves`),
+                size: "roomy",
+              },
+              h,
+            ),
+          ],
     },
     h,
   )

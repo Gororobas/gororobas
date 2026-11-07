@@ -23,6 +23,7 @@ import { RichText } from "../../../ui/rich-text"
 import { SectionCard, cardBleedStyle } from "../../../ui/section-card"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import { breakpoint, fontWeight, radius, space, toneColors, tones } from "../../../ui/theme"
+import { UntranslatedNotice } from "../../../ui/untranslated-notice"
 import { WikiArticleRow } from "../../../ui/wiki-article-row"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
@@ -51,40 +52,69 @@ const heroStyle = Style.make({
   scrollbarWidth: "none",
 })
 
+/** A card the photo sits in whole, uncropped, with its caption below. */
 const heroSlideStyle = Style.make({
-  position: "relative",
+  display: "flex",
+  flexDirection: "column",
+  rowGap: space[2],
   flex: "0 0 100%",
   scrollSnapAlign: "center",
   aspectRatio: "4 / 3",
   maxBlockSize: "30rem",
   margin: 0,
-  overflow: "hidden",
+  padding: space[4],
   borderRadius: radius.lg,
+  backgroundColor: toneColors.backgroundCard,
 })
+
+/** Whatever room the caption leaves: the photo grows to fit it in either direction. */
+const heroStageStyle = Style.make({
+  flex: 1,
+  minBlockSize: 0,
+  display: "grid",
+  placeItems: "center",
+  containerType: "size",
+})
+
+/** Sized to the photo's own shape, so the credit badge sits on the photo's corner. */
+const heroFrameStyle = Style.make({ position: "relative", maxInlineSize: "100%" })
 
 const heroLinkStyle = Style.make({
   display: "block",
   blockSize: "100%",
-  borderRadius: radius.lg,
+  overflow: "hidden",
+  borderRadius: radius.md,
+  backgroundColor: tones.primary.ramp[300],
   outline: "none",
 }).pipe(Style.when(When.focusVisible, focusRingDeclarations))
 
 /** With more photos, the next one peeks in so the strip reads as scrollable. */
 const heroSlidePeekStyle = Style.make({ flexBasis: "88%" })
 
-const heroImageStyle = Style.make({ inlineSize: "100%", blockSize: "100%", objectFit: "cover" })
+const heroImageStyle = Style.make({
+  display: "block",
+  inlineSize: "100%",
+  blockSize: "100%",
+  objectFit: "cover",
+})
 
 const heroCaptionStyle = Style.make({
-  position: "absolute",
-  display: "grid",
-  rowGap: space[1],
-  insetInline: space[4],
-  insetBlockEnd: space[4],
-  padding: space[3],
-  borderRadius: radius.lg,
-  backgroundColor: tones.primary.backgroundCard,
+  textAlign: "center",
   color: tones.neutral.shade[800],
 })
+
+/** Providers don't always tell a photo's size; a landscape frame then stands in for it. */
+const UNKNOWN_HERO_DIMENSIONS = { width: 4, height: 3 }
+
+/** As large as the stage allows, keeping the photo's shape: the stage's width or height bounds it. */
+const heroFrameSize = (photo: ArticlePhoto) => {
+  const { width, height } = Option.getOrElse(photo.maybeDimensions, () => UNKNOWN_HERO_DIMENSIONS)
+
+  return {
+    "aspect-ratio": `${width} / ${height}`,
+    "inline-size": `min(100cqi, ${(width / height) * 100}cqb)`,
+  }
+}
 
 const carouselStyle = Style.make({
   display: "flex",
@@ -126,7 +156,7 @@ const contentStyle = Style.make({ color: toneColors.foreground })
 
 // SECTIONS
 
-/** A photo's description, over its lower edge. */
+/** A photo's description, below it. */
 const heroCaption = (photo: ArticlePhoto, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
   EffectArray.fromOption(
     Option.map(photo.maybeCaption, (text) =>
@@ -159,34 +189,38 @@ const hero = (
               ...(slides.length > 1 ? [heroSlidePeekStyle] : []),
             ),
             [
-              h.a(
-                styledAttributes(
-                  [
-                    h.Href(
-                      wikiArticleUrl(language, {
-                        kind: page.kind,
-                        handle: page.handle,
-                        tab: "Photos",
-                      }),
-                    ),
-                    h.AriaLabel(seePhotosLabel),
-                  ],
-                  heroLinkStyle,
-                ),
-                [
-                  h.img(
+              h.div(styledAttributes([], heroStageStyle), [
+                h.div(styledAttributes([h.Style(heroFrameSize(photo))], heroFrameStyle), [
+                  h.a(
                     styledAttributes(
                       [
-                        h.Src(photo.src(1280)),
-                        h.Alt(Option.getOrElse(photo.maybeCaption, () => "")),
+                        h.Href(
+                          wikiArticleUrl(language, {
+                            kind: page.kind,
+                            handle: page.handle,
+                            tab: "Photos",
+                          }),
+                        ),
+                        h.AriaLabel(seePhotosLabel),
                       ],
-                      heroImageStyle,
+                      heroLinkStyle,
                     ),
+                    [
+                      h.img(
+                        styledAttributes(
+                          [
+                            h.Src(photo.src(1280)),
+                            h.Alt(Option.getOrElse(photo.maybeCaption, () => "")),
+                          ],
+                          heroImageStyle,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                  ...photoCredit({ model, language, photo, corner: "topEnd" }, h),
+                ]),
+              ]),
               ...heroCaption(photo, h),
-              ...photoCredit({ model, photo, corner: "topEnd" }, h),
             ],
           ),
         ),
@@ -270,7 +304,12 @@ const aboutContent = (
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> => {
   const { name, gender } = nameParts(page)
-  const title = translatorFor(language)._(msg`${select(gender, { other: `About ${name}` })}`)
+  const i18n = translatorFor(language)
+  const title = i18n._(msg`${select(gender, { other: `About ${name}` })}`)
+  const maybeFallback = UntranslatedNotice.maybeFallbackLanguage({
+    contentLanguage: page.language,
+    readerLanguage: language,
+  })
 
   return EffectArray.fromOption(
     Option.map(page.content, (content) =>
@@ -278,8 +317,13 @@ const aboutContent = (
         {
           title,
           icon: Icons.bulb,
+          actions: EffectArray.fromOption(
+            Option.map(maybeFallback, (contentLanguage) =>
+              UntranslatedNotice.badge({ contentLanguage, readerLanguage: language, i18n }, h),
+            ),
+          ),
           children: [
-            h.div(styledAttributes([], contentStyle), [
+            h.div(styledAttributes([h.Lang(page.language)], contentStyle), [
               RichText.view({ document: content, i18n: translatorFor(language) }, h),
             ]),
           ],
@@ -306,7 +350,7 @@ const publicationsPreview = (
   ).map((publications) =>
     SectionCard.view(
       {
-        title: i18n._(msg`Posts`),
+        title: i18n._(msg`Publications`),
         icon: Icons.clipboard,
         footerLink: {
           label: i18n._(msg`${select(gender, { other: `All posts about ${name}` })}`),
@@ -772,7 +816,7 @@ export const view = (
       ),
       ...ordered({ order: 4, children: cultivars({ model, language, page }, h) }, h),
       ...ordered({ order: 4, children: ChildPlaces.view({ model, language, page }, h) }, h),
-      ...ordered({ order: 6, children: ExternalData.editions({ model, page }, h) }, h),
+      ...ordered({ order: 6, children: ExternalData.editions({ model, language, page }, h) }, h),
       ...ordered({ order: 6, children: aboutContent({ page, language }, h) }, h),
       ...ordered(
         { order: 7, children: publicationsPreview({ model, language, page, maybeToday }, h) },

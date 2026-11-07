@@ -123,6 +123,7 @@ export class OrganizationsService extends Context.Service<OrganizationsService>(
             id,
             type: "ORGANIZATION",
             visibility: "PUBLIC",
+            bookmarksVisibility: "PUBLIC",
             bio: null,
             photoId: null,
             createdAt: now,

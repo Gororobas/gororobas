@@ -21,6 +21,9 @@ import {
 
 const viewportStyle = Style.make({ position: "fixed", inset: 0 })
 
+/** `radius.lg`'s horizontal and vertical radii, as a single corner's longhand takes them. */
+const SHEET_CORNER_RADIUS = "clamp(0.625rem, 4%, 1.25rem) clamp(0.625rem, 20%, 1.25rem)"
+
 // A bottom sheet on phones; a centered dialog from `breakpoint.md` up. Both slide in with
 // Foldkit's transition states.
 export const appDrawerPanelStyle = Recipe.make({
@@ -34,8 +37,11 @@ export const appDrawerPanelStyle = Recipe.make({
     inlineSize: "100%",
     maxBlockSize: `min(85dvh, ${viewport.visibleHeight})`,
     marginInline: "auto",
-    borderStartStartRadius: radius.lg,
-    borderStartEndRadius: radius.lg,
+    // A bottom sheet rounds its top corners only. `radius.lg` is elliptical (`a / b`), which only
+    // the `borderRadius` shorthand accepts, so these longhands spell its two radii out.
+    borderStartStartRadius: SHEET_CORNER_RADIUS,
+    borderStartEndRadius: SHEET_CORNER_RADIUS,
+    cornerShape: "squircle",
     backgroundColor: toneColors.backgroundCard,
     color: toneColors.foreground,
     transitionProperty: "transform, opacity",
@@ -93,6 +99,16 @@ const sectionedHeaderStyle = Style.make({
 })
 const descriptionStyle = Style.make({ marginBlockStart: space[2] })
 
+const headerRowStyle = Style.make({ display: "flex", alignItems: "center", gap: space[3] })
+const headerTextStyle = Style.make({ flex: 1, minInlineSize: 0 })
+
+const headerActionsStyle = Style.make({
+  display: "flex",
+  flexShrink: 0,
+  alignItems: "center",
+  gap: space[2],
+})
+
 // The negative margin keeps children's focus rings inside the scroll container's clip.
 const bodyStyle = Style.make({
   flex: 1,
@@ -129,6 +145,11 @@ export interface AppDrawerConfig {
   readonly children: ReadonlyArray<Html>
   /** Actions, stacked on phones (first child at the bottom) and in a row on wider screens. */
   readonly footer?: ReadonlyArray<Html>
+  /**
+   * Compact actions beside the title, for drawers whose body scrolls: the footer would cover
+   * what's left to scroll to.
+   */
+  readonly headerActions?: ReadonlyArray<Html>
 }
 
 /** The chrome around every drawer: backdrop, panel, swipe handle, title and actions. */
@@ -165,35 +186,47 @@ export const view = <Message>(config: AppDrawerConfig, h: DrawerViewBuilder<Mess
                   h.div(styledAttributes([], drawerHandleStyle)),
                 ]),
                 h.div(styledAttributes(render.content, contentStyle), [
-                  h.header(styledAttributes([], ...(isSectioned ? [sectionedHeaderStyle] : [])), [
-                    AppText.view(
-                      {
-                        element: "h2",
-                        appearance: "xl",
-                        weight: "semibold",
-                        lineHeight: "tight",
-                        attributes: render.title,
-                        children: [config.title],
-                      },
-                      h,
+                  h.header(
+                    styledAttributes(
+                      [],
+                      headerRowStyle,
+                      ...(isSectioned ? [sectionedHeaderStyle] : []),
                     ),
-                    ...(config.description === undefined
-                      ? []
-                      : [
-                          AppText.view(
-                            {
-                              element: "p",
-                              appearance: "footnote",
-                              isMuted: true,
-                              lineHeight: "relaxed",
-                              attributes: render.description,
-                              styles: [descriptionStyle],
-                              children: [config.description],
-                            },
-                            h,
-                          ),
-                        ]),
-                  ]),
+                    [
+                      h.div(styledAttributes([], headerTextStyle), [
+                        AppText.view(
+                          {
+                            element: "h2",
+                            appearance: "xl",
+                            weight: "semibold",
+                            lineHeight: "tight",
+                            attributes: render.title,
+                            children: [config.title],
+                          },
+                          h,
+                        ),
+                        ...(config.description === undefined
+                          ? []
+                          : [
+                              AppText.view(
+                                {
+                                  element: "p",
+                                  appearance: "footnote",
+                                  isMuted: true,
+                                  lineHeight: "relaxed",
+                                  attributes: render.description,
+                                  styles: [descriptionStyle],
+                                  children: [config.description],
+                                },
+                                h,
+                              ),
+                            ]),
+                      ]),
+                      ...(config.headerActions === undefined
+                        ? []
+                        : [h.div(styledAttributes([], headerActionsStyle), config.headerActions)]),
+                    ],
+                  ),
                   // Focusing the body opens it at its top. Its first focusable element can sit
                   // further down, and focusing that would scroll past everything above it.
                   h.div(

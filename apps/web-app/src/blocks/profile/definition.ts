@@ -12,7 +12,10 @@ export const ProfileKey = Symbol("Profile")
 
 export const ProfileBlock = Block.make("Profile", {
   key: ProfileKey,
+  /** Content loads in the language the app is read in, which also sets the block's key. */
   Init: Schema.Tuple([Handle, SupportedLanguage]),
+  /** Follow-up requests, such as the profile's posts, load in that same language. */
+  Context: Schema.Tuple([SupportedLanguage]),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
   effects: { services: [GororobasApiClient] },
   Model,

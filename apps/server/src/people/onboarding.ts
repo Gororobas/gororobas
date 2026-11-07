@@ -71,6 +71,7 @@ export const completeOnboarding = Effect.fn("People.completeOnboarding")(functio
         bio: null,
         photoId: null,
         visibility: "PUBLIC",
+        bookmarksVisibility: "PUBLIC",
         createdAt: now,
         updatedAt: now,
       })

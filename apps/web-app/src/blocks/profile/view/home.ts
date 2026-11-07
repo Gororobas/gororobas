@@ -10,6 +10,7 @@ import { type Translator, translatorFor } from "../../../lib/translations"
 import { EmptyState } from "../../../ui/empty-state"
 import * as Icons from "../../../ui/icons"
 import type { IconConfig } from "../../../ui/icons"
+import { LoadingState } from "../../../ui/loading-state"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { PublicationCard } from "../../../ui/publication-card"
 import { RichText } from "../../../ui/rich-text"
@@ -30,7 +31,7 @@ import {
 
 const PREVIEW_PUBLICATION_COUNT = 4
 const PREVIEW_PHOTO_COUNT = 6
-const PREVIEW_BOOKMARK_COUNT = 5
+const PREVIEW_BOOKMARK_COUNT = 8
 const PREVIEW_CONTRIBUTION_COUNT = 4
 
 /** One column on small screens; wide screens move what the profile follows into a sidebar. */
@@ -86,6 +87,17 @@ const morePhotosStyle = Style.make({
 
 const bioStyle = Style.make({ color: toneColors.foreground })
 
+const photoSkeletonStyle = Style.make({ flex: "0 0 auto", blockSize: "7rem", inlineSize: "auto" })
+const chipSkeletonStyle = Style.make({ blockSize: "2.75rem", inlineSize: "8rem" })
+
+const bookmarkChipsStyle = Style.make({ display: "flex", flexWrap: "wrap", gap: space[2] })
+
+const bookmarkChipStyle = Style.make({
+  display: "inline-flex",
+  minInlineSize: 0,
+  maxInlineSize: "100%",
+})
+
 /** A sample of one collection, linking to all of it; hidden once it's known to be empty. */
 const sample = <A>(
   {
@@ -95,17 +107,21 @@ const sample = <A>(
     icon,
     asyncData,
     footerLink,
-    loadingShape,
+    loading,
     render,
   }: Readonly<{
     title: string
     loadingLabel: string
     i18n: Translator
     icon: (config?: IconConfig) => Html
-    asyncData: AsyncData.AsyncData<ReadonlyArray<A>, ClientFailure>
+    asyncData: AsyncData.AsyncData<
+      Readonly<{ items: ReadonlyArray<A>; hasMore: boolean }>,
+      ClientFailure
+    >
     footerLink: Readonly<{ label: string; href: string }>
-    loadingShape: "rows" | "cards" | "tiles"
-    render: (items: EffectArray.NonEmptyReadonlyArray<A>) => Html
+    /** What stands in while it loads, shaped like what it shows. */
+    loading: Html
+    render: (items: EffectArray.NonEmptyReadonlyArray<A>, hasMore: boolean) => Html
   }>,
   h: ProfileViewBuilder,
 ): ReadonlyArray<Html> =>
@@ -122,13 +138,12 @@ const sample = <A>(
                 {
                   i18n,
                   asyncData,
-                  loading: {
-                    label: loadingLabel,
-                    shape: loadingShape,
-                    count: 2,
-                  },
-                  onData: (items) =>
-                    EffectArray.match(items, { onEmpty: () => h.empty, onNonEmpty: render }),
+                  loading: { label: loadingLabel, skeleton: loading },
+                  onData: ({ items, hasMore }) =>
+                    EffectArray.match(items, {
+                      onEmpty: () => h.empty,
+                      onNonEmpty: (nonEmpty) => render(nonEmpty, hasMore),
+                    }),
                 },
                 h,
               ),
@@ -165,15 +180,18 @@ const publications = (
   return sample(
     {
       i18n,
-      title: i18n._(msg`Posts`),
-      loadingLabel: i18n._(msg`Loading posts`),
+      title: i18n._(msg`Publications`),
+      loadingLabel: i18n._(msg`Loading publications`),
       icon: Icons.clipboard,
       asyncData: model.publicationsAsyncData,
       footerLink: {
-        label: i18n._(msg`All posts`),
+        label: i18n._(msg`All publications`),
         href: profileUrl(language, { handle: page.handle, tab: "Publications" }),
       },
-      loadingShape: "cards",
+      loading: h.div(styledAttributes([], carouselStyle, cardBleedStyle), [
+        h.div(styledAttributes([], carouselItemStyle), [PublicationCard.skeleton(h)]),
+        h.div(styledAttributes([], carouselItemStyle), [PublicationCard.skeleton(h)]),
+      ]),
       render: (all) =>
         h.div(
           styledAttributes([], carouselStyle, cardBleedStyle),
@@ -204,8 +222,13 @@ const photos = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) 
         label: i18n._(msg`See all photos`),
         href: profileUrl(language, { handle: page.handle, tab: "Photos" }),
       },
-      loadingShape: "tiles",
-      render: (media) => {
+      loading: h.div(
+        styledAttributes([], photoStripStyle, cardBleedStyle),
+        EffectArray.makeBy(4, () =>
+          LoadingState.bone({ shape: "tile", styles: [photoSkeletonStyle] }, h),
+        ),
+      ),
+      render: (media, hasMore) => {
         const all = galleryPhotos({ media, language })
         const remaining = all.length - PREVIEW_PHOTO_COUNT
 
@@ -231,14 +254,15 @@ const photos = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) 
               ),
             )
           }),
-          ...(remaining > 0
+          ...(remaining > 0 || hasMore
             ? [
                 h.a(
                   styledAttributes(
                     [h.Href(profileUrl(language, { handle: page.handle, tab: "Photos" }))],
                     morePhotosStyle,
                   ),
-                  [`+${remaining}`],
+                  // Only the loaded photos are counted, so more to load reads as an arrow.
+                  hasMore ? [Icons.arrowRight({ size: "md" })] : [`+${remaining}`],
                 ),
               ]
             : []),
@@ -249,44 +273,43 @@ const photos = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) 
   )
 }
 
+/** What the profile saved, quieter than what it shares: a line of names to browse. */
 const bookmarks = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) => {
   const i18n = translatorFor(language)
 
-  return sample(
-    {
-      i18n,
-      title: i18n._(msg({ message: "Saved", context: "profile collection" })),
-      loadingLabel: i18n._(msg`Loading saved articles`),
-      icon: Icons.bookmark,
-      asyncData: model.bookmarksAsyncData,
-      footerLink: {
-        label: i18n._(msg`See everything saved`),
-        href: profileUrl(language, { handle: page.handle, tab: "Bookmarks" }),
-      },
-      loadingShape: "rows",
-      render: (all) =>
-        h.div(
-          styledAttributes([], listStyle),
-          all.slice(0, PREVIEW_BOOKMARK_COUNT).map((bookmark) =>
-            h.keyed("div")(
-              bookmark.article.id,
-              [],
-              [
-                WikiArticleRow.view(
-                  {
-                    article: bookmark.article,
-                    language,
-                    maybeBookmarkState: Option.some(bookmark.state),
-                  },
-                  h,
-                ),
-              ],
+  return page.areBookmarksVisible
+    ? sample(
+        {
+          i18n,
+          title: i18n._(msg({ message: "Saved", context: "profile collection" })),
+          loadingLabel: i18n._(msg`Loading saved articles`),
+          icon: Icons.bookmark,
+          asyncData: model.bookmarksAsyncData,
+          footerLink: {
+            label: i18n._(msg`See everything saved`),
+            href: profileUrl(language, { handle: page.handle, tab: "Bookmarks" }),
+          },
+          loading: h.div(
+            styledAttributes([], bookmarkChipsStyle),
+            EffectArray.makeBy(4, () =>
+              LoadingState.bone({ shape: "pill", styles: [chipSkeletonStyle] }, h),
             ),
           ),
-        ),
-    },
-    h,
-  )
+          render: (all) =>
+            h.div(
+              styledAttributes([], bookmarkChipsStyle),
+              all
+                .slice(0, PREVIEW_BOOKMARK_COUNT)
+                .map((bookmark) =>
+                  h.keyed("span")(bookmark.article.id, styledAttributes([], bookmarkChipStyle), [
+                    WikiArticleRow.chip({ article: bookmark.article, language }, h),
+                  ]),
+                ),
+            ),
+        },
+        h,
+      )
+    : []
 }
 
 const contributions = ({ model, language, page }: ProfileState, h: ProfileViewBuilder) => {
@@ -303,7 +326,7 @@ const contributions = ({ model, language, page }: ProfileState, h: ProfileViewBu
         label: i18n._(msg`All contributions`),
         href: profileUrl(language, { handle: page.handle, tab: "Contributions" }),
       },
-      loadingShape: "rows",
+      loading: LoadingState.bones({ shape: "rows", count: 2 }, h),
       render: (all) =>
         h.div(
           styledAttributes([], listStyle),
@@ -334,7 +357,7 @@ const isEmptyProfile = ({ model, page }: ProfileState): boolean =>
   page.bio === null &&
   isEmptyData(model.publicationsAsyncData) &&
   isEmptyData(model.photosAsyncData) &&
-  isEmptyData(model.bookmarksAsyncData) &&
+  (!page.areBookmarksVisible || isEmptyData(model.bookmarksAsyncData)) &&
   isEmptyData(model.contributionsAsyncData)
 
 /** A sample of everything the profile shares, each linking to its tab. */
@@ -349,7 +372,9 @@ export const view = (state: ProfileState, h: ProfileViewBuilder): Html => {
             icon: Icons.sprout,
             title: i18n._(msg`${name} hasn't shared anything here yet`),
             maybeDescription: Option.some(
-              i18n._(msg`Posts, photos and saved articles show up here as soon as they're shared.`),
+              i18n._(
+                msg`Publications, photos and saved articles show up here as soon as they're shared.`,
+              ),
             ),
             size: "roomy",
           },
@@ -363,8 +388,8 @@ export const view = (state: ProfileState, h: ProfileViewBuilder): Html => {
           ...photos(state, h),
         ]),
         h.aside(styledAttributes([h.AriaLabel(i18n._(msg`What ${name} follows`))], columnStyle), [
-          ...bookmarks(state, h),
           ...contributions(state, h),
+          ...bookmarks(state, h),
         ]),
       ])
 }

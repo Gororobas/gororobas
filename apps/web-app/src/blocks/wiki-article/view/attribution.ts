@@ -164,12 +164,22 @@ export const attributionDetails = (
 
 /** Credits a section's provider: its mark opens the details, as a popover or a drawer. */
 export const attribution = (
-  { model, page, section }: Readonly<{ model: Model; page: Page; section: AttributedSection }>,
+  {
+    model,
+    language,
+    page,
+    section,
+  }: Readonly<{
+    model: Model
+    language: SupportedLanguage
+    page: Page
+    section: AttributedSection
+  }>,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> => {
   const provider = attributedSectionProviders[section]
   const name = ProviderMark.names[provider]
-  const i18n = translatorFor(model.language)
+  const i18n = translatorFor(language)
   const maybeInstance = EffectArray.findFirst(
     model.attributions,
     (instance) => instance.id === attributionId(section),
@@ -194,7 +204,7 @@ export const attribution = (
                 className: styledClassName(triggerStyle),
                 ariaLabel: i18n._(msg`Source: ${name}`),
               },
-              toContent: () => [attributionDetails({ credit, language: model.language }, h)],
+              toContent: () => [attributionDetails({ credit, language }, h)],
               anchor: { placement: "bottom-end", gap: 6, padding: 8 },
               panelClassName: styledClassName(panelStyle),
               tone: "primary",
@@ -209,46 +219,39 @@ export const attribution = (
 export const photoCredit = (
   {
     model,
+    language,
     photo,
     corner = "bottomStart",
-  }: Readonly<{ model: Model; photo: ArticlePhoto; corner?: "bottomStart" | "topEnd" }>,
+  }: Readonly<{
+    model: Model
+    language: SupportedLanguage
+    photo: ArticlePhoto
+    corner?: "bottomStart" | "topEnd"
+  }>,
   h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> => {
-  const i18n = translatorFor(model.language)
-  const { attribution: photoAttribution } = photo
-
-  return EffectArray.isReadonlyArrayEmpty(photo.attribution.credits) &&
-    Option.isNone(photo.attribution.maybeLicenseUrl)
-    ? []
-    : EffectArray.fromOption(
+): ReadonlyArray<Html> =>
+  MediaCredit.hasCredits(photo.attribution)
+    ? EffectArray.fromOption(
         Option.map(
           EffectArray.findFirst(model.attributions, (instance) => instance.id === photo.creditId),
           (instance) =>
-            h.block(
-              AttributionsBinding.embedView({
-                key: instance.id,
-                slotId: instance.id,
-                model: instance,
-                viewInputs: {
-                  title: i18n._(msg`Photo credits`),
-                  trigger: {
-                    children: MediaCredit.badgeChildren({ attribution: photoAttribution, i18n }, h),
-                    className: styledClassName(MediaCredit.badgeStyle({ corner })),
-                    ariaLabel: MediaCredit.badgeLabel({ attribution: photoAttribution, i18n }),
-                  },
-                  toContent: () => [
-                    MediaCredit.details({ attribution: photoAttribution, i18n }, h),
-                  ],
-                  anchor: {
-                    placement: corner === "bottomStart" ? "top-start" : "bottom-end",
-                    gap: 6,
-                    padding: 8,
-                  },
-                  panelClassName: styledClassName(panelStyle),
-                  tone: "primary",
-                },
-              }),
+            MediaCredit.corner(
+              {
+                corner,
+                badge: h.block(
+                  AttributionsBinding.embedView({
+                    key: instance.id,
+                    slotId: instance.id,
+                    model: instance,
+                    viewInputs: MediaCredit.popoverDrawerInputs(
+                      { attribution: photo.attribution, i18n: translatorFor(language), corner },
+                      h,
+                    ),
+                  }),
+                ),
+              },
+              h,
             ),
         ),
       )
-}
+    : []

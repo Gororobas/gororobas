@@ -28,7 +28,7 @@ import { nameParts } from "../../../../lib/wiki-article-names"
 import { styledAttributes } from "../../../../ui/pleat-attributes"
 import { fontSize, fontWeight, radius, space, tones } from "../../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../../composition"
-import { chipFact, fact, rangeText, textFact } from "./facts"
+import { chipFact, fact, rangeText, textFact, untranslatedNote } from "./facts"
 
 type PlantPage = typeof WikiPlantArticle.QueriedPageData.Type
 type CultivarPage = Extract<WikiArticleQueriedPageData, { kind: "PLANT_CULTIVAR" }>
@@ -301,7 +301,18 @@ export const facts = (
 
   return [
     ...(page.kind === "PLANT"
-      ? textFact({ title: i18n._(msg`Origin`), maybeText: page.origin }, h)
+      ? textFact(
+          {
+            title: i18n._(msg`Origin`),
+            maybeText: page.origin,
+            maybeNote: untranslatedNote({
+              contentLanguage: page.language,
+              readerLanguage: language,
+              i18n,
+            }),
+          },
+          h,
+        )
       : []),
     ...chipFact(
       {

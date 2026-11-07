@@ -1,3 +1,4 @@
+import type { GrammaticalGender } from "@gororobas/domain/common/enums"
 import type { WikiArticleCommonName } from "@gororobas/domain/wiki/wiki-article-common-name"
 import { Array as EffectArray, Option } from "effect"
 
@@ -11,17 +12,25 @@ export const primaryName = (article: NamedArticle): string =>
   })
 
 /**
- * The name's grammatical gender, as an ICU `select` key. English copy ignores it; Portuguese and
- * Spanish translations agree with it, as in "da Banana" and "do Mamão".
+ * A `GrammaticalGender` as the key of an ICU `select`, which is how translations agree with a name:
+ * Portuguese and Spanish say "da Banana" but "do Mamão", while English ignores it.
+ *
+ * ICU requires every `select` to have an `other` branch, so names without a gender and `NEUTRAL`
+ * ones both land there. `female` and `male` are the keys ICU's own gender examples use, which
+ * translators and translation tools recognize.
  */
-export type NameGender = "female" | "male" | "other"
+export type IcuGenderKey = "female" | "male" | "other"
 
-const genders = { FEMALE: "female", MALE: "male", NEUTRAL: "other" } as const
+const icuGenderKeys: Readonly<Record<GrammaticalGender, IcuGenderKey>> = {
+  FEMALE: "female",
+  MALE: "male",
+  NEUTRAL: "other",
+}
 
-export const nameGender = (article: NamedArticle): NameGender =>
+export const nameGender = (article: NamedArticle): IcuGenderKey =>
   EffectArray.head(article.commonNames).pipe(
     Option.flatMap((name) => name.grammaticalGender),
-    Option.match({ onNone: () => "other", onSome: (gender) => genders[gender] }),
+    Option.match({ onNone: () => "other", onSome: (gender) => icuGenderKeys[gender] }),
   )
 
 /** What messages about an article interpolate: its name and the gender translations agree with. */

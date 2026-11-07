@@ -2,7 +2,7 @@ import { Array as EffectArray, Option } from "effect"
 
 import { mediaCaption } from "../../../lib/media-caption"
 import { externalImageUrl, imageUrl } from "../../../media-urls"
-import type { MediaAttribution, MediaDimensions } from "../../../ui/media-credit"
+import { type MediaAttribution, MediaCredit, type MediaDimensions } from "../../../ui/media-credit"
 import type { Page } from "./shared"
 
 type PhotoWidth = 300 | 1280
@@ -37,15 +37,7 @@ export const articlePhotos = (page: Page): ReadonlyArray<ArticlePhoto> =>
               // Captions read in the language the article itself was served in.
               maybeCaption: mediaCaption({ media, language: page.language }),
               maybeCategory: Option.fromNullishOr(media.category),
-              attribution: {
-                credits: media.credits.map((credit) => ({
-                  maybeProfile: Option.fromNullishOr(credit.profile),
-                  maybeLine: Option.fromNullishOr(credit.creditLine),
-                  maybeUrl: Option.fromNullishOr(credit.creditUrl),
-                })),
-                maybeLicenseUrl: Option.none(),
-                maybeSourceUrl: Option.none(),
-              },
+              attribution: MediaCredit.uploadedMediaAttribution(media),
               maybeDimensions: Option.some({
                 width: media.metadata.originalWidth,
                 height: media.metadata.originalHeight,

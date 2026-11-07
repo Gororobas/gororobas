@@ -15,6 +15,7 @@ import { AppText } from "../app-text"
 import * as Icons from "../icons"
 import { iconSizeProperty } from "../icons/icon-size"
 import { wikiKindIcons } from "../icons/wiki-kind-icons"
+import { LoadingState } from "../loading-state"
 import { styledAttributes } from "../pleat-attributes"
 import { focusRingDeclarations } from "../styles/focus-ring"
 import { borderWidth, duration, fontWeight, radius, space, tones } from "../theme"
@@ -273,3 +274,65 @@ export const view = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Messa
     ),
   ])
 }
+
+const chipStyle = Style.make({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: space[2],
+  maxInlineSize: "100%",
+  paddingBlock: space[1],
+  paddingInlineStart: space[1],
+  paddingInlineEnd: space[3],
+  borderRadius: radius.full,
+  cornerShape: "squircle",
+  backgroundColor: tones.primary.ramp[300],
+  color: tones.neutral.ramp[900],
+  fontWeight: fontWeight.medium,
+  outline: "none",
+  transitionProperty: "filter",
+  transitionDuration: duration.control,
+}).pipe(
+  Style.when(When.hover, { filter: "brightness(0.96)" }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
+
+const chipNameStyle = Style.make({
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+})
+
+/** An article in a line of others, such as what a profile saved: its photo and name. */
+export const chip = <Message>(
+  {
+    article,
+    language,
+  }: Readonly<{ article: WikiArticleQueriedCardData; language: SupportedLanguage }>,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const name = primaryName(article)
+
+  return h.a(styledAttributes([h.Href(wikiArticleUrl(language, article))], chipStyle), [
+    Thumbnail.view({ maybeSrc: thumbnailSrc(article), alt: "", size: "xs" }, h),
+    AppText.view(
+      { element: "span", appearance: "footnote", styles: [chipNameStyle], children: [name] },
+      h,
+    ),
+  ])
+}
+
+const skeletonPanelStyle = Style.make({ rowGap: space[2], justifyItems: "stretch" })
+
+/** An article card on its way: the color block where its photo goes, and the names' panel. */
+export const cardSkeleton = <Message>(h: HtmlBuilder<Message>): Html =>
+  h.div(styledAttributes([], cardStyle), [
+    h.div(styledAttributes([], cardMediaStyle)),
+    h.div(styledAttributes([], cardPanelStyle, skeletonPanelStyle), [
+      LoadingState.bone(
+        { shape: "pill", styles: [Style.make({ inlineSize: "3.5rem", blockSize: "1rem" })] },
+        h,
+      ),
+      LoadingState.bone({ shape: "heading", styles: [Style.make({ inlineSize: "80%" })] }, h),
+      LoadingState.bone({ shape: "shortLine" }, h),
+    ]),
+  ])

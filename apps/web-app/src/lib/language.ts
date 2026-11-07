@@ -40,3 +40,19 @@ export const detectLanguage = (
     Option.orElse(maybePreference, () => EffectArray.findFirst(browserLanguageTags, languageOfTag)),
     () => DEFAULT_LANGUAGE,
   )
+
+/**
+ * A language's name in the reader's language, as written mid-sentence: "inglês" for `en` in
+ * Portuguese, but "English" in English.
+ */
+export const inlineLanguageName = (code: string, readerLanguage: SupportedLanguage): string =>
+  Option.getOrElse(
+    Option.fromNullishOr(
+      new Intl.DisplayNames([intlTags[readerLanguage]], { type: "language" }).of(code),
+    ),
+    () => code,
+  )
+
+/** A language's name in the reader's language on its own, such as "Inglês" in a list. */
+export const languageName = (code: string, readerLanguage: SupportedLanguage): string =>
+  EffectString.capitalize(inlineLanguageName(code, readerLanguage))

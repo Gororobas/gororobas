@@ -27,7 +27,6 @@ export const init = WikiArticleComposition.makeInit(
   (lookup: WikiArticleLookup, language: SupportedLanguage) => ({
     model: {
       lookup,
-      language,
       pageAsyncData: PageResult.Loading(),
       relatedAsyncData: RelatedResults.Loading(),
       bookmarkersAsyncData: BookmarkerResults.Loading(),

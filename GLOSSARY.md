@@ -32,6 +32,10 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Profile location**: one entry of a profile's location timeline: a place, with an optional label and device elevation (only when the device was inside the place), or free text in the owner's words, with optional partial dates and its own `InformationVisibility`. Coordinates are never stored. The **latest location** is the first entry in timeline order (open-ended entries, then the latest started); profile cards show it only when it's public.
 
+**Bookmark visibility**: who sees the wiki articles a profile saved (its bookmarks), set by the profile's `bookmarksVisibility` (`InformationVisibility`). Its owner always sees them; when a reader can't, the profile page leaves the saved section and tab out entirely.
+
+**Profile photos**: images credited to the profile through `media_asset_credits`, as the person who took them. Media they uploaded but didn't take isn't among them: it belongs with their contributions.
+
 ## Moderation
 
 **Moderation status**: where a publication, publication comment or media asset stands in the moderation lifecycle: `APPROVED_BY_DEFAULT`, `CENSORED` or `REAPPROVED_AFTER_CENSORING` (`ModerationStatus`, stored in `moderation_status`).

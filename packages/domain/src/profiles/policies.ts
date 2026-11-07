@@ -26,6 +26,18 @@ export const profilePolicies = {
         policy((session) => (profile.visibility === "COMMUNITY" ? allow(session) : deny())),
       ),
     ),
+  /** Its owner always sees what they saved; others as `bookmarksVisibility` allows. */
+  canReadBookmarks: (profile: Pick<ProfileRow, "id" | "type" | "bookmarksVisibility">) =>
+    or(
+      isProfileOwner(profile),
+      policy((session) => (profile.bookmarksVisibility === "PUBLIC" ? allow(session) : deny())),
+      and(
+        platformPermission("profiles:read:community"),
+        policy((session) =>
+          profile.bookmarksVisibility === "COMMUNITY" ? allow(session) : deny(),
+        ),
+      ),
+    ),
   canEdit: (profile: ProfileRow) =>
     or(
       // For personal profiles, must be the owner to edit

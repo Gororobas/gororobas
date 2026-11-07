@@ -51,7 +51,10 @@ export const publications = (
             {
               i18n,
               asyncData: model.publicationsAsyncData,
-              loading: { label: i18n._(msg`Loading posts`), shape: "cards" },
+              loading: {
+                label: i18n._(msg`Loading publications`),
+                skeleton: PublicationCard.skeletons(2, h),
+              },
               onData: (all) =>
                 EffectArray.match(
                   all.filter((publication) =>
@@ -150,7 +153,7 @@ export const photos = (
                   {
                     photo: featured,
                     isFeatured: true,
-                    overlay: (photo) => photoCredit({ model, photo }, h),
+                    overlay: (photo) => photoCredit({ model, language, photo }, h),
                   },
                   h,
                 ),
@@ -158,7 +161,7 @@ export const photos = (
                   {
                     photos: rest,
                     columnCount: model.photoColumnCount,
-                    overlay: (photo) => photoCredit({ model, photo }, h),
+                    overlay: (photo) => photoCredit({ model, language, photo }, h),
                   },
                   h,
                 ),

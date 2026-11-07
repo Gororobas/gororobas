@@ -6,6 +6,8 @@ import {
   type Session,
   TimestampColumn,
   WikiArticleId,
+  WikiArticleKind,
+  PROFILE_COLLECTION_PAGE_SIZE,
   ProfileContentCounts,
   ProfileId,
   ProfileMetadataResult,
@@ -226,51 +228,92 @@ export const findPageLocation = SqlSchema.findOne({
 })
 
 /** Published articles the profile bookmarked, as anything but indifferent. */
+/** One page of a profile's collection, as LIMIT and OFFSET. */
+const pageOf = (sql: SqlClient.SqlClient, currentPage: number) =>
+  sql`LIMIT ${PROFILE_COLLECTION_PAGE_SIZE} OFFSET ${currentPage * PROFILE_COLLECTION_PAGE_SIZE}`
+
+/** Bookmarked articles' projections, under the `a` alias, only while they're published. */
+const publishedArticleJoin = (sql: SqlClient.SqlClient) => sql`
+  JOIN wiki_article_projections a ON a.id = b.wiki_article_id
+  JOIN wiki_article_sources source ON source.id = a.id AND source.status = 'PUBLISHED'`
+
+/** Published articles the profile saved, optionally of one kind or in one state. */
 export const listBookmarkedArticles = SqlSchema.findAll({
-  Request: ProfileId,
+  Request: Schema.Struct({
+    profileId: ProfileId,
+    currentPage: IntNonNegative,
+    kind: Schema.optionalKey(WikiArticleKind),
+    state: Schema.optionalKey(BookmarkState),
+  }),
   Result: Schema.Struct({ wikiArticleId: WikiArticleId, state: BookmarkState }),
-  execute: (profileId) =>
+  execute: ({ profileId, currentPage, kind, state }) =>
     SqlClient.SqlClient.use(
       (sql) => sql`
         SELECT b.wiki_article_id, b.state FROM bookmarks_wiki_articles b
+        ${publishedArticleJoin(sql)}
         WHERE b.person_id = ${profileId} AND b.state <> 'INDIFFERENT'
+          ${kind === undefined ? sql`` : sql`AND a.kind = ${kind}`}
+          ${state === undefined ? sql`` : sql`AND b.state = ${state}`}
+        ORDER BY b.wiki_article_id
+        ${pageOf(sql, currentPage)}
+      `,
+    ),
+})
+
+/** The kinds of published article the profile saved, so filters only offer those it has. */
+export const listBookmarkedKinds = SqlSchema.findAll({
+  Request: ProfileId,
+  Result: Schema.Struct({ kind: WikiArticleKind }),
+  execute: (profileId) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`
+        SELECT DISTINCT a.kind FROM bookmarks_wiki_articles b
+        ${publishedArticleJoin(sql)}
+        WHERE b.person_id = ${profileId} AND b.state <> 'INDIFFERENT'
+        ORDER BY a.kind
       `,
     ),
 })
 
 /** Articles with revisions the profile created that were approved, most recent first. */
 export const listContributedArticles = SqlSchema.findAll({
-  Request: ProfileId,
+  Request: Schema.Struct({ profileId: ProfileId, currentPage: IntNonNegative }),
   Result: Schema.Struct({
     wikiArticleId: WikiArticleId,
     revisionCount: IntNonNegative,
     lastContributedAt: TimestampColumn,
   }),
-  execute: (profileId) =>
+  execute: ({ profileId, currentPage }) =>
     SqlClient.SqlClient.use(
       (sql) => sql`
         SELECT r.wiki_article_id, COUNT(*) AS revision_count, MAX(r.created_at) AS last_contributed_at
         FROM wiki_article_revisions r
         WHERE r.created_by_id = ${profileId} AND r.evaluation = 'APPROVED'
         GROUP BY r.wiki_article_id
-        ORDER BY last_contributed_at DESC
+        ORDER BY last_contributed_at DESC, r.wiki_article_id
+        ${pageOf(sql, currentPage)}
       `,
     ),
 })
 
 /**
- * Images the profile uploaded that `session` can see: censored ones only by their owner, and each
- * attached to a wiki article, which anyone can read, or to a publication `session` can see.
+ * Images credited to the profile, as the person who took them, that `session` can see: censored
+ * ones only by their owner, and each attached to a wiki article, which anyone can read, or to a
+ * publication `session` can see. What the profile uploaded of others' shows in its contributions.
  */
 export const listVisiblePhotos = (session: Session) =>
   SqlSchema.findAll({
-    Request: ProfileId,
+    Request: Schema.Struct({ profileId: ProfileId, currentPage: IntNonNegative }),
     Result: MediaAssetRow,
-    execute: (profileId) =>
+    execute: ({ profileId, currentPage }) =>
       SqlClient.SqlClient.use(
         (sql) => sql`
           SELECT m.* FROM media_assets m
-          WHERE m.owner_profile_id = ${profileId} AND m.format = 'IMAGE'
+          WHERE m.format = 'IMAGE'
+            AND EXISTS (
+              SELECT 1 FROM media_asset_credits credit
+              WHERE credit.media_asset_id = m.id AND credit.person_id = ${profileId}
+            )
             AND (m.moderation_status <> 'CENSORED'
               OR ${session.type === "ACCOUNT" ? sql`m.owner_profile_id = ${session.personId}` : sql.literal("0")})
             AND (
@@ -282,6 +325,7 @@ export const listVisiblePhotos = (session: Session) =>
               )
             )
           ORDER BY m.created_at DESC, m.id
+          ${pageOf(sql, currentPage)}
         `,
       ),
   })

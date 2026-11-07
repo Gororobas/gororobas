@@ -40,21 +40,24 @@ const dedupedFilters = (filters: WikiKindFilters): WikiKindFilters =>
     Match.discriminators("kind")({
       PLANT: (plant) => ({
         ...plant,
-        plantUsages: EffectArray.dedupe(plant.plantUsages),
-        edibleParts: EffectArray.dedupe(plant.edibleParts),
-        plantLifecycles: EffectArray.dedupe(plant.plantLifecycles),
-        strata: EffectArray.dedupe(plant.strata),
-        plantingMethods: EffectArray.dedupe(plant.plantingMethods),
+        plantUsages: EffectArray.dedupe(plant.plantUsages ?? []),
+        edibleParts: EffectArray.dedupe(plant.edibleParts ?? []),
+        plantLifecycles: EffectArray.dedupe(plant.plantLifecycles ?? []),
+        strata: EffectArray.dedupe(plant.strata ?? []),
+        plantingMethods: EffectArray.dedupe(plant.plantingMethods ?? []),
       }),
-      ANIMAL: (animal) => ({ ...animal, animalRoles: EffectArray.dedupe(animal.animalRoles) }),
-      TOOL: (tool) => ({ ...tool, toolUsages: EffectArray.dedupe(tool.toolUsages) }),
+      ANIMAL: (animal) => ({
+        ...animal,
+        animalRoles: EffectArray.dedupe(animal.animalRoles ?? []),
+      }),
+      TOOL: (tool) => ({ ...tool, toolUsages: EffectArray.dedupe(tool.toolUsages ?? []) }),
       RESOURCE: (resource) => ({
         ...resource,
-        resourceFormats: EffectArray.dedupe(resource.resourceFormats),
+        resourceFormats: EffectArray.dedupe(resource.resourceFormats ?? []),
       }),
       NOTEWORTHY_ENTITY: (entity) => ({
         ...entity,
-        entityTypes: EffectArray.dedupe(entity.entityTypes),
+        entityTypes: EffectArray.dedupe(entity.entityTypes ?? []),
       }),
     }),
     Match.orElse((unfiltered) => unfiltered),

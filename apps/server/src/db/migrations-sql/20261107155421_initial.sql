@@ -117,6 +117,7 @@ CREATE TABLE `profiles` (
   `bio` json NULL,
   `photo_id` text NULL,
   `visibility` text NOT NULL,
+  `bookmarks_visibility` text NOT NULL,
   `searchable_text` text NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,

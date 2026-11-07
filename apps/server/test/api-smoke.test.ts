@@ -254,15 +254,18 @@ const requests = ({
     "profiles.listProfileBookmarks": () =>
       client.profiles.listProfileBookmarks({
         params: { handle: targets.profile.handle },
-        query: { language: "pt" },
+        query: { language: "pt", currentPage: 0 },
       }),
     "profiles.listProfileWikiContributions": () =>
       client.profiles.listProfileWikiContributions({
         params: { handle: targets.profile.handle },
-        query: { language: "pt" },
+        query: { language: "pt", currentPage: 0 },
       }),
     "profiles.listProfilePhotos": () =>
-      client.profiles.listProfilePhotos({ params: { handle: targets.profile.handle } }),
+      client.profiles.listProfilePhotos({
+        params: { handle: targets.profile.handle },
+        query: { currentPage: 0 },
+      }),
     "profiles.handleAvailability": () => client.profiles.handleAvailability({ query: { handle } }),
     "wiki.suggestBookIds": () => client.wiki.suggestBookIds({ query: { title: "Agrofloresta" } }),
     "wiki.getWikiArticleDebug": () =>

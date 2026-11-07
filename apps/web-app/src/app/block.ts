@@ -7,10 +7,12 @@ import * as ProfileLocationsEditor from "../blocks/profile-locations-editor"
 import * as Search from "../blocks/search"
 import * as WikiArticle from "../blocks/wiki-article"
 import * as WikiArticleDebug from "../blocks/wiki-article-debug"
+import { layer as PopoverDrawerLayer } from "../ui/popover-drawer"
 import { EffectsLayer } from "./command"
 import {
   AuthenticationBinding,
   ExternalDataAdminDashboardBinding,
+  SettingsMenuBinding,
   ProfileBinding,
   ProfileLocationsEditorBinding,
   SearchBinding,
@@ -26,6 +28,7 @@ import { view } from "./view"
 export const layer = ApplicationBlock.makeLayer(
   Effect.gen(function* () {
     const authentication = yield* AuthenticationBinding
+    const settingsMenu = yield* SettingsMenuBinding
     const search = yield* SearchBinding
     const wikiArticle = yield* WikiArticleBinding
     const wikiArticleDebug = yield* WikiArticleDebugBinding
@@ -36,6 +39,7 @@ export const layer = ApplicationBlock.makeLayer(
     return {
       children: [
         authentication,
+        settingsMenu,
         search,
         wikiArticle,
         wikiArticleDebug,
@@ -54,6 +58,7 @@ export const layer = ApplicationBlock.makeLayer(
   Layer.provide(
     Layer.mergeAll(
       Authentication.layer,
+      PopoverDrawerLayer,
       Search.layer,
       WikiArticle.layer,
       WikiArticleDebug.layer,

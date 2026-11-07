@@ -3,7 +3,7 @@ import type { Handle } from "@gororobas/domain/common/primitives"
 import { Option } from "effect"
 
 import { PhotoGallery } from "../../ui/photo-gallery"
-import { LoadBookmarks, LoadContributions, LoadPage, LoadPhotos } from "./command"
+import { LoadContributions, LoadPage, LoadPhotos } from "./command"
 import { ProfileComposition } from "./composition"
 import {
   BookmarkResults,
@@ -13,11 +13,14 @@ import {
   PublicationResults,
 } from "./model"
 
-/** Every collection loads with the page, so the home tab can sample each of them. */
+/**
+ * Every collection's first page loads with the page, so the home tab can sample each of them.
+ * Publications and saved articles wait for the page: they're found by the profile's ID, and
+ * saved articles only load when the reader may see them.
+ */
 export const init = ProfileComposition.makeInit((handle: Handle, language: SupportedLanguage) => ({
   model: {
     handle,
-    language,
     pageAsyncData: PageResult.Loading(),
     publicationsAsyncData: PublicationResults.Loading(),
     photosAsyncData: PhotoResults.Loading(),
@@ -25,12 +28,12 @@ export const init = ProfileComposition.makeInit((handle: Handle, language: Suppo
     bookmarksAsyncData: BookmarkResults.Loading(),
     maybePublicationKindFilter: Option.none(),
     maybeBookmarkStateFilter: Option.none(),
+    maybeBookmarkKindFilter: Option.none(),
     photoColumnCount: PhotoGallery.initialColumnCount,
   },
   commands: [
     LoadPage({ handle }),
-    LoadPhotos({ handle }),
-    LoadContributions({ handle, language }),
-    LoadBookmarks({ handle, language }),
+    LoadPhotos({ handle, currentPage: 0 }),
+    LoadContributions({ handle, language, currentPage: 0 }),
   ],
 }))

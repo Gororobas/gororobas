@@ -139,7 +139,7 @@ const kindFilterGroups = (
           id: "plantUsages",
           label: msg`Uses`,
           labels: plantUsageLabels,
-          selected: plant.plantUsages,
+          selected: plant.plantUsages ?? [],
           toFilters: (plantUsages) => ({ ...plant, plantUsages }),
         }),
         listGroup({
@@ -147,7 +147,7 @@ const kindFilterGroups = (
           id: "edibleParts",
           label: msg`Edible parts`,
           labels: ediblePartLabels,
-          selected: plant.edibleParts,
+          selected: plant.edibleParts ?? [],
           toFilters: (edibleParts) => ({ ...plant, edibleParts }),
         }),
         listGroup({
@@ -155,7 +155,7 @@ const kindFilterGroups = (
           id: "plantLifecycles",
           label: msg`Lifecycle`,
           labels: lifecycleLabels,
-          selected: plant.plantLifecycles,
+          selected: plant.plantLifecycles ?? [],
           toFilters: (plantLifecycles) => ({ ...plant, plantLifecycles }),
         }),
         listGroup({
@@ -163,7 +163,7 @@ const kindFilterGroups = (
           id: "strata",
           label: msg`Stratum`,
           labels: stratumLabels,
-          selected: plant.strata,
+          selected: plant.strata ?? [],
           toFilters: (strata) => ({ ...plant, strata }),
         }),
         listGroup({
@@ -171,7 +171,7 @@ const kindFilterGroups = (
           id: "plantingMethods",
           label: msg`Planting`,
           labels: plantingMethodLabels,
-          selected: plant.plantingMethods,
+          selected: plant.plantingMethods ?? [],
           toFilters: (plantingMethods) => ({ ...plant, plantingMethods }),
         }),
       ],
@@ -181,7 +181,7 @@ const kindFilterGroups = (
           id: "animalRoles",
           label: msg`Roles`,
           labels: animalRoleLabels,
-          selected: animal.animalRoles,
+          selected: animal.animalRoles ?? [],
           toFilters: (animalRoles) => ({ ...animal, animalRoles }),
         }),
       ],
@@ -191,7 +191,7 @@ const kindFilterGroups = (
           id: "toolUsages",
           label: msg`Uses`,
           labels: toolUsageLabels,
-          selected: tool.toolUsages,
+          selected: tool.toolUsages ?? [],
           toFilters: (toolUsages) => ({ ...tool, toolUsages }),
         }),
       ],
@@ -201,7 +201,7 @@ const kindFilterGroups = (
           id: "resourceFormats",
           label: msg`Format`,
           labels: resourceFormatLabels,
-          selected: resource.resourceFormats,
+          selected: resource.resourceFormats ?? [],
           toFilters: (resourceFormats) => ({ ...resource, resourceFormats }),
         }),
       ],
@@ -211,7 +211,7 @@ const kindFilterGroups = (
           id: "entityTypes",
           label: msg`Category`,
           labels: entityTypeLabels,
-          selected: entity.entityTypes,
+          selected: entity.entityTypes ?? [],
           toFilters: (entityTypes) => ({ ...entity, entityTypes }),
         }),
       ],
@@ -333,12 +333,6 @@ export const nonEmptyText = (query: SearchQuery): Option.Option<string> =>
 const optionalText = (query: SearchQuery): { readonly text?: string } =>
   Option.match(nonEmptyText(query), { onNone: () => ({}), onSome: (text) => ({ text }) })
 
-const optionalList = <Key extends string, Value>(
-  key: Key,
-  values: ReadonlyArray<Value>,
-): Partial<Record<Key, ReadonlyArray<Value>>> =>
-  EffectArray.isReadonlyArrayNonEmpty(values) ? Record.singleton(key, values) : {}
-
 type ApiInputs = Readonly<{ query: SearchQuery; language: SupportedLanguage }>
 
 /** Overviews search every kind; only a chosen kind sends its filters. */
@@ -348,42 +342,7 @@ export const wikiSearchParams = ({ query, language }: ApiInputs): WikiSearchPara
 
   return Option.match(maybeKind, {
     onNone: () => base,
-    onSome: (filters): WikiSearchParams =>
-      Match.value(filters).pipe(
-        Match.withReturnType<WikiSearchParams>(),
-        Match.discriminators("kind")({
-          PLANT: (plant) => ({
-            ...base,
-            kind: plant.kind,
-            ...optionalList("plantUsages", plant.plantUsages),
-            ...optionalList("edibleParts", plant.edibleParts),
-            ...optionalList("plantLifecycles", plant.plantLifecycles),
-            ...optionalList("strata", plant.strata),
-            ...optionalList("plantingMethods", plant.plantingMethods),
-          }),
-          ANIMAL: (animal) => ({
-            ...base,
-            kind: animal.kind,
-            ...optionalList("animalRoles", animal.animalRoles),
-          }),
-          TOOL: (tool) => ({
-            ...base,
-            kind: tool.kind,
-            ...optionalList("toolUsages", tool.toolUsages),
-          }),
-          RESOURCE: (resource) => ({
-            ...base,
-            kind: resource.kind,
-            ...optionalList("resourceFormats", resource.resourceFormats),
-          }),
-          NOTEWORTHY_ENTITY: (entity) => ({
-            ...base,
-            kind: entity.kind,
-            ...optionalList("entityTypes", entity.entityTypes),
-          }),
-        }),
-        Match.orElse((other) => ({ ...base, kind: other.kind })),
-      ),
+    onSome: (filters) => ({ ...base, ...filters }),
   })
 }
 

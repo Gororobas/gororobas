@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { GbifClassification } from "@gororobas/domain/wiki/domain"
 import type { MessageDescriptor } from "@lingui/core"
 import { msg } from "@lingui/core/macro"
@@ -31,7 +32,7 @@ import type { Page } from "./shared"
 
 type Rank = Readonly<{
   maybeLabel: Option.Option<MessageDescriptor>
-  /** Shown in the one-line breadcrumb, not only in the full classification. */
+  /** Shown in the header's one-line breadcrumb (family and genus); every rank is in the full classification. */
   isInBreadcrumb: boolean
   /** Family and subfamily say the most about a plant's kin, so they stand out. */
   isEmphasized: boolean
@@ -52,26 +53,11 @@ const rank = (
 /** From broadest to narrowest; GBIF reports ranks in upper case. */
 const ranks: ReadonlyArray<readonly [string, Rank]> = [
   ["DOMAIN", rank(Option.some(msg({ message: "Domain", context: "taxonomic rank" })))],
-  [
-    "KINGDOM",
-    rank(Option.some(msg({ message: "Kingdom", context: "taxonomic rank" })), {
-      isInBreadcrumb: true,
-    }),
-  ],
+  ["KINGDOM", rank(Option.some(msg({ message: "Kingdom", context: "taxonomic rank" })))],
   ["SUBKINGDOM", rank(Option.some(msg({ message: "Subkingdom", context: "taxonomic rank" })))],
   ["PHYLUM", rank(Option.some(msg({ message: "Phylum", context: "taxonomic rank" })))],
-  [
-    "CLASS",
-    rank(Option.some(msg({ message: "Class", context: "taxonomic rank" })), {
-      isInBreadcrumb: true,
-    }),
-  ],
-  [
-    "ORDER",
-    rank(Option.some(msg({ message: "Order", context: "taxonomic rank" })), {
-      isInBreadcrumb: true,
-    }),
-  ],
+  ["CLASS", rank(Option.some(msg({ message: "Class", context: "taxonomic rank" })))],
+  ["ORDER", rank(Option.some(msg({ message: "Order", context: "taxonomic rank" })))],
   [
     "FAMILY",
     rank(Option.some(msg({ message: "Family", context: "taxonomic rank" })), {
@@ -82,7 +68,6 @@ const ranks: ReadonlyArray<readonly [string, Rank]> = [
   [
     "SUBFAMILY",
     rank(Option.some(msg({ message: "Subfamily", context: "taxonomic rank" })), {
-      isInBreadcrumb: true,
       isEmphasized: true,
     }),
   ],
@@ -251,7 +236,7 @@ const fullClassification = (
 
 /** A plant's kin in one line, from its kingdom to its genus; the whole classification behind it. */
 export const view = (
-  { model, page }: Readonly<{ model: Model; page: Page }>,
+  { model, language, page }: Readonly<{ model: Model; language: SupportedLanguage; page: Page }>,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> =>
   EffectArray.fromOption(
@@ -260,7 +245,7 @@ export const view = (
     ),
   ).map((taxonomy) => {
     const classification = EffectArray.sort(taxonomy.classification, byRank)
-    const i18n = translatorFor(model.language)
+    const i18n = translatorFor(language)
     const names = classification.map((entry) => entry.scientificName).join(", ")
 
     return h.block(
@@ -283,7 +268,7 @@ export const view = (
               ...EffectArray.fromOption(
                 Option.map(findCredit(page, "GBIF"), (credit) => [
                   h.hr(styledAttributes([h.AriaHidden(true)], ruleStyle)),
-                  attributionDetails({ credit, language: model.language }, h),
+                  attributionDetails({ credit, language }, h),
                 ]),
               ).flat(),
             ]),

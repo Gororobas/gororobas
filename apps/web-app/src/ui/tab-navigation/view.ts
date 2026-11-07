@@ -1,4 +1,4 @@
-import { Recipe, Style, When } from "@pleat/core"
+import { Global, Recipe, Style, When } from "@pleat/core"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
 import type { IconConfig } from "../icons"
@@ -26,6 +26,23 @@ const SLIDING_INDICATOR_QUERY = "(anchor-scope: all) and (anchor-name: --a)"
 const supportsSlidingIndicator = When.supports(SLIDING_INDICATOR_QUERY)
 const lacksSlidingIndicator = When.supports(`not (${SLIDING_INDICATOR_QUERY})`)
 
+/** How far the edges fade out where tabs continue past them. */
+const OVERFLOW_FADE = "4rem"
+
+const fadeMask = ({ start, end }: Readonly<{ start: boolean; end: boolean }>) =>
+  `linear-gradient(to right, ${start ? "transparent" : "black"}, black ${start ? OVERFLOW_FADE : "0%"}, black calc(100% - ${end ? OVERFLOW_FADE : "0%"}), ${end ? "transparent" : "black"})`
+
+/**
+ * Fades whichever edge has more tabs past it, so a clipped list doesn't read as complete. Driven
+ * by the list's own scroll timeline, which is inactive (and so leaves no mask) when the tabs fit.
+ * Masks don't interpolate: each one holds until the next keyframe takes over.
+ */
+const overflowFade = Global.keyframes("tab-navigation-overflow-fade", {
+  "from, 1%": { maskImage: fadeMask({ start: false, end: true }) },
+  "2%, 98%": { maskImage: fadeMask({ start: true, end: true }) },
+  "99%, to": { maskImage: fadeMask({ start: true, end: false }) },
+})
+
 const listStyle = Style.make({
   position: "relative",
   display: "flex",
@@ -33,7 +50,14 @@ const listStyle = Style.make({
   scrollbarWidth: "none",
   paddingBlockEnd: INDICATOR_THICKNESS,
   anchorScope: CURRENT_TAB_ANCHOR,
-})
+}).pipe(
+  Style.when(When.supports("(animation-timeline: scroll())"), {
+    animationName: overflowFade,
+    animationTimingFunction: "linear",
+    animationFillMode: "both",
+    animationTimeline: "scroll(self inline)",
+  }),
+)
 
 /** No gap between tabs: each tab's padding spaces them, so the hit areas touch. */
 const tabStyle = Recipe.make({

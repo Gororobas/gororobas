@@ -55,8 +55,9 @@ export const subscriptions = SearchBlock.makeSubscriptions((entry) => ({
                   query: publicationSearchParams({
                     query,
                     language,
+                    // One past the preview, so the overview knows whether there's more to see.
                     pageSize: SearchScope.guards.Everything(query.scope)
-                      ? previewCapacity(publicationsShownAt)
+                      ? previewCapacity(publicationsShownAt) + 1
                       : PUBLICATIONS_SEARCH_PAGE_SIZE,
                   }),
                 })

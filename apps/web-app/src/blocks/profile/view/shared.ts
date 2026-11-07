@@ -11,13 +11,18 @@ import type { ClientFailure } from "../../../lib/client-failure"
 import { mediaCaption } from "../../../lib/media-caption"
 import type { Translator } from "../../../lib/translations"
 import { imageUrl } from "../../../media-urls"
+import { AppButton } from "../../../ui/app-button"
 import { EmptyState } from "../../../ui/empty-state"
 import * as Icons from "../../../ui/icons"
-import { type LoadingShape, LoadingState } from "../../../ui/loading-state"
+import { LoadingState, type LoadingStateConfig } from "../../../ui/loading-state"
+import { type MediaAttribution, MediaCredit } from "../../../ui/media-credit"
 import type { GalleryPhoto } from "../../../ui/photo-gallery"
+import { styledAttributes } from "../../../ui/pleat-attributes"
 import { breakpoint, space } from "../../../ui/theme"
-import type { ProfileViewBuilder } from "../composition"
-import type { Model } from "../model"
+import { PhotoCreditsBinding, type ProfileViewBuilder, photoCreditId } from "../composition"
+import { Message } from "../message"
+import type { Collection, Model } from "../model"
+import { ObserveCollectionEnd } from "../mount"
 
 export type Page = ProfilePageData
 
@@ -53,7 +58,7 @@ export const asyncView = <A>(
   }: Readonly<{
     i18n: Translator
     asyncData: AsyncData.AsyncData<A, ClientFailure>
-    loading: Readonly<{ label: string; shape: LoadingShape; count?: number }>
+    loading: LoadingStateConfig
     onData: (data: A) => Html
   }>,
   h: ProfileViewBuilder,
@@ -72,6 +77,9 @@ export const asyncView = <A>(
     onData,
   })
 
+/** A photo with what's needed to credit it, in a popover by its badge or a drawer. */
+export type ProfilePhoto = GalleryPhoto & Readonly<{ attribution: MediaAttribution }>
+
 /** Only images are shown as photos; the gallery sizes each by its own dimensions. */
 export const galleryPhotos = ({
   media,
@@ -79,8 +87,8 @@ export const galleryPhotos = ({
 }: Readonly<{
   media: ReadonlyArray<CreditedMediaAssetRow>
   language: SupportedLanguage
-}>): ReadonlyArray<GalleryPhoto> =>
-  media.flatMap((asset): ReadonlyArray<GalleryPhoto> =>
+}>): ReadonlyArray<ProfilePhoto> =>
+  media.flatMap((asset): ReadonlyArray<ProfilePhoto> =>
     asset.format === "IMAGE"
       ? [
           {
@@ -91,11 +99,112 @@ export const galleryPhotos = ({
               width: asset.metadata.originalWidth,
               height: asset.metadata.originalHeight,
             }),
+            attribution: MediaCredit.uploadedMediaAttribution(asset),
           },
         ]
       : [],
   )
 
-export const isEmptyData = <A>(
-  asyncData: AsyncData.AsyncData<ReadonlyArray<A>, ClientFailure>,
-): boolean => Option.exists(AsyncData.getData(asyncData), EffectArray.isReadonlyArrayEmpty)
+/** Who took a photo and its license, behind a badge over its corner. */
+export const photoCredit = (
+  { model, photo, i18n }: Readonly<{ model: Model; photo: ProfilePhoto; i18n: Translator }>,
+  h: ProfileViewBuilder,
+): ReadonlyArray<Html> =>
+  MediaCredit.hasCredits(photo.attribution)
+    ? EffectArray.fromOption(
+        Option.map(
+          EffectArray.findFirst(
+            model.photoCredits,
+            (credit) => credit.id === photoCreditId(photo.key),
+          ),
+          (instance) =>
+            MediaCredit.corner(
+              {
+                badge: h.block(
+                  PhotoCreditsBinding.embedView({
+                    key: instance.id,
+                    slotId: instance.id,
+                    model: instance,
+                    viewInputs: MediaCredit.popoverDrawerInputs(
+                      { attribution: photo.attribution, i18n },
+                      h,
+                    ),
+                  }),
+                ),
+              },
+              h,
+            ),
+        ),
+      )
+    : []
+
+type Paged<Item> = Readonly<{ items: ReadonlyArray<Item>; hasMore: boolean }>
+
+export const isEmptyData = <Item>(
+  asyncData: AsyncData.AsyncData<Paged<Item>, ClientFailure>,
+): boolean =>
+  Option.exists(AsyncData.getData(asyncData), (data) =>
+    EffectArray.isReadonlyArrayEmpty(data.items),
+  )
+
+const moreStyle = Style.make({ display: "grid", justifyItems: "center", paddingBlock: space[4] })
+
+/**
+ * A collection loaded a page at a time: what's loaded, then a marker that loads the next page as
+ * the reader nears it, or a way to retry when it failed.
+ */
+export const pagedView = <Item>(
+  {
+    collection,
+    asyncData,
+    loading,
+    onItems,
+    i18n,
+  }: Readonly<{
+    collection: Collection
+    i18n: Translator
+    asyncData: AsyncData.AsyncData<Paged<Item>, ClientFailure>
+    loading: LoadingStateConfig
+    onItems: (items: ReadonlyArray<Item>) => Html
+  }>,
+  h: ProfileViewBuilder,
+): Html =>
+  asyncView(
+    {
+      i18n,
+      asyncData,
+      loading,
+      onData: (data) =>
+        h.div(
+          [],
+          [
+            onItems(data.items),
+            ...(data.hasMore
+              ? [
+                  AsyncData.isStale(asyncData)
+                    ? h.div(styledAttributes([], moreStyle), [
+                        AppButton.view(
+                          {
+                            mode: "outline",
+                            size: "sm",
+                            onClick: Message.ReachedCollectionEnd({ collection }),
+                            children: [i18n._(msg`Couldn't load more. Try again`)],
+                          },
+                          h,
+                        ),
+                      ])
+                    : h.keyed("div")(
+                        `${collection}-end`,
+                        styledAttributes(
+                          [h.OnMount(ObserveCollectionEnd({ collection }))],
+                          moreStyle,
+                        ),
+                        AsyncData.isRefreshing(asyncData) ? [LoadingState.view(loading, h)] : [],
+                      ),
+                ]
+              : []),
+          ],
+        ),
+    },
+    h,
+  )

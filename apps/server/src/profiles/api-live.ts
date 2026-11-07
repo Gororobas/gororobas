@@ -31,22 +31,20 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
       }).pipe(withApiInfrastructureErrors({ endpoint: "getProfileByHandle", group: "profiles" })),
     )
     .handle("listProfileBookmarks", ({ params, query }) =>
-      ProfileService.use((service) => service.listBookmarks(params.handle, query.language)).pipe(
+      ProfileService.use((service) => service.listBookmarks(params.handle, query)).pipe(
         withApiInfrastructureErrors({ endpoint: "listProfileBookmarks", group: "profiles" }),
       ),
     )
     .handle("listProfileWikiContributions", ({ params, query }) =>
-      ProfileService.use((service) =>
-        service.listWikiContributions(params.handle, query.language),
-      ).pipe(
+      ProfileService.use((service) => service.listWikiContributions(params.handle, query)).pipe(
         withApiInfrastructureErrors({
           endpoint: "listProfileWikiContributions",
           group: "profiles",
         }),
       ),
     )
-    .handle("listProfilePhotos", ({ params }) =>
-      ProfileService.use((service) => service.listPhotos(params.handle)).pipe(
+    .handle("listProfilePhotos", ({ params, query }) =>
+      ProfileService.use((service) => service.listPhotos(params.handle, query)).pipe(
         withApiInfrastructureErrors({ endpoint: "listProfilePhotos", group: "profiles" }),
       ),
     )

@@ -146,6 +146,7 @@ export const makeProfileFixture = (
       bio: null,
       photoId: null,
       visibility: "PUBLIC" satisfies ProfileVisibility,
+      bookmarksVisibility: "PUBLIC",
       createdAt: now,
       updatedAt: now,
     }
@@ -190,6 +191,7 @@ export const makeOrganizationProfileFixture = (
       bio: null,
       photoId: null,
       visibility: "PUBLIC" satisfies ProfileVisibility,
+      bookmarksVisibility: "PUBLIC",
       createdAt: now,
       updatedAt: now,
     }

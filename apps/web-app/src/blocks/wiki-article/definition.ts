@@ -13,7 +13,10 @@ export const WikiArticleKey = Symbol("WikiArticle")
 
 export const WikiArticleBlock = Block.make("WikiArticle", {
   key: WikiArticleKey,
+  /** Content loads in the language the app is read in, which also sets the block's key. */
   Init: Schema.Tuple([WikiArticleLookup, SupportedLanguage]),
+  /** Follow-up requests, such as the article's posts, load in that same language. */
+  Context: Schema.Tuple([SupportedLanguage]),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
   effects: { services: [GororobasApiClient, SessionAccess] },
   Model,

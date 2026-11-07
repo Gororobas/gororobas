@@ -110,6 +110,7 @@ CREATE TABLE profiles (
   bio json,
   photo_id text,
   visibility text NOT NULL, -- ProfileVisibility
+  bookmarks_visibility text NOT NULL, -- InformationVisibility: who sees the wiki articles it saved
   -- Name, handle and latest location's text, when public, folded for full-text search (indexed at the end of this file)
   searchable_text text NOT NULL,
   created_at text NOT NULL,

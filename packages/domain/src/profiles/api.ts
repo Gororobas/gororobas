@@ -14,8 +14,10 @@ import {
 import { ProfileLocationData, ProfileLocationPayload } from "./locations.js"
 import {
   ProfileBookmark,
+  ProfileBookmarksQuery,
   ProfileCollectionQuery,
   ProfilePhotos,
+  ProfilePhotosQuery,
   ProfileWikiContribution,
 } from "./profile-page.js"
 
@@ -40,7 +42,7 @@ export class ProfilesApiGroup extends HttpApiGroup.make("profiles")
       success: Schema.Array(ProfileBookmark),
       error: [ProfileNotFoundError, UnauthorizedError],
       params: ProfileCollectionParams,
-      query: ProfileCollectionQuery,
+      query: ProfileBookmarksQuery,
     }),
   )
   .add(
@@ -56,6 +58,7 @@ export class ProfilesApiGroup extends HttpApiGroup.make("profiles")
       success: ProfilePhotos,
       error: [ProfileNotFoundError, UnauthorizedError],
       params: ProfileCollectionParams,
+      query: ProfilePhotosQuery,
     }),
   )
   .add(

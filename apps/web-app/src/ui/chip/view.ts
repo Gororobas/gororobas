@@ -4,7 +4,16 @@ import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 
 import { styledAttributes } from "../pleat-attributes"
 import { focusRingDeclarations } from "../styles/focus-ring"
-import { duration, fontSize, fontWeight, lineHeight, radius, space, tones } from "../theme"
+import {
+  duration,
+  fontSize,
+  fontWeight,
+  lineHeight,
+  radius,
+  space,
+  toneColors,
+  tones,
+} from "../theme"
 
 export const chipStyle = Recipe.make({
   name: "Chip",
@@ -29,9 +38,12 @@ export const chipStyle = Recipe.make({
     appearance: {
       /** A value, such as an article's usage. */
       tag: { backgroundColor: tones.primary.ramp[400], color: tones.neutral.ramp[800] },
-      /** A choice that narrows a list. */
-      option: { backgroundColor: tones.neutral.shade[100], color: tones.neutral.shade[700] },
-      selectedOption: { backgroundColor: tones.primary.ramp[400], color: tones.neutral.ramp[900] },
+      /** A choice that narrows a list, in the tone of the surface it's on. */
+      option: { backgroundColor: toneColors.backgroundMuted, color: toneColors.foreground },
+      selectedOption: {
+        backgroundColor: toneColors.action.background,
+        color: toneColors.action.foreground,
+      },
     },
     isInteractive: {
       true: Style.make({ cursor: "pointer", outline: "none" }).pipe(

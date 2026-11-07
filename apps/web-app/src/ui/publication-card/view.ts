@@ -12,6 +12,7 @@ import { translatorFor } from "../../lib/translations"
 import { primaryName } from "../../lib/wiki-article-names"
 import { audioUrl, imageUrl } from "../../media-urls"
 import { AppText, type AppTextAppearance } from "../app-text"
+import { LoadingState } from "../loading-state"
 import { styledAttributes } from "../pleat-attributes"
 import { ProfileRow } from "../profile-row"
 import { focusRingDeclarations } from "../styles/focus-ring"
@@ -213,3 +214,46 @@ export const view = <Message>(
     ]),
   ])
 }
+
+const skeletonTagsStyle = Style.make({ display: "flex", gap: space[2] })
+
+const skeletonCopyStyle = Style.make({
+  display: "grid",
+  rowGap: space[2],
+  marginBlockStart: space[4],
+})
+
+const skeletonOwnerTextStyle = Style.make({ display: "grid", flex: 1, rowGap: space[2] })
+
+/** A publication card on its way, on the same recipe-card surface. */
+export const skeleton = <Message>(h: HtmlBuilder<Message>): Html =>
+  h.div(styledAttributes([], cardStyle), [
+    h.div(styledAttributes([], rowStyle), [
+      LoadingState.bone({ shape: "pill" }, h),
+      h.div(styledAttributes([], skeletonTagsStyle), [
+        LoadingState.bone({ shape: "pill" }, h),
+        LoadingState.bone({ shape: "pill" }, h),
+      ]),
+    ]),
+    h.div(styledAttributes([], skeletonCopyStyle), [
+      LoadingState.bone({ shape: "line" }, h),
+      LoadingState.bone({ shape: "line" }, h),
+      LoadingState.bone({ shape: "shortLine" }, h),
+    ]),
+    h.div(styledAttributes([], footerStyle), [
+      LoadingState.bone({ shape: "avatar" }, h),
+      h.div(styledAttributes([], skeletonOwnerTextStyle), [
+        LoadingState.bone({ shape: "shortLine" }, h),
+        LoadingState.bone({ shape: "shortLine", styles: [Style.make({ inlineSize: "35%" })] }, h),
+      ]),
+    ]),
+  ])
+
+const skeletonListStyle = Style.make({ display: "grid", rowGap: space[3] })
+
+/** `count` publication cards on their way, stacked as lists of them are. */
+export const skeletons = <Message>(count: number, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    styledAttributes([], skeletonListStyle),
+    EffectArray.makeBy(count, () => skeleton(h)),
+  )

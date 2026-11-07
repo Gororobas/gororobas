@@ -345,7 +345,7 @@ const header = (
               ),
             ),
           ),
-          ...Classification.view({ model, page }, h),
+          ...Classification.view({ model, language, page }, h),
         ]),
         ...debugLink({ page, language }, h),
       ]),
@@ -427,12 +427,10 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
   (model, { language, tab, isSignedIn, maybeToday }, h): Html =>
     AsyncData.matchData(model.pageAsyncData, {
       onEmpty: () =>
-        h.div(styledAttributes([], pageColumnStyle, statusStyle), [
-          LoadingState.view(
-            { label: translatorFor(language)._(msg`Loading article`), shape: "page", count: 2 },
-            h,
-          ),
-        ]),
+        LoadingState.page(
+          { label: translatorFor(language)._(msg`Loading article`), media: "square" },
+          h,
+        ),
       onFailure: (error) =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
           error.cause === "NotFound"

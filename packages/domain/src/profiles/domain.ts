@@ -3,12 +3,13 @@
  */
 import { Schema, Struct } from "effect"
 
-import { ProfileType, ProfileVisibility } from "../common/enums.js"
+import { InformationVisibility, ProfileType, ProfileVisibility } from "../common/enums.js"
 import { MediaAssetId, OrganizationId, PersonId, ProfileId } from "../common/ids.js"
 import { Handle, TimestampedStruct } from "../common/primitives.js"
 import { toSearchableText } from "../common/utils/strings.js"
 import { OrganizationRow } from "../organizations/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
+import { WikiArticleKind } from "../wiki/wiki-article.js"
 import { ProfileLocationCardData } from "./locations.js"
 
 export const ProfileSearchParams = Schema.Struct({
@@ -46,6 +47,8 @@ const CoreProfileRow = Schema.Struct({
   name: Schema.Trimmed.check(Schema.isNonEmpty()),
   photoId: Schema.NullOr(MediaAssetId),
   visibility: ProfileVisibility,
+  /** Who sees the wiki articles the profile saved, and how it relates to them. */
+  bookmarksVisibility: InformationVisibility,
 })
 
 export const PersonProfileRow = Schema.Struct({
@@ -69,18 +72,24 @@ export const ProfileRowUpdate = CoreProfileRow.mapFields(
 
 export type ProfileRowUpdate = typeof ProfileRowUpdate.Type
 
-/** The profile's latest location, when the reader may see it. */
-const pageLocation = { location: Schema.NullOr(ProfileLocationCardData) }
+const pageFields = {
+  /** The profile's latest location, when the reader may see it. */
+  location: Schema.NullOr(ProfileLocationCardData),
+  /** Whether the reader may see what the profile saved; when not, its page doesn't mention it. */
+  areBookmarksVisible: Schema.Boolean,
+  /** The kinds of article it saved, for filtering them; empty when the reader can't see them. */
+  bookmarkedKinds: Schema.Array(WikiArticleKind),
+}
 
 export const OrganizationProfilePageData = Schema.Struct({
   ...OrganizationProfileRow.fields,
-  ...pageLocation,
+  ...pageFields,
 })
 export type OrganizationProfilePageData = typeof OrganizationProfilePageData.Type
 
 export const PersonProfilePageData = Schema.Struct({
   ...PersonProfileRow.fields,
-  ...pageLocation,
+  ...pageFields,
 })
 export type PersonProfilePageData = typeof PersonProfilePageData.Type
 

@@ -1,4 +1,4 @@
-import { BookmarkState, PublicationKind, SupportedLanguage } from "@gororobas/domain/common/enums"
+import { BookmarkState, PublicationKind } from "@gororobas/domain/common/enums"
 import { ApiPublicationCardData } from "@gororobas/domain/publications/domain"
 import {
   ExternalDataProvider,
@@ -58,8 +58,6 @@ export const BookmarkSaving = defineTaggedUnion({
 
 export const Model = Schema.Struct({
   lookup: WikiArticleLookup,
-  /** The language its content loads in, which is the app's. */
-  language: SupportedLanguage,
   pageAsyncData: PageResult.schema,
   relatedAsyncData: RelatedResults.schema,
   bookmarkersAsyncData: BookmarkerResults.schema,

@@ -1,7 +1,7 @@
-import type { SupportedLanguage } from "@gororobas/domain/common/enums"
+import type { PublicationKind, SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { ProfileCardData } from "@gororobas/domain/profiles/domain"
 import type { ApiPublicationCardData } from "@gororobas/domain/publications/domain"
-import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
+import type { WikiArticleKind, WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import type { MessageDescriptor } from "@lingui/core"
 import { msg, plural } from "@lingui/core/macro"
 import { Style, When } from "@pleat/core"
@@ -12,6 +12,7 @@ import type { Html } from "foldkit/html"
 import { searchUrl } from "../../app/route"
 import {
   type SearchQuery,
+  SearchScope,
   type SearchType,
   peopleScope,
   publicationsScope,
@@ -44,6 +45,7 @@ import { focusRingDeclarations } from "../../ui/styles/focus-ring"
 import { pageColumnStyle } from "../../ui/styles/page-column"
 import {
   type ColumnCount,
+  morePreviewedStyle,
   previewCapacity,
   previewItemStyle,
   resultGridContainerStyle,
@@ -138,7 +140,7 @@ const searchIdeas = ({
 
 const searchTypeContexts: Readonly<Record<SearchType, MessageDescriptor>> = {
   wiki: msg`in the encyclopedia`,
-  publications: msg`in posts`,
+  publications: msg`in publications`,
   people: msg`among people`,
 }
 
@@ -333,7 +335,7 @@ type ViewState = Readonly<{
 
 const searchTypeTitles: Readonly<Record<SearchType, MessageDescriptor>> = {
   wiki: msg`Encyclopedia`,
-  publications: msg`Posts`,
+  publications: msg`Publications`,
   people: msg`People`,
 }
 
@@ -377,16 +379,19 @@ const resultsView = <A>(
     asyncData,
     onData,
     i18n,
+    type,
   }: Readonly<{
     asyncData: AsyncData.AsyncData<A, ClientFailure>
     onData: (data: A) => Html
     i18n: Translator
+    /** Its results' skeletons stand in while they load. */
+    type: SearchType
   }>,
   h: SearchViewBuilder,
 ): Html =>
   AsyncData.matchData(asyncData, {
     onEmpty: () =>
-      LoadingState.view({ label: i18n._(msg`Searching`), shape: "tiles", count: 6 }, h),
+      LoadingState.view({ label: i18n._(msg`Searching`), ...resultSkeletons(type, h) }, h),
     onFailure: () =>
       EmptyState.view(
         {
@@ -430,7 +435,7 @@ const searchField = (
             h.Type("search"),
             h.Name("q"),
             h.Attribute("autocomplete", "off"),
-            h.Placeholder(i18n._(msg`Search plants, posts and people`)),
+            h.Placeholder(i18n._(msg`Search plants, publications and people`)),
             h.Value(Option.getOrElse(query.text, () => "")),
             h.OnInput((value) =>
               Message.ChangedSearchQuery({
@@ -562,6 +567,29 @@ const typedCount = (model: Model, type: SearchType): Option.Option<ResultCount> 
 
 type Preview = Readonly<{ shownAt: (columns: ColumnCount) => number }>
 
+/** Each type's results on their way, in the grid they'll fill. */
+const resultSkeletons = (type: SearchType, h: SearchViewBuilder) =>
+  Match.value(type).pipe(
+    Match.when("wiki", () => ({
+      skeleton: h.div(styledAttributes([], resultGridContainerStyle), [
+        h.div(
+          styledAttributes([], resultGridStyle),
+          EffectArray.makeBy(6, () => WikiArticleRow.cardSkeleton(h)),
+        ),
+      ]),
+    })),
+    Match.when("publications", () => ({
+      skeleton: h.div(styledAttributes([], resultGridContainerStyle), [
+        h.div(
+          styledAttributes([], resultGridStyle),
+          EffectArray.makeBy(3, () => PublicationCard.skeleton(h)),
+        ),
+      ]),
+    })),
+    Match.when("people", () => ({ shape: "rows" as const, count: 4 })),
+    Match.exhaustive,
+  )
+
 /** A grid whose columns follow its width. A preview shows whole rows only. */
 const resultGrid = (
   {
@@ -634,17 +662,25 @@ const articleGrid = (
       ),
   })
 
+const noPublicationsFound: Readonly<Record<PublicationKind, MessageDescriptor>> = {
+  POST: msg`No posts found`,
+  EVENT: msg`No events found`,
+}
+
 const publicationGrid = (
   {
     language,
     i18n,
     publications,
+    maybeKind,
     maybeToday,
     maybePreview,
   }: Readonly<{
     language: SupportedLanguage
     i18n: Translator
     publications: ReadonlyArray<ApiPublicationCardData>
+    /** Names what's missing after the kind searched for, such as "No events found". */
+    maybeKind: Option.Option<PublicationKind>
     maybeToday: Option.Option<DateTime.Utc>
     maybePreview: Option.Option<Preview>
   }>,
@@ -652,7 +688,19 @@ const publicationGrid = (
 ): Html =>
   EffectArray.match(publications, {
     onEmpty: () =>
-      noResults({ icon: Icons.clipboard, title: i18n._(msg`No posts found`), i18n }, h),
+      noResults(
+        {
+          icon: Icons.clipboard,
+          title: i18n._(
+            Option.match(maybeKind, {
+              onNone: () => msg`No publications found`,
+              onSome: (kind) => noPublicationsFound[kind],
+            }),
+          ),
+          i18n,
+        },
+        h,
+      ),
     onNonEmpty: (nonEmpty) =>
       resultGrid(
         {
@@ -730,35 +778,59 @@ const overviewSection = (
     i18n,
     type,
     query,
+    maybeLoadedCount,
+    shownAt,
     children,
   }: Readonly<{
     language: SupportedLanguage
     i18n: Translator
     type: SearchType
     query: SearchQuery
+    /** Unknown while loading, when the link to every result stays. */
+    maybeLoadedCount: Option.Option<number>
+    shownAt: (columns: ColumnCount) => number
     children: ReadonlyArray<Html>
   }>,
   h: SearchViewBuilder,
 ): Html =>
-  h.section(styledAttributes([h.AriaLabel(i18n._(searchTypeTitles[type]))], sectionStyle), [
-    h.div(styledAttributes([], sectionHeaderStyle), [
-      SectionHeading.view(
-        { title: i18n._(searchTypeTitles[type]), icon: searchTypeIcons[type] },
-        h,
-      ),
-      AppButton.view(
-        {
-          children: [i18n._(msg`See all`), Icons.arrowRight({ size: "sm" })],
-          href: typeUrl({ language, query, type: Option.some(type) }),
-          tone: "accent",
-          mode: "faded",
-          size: "sm",
-        },
-        h,
-      ),
-    ]),
-    ...children,
-  ])
+  h.section(
+    styledAttributes(
+      [h.AriaLabel(i18n._(searchTypeTitles[type]))],
+      sectionStyle,
+      resultGridContainerStyle,
+    ),
+    [
+      h.div(styledAttributes([], sectionHeaderStyle), [
+        SectionHeading.view(
+          { title: i18n._(searchTypeTitles[type]), icon: searchTypeIcons[type] },
+          h,
+        ),
+        // Only when there's more than the preview shows.
+        ...(Option.exists(maybeLoadedCount, (count) => count === 0)
+          ? []
+          : [
+              AppButton.view(
+                {
+                  children: [i18n._(msg`See all`), Icons.arrowRight({ size: "sm" })],
+                  href: typeUrl({ language, query, type: Option.some(type) }),
+                  tone: "accent",
+                  mode: "faded",
+                  size: "sm",
+                  styles: EffectArray.fromOption(
+                    Option.map(maybeLoadedCount, (count) => morePreviewedStyle({ shownAt, count })),
+                  ),
+                },
+                h,
+              ),
+            ]),
+      ]),
+      ...children,
+    ],
+  )
+
+const loadedLength = <A>(
+  asyncData: AsyncData.AsyncData<ReadonlyArray<A>, ClientFailure>,
+): Option.Option<number> => Option.map(AsyncData.getData(asyncData), (items) => items.length)
 
 const overview = (
   { model, language, i18n, query, maybeToday }: ViewState,
@@ -772,12 +844,15 @@ const overview = (
         i18n,
         type: "wiki",
         query,
+        maybeLoadedCount: loadedLength(model.wikiAsyncData),
+        shownAt: articlesShownAt,
         children: [
           kindShortcuts({ language, i18n, query }, h),
           resultsView(
             {
               asyncData: model.wikiAsyncData,
               i18n,
+              type: "wiki",
               onData: (articles) =>
                 articleGrid(
                   {
@@ -802,17 +877,21 @@ const overview = (
         i18n,
         type: "publications",
         query,
+        maybeLoadedCount: loadedLength(model.publicationsAsyncData),
+        shownAt: publicationsShownAt,
         children: [
           resultsView(
             {
               asyncData: model.publicationsAsyncData,
               i18n,
+              type: "publications",
               onData: (publications) =>
                 publicationGrid(
                   {
                     language,
                     i18n,
                     publications,
+                    maybeKind: Option.none(),
                     maybeToday,
                     maybePreview: Option.some({ shownAt: publicationsShownAt }),
                   },
@@ -831,11 +910,14 @@ const overview = (
         i18n,
         type: "people",
         query,
+        maybeLoadedCount: loadedLength(model.profilesAsyncData),
+        shownAt: profilesShownAt,
         children: [
           resultsView(
             {
               asyncData: model.profilesAsyncData,
               i18n,
+              type: "people",
               onData: (profiles) =>
                 profileGrid(
                   {
@@ -927,14 +1009,16 @@ const browse = (
   }: Readonly<{ model: Model; language: SupportedLanguage; i18n: Translator }>,
   h: SearchViewBuilder,
 ): Html => {
+  const wikiTile = (kind: WikiArticleKind) => ({
+    label: i18n._(wikiKindLabels[kind].plural),
+    href: searchUrl(language, { scope: wikiScope(Option.some(kind)) }),
+    icon: wikiKindIcons[kind],
+  })
+
+  // What people come to Gororobas for first; the encyclopedia's other kinds follow.
+  const leadingWikiKinds: ReadonlyArray<WikiArticleKind> = ["NOTEWORTHY_ENTITY", "PLANT"]
+
   const tiles = [
-    ...Record.toEntries(wikiKindIcons)
-      .filter(([kind]) => kind !== "UNCATEGORIZED")
-      .map(([kind, icon]) => ({
-        label: i18n._(wikiKindLabels[kind].plural),
-        href: searchUrl(language, { scope: wikiScope(Option.some(kind)) }),
-        icon,
-      })),
     {
       label: i18n._(searchTypeTitles.publications),
       href: searchUrl(language, { scope: publicationsScope() }),
@@ -945,6 +1029,10 @@ const browse = (
       href: searchUrl(language, { scope: peopleScope() }),
       icon: Icons.users,
     },
+    ...leadingWikiKinds.map(wikiTile),
+    ...Record.keys(wikiKindIcons)
+      .filter((kind) => kind !== "UNCATEGORIZED" && !leadingWikiKinds.includes(kind))
+      .map(wikiTile),
   ]
 
   const browseTitle = i18n._(msg`Browse everything`)
@@ -1270,23 +1358,27 @@ const filtersDrawer = (
                   ),
                 ),
               ],
-              footer: [
+              headerActions: [
                 AppButton.view(
                   {
                     mode: "outline",
                     tone: "accent",
+                    size: "sm",
                     isDisabled: activeSecondaryFilterCount({ query, i18n }) === 0,
                     onClick: Message.ChangedSearchQuery({
                       query: clearedSecondaryFilters(query),
                       navigation: "Push",
                     }),
-                    children: [i18n._(msg`Clear filters`)],
+                    ariaLabel: i18n._(msg`Clear filters`),
+                    title: i18n._(msg`Clear filters`),
+                    children: [Icons.trash({ size: "sm" })],
                   },
                   h,
                 ),
                 AppButton.view(
                   {
                     tone: "accent",
+                    size: "sm",
                     onClick: Message.ClickedCloseFilters(),
                     children: [i18n._(msg`See results`)],
                   },
@@ -1334,6 +1426,7 @@ const typedResults = (
               {
                 asyncData: model.wikiAsyncData,
                 i18n,
+                type: "wiki",
                 onData: (articles) =>
                   articleGrid(
                     {
@@ -1354,9 +1447,19 @@ const typedResults = (
               {
                 asyncData: model.publicationsAsyncData,
                 i18n,
+                type: "publications",
                 onData: (publications) =>
                   publicationGrid(
-                    { language, i18n, publications, maybeToday, maybePreview: Option.none() },
+                    {
+                      language,
+                      i18n,
+                      publications,
+                      maybeKind: SearchScope.guards.Publications(query.scope)
+                        ? query.scope.maybeKind
+                        : Option.none(),
+                      maybeToday,
+                      maybePreview: Option.none(),
+                    },
                     h,
                   ),
               },
@@ -1368,6 +1471,7 @@ const typedResults = (
               {
                 asyncData: model.profilesAsyncData,
                 i18n,
+                type: "people",
                 onData: (profiles) =>
                   profileGrid({ language, i18n, profiles, maybePreview: Option.none() }, h),
               },
