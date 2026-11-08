@@ -7,6 +7,7 @@ Feature: Publications
     While their author is a NEWCOMER, personal publications are visible only to
     their author, moderators, and admins, even when their visibility is PUBLIC.
     Approval of the person makes their existing PUBLIC publications visible to everyone.
+    Blocking someone hides their publications the same way, and they can no longer edit them.
 
     Background:
       Given the following people exist:
@@ -63,6 +64,21 @@ Feature: Publications
         | Irene    | yes     |
         | Gusttavo | yes     |
         | visitors | yes     |
+
+    Scenario: Blocking hides a person's posts and stops them from editing
+      Given "Irene" is logged in
+      When they create a "PUBLIC" post publication under their profile
+      And "Ailton" blocks "Irene"
+      And they try to edit the post publication content to "Reescrito depois do bloqueio"
+      Then access is denied
+      And the post publication should have the following visibility:
+        | viewer   | visible |
+        | Irene    | yes     |
+        | Ailton   | yes     |
+        | Ana      | yes     |
+        | Pedro    | no      |
+        | Gusttavo | no      |
+        | visitors | no      |
 
     Scenario: Blocked person cannot create post publications
       Given "Gusttavo" is logged in

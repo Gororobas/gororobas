@@ -180,6 +180,21 @@ const makeApiTestClient = Effect.gen(function* () {
     ({ path, ...init }: RequestInit & { readonly path: string }) =>
       Effect.tryPromise(() => fetchWith(browser)(`${authenticationTestOrigin}${path}`, init))
 
+  /**
+   * Sends a request carrying only `browser`'s cookie and the given headers, like a form another
+   * site submits: no CSRF header, and whatever origin that site has.
+   */
+  const crossSiteRequestWith =
+    (browser: TestBrowser) =>
+    ({ path, headers, ...init }: RequestInit & { readonly path: string }) =>
+      Effect.tryPromise(() => {
+        const sent = new Headers(headers)
+        sent.set("cookie", browser.cookieHeader())
+        return handler(
+          new Request(`${authenticationTestOrigin}${path}`, { ...init, headers: sent }),
+        )
+      })
+
   const clientWith = (browser: TestBrowser, extraHeaders?: Record.ReadonlyRecord<string, string>) =>
     HttpApiClient.make(GororobasApi, { baseUrl: authenticationTestOrigin }).pipe(
       Effect.provide(FetchHttpClient.layer),
@@ -277,6 +292,7 @@ const makeApiTestClient = Effect.gen(function* () {
     clientWith,
     fetchWith,
     requestWith,
+    crossSiteRequestWith,
   }
 })
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ContentLanguage, IdGen, type SupportedLanguage } from "@gororobas/domain"
-import { Context, Effect, Layer, Option, Array as EffectArray, Order } from "effect"
+import { Context, Effect, Layer, Array as EffectArray, Order } from "effect"
 import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
@@ -66,9 +66,7 @@ describe("PublicationCommentTranslationWorkflow", () => {
 
     return Effect.gen(function* () {
       const { publicationComments, publicationCommentId } = yield* fixture
-      const before = Option.getOrThrow(
-        yield* publicationComments.findPublicationCommentRowById(publicationCommentId),
-      )
+      const before = yield* publicationComments.getActivePublicationComment(publicationCommentId)
 
       const payload = {
         publicationCommentId,
@@ -77,9 +75,7 @@ describe("PublicationCommentTranslationWorkflow", () => {
       }
 
       yield* PublicationCommentTranslationWorkflow.execute(payload)
-      const after = Option.getOrThrow(
-        yield* publicationComments.findPublicationCommentRowById(publicationCommentId),
-      )
+      const after = yield* publicationComments.getActivePublicationComment(publicationCommentId)
       expect(after.sourceLanguage).toBe("en-US")
       expect(after.currentRevisionId).toBe(before.currentRevisionId)
       expect(after.editCount).toBe(0)
@@ -108,9 +104,7 @@ describe("PublicationCommentTranslationWorkflow", () => {
 
       return Effect.gen(function* () {
         const { publicationComments, publicationCommentId } = yield* fixture
-        const before = Option.getOrThrow(
-          yield* publicationComments.findPublicationCommentRowById(publicationCommentId),
-        )
+        const before = yield* publicationComments.getActivePublicationComment(publicationCommentId)
 
         yield* publicationComments.setPublicationCommentSourceLanguage({
           publicationCommentId,
@@ -167,9 +161,7 @@ describe("PublicationCommentTranslationWorkflow", () => {
   it.live("rejects results if the source is edited during translation", () =>
     Effect.gen(function* () {
       const { publicationComments, person, publicationCommentId } = yield* fixture
-      const before = Option.getOrThrow(
-        yield* publicationComments.findPublicationCommentRowById(publicationCommentId),
-      )
+      const before = yield* publicationComments.getActivePublicationComment(publicationCommentId)
       const testContext = yield* Effect.context<IdGen | SqlClient.SqlClient>()
 
       const dependencies = Layer.mergeAll(
@@ -221,9 +213,8 @@ describe("PublicationCommentTranslationWorkflow", () => {
       ).toEqual([])
 
       expect(
-        Option.getOrThrow(
-          yield* publicationComments.findPublicationCommentRowById(publicationCommentId),
-        ).sourceLanguage,
+        (yield* publicationComments.getActivePublicationComment(publicationCommentId))
+          .sourceLanguage,
       ).toBe("und")
     }).pipe(Effect.provide(TestLayerWithRepositories)),
   )

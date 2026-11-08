@@ -1,6 +1,6 @@
-import { Effect, Stream } from "effect"
+import { Stream } from "effect"
 
-import { SessionAccess, sessionChangedEvent, sessionStorageKey } from "../../session-access"
+import { SessionAccess, sessionStorageKey } from "../../session-access"
 import { AuthenticationBlock } from "./definition"
 import { Message } from "./message"
 
@@ -12,14 +12,21 @@ export const subscriptions = AuthenticationBlock.makeSubscriptions((entry) => ({
       messages: [Message.ChangedSessionAccess],
       modelToDependencies: () => ({}),
       handler: function* () {
+        const access = yield* SessionAccess
         return () =>
-          Stream.fromEventListener(window, sessionChangedEvent).pipe(
-            Stream.mapEffect(() =>
-              Effect.map(SessionAccess, (access) =>
-                Message.ChangedSessionAccess({ state: access.read() }),
-              ),
-            ),
-          )
+          access.changes.pipe(Stream.map((state) => Message.ChangedSessionAccess({ state })))
+      },
+    },
+  ),
+  accountSwitches: entry(
+    "WatchAccountSwitches",
+    {},
+    {
+      messages: [Message.SwitchedAccount],
+      modelToDependencies: () => ({}),
+      handler: function* () {
+        const access = yield* SessionAccess
+        return () => access.switchedAccounts.pipe(Stream.map(() => Message.SwitchedAccount()))
       },
     },
   ),

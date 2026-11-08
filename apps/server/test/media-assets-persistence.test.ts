@@ -1,6 +1,6 @@
 import { NodePath, NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
-import { AccountSession, IdGen, PersonId, SessionContext } from "@gororobas/domain"
+import { AccountSession, IdGen, PersonId, provideSession } from "@gororobas/domain"
 import { ConfigProvider, Effect, Exit, FileSystem, Layer, Path } from "effect"
 import { SqlClient } from "effect/sql"
 import sharp from "sharp"
@@ -143,7 +143,7 @@ it.live(
               fileName: "plant.png",
             })
             .pipe(
-              Effect.provideService(SessionContext, {
+              provideSession({
                 type: "VISITOR",
               }),
             ),
@@ -153,7 +153,7 @@ it.live(
         yield* service.moderate({ id: mediaAsset.id, decision: "CENSORED" })
         expect(yield* Effect.exit(service.getRow(mediaAsset.id))).toSatisfy(Exit.isSuccess)
 
-        const asVisitor = Effect.provideService(SessionContext, { type: "VISITOR" })
+        const asVisitor = provideSession({ type: "VISITOR" })
         expect(yield* Effect.exit(service.getRow(mediaAsset.id).pipe(asVisitor))).toSatisfy(
           Exit.isFailure,
         )
@@ -175,7 +175,7 @@ it.live(
             moderationStatus: "CENSORED",
           },
         ])
-      }).pipe(Effect.provideService(SessionContext, session))
+      }).pipe(provideSession(session))
     }).pipe(Effect.provide(services))
   }),
 )

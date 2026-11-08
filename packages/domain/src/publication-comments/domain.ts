@@ -27,18 +27,52 @@ export const PublicationCommentContentRevisionRow = Schema.Struct({
 
 export type PublicationCommentContentRevisionRow = typeof PublicationCommentContentRevisionRow.Type
 
-export const PublicationCommentRow = Schema.Struct({
+/** Where a comment sits in its thread, which it keeps after being deleted. */
+const PublicationCommentPlacement = Schema.Struct({
   ...TimestampedStruct.fields,
   id: PublicationCommentId,
   moderationStatus: ModerationStatus,
-  ownerProfileId: ProfileId,
   parentPublicationCommentId: Schema.NullOr(PublicationCommentId),
   publicationId: PublicationId,
+})
+
+export const ActivePublicationCommentRow = Schema.Struct({
+  ...PublicationCommentPlacement.fields,
+  deletedAt: Schema.Null,
+  ownerProfileId: ProfileId,
   sourceLanguage: ContentLanguage,
   sourceContent: Schema.fromJsonString(TiptapDocument),
 })
 
+export type ActivePublicationCommentRow = typeof ActivePublicationCommentRow.Type
+
+/**
+ * A deleted comment that other people replied to: it stays in the thread, so their replies keep
+ * their place under "This comment has been deleted", without its author or content. Once no reply
+ * remains under it, it's removed for good.
+ */
+export const DeletedPublicationCommentRow = Schema.Struct({
+  ...PublicationCommentPlacement.fields,
+  deletedAt: TimestampColumn,
+  ownerProfileId: Schema.Null,
+  sourceLanguage: Schema.Null,
+  sourceContent: Schema.Null,
+})
+
+export type DeletedPublicationCommentRow = typeof DeletedPublicationCommentRow.Type
+
+export const PublicationCommentRow = Schema.Union([
+  ActivePublicationCommentRow,
+  DeletedPublicationCommentRow,
+])
+
 export type PublicationCommentRow = typeof PublicationCommentRow.Type
+
+// @todo perhaps can use Schema.is(DeletedPublicationCommentRow) ?
+export const isDeletedPublicationComment = <Comment extends { readonly deletedAt: unknown }>(
+  comment: Comment,
+): comment is Extract<Comment, { readonly deletedAt: TimestampColumn }> =>
+  comment.deletedAt !== null
 
 export const PublicationCommentTranslationRow = Schema.Struct({
   publicationCommentId: PublicationCommentId,
@@ -51,12 +85,20 @@ export const PublicationCommentTranslationRow = Schema.Struct({
 export type PublicationCommentTranslationRow = typeof PublicationCommentTranslationRow.Type
 
 /** API response schemas */
-export const PublicationCommentData = Schema.Struct({
-  ...PublicationCommentRow.fields,
+export const ActivePublicationCommentData = Schema.Struct({
+  ...ActivePublicationCommentRow.fields,
   currentRevisionId: PublicationCommentContentRevisionId,
   editCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   editedAt: Schema.NullOr(TimestampColumn),
 })
+
+export type ActivePublicationCommentData = typeof ActivePublicationCommentData.Type
+
+/** Deleting a comment also deletes its revisions: only its place in the thread remains. */
+export const PublicationCommentData = Schema.Union([
+  ActivePublicationCommentData,
+  DeletedPublicationCommentRow,
+])
 
 export type PublicationCommentData = typeof PublicationCommentData.Type
 

@@ -366,6 +366,19 @@ const sameVisibility = () =>
 const eventVisibility = () =>
   And("the event publication should have the following visibility:", visibilityStep)
 
+const block = () =>
+  And("{string:actor} blocks {string:target}", {
+    params: Schema.Struct({ actor: Schema.String, target: Schema.String }),
+    handler: (context: PublicationContext, { actor, target }) =>
+      Effect.gen(function* () {
+        yield* withPerson(
+          (yield* PeopleService).setAccessLevel(personNamed(context.actors, target), "BLOCKED"),
+          personNamed(context.actors, actor),
+        )
+        return context
+      }),
+  })
+
 const promote = () =>
   When("{string:actor} promotes {string:target} to COMMUNITY", {
     params: Schema.Struct({ actor: Schema.String, target: Schema.String }),
@@ -1296,6 +1309,19 @@ await Effect.runPromise(
           ),
       })
 
+      Scenario("Blocking hides a person's posts and stops them from editing", {
+        layer: PublicationsFeatureTestLayer,
+        steps: () =>
+          runSteps(
+            loggedIn(),
+            createPersonal(),
+            block(),
+            deniedEdit(),
+            accessDenied(),
+            postVisibility(),
+          ),
+      })
+
       Scenario("Blocked person cannot create post publications", {
         layer: PublicationsFeatureTestLayer,
         steps: () => runSteps(loggedIn(), denyPersonal(), accessDenied()),
@@ -1654,9 +1680,7 @@ it.effect("censorship survives subsequent author edits", () =>
     })
 
     expect((yield* readAggregateStatus(publicationCommentId)).moderationStatus).toBe("CENSORED")
-    const before = Option.getOrThrow(
-      yield* repo.findPublicationCommentRowById(publicationCommentId),
-    )
+    const before = yield* repo.getActivePublicationComment(publicationCommentId)
     yield* TestClock.adjust(1)
 
     yield* asViewer(

@@ -2,14 +2,16 @@ import {
   BookmarkState,
   Handle,
   IntNonNegative,
+  MediaAssetId,
   MediaAssetRow,
   type Session,
   TimestampColumn,
   WikiArticleId,
   WikiArticleKind,
   PROFILE_COLLECTION_PAGE_SIZE,
-  ProfileContentCounts,
   ProfileId,
+  PublicationCommentId,
+  PublicationId,
   ProfileMetadataResult,
   ProfileRow,
   ProfileSearchParams,
@@ -192,22 +194,30 @@ export const fetchProfileMetadata = SqlSchema.findOneOption({
     }),
 })
 
-export const fetchProfileContentCounts = SqlSchema.findOne({
+const IdsJson = <S extends Schema.Top>(id: S) => Schema.fromJsonString(Schema.Array(id))
+
+export const fetchProfileContent = SqlSchema.findOne({
   Request: ProfileId,
-  Result: ProfileContentCounts,
+  Result: Schema.Struct({
+    postIds: IdsJson(PublicationId),
+    eventIds: IdsJson(PublicationId),
+    wikiArticleBookmarkIds: IdsJson(WikiArticleId),
+    publicationCommentIds: IdsJson(PublicationCommentId),
+    imageIds: IdsJson(MediaAssetId),
+  }),
   execute: (id) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
 
       return yield* sql`
       SELECT
-        (SELECT COUNT(*) FROM publication_sources s JOIN publication_projections p ON p.id = s.id
-          WHERE s.owner_profile_id = ${id} AND p.kind = 'POST') as posts,
-        (SELECT COUNT(*) FROM publication_sources s JOIN publication_projections p ON p.id = s.id
-          WHERE s.owner_profile_id = ${id} AND p.kind = 'EVENT') as events,
-        (SELECT COUNT(*) FROM bookmarks_wiki_articles WHERE person_id = ${id}) as wiki_article_bookmarks,
-        (SELECT COUNT(*) FROM publication_comments WHERE owner_profile_id = ${id}) as publication_comments,
-        (SELECT COUNT(*) FROM media_assets WHERE format = 'IMAGE' AND owner_profile_id = ${id}) as images
+        (SELECT json_group_array(s.id) FROM publication_sources s JOIN publication_projections p ON p.id = s.id
+          WHERE s.owner_profile_id = ${id} AND p.kind = 'POST') as post_ids,
+        (SELECT json_group_array(s.id) FROM publication_sources s JOIN publication_projections p ON p.id = s.id
+          WHERE s.owner_profile_id = ${id} AND p.kind = 'EVENT') as event_ids,
+        (SELECT json_group_array(wiki_article_id) FROM bookmarks_wiki_articles WHERE person_id = ${id}) as wiki_article_bookmark_ids,
+        (SELECT json_group_array(id) FROM publication_comments WHERE owner_profile_id = ${id}) as publication_comment_ids,
+        (SELECT json_group_array(id) FROM media_assets WHERE format = 'IMAGE' AND owner_profile_id = ${id}) as image_ids
     `
     }),
 })

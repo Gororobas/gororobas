@@ -2,7 +2,7 @@ import { Context, Effect } from "effect"
 
 import { insertProfile, updateProfileRow } from "./mutations.js"
 import {
-  fetchProfileContentCounts,
+  fetchProfileContent,
   fetchProfileMetadata,
   findByHandle,
   findById,
@@ -16,7 +16,7 @@ export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
     make: Effect.succeed({
       fetchProfileContributions: (_handle: string) =>
         Effect.logDebug("fetchProfileContributions: stub").pipe(Effect.as([])),
-      fetchProfileContentCounts,
+      fetchProfileContent,
       fetchProfileEvents: (_handle: string) =>
         Effect.logDebug("fetchProfileEvents: stub").pipe(Effect.as([])),
       fetchProfileMetadata,

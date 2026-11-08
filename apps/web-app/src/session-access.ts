@@ -1,12 +1,25 @@
 import {
   AuthenticationApi,
   AuthenticationSession,
+  csrfProtection,
 } from "@gororobas/domain/authentication/auth-contract"
 import { Client } from "@yielded/auth"
-import { Clock, Context, Effect, Layer, Option, Predicate, Schema, Semaphore } from "effect"
+import {
+  Clock,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Predicate,
+  Schema,
+  Semaphore,
+  Stream,
+  SubscriptionRef,
+} from "effect"
 
 export const AuthenticationClient = Client.make(AuthenticationApi, {
   baseUrl: window.location.origin,
+  csrf: csrfProtection,
 })
 
 export const LocalIdentity = Schema.Struct({
@@ -27,7 +40,6 @@ const StoredSession = Schema.Struct({
 })
 const StoredSessionJson = Schema.fromJsonString(StoredSession)
 export const sessionStorageKey = "gororobas.local-session"
-export const sessionChangedEvent = "gororobas-session-changed"
 
 export class SessionNotReadyError extends Schema.TaggedError<SessionNotReadyError>()(
   "SessionNotReadyError",
@@ -60,7 +72,6 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
   readonly auth: AuthPort<AuthError>
   readonly storage: Storage
   readonly online: () => boolean
-  readonly changed: (state: SessionState) => void
 }) {
   const gate = yield* Semaphore.make(1)
   let stored: typeof StoredSession.Type = { identity: null, hasPendingSignOut: false }
@@ -79,16 +90,18 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
   )
 
   stored = yield* readStored
-  let state: SessionState = {
-    identity: stored.identity,
-    status: stored.identity === null ? "SignedOut" : "Checking",
-  }
   let checkedAt = -Infinity
 
-  const publish = (status: SessionState["status"]) => {
-    state = { identity: stored.identity, status }
-    options.changed(state)
-  }
+  const states = yield* SubscriptionRef.make<SessionState>({
+    identity: stored.identity,
+    status: stored.identity === null ? "SignedOut" : "Checking",
+  })
+  const read = () => SubscriptionRef.getUnsafe(states)
+  // The account this tab signed in to, which its own sign-in flow carries on from without a reload.
+  let signedInHere: string | null = null
+
+  const publish = (status: SessionState["status"]) =>
+    SubscriptionRef.set(states, { identity: stored.identity, status })
 
   const persist = Effect.suspend(() => Schema.encodeEffect(StoredSessionJson)(stored)).pipe(
     Effect.flatMap((encoded) =>
@@ -104,7 +117,7 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
     stored = { ...stored, identity: null }
     checkedAt = -Infinity
     yield* persist
-    publish("SignedOut")
+    yield* publish("SignedOut")
   })
 
   const settleSignOut = Effect.gen(function* () {
@@ -126,7 +139,7 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
 
     stored = latest
     checkedAt = -Infinity
-    publish(stored.identity === null ? "SignedOut" : "Checking")
+    yield* publish(stored.identity === null ? "SignedOut" : "Checking")
     return true
   })
 
@@ -136,7 +149,7 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
         yield* synchronize
 
         if (!options.online()) {
-          publish(stored.identity === null ? "SignedOut" : "Offline")
+          yield* publish(stored.identity === null ? "SignedOut" : "Offline")
           return yield* new SessionNotReadyError()
         }
         if (expectedSubjectId !== undefined && stored.identity?.subjectId !== expectedSubjectId) {
@@ -146,14 +159,14 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
 
         if (
           !fresh &&
-          state.status === "Ready" &&
+          read().status === "Ready" &&
           now - checkedAt < 30_000 &&
           stored.identity !== null
         ) {
           return stored.identity
         }
 
-        publish(stored.identity === null ? "SignedOut" : "Checking")
+        yield* publish(stored.identity === null ? "SignedOut" : "Checking")
 
         const session = yield* Effect.gen(function* () {
           yield* settleSignOut
@@ -187,7 +200,7 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
                 Predicate.isTagged(failure, "StaleAuthentication")
               ) {
                 yield* reject
-              } else publish(stored.identity === null ? "SignedOut" : "Offline")
+              } else yield* publish(stored.identity === null ? "SignedOut" : "Offline")
 
               return yield* new SessionNotReadyError()
             }),
@@ -210,7 +223,7 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
         }
         checkedAt = now
         yield* persist
-        publish("Ready")
+        yield* publish("Ready")
         if (expectedSubjectId !== undefined && session.subjectId !== expectedSubjectId) {
           return yield* new SessionNotReadyError()
         }
@@ -218,8 +231,25 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
       }),
     )
 
+  const changes = SubscriptionRef.changes(states)
+
   return {
-    read: () => state,
+    read,
+    /** The current state, then every change: other tabs' changes arrive through `connectionChanged`. */
+    changes,
+    /**
+     * The browser's account (`null` for visitors) each time it changes from the one this page loaded data for: it was
+     * loaded with the previous account's cookie, so it may show what the new one can't see.
+     * The page-load check is no switch (it confirms or corrects the account remembered from the
+     * last visit), and neither is signing in from this tab, whose flow carries on without reloading.
+     */
+    switchedAccounts: changes.pipe(
+      Stream.dropWhile(({ status }) => status === "Checking"),
+      Stream.map(({ identity }) => identity?.subjectId ?? null),
+      Stream.changes,
+      Stream.drop(1),
+      Stream.filter((subjectId) => subjectId === null || subjectId !== signedInHere),
+    ),
     ensureReady,
     flushSignOut: gate.withPermits(1)(
       Effect.gen(function* () {
@@ -232,9 +262,10 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
       gate.withPermits(1)(
         Effect.gen(function* () {
           stored = { identity, hasPendingSignOut: false }
+          signedInHere = identity.subjectId
           checkedAt = -Infinity
           yield* persist
-          publish("Checking")
+          yield* publish("Checking")
         }),
       ),
     setName: (name: string | null) =>
@@ -243,7 +274,7 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
           if (stored.identity !== null) {
             stored = { ...stored, identity: { ...stored.identity, name } }
             yield* persist
-            publish(state.status)
+            yield* publish(read().status)
           }
         }),
       ),
@@ -251,7 +282,9 @@ export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
       Effect.gen(function* () {
         stored = yield* readStored
         checkedAt = -Infinity
-        publish(stored.identity === null ? "SignedOut" : options.online() ? "Checking" : "Offline")
+        yield* publish(
+          stored.identity === null ? "SignedOut" : options.online() ? "Checking" : "Offline",
+        )
       }),
     ),
     signOut: gate.withPermits(1)(
@@ -292,7 +325,6 @@ export const sessionAccessLayer = Layer.effect(
       },
       storage: localStorage,
       online: () => navigator.onLine,
-      changed: () => window.dispatchEvent(new Event(sessionChangedEvent)),
     })
   }),
 ).pipe(Layer.provide(AuthenticationClient.layerFetch.pipe(Layer.orDie)))

@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { Multipart } from "effect/http"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 
+import { OutsideWriteTransaction } from "../authentication/middleware.js"
 import { UnauthorizedError } from "../authorization/session.js"
 import { ModerationStatus } from "../common/enums.js"
 import { MediaAssetId } from "../common/ids.js"
@@ -33,7 +34,7 @@ export class MediaAssetsApi extends HttpApiGroup.make("mediaAssets")
           maxTotalSize: "5 GiB",
         }),
       ),
-    }),
+    }).annotate(OutsideWriteTransaction, true),
   )
   .add(
     HttpApiEndpoint.get("getMedia", "/media/:id/:format/:variant", {

@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest"
-import { SessionContext } from "@gororobas/domain"
+import { currentSession } from "@gororobas/domain"
 import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
 import { Effect } from "effect"
 
@@ -14,7 +14,7 @@ it.effect("impersonation isolates concurrent identities", () =>
     const secondPersonId = yield* provisionCommunityPerson(administratorId, "Second person")
     const readIdentity = Effect.gen(function* () {
       yield* Effect.yieldNow
-      return yield* SessionContext
+      return yield* currentSession
     })
 
     const sessions = yield* Effect.all(
@@ -40,19 +40,19 @@ it.effect("nested impersonation restores the caller's session", () =>
 
     yield* withSession(
       Effect.gen(function* () {
-        const before = yield* SessionContext
+        const before = yield* currentSession
         const nested = yield* withSession(
-          SessionContext,
+          currentSession,
           yield* resolveSessionFromAuthSubjectId(secondPersonId),
         )
-        const after = yield* SessionContext
+        const after = yield* currentSession
         expect(nested).toMatchObject({ type: "ACCOUNT", personId: secondPersonId })
         expect(after).toEqual(before)
       }),
       yield* resolveSessionFromAuthSubjectId(firstPersonId),
     )
 
-    expect(yield* SessionContext).toEqual(VISITOR_SESSION)
+    expect(yield* currentSession).toEqual(VISITOR_SESSION)
   }).pipe(Effect.provide(TestLayerWithServices), (action) => withSession(action, VISITOR_SESSION)),
 )
 

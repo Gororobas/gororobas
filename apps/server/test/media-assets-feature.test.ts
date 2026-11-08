@@ -63,6 +63,7 @@ import {
 import { WikiArticlesRepository } from "../src/wiki/repository.js"
 import { WikiArticlesService } from "../src/wiki/service.js"
 import {
+  confirmAccountDeletion,
   createPost,
   PeopleBackground,
   PeopleFeatureTestLayer,
@@ -1043,15 +1044,7 @@ REVISION_CASES.forEach((hasRevisions) => {
       const filesystem = yield* FileSystem.FileSystem
       expect(yield* filesystem.exists(files.filePath(media.id, "original"))).toBe(true)
 
-      expect(
-        yield* withPerson(
-          (yield* PeopleService).deleteCurrentPerson({
-            shouldDeleteContent: true,
-            shouldDeleteOrgs: false,
-          }),
-          personId,
-        ),
-      ).toEqual({ _tag: "Success" })
+      expect(yield* confirmAccountDeletion(personId)).toEqual({ _tag: "Success" })
 
       yield* MediaDeletionWorkflow.execute({ mediaAssetIds: [media.id] })
 

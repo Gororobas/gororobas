@@ -26,6 +26,7 @@ export const Message = defineMessageUnion({
   CompletedRestoreSession: { session: RestoredSession },
   ChangedSessionAccess: { state: SessionState },
   ChangedConnection: {},
+  SwitchedAccount: {},
   SucceededSendCode: { pending: PendingCode },
   FailedSendCode: { error: AuthenticationNotice },
   SucceededResendCode: { pending: PendingCode },
@@ -38,6 +39,7 @@ export const Message = defineMessageUnion({
   SucceededSignOut: {},
   FailedSignOut: {},
   CompletedFocusField: {},
+  CompletedReloadPage: {},
 })
 
 export const OutMessage = defineMessageUnion({

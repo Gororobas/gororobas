@@ -5,6 +5,7 @@ import {
   PublicationCommentId,
   PublicationCommentNotFoundError,
   IdGen,
+  isDeletedPublicationComment,
   tiptapToText,
   TiptapDocument,
   type CreatePublicationCommentInput,
@@ -15,8 +16,8 @@ import {
 import { Context, DateTime, Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { deletePublicationComment } from "./comment-deletion.js"
 import {
-  deletePublicationComment,
   insertPublicationCommentContentRevisionRow,
   insertPublicationCommentRow,
   updatePublicationCommentRow,
@@ -40,12 +41,16 @@ export class PublicationCommentsRepository extends Context.Service<PublicationCo
 
       const contentEquals = Schema.toEquivalence(TiptapDocument)
 
+      /** Deleted comments have no content left to edit or translate. */
       const getPublicationComment = (id: PublicationCommentId) =>
         findPublicationCommentRowById(id).pipe(
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new PublicationCommentNotFoundError({ id })),
-              onSome: Effect.succeed,
+              onSome: (comment) =>
+                isDeletedPublicationComment(comment)
+                  ? Effect.fail(new PublicationCommentNotFoundError({ id }))
+                  : Effect.succeed(comment),
             }),
           ),
         )
@@ -61,6 +66,7 @@ export class PublicationCommentsRepository extends Context.Service<PublicationCo
               id,
               createdAt: now,
               updatedAt: now,
+              deletedAt: null,
               moderationStatus: "APPROVED_BY_DEFAULT",
               ownerProfileId: input.ownerProfileId,
               parentPublicationCommentId: input.parentPublicationCommentId,
@@ -169,6 +175,7 @@ export class PublicationCommentsRepository extends Context.Service<PublicationCo
         )
 
       return {
+        getActivePublicationComment: getPublicationComment,
         listPublicationCommentTranslationRowsByPublicationCommentId,
         createPublicationComment,
         deletePublicationComment,

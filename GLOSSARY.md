@@ -18,7 +18,9 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Evaluation**: a moderator's verdict on a pending wiki revision: `PENDING`, `APPROVED` or `REJECTED` (`RevisionEvaluation`). The API payload, the TypeScript input and the `evaluation` column all use this name.
 
-**Enrichment**: the derived work a committed change requests: external provider data and link inference for approved wiki articles, link inference and translations for publication content, translations for comments. Services request it through `Enrichment` (`apps/server/src/enrichment/`) after their transaction commits; requests are best-effort and logged when they fail.
+**Enrichment**: the derived work a committed change requests: external provider data and link inference for approved wiki articles, link inference and translations for publication content, translations for comments. Services request it through `Enrichment` (`apps/server/src/enrichment/`), which waits for the change's transaction to commit (`sql.afterCommit`); requests are best-effort and logged when they fail.
+
+**Deleted comment**: a publication comment its author deleted (or whose author deleted their account) while other people's replies remain under it (`DeletedPublicationCommentRow`). It keeps its place in the thread, with `deleted_at` set and no owner, content, revisions or translations, and readers see "This comment has been deleted". A deleted comment no reply remains under is removed for good.
 
 **External data observation**: one provider's answer to one external data fetch for a wiki article, stored with the article frontier and inputs it was fetched for: the raw responses on success, the `ExternalDataFetchError` on failure (`wiki_article_external_data_observations`). Projections such as Wikipedia links, GBIF media and book editions are replaced only by successful observations.
 
@@ -46,7 +48,9 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Moderation event**: the record of one moderation decision that changed content's status: who decided, when, why and the status it left (`moderation_events`, written by `recordModerationDecision`). It's moderation's counterpart to a revision's evaluation.
 
-**Content visibility**: who can see a publication and the media attached to it (`canViewContent` in `packages/domain/src/content-visibility/`). Censored content is only visible to its authors, a newcomer's content to them and to moderators, and otherwise visibility follows `PUBLIC`/`COMMUNITY` and organization membership. Queries apply the same rule in SQL through `visibleTo`.
+**Content visibility**: who can see a publication and the media attached to it (`canViewContent` in `packages/domain/src/content-visibility/`). Censored content is only visible to its authors, a newcomer's or blocked person's content to them and to moderators, and otherwise visibility follows `PUBLIC`/`COMMUNITY` and organization membership. Queries apply the same rule in SQL through `visibleTo`.
+
+**Hidden profile**: what readers who may not see a profile (`profilePolicies.canRead`) get in its place where content it owns appears, such as a publication card's owner (`HiddenProfile`): no name, photo, location or ID. The web app shows it as a "Mysterious author".
 
 ## Handles
 

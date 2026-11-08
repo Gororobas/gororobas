@@ -1,4 +1,4 @@
-import { Match, Option } from "effect"
+import { Array as EffectArray, Match, Option, Predicate } from "effect"
 import { AsyncData } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
@@ -96,55 +96,59 @@ export const update = ProfileSettingsEditorComposition.makeUpdate({
   ClickedDeleteAccount: (model) =>
     AccountDeletion.guards.Idle(model.deletion) || AccountDeletion.guards.Blocked(model.deletion)
       ? {
-          model: deletionStep(model, AccountDeletion.Asking({ shouldDeleteOrganizations: false })),
+          model: deletionStep(model, AccountDeletion.Asking({ organizationIds: [] })),
           commands: [RequestAccountDeletion({ maybeConfirmation: Option.none() })],
         }
       : { model },
-  ConfirmedDeleteOrganizations: (model) =>
-    AccountDeletion.guards.ConfirmingOrganizations(model.deletion)
-      ? {
-          model: deletionStep(model, AccountDeletion.Asking({ shouldDeleteOrganizations: true })),
-          commands: [
-            RequestAccountDeletion({
-              maybeConfirmation: Option.some({
-                shouldDeleteOrgs: true,
-                shouldDeleteContent: false,
-              }),
-            }),
-          ],
-        }
-      : { model },
-  ConfirmedDeleteAccount: (model) =>
-    AccountDeletion.guards.ConfirmingContent(model.deletion)
-      ? {
-          model: deletionStep(model, AccountDeletion.Deleting()),
-          commands: [
-            RequestAccountDeletion({
-              maybeConfirmation: Option.some({
-                shouldDeleteOrgs: model.deletion.shouldDeleteOrganizations,
-                shouldDeleteContent: true,
-              }),
-            }),
-          ],
-        }
-      : { model },
+  ConfirmedDeleteOrganizations: (model) => {
+    if (!AccountDeletion.guards.ConfirmingOrganizations(model.deletion)) return { model }
+    const organizationIds = model.deletion.organizations.map(({ organizationId }) => organizationId)
+
+    return {
+      model: deletionStep(model, AccountDeletion.Asking({ organizationIds })),
+      commands: [RequestAccountDeletion({ maybeConfirmation: Option.some({ organizationIds }) })],
+    }
+  },
+  ConfirmedDeleteAccount: (model) => {
+    if (!AccountDeletion.guards.ConfirmingContent(model.deletion)) return { model }
+    const { scope } = model.deletion
+
+    return {
+      model: deletionStep(model, AccountDeletion.Deleting({ scope })),
+      commands: [
+        RequestAccountDeletion({
+          maybeConfirmation: Option.some({
+            organizationIds: scope.organizations.map(({ organizationId }) => organizationId),
+            scope,
+          }),
+        }),
+      ],
+    }
+  },
   ClickedCancelDeletion: (model) => ({ model: deletionStep(model, AccountDeletion.Idle()) }),
   SucceededRequestAccountDeletion: (model, { result }) => {
-    const shouldDeleteOrganizations =
-      AccountDeletion.guards.Asking(model.deletion) && model.deletion.shouldDeleteOrganizations
+    // Asked again after confirming: what they reviewed changed in the meantime.
+    const hasChanged =
+      AccountDeletion.guards.Deleting(model.deletion) ||
+      (AccountDeletion.guards.Asking(model.deletion) &&
+        EffectArray.isReadonlyArrayNonEmpty(model.deletion.organizationIds) &&
+        Predicate.isTagged(result, "ConfirmOrgDeletion"))
 
     return Match.value(result).pipe(
       Match.tagsExhaustive({
         ConfirmOrgDeletion: ({ organizations }) => ({
           model: deletionStep(
             model,
-            AccountDeletion.ConfirmingOrganizations({ organizationCount: organizations.length }),
+            AccountDeletion.ConfirmingOrganizations({ organizations, hasChanged }),
           ),
         }),
-        ConfirmContentDeletion: ({ personalContentCount }) => ({
+        ConfirmContentDeletion: ({ personalContent, organizations }) => ({
           model: deletionStep(
             model,
-            AccountDeletion.ConfirmingContent({ shouldDeleteOrganizations, personalContentCount }),
+            AccountDeletion.ConfirmingContent({
+              scope: { personalContent, organizations },
+              hasChanged,
+            }),
           ),
         }),
         Success: () => ({ model, outMessage: OutMessage.DeletedAccount() }),

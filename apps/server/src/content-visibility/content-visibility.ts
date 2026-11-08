@@ -1,9 +1,9 @@
 import {
   canViewContent,
   PublicationNotFoundError,
-  SessionContext,
   UnauthorizedError,
   type ModeratedPublicationRow,
+  currentSession,
 } from "@gororobas/domain"
 import { Effect, Option } from "effect"
 
@@ -22,7 +22,7 @@ export const assertCanViewPublication = (
   >,
 ) =>
   Effect.gen(function* () {
-    const session = yield* SessionContext
+    const session = yield* currentSession
     const owner = yield* findContentOwner(publication.ownerProfileId)
 
     // Owners are profiles, which deleting a publication's owner cascades to.

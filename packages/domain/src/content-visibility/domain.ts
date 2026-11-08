@@ -53,7 +53,8 @@ const hasOrganizationPermission = ({
 /**
  * - Censored content is hidden from everyone but its authors: the person who owns it, or the
  *   organization members who can edit it.
- * - Newcomers' content is only visible to them and to moderators until they're approved.
+ * - Newcomers' content is only visible to them and to moderators until they're approved, and
+ *   blocked people's once they're blocked.
  * - Otherwise, public content is visible to anyone, community content to people with community
  *   access, and organization content to its members.
  */
@@ -66,7 +67,10 @@ export const canViewContent = (session: Session, content: ViewableContent): bool
 
   if (content.moderationStatus === "CENSORED") return isOwner || can("publications:edit")
 
-  if (owner.type === "PERSON" && owner.accessLevel === "NEWCOMER") {
+  if (
+    owner.type === "PERSON" &&
+    (owner.accessLevel === "NEWCOMER" || owner.accessLevel === "BLOCKED")
+  ) {
     return isOwner || account?.accessLevel === "ADMIN" || account?.accessLevel === "MODERATOR"
   }
 

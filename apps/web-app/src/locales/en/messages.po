@@ -1202,6 +1202,14 @@ msgstr "Interests"
 msgid "Irrigation"
 msgstr "Irrigation"
 
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "It also deletes {name}'s profile, and with it:"
+msgstr "It also deletes {name}'s profile, and with it:"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "It also deletes {name}'s profile."
+msgstr "It also deletes {name}'s profile."
+
 #: src/blocks/wiki-article/view/view.ts
 msgid "It may have been renamed. Try finding it through search."
 msgstr "It may have been renamed. Try finding it through search."
@@ -1434,6 +1442,10 @@ msgstr "Municipality, state or country"
 #: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "My geographic itinerary"
 msgstr "My geographic itinerary"
+
+#: src/ui/mysterious-author/view.ts
+msgid "Mysterious author"
+msgstr "Mysterious author"
 
 #: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
 msgid "Name"
@@ -2219,6 +2231,10 @@ msgstr "Soil preparation"
 msgid "Someone already uses this handle. Try another one."
 msgstr "Someone already uses this handle. Try another one."
 
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Something changed since you reviewed it, so nothing was deleted. Check again before confirming."
+msgstr "Something changed since you reviewed it, so nothing was deleted. Check again before confirming."
+
 #: src/blocks/authentication/view.ts
 msgid "Something went wrong. Try again."
 msgstr "Something went wrong. Try again."
@@ -2610,9 +2626,17 @@ msgstr "Who can see what you save"
 msgid "Who can see your profile"
 msgstr "Who can see your profile"
 
+#: src/ui/mysterious-author/view.ts
+msgid "Whoever wrote this shares their profile only with the Gororobas community, so their name stays a secret here. What they published is for everyone, though."
+msgstr "Whoever wrote this shares their profile only with the Gororobas community, so their name stays a secret here. What they published is for everyone, though."
+
 #: src/blocks/authentication/view.ts
 msgid "Why create an account"
 msgstr "Why create an account"
+
+#: src/ui/mysterious-author/view.ts
+msgid "Why don't we know who wrote this?"
+msgstr "Why don't we know who wrote this?"
 
 #: src/blocks/wiki-article/view/attribution.ts
 msgid "Wikimedia's free and collaborative knowledge base. Its data is in the public domain (CC0)."
@@ -2659,9 +2683,10 @@ msgstr "You're the last administrator. Make someone else an administrator before
 msgid "You're the only manager of an organization that has other members. Make someone else a manager before deleting your account."
 msgstr "You're the only manager of an organization that has other members. Make someone else a manager before deleting your account."
 
+#. placeholder {0}: organizations.length
 #: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
-msgid "You're the only member of {organizationCount, plural, one {# organization} other {# organizations}}. Deleting your account deletes them and what they've shared, too."
-msgstr "You're the only member of {organizationCount, plural, one {# organization} other {# organizations}}. Deleting your account deletes them and what they've shared, too."
+msgid "You're the only member of {0, plural, one {this organization} other {these organizations}}. Deleting your account deletes them and what they've shared, too:"
+msgstr "You're the only member of {0, plural, one {this organization} other {these organizations}}. Deleting your account deletes them and what they've shared, too:"
 
 #: src/blocks/authentication/view.ts
 msgid "you@example.com"

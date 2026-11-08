@@ -13,6 +13,7 @@ import {
   type PlatformAccessLevel,
   type ProfileRow,
   type Session,
+  provideSession,
 } from "@gororobas/domain"
 import { LinkInferenceModelStub } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
@@ -56,8 +57,7 @@ export const DATABASE_PROPERTY_TEST_CONFIG = { runs: 50 } as const
 export const withSession = <A, E, R>(
   effect: Effect.Effect<A, E, R | SessionContext>,
   session: Session,
-): Effect.Effect<A, E, Exclude<R, SessionContext>> =>
-  effect.pipe(Effect.provideService(SessionContext, session))
+): Effect.Effect<A, E, Exclude<R, SessionContext>> => effect.pipe(provideSession(session))
 
 /**
  * IdGen test layer that generates UUIDv7 identifiers.

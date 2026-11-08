@@ -3,7 +3,9 @@ import {
   ApiPublicationSearchParams,
   ApiUpdatePublicationData,
   ContentLanguage,
+  HiddenProfile,
   PublicationCrdt,
+  currentSession,
 } from "@gororobas/domain"
 /**
  * Publications service - business operations for publications.
@@ -27,7 +29,6 @@ import {
   Policies,
   PublicationId,
   PublicationNotFoundError,
-  SessionContext,
   ProfileId,
   OrganizationId,
   MediaAssetId,
@@ -49,6 +50,7 @@ import {
   listPublicationMediaAssets,
   findPublicationApiData,
   searchPublicationRows,
+  findOwnerVisibility,
   findPublicationCardContent,
 } from "./queries.js"
 import { PublicationsRepository } from "./repository.js"
@@ -336,10 +338,27 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           return data.value
         })
 
+      /** Listing someone's publications would tell who wrote them: only for readers of the profile. */
+      const canListByOwner = (ownerProfileId: ProfileId) =>
+        Effect.gen(function* () {
+          const owner = yield* findOwnerVisibility(ownerProfileId)
+          return (
+            Option.isSome(owner) &&
+            (yield* Policies.helpers.check(Policies.profiles.canRead(owner.value)))
+          )
+        })
+
       const searchPublications = (query: typeof ApiPublicationSearchParams.Type) =>
         Effect.gen(function* () {
+          if (
+            query.ownerProfileId !== undefined &&
+            !(yield* canListByOwner(query.ownerProfileId))
+          ) {
+            return []
+          }
+
           const page = yield* searchPublicationRows({
-            session: yield* SessionContext,
+            session: yield* currentSession,
             limit: query.pageSize,
             offset: query.currentPage * query.pageSize,
           })(query)
@@ -353,7 +372,11 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
                 const details = yield* findPublicationCardContent({ id: row.id, language })
                 if (Option.isNone(details)) return Option.none()
 
-                const { conceptIds, ...content } = details.value
+                const { conceptIds, owner, ownerVisibility, ...content } = details.value
+                const { ...publication } = row
+                const canSeeOwner = yield* Policies.helpers.check(
+                  Policies.profiles.canRead({ visibility: ownerVisibility }),
+                )
 
                 const concepts = EffectArray.isReadonlyArrayNonEmpty(conceptIds)
                   ? yield* wikiArticlesRepository.listCardsByIds({
@@ -364,8 +387,9 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
 
                 return Option.some(
                   ApiPublicationCardData.make({
-                    ...row,
+                    ...publication,
                     ...content,
+                    owner: canSeeOwner ? owner : HiddenProfile.make({}),
                     mediaAssets: yield* listPublicationMediaAssets(row.id),
                     concepts,
                   }),

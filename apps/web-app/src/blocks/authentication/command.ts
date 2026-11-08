@@ -296,6 +296,15 @@ export const FocusField = AuthenticationBlock.makeCommand("FocusField", {
   },
 })
 
+/** Loads the page again, so nothing loaded for the previous account stays on screen. */
+export const ReloadPage = AuthenticationBlock.makeCommand("ReloadPage", {
+  messages: [Message.CompletedReloadPage],
+  handler: function* () {
+    return () =>
+      Effect.sync(() => window.location.reload()).pipe(Effect.as(Message.CompletedReloadPage()))
+  },
+})
+
 export const CommandsLayer = Layer.mergeAll(
   FocusField.layer,
   RestoreSession.layer,
@@ -306,4 +315,5 @@ export const CommandsLayer = Layer.mergeAll(
   CompleteOnboarding.layer,
   SignOut.layer,
   CheckConnection.layer,
+  ReloadPage.layer,
 )

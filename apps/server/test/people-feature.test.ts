@@ -1,6 +1,10 @@
 import { NodeServices } from "@effect/platform-node"
-import { expect, it } from "@effect/vitest"
-import { AccountDeletionResultSuccess, ContentLanguage } from "@gororobas/domain"
+import { assert, expect, it } from "@effect/vitest"
+import {
+  AccountDeletionResultSuccess,
+  ContentLanguage,
+  countProfileContent,
+} from "@gororobas/domain"
 import {
   Handle,
   PersonId,
@@ -26,7 +30,7 @@ import {
   When,
 } from "@gororobas/effect-bdd"
 import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
-import { Effect, Option, Result, Schema } from "effect"
+import { Effect, Option, Predicate, Result, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
@@ -52,6 +56,7 @@ import {
   PeopleTestDataTable,
   provisionPeople,
   withPerson,
+  confirmAccountDeletion,
   PeopleFeatureTestLayer,
   textToRichTextDocument,
   createPost,
@@ -253,14 +258,6 @@ const DeletionBackground = Schema.Struct({
   retainedPublicationId: PublicationId,
   publicationCommentId: PublicationCommentId,
 })
-
-const confirmPersonalDeletion = (personId: PersonId, shouldDeleteOrgs = false) =>
-  PeopleService.use((people) =>
-    withPerson(
-      people.deleteCurrentPerson({ shouldDeleteContent: true, shouldDeleteOrgs }),
-      personId,
-    ),
-  )
 
 const expectPersonDeleted = (personId: PersonId) =>
   Effect.gen(function* () {
@@ -1063,6 +1060,135 @@ await Effect.runPromise(
           ),
       })
 
+      Scenario("Replies to a deleted person's comments remain", {
+        layer: PeopleFeatureTestLayer,
+        steps: () =>
+          runSteps(
+            Given("someone replied to {string:name}'s comment", {
+              params: NamedPerson,
+              handler: () =>
+                Effect.gen(function* () {
+                  const context = yield* getBackgroundContext(DeletionBackground)
+                  const publicationComments = yield* PublicationCommentsService
+
+                  const replyId = yield* withPerson(
+                    publicationComments.createReplyPublicationComment({
+                      parentPublicationCommentId: context.publicationCommentId,
+                      content: {
+                        sourceContent: textToRichTextDocument("Resposta"),
+                        sourceLanguage: ContentLanguage.make("pt"),
+                      },
+                    }),
+                    context.administratorId,
+                  )
+
+                  return { ...context, replyId }
+                }),
+            }),
+            When("{string:name} deletes their account", {
+              params: NamedPerson,
+              handler: (context, { name }) =>
+                Effect.gen(function* () {
+                  expect(yield* confirmAccountDeletion(personNamed(context.actors, name))).toEqual({
+                    _tag: "Success",
+                  })
+                  return context
+                }),
+            }),
+            Then("the reply remains, under a deleted comment", {
+              handler: (context) =>
+                Effect.gen(function* () {
+                  const comments = yield* PublicationCommentsRepository
+                  const reply = yield* comments.getActivePublicationComment(context.replyId)
+                  expect(reply.parentPublicationCommentId).toBe(context.publicationCommentId)
+                  const parent = yield* comments.findPublicationCommentRowById(
+                    context.publicationCommentId,
+                  )
+                  expect(parent).toMatchObject(
+                    Option.some({ ownerProfileId: null, sourceContent: null }),
+                  )
+                  return context
+                }),
+            }),
+          ),
+      })
+
+      Scenario("A confirmation covers only what was reviewed", {
+        layer: PeopleFeatureTestLayer,
+        steps: () =>
+          runSteps(
+            Given("{string:name} has reviewed what deleting their account removes", {
+              params: NamedPerson,
+              handler: (_, { name }) =>
+                Effect.gen(function* () {
+                  const context = yield* getBackgroundContext(DeletionBackground)
+                  const people = yield* PeopleService
+                  const review = yield* withPerson(
+                    people.deleteCurrentPerson(),
+                    personNamed(context.actors, name),
+                  )
+                  assert(Predicate.isTagged(review, "ConfirmContentDeletion"))
+                  return { ...context, review }
+                }),
+            }),
+            And("{string:name} then publishes another post", {
+              params: NamedPerson,
+              handler: (context, { name }) =>
+                Effect.gen(function* () {
+                  const personId = personNamed(context.actors, name)
+
+                  const newPost = yield* createPost({
+                    personId,
+                    ownerProfileId: personId,
+                    content: "Publicado depois da revisão",
+                  })
+
+                  return { ...context, newPostId: newPost.id }
+                }),
+            }),
+            When("{string:name} confirms deletion with that review", {
+              params: NamedPerson,
+              handler: (context, { name }) =>
+                Effect.gen(function* () {
+                  const people = yield* PeopleService
+
+                  const result = yield* withPerson(
+                    people.deleteCurrentPerson({
+                      organizationIds: [],
+                      scope: {
+                        personalContent: context.review.personalContent,
+                        organizations: context.review.organizations,
+                      },
+                    }),
+                    personNamed(context.actors, name),
+                  )
+
+                  return { ...context, result }
+                }),
+            }),
+            Then("they are asked to confirm again, including the new post", {
+              handler: (context) =>
+                Effect.sync(() => {
+                  assert(Predicate.isTagged(context.result, "ConfirmContentDeletion"))
+                  expect(context.result.personalContent.postIds).toContain(context.newPostId)
+                  return context
+                }),
+            }),
+            And("{string:name}'s profile still exists", {
+              params: NamedPerson,
+              handler: (context, { name }) =>
+                Effect.gen(function* () {
+                  const personId = personNamed(context.actors, name)
+                  const profiles = yield* ProfileService
+                  expect(
+                    Option.isSome(yield* withPerson(profiles.findById(personId), personId)),
+                  ).toBe(true)
+                  return context
+                }),
+            }),
+          ),
+      })
+
       Scenario("Person deletes their account", {
         layer: PeopleFeatureTestLayer,
         steps: () =>
@@ -1075,15 +1201,17 @@ await Effect.runPromise(
                   const personId = personNamed(context.actors, name)
                   const people = yield* PeopleService
                   const confirmation = yield* withPerson(people.deleteCurrentPerson(), personId)
-                  expect(confirmation).toMatchObject({
-                    _tag: "ConfirmContentDeletion",
-                    personalContentCount: { posts: 1, publicationComments: 1 },
+                  assert(Predicate.isTagged(confirmation, "ConfirmContentDeletion"))
+                  expect(countProfileContent(confirmation.personalContent)).toMatchObject({
+                    posts: 1,
+                    publicationComments: 1,
                   })
+
                   const profiles = yield* ProfileService
                   expect(
                     Option.isSome(yield* withPerson(profiles.findById(personId), personId)),
                   ).toBe(true)
-                  expect(yield* confirmPersonalDeletion(personId)).toEqual({ _tag: "Success" })
+                  expect(yield* confirmAccountDeletion(personId)).toEqual({ _tag: "Success" })
                   return context
                 }),
             }),
@@ -1185,9 +1313,9 @@ await Effect.runPromise(
               params: NamedPerson,
               handler: (context, { name }) =>
                 Effect.gen(function* () {
-                  expect(yield* confirmPersonalDeletion(personNamed(context.actors, name))).toEqual(
-                    { _tag: "Success" },
-                  )
+                  expect(yield* confirmAccountDeletion(personNamed(context.actors, name))).toEqual({
+                    _tag: "Success",
+                  })
                   return context
                 }),
             }),
@@ -1267,7 +1395,7 @@ await Effect.runPromise(
               params: NamedPerson,
               handler: (context, { name }) =>
                 Effect.gen(function* () {
-                  const error = yield* confirmPersonalDeletion(
+                  const error = yield* confirmAccountDeletion(
                     personNamed(context.actors, name),
                     true,
                   ).pipe(Effect.flip)
@@ -1380,9 +1508,9 @@ await Effect.runPromise(
               params: NamedPerson,
               handler: (context, { name }) =>
                 Effect.gen(function* () {
-                  expect(yield* confirmPersonalDeletion(personNamed(context.actors, name))).toEqual(
-                    { _tag: "Success" },
-                  )
+                  expect(yield* confirmAccountDeletion(personNamed(context.actors, name))).toEqual({
+                    _tag: "Success",
+                  })
                   return context
                 }),
             }),
@@ -1430,7 +1558,7 @@ await Effect.runPromise(
                 params: NamedPerson,
                 handler: (context, { name }) =>
                   Effect.gen(function* () {
-                    const result = yield* confirmPersonalDeletion(personNamed(context.actors, name))
+                    const result = yield* confirmAccountDeletion(personNamed(context.actors, name))
                     return { ...context, result }
                   }),
               },
@@ -1439,9 +1567,9 @@ await Effect.runPromise(
               params: Schema.Struct({ organization: Schema.String }),
               handler: (context) =>
                 Effect.sync(() => {
-                  expect(context.result).toEqual({
+                  expect(context.result).toMatchObject({
                     _tag: "ConfirmOrgDeletion",
-                    organizations: [context.organizationId],
+                    organizations: [{ organizationId: context.organizationId }],
                   })
                   return context
                 }),
@@ -1506,21 +1634,20 @@ await Effect.runPromise(
                     const personId = personNamed(context.actors, name)
 
                     const confirmation = yield* withPerson(
-                      people.deleteCurrentPerson({
-                        shouldDeleteOrgs: true,
-                        shouldDeleteContent: false,
-                      }),
+                      people.deleteCurrentPerson({ organizationIds: [context.organizationId] }),
                       personId,
                     )
 
-                    expect(confirmation).toMatchObject({
-                      _tag: "ConfirmContentDeletion",
-                      organizationContent: [
-                        { organizationId: context.organizationId, contentCount: { posts: 1 } },
-                      ],
-                    })
+                    assert(Predicate.isTagged(confirmation, "ConfirmContentDeletion"))
 
-                    expect(yield* confirmPersonalDeletion(personId, true)).toEqual({
+                    expect(
+                      confirmation.organizations.map(({ organizationId, content }) => ({
+                        organizationId,
+                        posts: countProfileContent(content).posts,
+                      })),
+                    ).toEqual([{ organizationId: context.organizationId, posts: 1 }])
+
+                    expect(yield* confirmAccountDeletion(personId, true)).toEqual({
                       _tag: "Success",
                     })
                     return context
@@ -1604,7 +1731,7 @@ await Effect.runPromise(
               handler: (_, { name }) =>
                 Effect.gen(function* () {
                   const context = yield* getBackgroundContext(PeopleBackground)
-                  const error = yield* confirmPersonalDeletion(
+                  const error = yield* confirmAccountDeletion(
                     personNamed(context.actors, name),
                   ).pipe(Effect.flip)
                   return { ...context, error }
@@ -1652,7 +1779,7 @@ await Effect.runPromise(
               handler: (_, { name }) =>
                 Effect.gen(function* () {
                   const context = yield* getBackgroundContext(PeopleBackground)
-                  expect(yield* confirmPersonalDeletion(personNamed(context.actors, name))).toEqual(
+                  expect(yield* confirmAccountDeletion(personNamed(context.actors, name))).toEqual(
                     AccountDeletionResultSuccess.make({}),
                   )
                   return context

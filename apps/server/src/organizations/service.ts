@@ -321,7 +321,8 @@ export class OrganizationsService extends Context.Service<OrganizationsService>(
             yield* Policies.organizations.canDelete(organizationId)
             yield* requireOrganization(organizationId)
             // Delete the owning profile so its content and organization dependencies cascade together.
-            yield* deleteProfiles([organizationId])
+            const orphanedMedia = yield* deleteProfiles([organizationId])
+            return { result: undefined, orphanedMedia }
           }),
         )
 

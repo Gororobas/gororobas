@@ -4,8 +4,12 @@ import {
   AccountDeletionResultConfirmContentDeletion,
   AccountDeletionResultConfirmOrgDeletion,
   AccountDeletionResultSuccess,
+  AccountDeletionResult,
+  type MediaAssetId,
+  AccountDeletionScope,
+  isSameAccountDeletionScope,
+  isSameOrganizationSet,
   LastAdministrator,
-  OrganizationContentCount,
   PersonId,
   PersonNotFoundError,
   type PersonRow,
@@ -103,59 +107,67 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
             })
           }
 
+          const organizationsToDelete = orgsWhereSoleManager.map(
+            ({ organizationId, name, handle }) => ({ organizationId, name, handle }),
+          )
+
           // 1.2. Ask for confirmation if they have a single member (the user to be deleted)
           if (
-            confirmation?.shouldDeleteOrgs !== true &&
-            EffectArray.isReadonlyArrayNonEmpty(orgsWhereSoleManager)
+            EffectArray.isReadonlyArrayNonEmpty(organizationsToDelete) &&
+            !isSameOrganizationSet(confirmation?.organizationIds ?? [], organizationsToDelete)
           ) {
-            return AccountDeletionResultConfirmOrgDeletion.make({
-              organizations: orgsWhereSoleManager.map((o) => o.organizationId),
-            })
+            return {
+              result: AccountDeletionResultConfirmOrgDeletion.make({
+                organizations: organizationsToDelete,
+              }),
+              orphanedMedia: [],
+            }
           }
 
           /**
-           * 2. CONFIRMING DELETION OF ALL CONTENT
+           * 2. CONFIRMING DELETION OF ALL CONTENT, exactly as they reviewed it
            */
-          const [personalContentCount, organizationContent] = yield* Effect.all(
-            [
-              // Personal
-              profilesRepo.fetchProfileContentCounts(session.personId),
+          const scope = AccountDeletionScope.make({
+            personalContent: yield* profilesRepo.fetchProfileContent(session.personId),
+            organizations: yield* Effect.forEach(
+              organizationsToDelete,
+              (organization) =>
+                profilesRepo
+                  .fetchProfileContent(organization.organizationId)
+                  .pipe(Effect.map((content) => ({ ...organization, content }))),
+              { concurrency: 1 },
+            ),
+          })
 
-              // Per organization
-              Effect.forEach(
-                orgsWhereSoleManager,
-                (org) =>
-                  profilesRepo.fetchProfileContentCounts(org.organizationId).pipe(
-                    Effect.map((contentCount) =>
-                      OrganizationContentCount.make({
-                        organizationId: org.organizationId,
-                        contentCount,
-                      }),
-                    ),
-                  ),
-                { concurrency: "unbounded" },
-              ),
-            ],
-            { concurrency: "unbounded" },
-          )
-
-          if (confirmation?.shouldDeleteContent !== true) {
-            return AccountDeletionResultConfirmContentDeletion.make({
-              personalContentCount,
-              organizationContent,
-            })
+          if (
+            confirmation?.scope === undefined ||
+            !isSameAccountDeletionScope(confirmation.scope, scope)
+          ) {
+            return {
+              result: AccountDeletionResultConfirmContentDeletion.make(scope),
+              orphanedMedia: [],
+            }
           }
 
           /**
            * 3. FINALLY DELETING EVERYTHING
            */
-          yield* deleteProfiles([
+          const orphanedMedia = yield* deleteProfiles([
             session.personId,
             ...orgsWhereSoleManager.map((organization) => organization.organizationId),
           ])
 
-          return AccountDeletionResultSuccess.make({})
-        }),
+          return { result: AccountDeletionResultSuccess.make({}), orphanedMedia }
+        }).pipe(
+          Effect.map(
+            (
+              value,
+            ): {
+              result: typeof AccountDeletionResult.Type
+              orphanedMedia: ReadonlyArray<MediaAssetId>
+            } => value,
+          ),
+        ),
       )
 
     const getCurrentAccount = Effect.gen(function* () {

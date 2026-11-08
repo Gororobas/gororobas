@@ -450,12 +450,13 @@ CREATE TABLE `publication_comments` (
   `moderation_status` text NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
-  `owner_profile_id` text NOT NULL,
-  `source_language` text NOT NULL,
-  `source_content` json NOT NULL,
+  `deleted_at` text NULL,
+  `owner_profile_id` text NULL,
+  `source_language` text NULL,
+  `source_content` json NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT `1` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION,
   CONSTRAINT `2` FOREIGN KEY (`parent_publication_comment_id`) REFERENCES `publication_comments` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "idx_publication_comments_publication_id" to table: "publication_comments"

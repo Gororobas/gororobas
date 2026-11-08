@@ -1,21 +1,22 @@
 /**
  * Derived work on committed content: which workflows each kind of change requests.
  *
- * Services call these after their transaction commits, so workflows read the committed state.
- * Requests are best-effort: `submitInBackground` logs a failed submission instead of failing the
- * change that made it. Tests swap `EnrichmentSubmitterLive` for `EnrichmentRecorder` to assert
+ * Requests wait for the change's transaction to commit (`sql.afterCommit`), so workflows read the
+ * committed state and a rolled-back change requests nothing. They're best-effort:
+ * `submitInBackground` logs a failed submission instead of failing the change that made it. Tests swap `EnrichmentSubmitterLive` for `EnrichmentRecorder` to assert
  * which workflows a change requests without running them.
  */
 import {
   ContentLanguage,
   PublicationCrdt,
-  type PublicationCommentData,
+  type ActivePublicationCommentData,
   type PublicationId,
   snapshotToLoroDoc,
   SupportedLanguage,
   type WikiArticleProjectionRow,
 } from "@gororobas/domain"
 import { Array as EffectArray, Context, Effect, Layer, Option, Ref } from "effect"
+import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
 import { PublicationLinkInferenceWorkflow } from "../link-inference/publication-link-inference-workflow.js"
@@ -41,14 +42,17 @@ export const EnrichmentSubmitterLive = Layer.effect(
   EnrichmentSubmitter,
   Effect.gen(function* () {
     const engine = yield* WorkflowEngine.WorkflowEngine
+    const sql = yield* SqlClient.SqlClient
 
     return {
       submitInBackground: (request) =>
-        request.submit.pipe(
-          Effect.asVoid,
-          Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-          Effect.catchCause((cause) =>
-            Effect.logError(`Submitting ${request.description} failed`, cause),
+        sql.afterCommit(
+          request.submit.pipe(
+            Effect.asVoid,
+            Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+            Effect.catchCause((cause) =>
+              Effect.logError(`Submitting ${request.description} failed`, cause),
+            ),
           ),
         ),
     }
@@ -154,7 +158,7 @@ export class Enrichment extends Context.Service<Enrichment>()("Enrichment", {
 
     /** A new or edited comment: detect its language and translate it. */
     const onCommentChanged = (
-      comment: Pick<PublicationCommentData, "id" | "currentRevisionId" | "sourceContent">,
+      comment: Pick<ActivePublicationCommentData, "id" | "currentRevisionId" | "sourceContent">,
     ) =>
       submitAll([
         {

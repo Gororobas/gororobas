@@ -5,8 +5,8 @@ import {
   AuthenticationHttp,
   PersonId,
   ProfileId,
-  SessionContext,
   DEFAULT_AUTHENTICATION_RETURN_TARGET,
+  currentSession,
 } from "@gororobas/domain"
 import { Proofs } from "@yielded/auth"
 import {
@@ -54,7 +54,7 @@ const ProtectedHandlers = HttpApiBuilder.group(ProtectedApi, "protected", (handl
   handlers.handle("account", () =>
     Effect.gen(function* () {
       const authentication = yield* AuthenticationHttp.CurrentSession
-      const session = yield* SessionContext
+      const session = yield* currentSession
       if (authentication === null) return yield* Effect.die("authenticated account missing")
       return {
         authSubjectId: authentication.subjectId,
@@ -340,7 +340,9 @@ test.live.each([authenticationTestOrigin, "http://localhost:4443"])(
 
     yield* run(
       deleteProfilesWithMedia((deleteProfiles) =>
-        deleteProfiles([ProfileId.make(authSubjectId)]),
+        deleteProfiles([ProfileId.make(authSubjectId)]).pipe(
+          Effect.map((orphanedMedia) => ({ result: undefined, orphanedMedia })),
+        ),
       ).pipe(Effect.provide(WorkflowEngine.layerMemory)),
     )
 

@@ -1,5 +1,10 @@
-import { MyAccount } from "@gororobas/domain/people/domain"
-import { PersonProfileRow, ProfileContentCounts } from "@gororobas/domain/profiles/domain"
+import { OrganizationId } from "@gororobas/domain/common/ids"
+import {
+  AccountDeletionScope,
+  MyAccount,
+  OrganizationToDelete,
+} from "@gororobas/domain/people/domain"
+import { PersonProfileRow } from "@gororobas/domain/profiles/domain"
 import { Schema } from "effect"
 import { AsyncData } from "foldkit"
 import { defineTaggedUnion } from "foldkit/schema"
@@ -37,13 +42,16 @@ export type DeletionBlocker = typeof DeletionBlocker.Type
  */
 export const AccountDeletion = defineTaggedUnion({
   Idle: {},
-  Asking: { shouldDeleteOrganizations: Schema.Boolean },
-  ConfirmingOrganizations: { organizationCount: Schema.Int },
-  ConfirmingContent: {
-    shouldDeleteOrganizations: Schema.Boolean,
-    personalContentCount: ProfileContentCounts,
+  /** `organizationIds`: the organizations they've agreed to delete so far. */
+  Asking: { organizationIds: Schema.Array(OrganizationId) },
+  /** `hasChanged`: they had confirmed, but the server found something they hadn't reviewed. */
+  ConfirmingOrganizations: {
+    organizations: Schema.Array(OrganizationToDelete),
+    hasChanged: Schema.Boolean,
   },
-  Deleting: {},
+  ConfirmingContent: { scope: AccountDeletionScope, hasChanged: Schema.Boolean },
+  /** Confirming exactly `scope`, which the server deletes only if it's still what it finds. */
+  Deleting: { scope: AccountDeletionScope },
   Blocked: { blocker: DeletionBlocker },
 })
 

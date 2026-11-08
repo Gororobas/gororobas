@@ -1,4 +1,5 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
+import { isHiddenProfile } from "@gororobas/domain/profiles/domain"
 import type { ApiPublicationCardData } from "@gororobas/domain/publications/domain"
 import { tiptapToText } from "@gororobas/domain/rich-text/tiptap-to-text"
 import { msg } from "@lingui/core/macro"
@@ -13,6 +14,7 @@ import { primaryName } from "../../lib/wiki-article-names"
 import { audioUrl, imageUrl } from "../../media-urls"
 import { AppText, type AppTextAppearance } from "../app-text"
 import { LoadingState } from "../loading-state"
+import { MysteriousAuthor } from "../mysterious-author"
 import { styledAttributes } from "../pleat-attributes"
 import { ProfileRow } from "../profile-row"
 import { focusRingDeclarations } from "../styles/focus-ring"
@@ -210,7 +212,9 @@ export const view = <Message>(
       },
     ),
     h.footer(styledAttributes([], footerStyle), [
-      ProfileRow.view({ profile: publication.owner, language, size: "compact" }, h),
+      isHiddenProfile(publication.owner)
+        ? MysteriousAuthor.view({ id: `mysterious-author-${publication.id}`, language }, h)
+        : ProfileRow.view({ profile: publication.owner, language, size: "compact" }, h),
     ]),
   ])
 }

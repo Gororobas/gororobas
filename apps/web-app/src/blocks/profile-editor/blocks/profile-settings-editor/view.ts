@@ -3,10 +3,11 @@ import {
   ProfileVisibility,
   SupportedLanguage,
 } from "@gororobas/domain/common/enums"
-import type { MyAccount } from "@gororobas/domain/people/domain"
-import type {
-  PersonProfileRow as PersonProfileRowSchema,
-  ProfileContentCounts as ProfileContentCountsSchema,
+import type { MyAccount, OrganizationToDelete } from "@gororobas/domain/people/domain"
+import {
+  countProfileContent,
+  type PersonProfileRow as PersonProfileRowSchema,
+  type ProfileContent,
 } from "@gororobas/domain/profiles/domain"
 import type { MessageDescriptor } from "@lingui/core"
 import { msg, plural } from "@lingui/core/macro"
@@ -41,7 +42,6 @@ import {
 } from "./model"
 
 type PersonProfileRow = typeof PersonProfileRowSchema.Type
-type ProfileContentCounts = typeof ProfileContentCountsSchema.Type
 
 type ViewBuilder = ProfileSettingsEditorViewBuilder
 
@@ -290,10 +290,17 @@ const blockers: Readonly<Record<DeletionBlocker, MessageDescriptor>> = {
   RequestFailed: msg`Couldn't delete your account right now. Try again in a moment.`,
 }
 
+/** What deleting a profile removes: theirs (`organization` absent) or an organization's. */
 const contentCounts = (
-  { counts, i18n }: Readonly<{ counts: ProfileContentCounts; i18n: Translator }>,
+  {
+    content,
+    organization,
+    i18n,
+  }: Readonly<{ content: ProfileContent; organization?: OrganizationToDelete; i18n: Translator }>,
   h: ViewBuilder,
 ): Html => {
+  const counts = countProfileContent(content)
+
   const lines = [
     counts.posts > 0
       ? i18n._(msg`${plural(counts.posts, { one: "# post", other: "# posts" })}`)
@@ -319,11 +326,26 @@ const contentCounts = (
   const lead = (text: string) =>
     AppText.view({ element: "p", appearance: "footnote", children: [text] }, h)
 
+  const name = organization?.name
+
   return EffectArray.match(lines, {
-    onEmpty: () => lead(i18n._(msg`This permanently deletes your profile.`)),
+    onEmpty: () =>
+      lead(
+        i18n._(
+          name === undefined
+            ? msg`This permanently deletes your profile.`
+            : msg`It also deletes ${name}'s profile.`,
+        ),
+      ),
     onNonEmpty: (nonEmptyLines) =>
       h.div(styledAttributes([], countsGroupStyle), [
-        lead(i18n._(msg`This permanently deletes your profile, and with it:`)),
+        lead(
+          i18n._(
+            name === undefined
+              ? msg`This permanently deletes your profile, and with it:`
+              : msg`It also deletes ${name}'s profile, and with it:`,
+          ),
+        ),
         h.ul(
           styledAttributes([], countsStyle),
           nonEmptyLines.map((line) =>
@@ -336,6 +358,22 @@ const contentCounts = (
       ]),
   })
 }
+
+const changedNotice = ({ i18n }: Readonly<{ i18n: Translator }>, h: ViewBuilder) =>
+  AppText.view(
+    {
+      element: "p",
+      appearance: "footnote",
+      tone: "destructive",
+      attributes: [h.Role("alert")],
+      children: [
+        i18n._(
+          msg`Something changed since you reviewed it, so nothing was deleted. Check again before confirming.`,
+        ),
+      ],
+    },
+    h,
+  )
 
 const cancelButton = (
   { i18n, isDisabled }: Readonly<{ i18n: Translator; isDisabled: boolean }>,
@@ -389,18 +427,28 @@ const deletion = (
         ]),
       ],
       Asking: () => [muted(i18n._(msg`Checking what deleting would remove…`), h)],
-      ConfirmingOrganizations: ({ organizationCount }) => [
+      ConfirmingOrganizations: ({ organizations, hasChanged }) => [
+        ...(hasChanged ? [changedNotice({ i18n }, h)] : []),
         AppText.view(
           {
             element: "p",
             appearance: "footnote",
             children: [
               i18n._(
-                msg`You're the only member of ${plural(organizationCount, { one: "# organization", other: "# organizations" })}. Deleting your account deletes them and what they've shared, too.`,
+                msg`You're the only member of ${plural(organizations.length, { one: "this organization", other: "these organizations" })}. Deleting your account deletes them and what they've shared, too:`,
               ),
             ],
           },
           h,
+        ),
+        h.ul(
+          styledAttributes([], countsStyle),
+          organizations.map(({ name }) =>
+            h.li(
+              [],
+              [AppText.view({ element: "span", appearance: "footnote", children: [name] }, h)],
+            ),
+          ),
         ),
         h.div(styledAttributes([], rowStyle), [
           AppButton.view(
@@ -415,8 +463,12 @@ const deletion = (
           cancelButton({ i18n, isDisabled: false }, h),
         ]),
       ],
-      ConfirmingContent: ({ personalContentCount }) => [
-        contentCounts({ counts: personalContentCount, i18n }, h),
+      ConfirmingContent: ({ scope, hasChanged }) => [
+        ...(hasChanged ? [changedNotice({ i18n }, h)] : []),
+        contentCounts({ content: scope.personalContent, i18n }, h),
+        ...scope.organizations.map((organization) =>
+          contentCounts({ content: organization.content, organization, i18n }, h),
+        ),
         muted(i18n._(msg`This can't be undone.`), h),
         h.div(styledAttributes([], rowStyle), [
           AppButton.view(

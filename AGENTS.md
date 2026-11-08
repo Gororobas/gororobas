@@ -16,6 +16,8 @@ You are not just writing code. You are shaping the future of this project. The p
 
 Fight entropy. Leave the codebase better than you found it.
 
+Always build code cleanly, modularly, and with proper architecture and separation of concerns. Never simply bolt on a feature because I asked for it. If you can’t find an easy way to build it naturally, and you'd recommend a refactor to make the whole thing cleanly, stop your work ahead of time and say so.
+
 ## Typescript
 
 Do not set `as any`, `@ts-ignore` or `@ts-expect-error` when you're stuck. Think hard about types and find ways to make them work.

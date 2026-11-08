@@ -6,6 +6,7 @@ import {
   OrganizationMembershipSession,
   PersonId,
   PlatformAccessLevel,
+  type Session,
   SessionContext,
   VisitorSession,
 } from "@gororobas/domain"
@@ -78,11 +79,43 @@ export const resolveSessionFromAuthSubjectId = (authSubjectId: AuthSubjectId) =>
     return account
   })
 
-export const resolveSession = Effect.gen(function* () {
-  const authentication = yield* (yield* AppAuth).getSession()
-  return authentication === null
-    ? VISITOR_SESSION
-    : yield* resolveSessionFromAuthSubjectId(authentication.subjectId)
-})
+/**
+ * The requester's session, resolved when a policy first reads it.
+ *
+ * Each transaction reads it again, on its own connection and under its lock (Turso begins writes
+ * with `BEGIN IMMEDIATE`): a demotion that commits before the write denies it, and one that
+ * commits after it can't make the write unauthorized. Outside transactions, the first read is
+ * kept for the rest of the request.
+ */
+export const makeSessionContext = (authSubjectId: AuthSubjectId | null) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient
+    if (authSubjectId === null) return SessionContext.fixed(VISITOR_SESSION)
 
-export const SessionServiceLive = Layer.effect(SessionContext, resolveSession)
+    // A transaction's service value is a new tuple for every transaction and savepoint.
+    let cached: { readonly transaction: object | undefined; readonly session: Session } | undefined
+
+    return SessionContext.of({
+      current: Effect.gen(function* () {
+        const transaction = Option.getOrUndefined(
+          yield* Effect.serviceOption(sql.transactionService),
+        )
+        if (cached !== undefined && cached.transaction === transaction) return cached.session
+
+        const session = yield* resolveSessionFromAuthSubjectId(authSubjectId).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+          Effect.orDie,
+        )
+        cached = { transaction, session }
+        return session
+      }),
+    })
+  })
+
+export const SessionServiceLive = Layer.effect(
+  SessionContext,
+  Effect.gen(function* () {
+    const authentication = yield* (yield* AppAuth).getSession()
+    return yield* makeSessionContext(authentication?.subjectId ?? null)
+  }),
+)

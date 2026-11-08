@@ -7,7 +7,7 @@ import { Array as EffectArray, DateTime, Duration, Effect, Exit, Predicate, Reco
 import * as Arbitrary from "effect/Arbitrary"
 
 import type { Session } from "./authorization/session.js"
-import { SessionContext } from "./authorization/session.js"
+import { provideSession, type SessionContext } from "./authorization/session.js"
 export class PropertyTestFailure extends Error {
   readonly _tag = "PropertyTestFailure"
   readonly counterexample: unknown
@@ -131,7 +131,7 @@ export const runPolicy = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   session: Session,
 ): Effect.Effect<Exit.Exit<A, E>, never, Exclude<R, SessionContext>> =>
-  effect.pipe(Effect.provideService(SessionContext, session), Effect.exit)
+  effect.pipe(provideSession(session), Effect.exit)
 
 /**
  * Run a policy effect with a session and return whether it succeeded

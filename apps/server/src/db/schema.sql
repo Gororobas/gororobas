@@ -460,6 +460,8 @@ CREATE INDEX idx_publication_wiki_articles_wiki_article_id ON publication_wiki_a
 -- ========
 -- COMMENTS
 -- ========
+-- Deleted comments with replies stay as tombstones (DeletedPublicationCommentRow): deleted_at is set
+-- and the owner and content are wiped, so replies keep their place. Childless ones are removed.
 CREATE TABLE publication_comments (
   id text PRIMARY KEY,
   publication_id text NOT NULL,
@@ -467,11 +469,14 @@ CREATE TABLE publication_comments (
   moderation_status text NOT NULL, -- ModerationStatus
   created_at text NOT NULL,
   updated_at text NOT NULL,
-  owner_profile_id text NOT NULL,
-  source_language text NOT NULL,
-  source_content json NOT NULL,
+  deleted_at text,
+  owner_profile_id text,
+  source_language text,
+  source_content json,
   FOREIGN KEY (parent_publication_comment_id) REFERENCES publication_comments (id) ON DELETE CASCADE,
-  FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
+  -- No cascade: deleting a profile must turn its comments into tombstones first, or replies by
+  -- other people would go with them.
+  FOREIGN KEY (owner_profile_id) REFERENCES profiles (id),
   FOREIGN KEY (publication_id) REFERENCES publication_sources (id) ON DELETE CASCADE
 );
 

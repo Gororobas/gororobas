@@ -10,8 +10,8 @@ import {
   ProfileId,
   assertAuthenticated,
   isCensored,
-  SessionContext,
   type ModerationDecision,
+  currentSession,
 } from "@gororobas/domain"
 import { Record, Context, DateTime, Effect, Option, Schema, Array as EffectArray } from "effect"
 import { SqlClient } from "effect/sql"
@@ -56,7 +56,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
 
           const wiki = yield* repository.listMediaAssetWikiArticles(id)
           const publications = yield* repository
-            .findMediaAssetPublicationAccess(yield* SessionContext)(id)
+            .findMediaAssetPublicationAccess(yield* currentSession)(id)
             // The EXISTS query always returns a row.
             .pipe(Effect.catchTag("NoSuchElementError", Effect.die))
           const profiles = yield* repository.listMediaAssetProfiles(id)
@@ -172,6 +172,10 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
               const stored = yield* prepare({ ...input, id })
 
               return yield* Effect.gen(function* () {
+                // Uploads run outside the request's write transaction (see `OutsideWriteTransaction`):
+                // checking again here reads the uploader's roles under this transaction's lock.
+                yield* Policies.media.canCreate
+
                 const mediaAsset = yield* Schema.decodeEffect(Schema.toType(MediaAssetRow))({
                   ...stored,
                   id,

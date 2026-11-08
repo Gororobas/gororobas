@@ -132,7 +132,9 @@ describe("PublicationCommentsService", () => {
         yield* resolveSessionFromAuthSubjectId(owner.id),
       )
 
-      const publicationComment = yield* service.getPublicationCommentById(publicationCommentId)
+      const publicationComment = yield* PublicationCommentsRepository.use((repository) =>
+        repository.getActivePublicationComment(publicationCommentId),
+      )
 
       const result = yield* withSession(
         service.updatePublicationComment({

@@ -9,6 +9,7 @@ import {
   type ApiUpdatePublicationCommentData,
   UpdatePublicationCommentInput,
   isCensored,
+  isDeletedPublicationComment,
   type ModerationDecision,
   type PublicationCommentRow,
 } from "@gororobas/domain"
@@ -40,9 +41,18 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
           ),
         )
 
+      /** What people can still reply to, edit or delete: deleted comments only keep their place. */
+      const getActivePublicationCommentById = (publicationCommentId: PublicationCommentId) =>
+        getPublicationCommentById(publicationCommentId).pipe(
+          Effect.filterOrFail(
+            (comment) => !isDeletedPublicationComment(comment),
+            (_comment) => new PublicationCommentNotFoundError({ id: publicationCommentId }),
+          ),
+        )
+
       /** After the repository's transaction commits, so translation reads the committed content. */
       const requestEnrichment = (publicationCommentId: PublicationCommentId) =>
-        getPublicationCommentById(publicationCommentId).pipe(
+        getActivePublicationCommentById(publicationCommentId).pipe(
           Effect.flatMap(enrichment.onCommentChanged),
         )
 
@@ -86,6 +96,13 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
           yield* Policies.publicationComments.canCreate
 
           const parent = yield* getPublicationCommentData(input.parentPublicationCommentId)
+
+          if (isDeletedPublicationComment(parent)) {
+            return yield* new PublicationCommentNotFoundError({
+              id: input.parentPublicationCommentId,
+            })
+          }
+
           yield* assertCanViewPublication(yield* getPublicationById(parent.publicationId))
 
           return yield* publicationCommentsRepository.createPublicationComment({
@@ -101,7 +118,7 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
         input: ApiUpdatePublicationCommentData & { publicationCommentId: PublicationCommentId },
       ) =>
         Effect.gen(function* () {
-          const row = yield* getPublicationCommentById(input.publicationCommentId)
+          const row = yield* getActivePublicationCommentById(input.publicationCommentId)
           const session = yield* Policies.publicationComments.canEdit(row.ownerProfileId)
 
           yield* publicationCommentsRepository.updatePublicationComment(
@@ -116,7 +133,7 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
 
       const deletePublicationComment = (publicationCommentId: PublicationCommentId) =>
         Effect.gen(function* () {
-          const row = yield* getPublicationCommentById(publicationCommentId)
+          const row = yield* getActivePublicationCommentById(publicationCommentId)
 
           yield* Policies.publicationComments.canDelete(row.ownerProfileId)
 
@@ -136,8 +153,12 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
           notFound: () => new PublicationCommentNotFoundError({ id: input.id }),
         })
 
-      /** Censored publication comments are hidden from every reader but their authors. */
+      /**
+       * Censored publication comments are hidden from every reader but their authors. Deleted ones
+       * show nothing but their place in the thread.
+       */
       const canSee = (publicationComment: PublicationCommentRow) =>
+        !isDeletedPublicationComment(publicationComment) &&
         isCensored(publicationComment.moderationStatus)
           ? Policies.publicationComments.canViewCensored(publicationComment.ownerProfileId).pipe(
               Effect.as(true),

@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect } from "@effect/vitest"
-import { AuthenticationApi, Handle } from "@gororobas/domain"
+import { AuthenticationApi, EXPECTED_SUBJECT_HEADER, Handle } from "@gororobas/domain"
 import { describeFeature, Given, runSteps, Then, When } from "@gororobas/effect-bdd"
 import { Effect, Layer, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
@@ -220,6 +220,69 @@ const signsOut = () =>
         .pipe(Effect.as(context)),
   })
 
+const ACCOUNT_PATH = "/people/me/account"
+
+const submitsCrossSiteChange = () =>
+  When("another site submits a change to their account", {
+    handler: (context: AuthenticationContext) =>
+      Effect.gen(function* () {
+        const response = yield* context.api.crossSiteRequestWith(
+          required(context.browser, "browser"),
+        )({
+          path: ACCOUNT_PATH,
+          method: "PATCH",
+          headers: { origin: "https://elsewhere.example", "content-type": "application/json" },
+          body: JSON.stringify({ preferredLanguage: "es" }),
+        })
+
+        return { ...context, response }
+      }),
+  })
+
+const submitsChangeForAnotherAccount = () =>
+  When("the app submits a change to their account meant for another account", {
+    handler: (context: AuthenticationContext) =>
+      Effect.gen(function* () {
+        const response = yield* context.api.requestWith(required(context.browser, "browser"))({
+          path: ACCOUNT_PATH,
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            [EXPECTED_SUBJECT_HEADER]: personNamed(context.actors, "Maria") + "-elsewhere",
+          },
+          body: JSON.stringify({ preferredLanguage: "es" }),
+        })
+
+        return { ...context, response }
+      }),
+  })
+
+const expectStatus = (context: AuthenticationContext, status: number) =>
+  Effect.sync(() => {
+    expect(required(context.response, "response").status).toBe(status)
+    return context
+  })
+
+const refusedAsForbidden = () =>
+  Then("the change is refused as forbidden", {
+    handler: (context: AuthenticationContext) => expectStatus(context, 403),
+  })
+
+const refusedAsUnauthenticated = () =>
+  Then("the change is refused as unauthenticated", {
+    handler: (context: AuthenticationContext) => expectStatus(context, 401),
+  })
+
+const accountUnchanged = () =>
+  Then("their account is unchanged", {
+    handler: (context: AuthenticationContext) =>
+      Effect.gen(function* () {
+        const client = yield* context.api.clientWith(required(context.browser, "browser"))
+        expect((yield* client.people.getMyAccount()).preferredLanguage).not.toBe("es")
+        return context
+      }),
+  })
+
 await Effect.runPromise(
   describeFeature("./auth.feature", ({ Background, Scenario }) => {
     Background({ layer: AuthenticationTestLayer, steps: () => runSteps(givenPeople()) })
@@ -256,6 +319,23 @@ await Effect.runPromise(
     Scenario("Signing out ends the session", {
       layer: AuthenticationTestLayer,
       steps: () => runSteps(hasSignedIn(), signsOut(), notSignedIn()),
+    })
+
+    Scenario("Writes another site submits with someone's cookie are refused", {
+      layer: AuthenticationTestLayer,
+      steps: () =>
+        runSteps(hasSignedIn(), submitsCrossSiteChange(), refusedAsForbidden(), accountUnchanged()),
+    })
+
+    Scenario("Writes meant for another account are refused", {
+      layer: AuthenticationTestLayer,
+      steps: () =>
+        runSteps(
+          hasSignedIn(),
+          submitsChangeForAnotherAccount(),
+          refusedAsUnauthenticated(),
+          accountUnchanged(),
+        ),
     })
   }).pipe(Effect.provide(NodeServices.layer)),
 )

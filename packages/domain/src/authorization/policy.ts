@@ -12,8 +12,9 @@ import {
   getSessionOrganizationPermissions,
   getSessionPlatformPermissions,
   isAccountSession,
+  currentSession,
   type Session,
-  SessionContext,
+  type SessionContext,
   UnauthorizedError,
 } from "./session.js"
 
@@ -38,7 +39,7 @@ export const policy = <A, R = never>(
   ) => Effect.Effect<Result.Result<A, string>, UnauthorizedError, R> | Result.Result<A, string>,
 ): Policy<A, R> =>
   Effect.gen(function* () {
-    const session = yield* SessionContext
+    const session = yield* currentSession
     const effectOrResult = predicate(session)
     const result = Result.isResult(effectOrResult) ? effectOrResult : yield* effectOrResult
 

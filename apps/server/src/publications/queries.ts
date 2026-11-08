@@ -8,7 +8,9 @@ import {
   ModeratedPublicationRow,
   PublicationMediaAssetRow,
   Handle,
+  ProfileCardData,
   ProfileId,
+  ProfileVisibility,
   PublicationRevisionRow,
   PublicationSourceRow,
   PublicationId,
@@ -157,7 +159,8 @@ const PublicationCardContentRow = Schema.Struct({
   content: Schema.fromJsonString(ApiPublicationCardData.fields.content),
   language: ApiPublicationCardData.fields.language,
   originalLanguage: ApiPublicationCardData.fields.originalLanguage,
-  owner: Schema.fromJsonString(ApiPublicationCardData.fields.owner),
+  owner: Schema.fromJsonString(ProfileCardData),
+  ownerVisibility: ProfileVisibility,
   conceptIds: Schema.fromJsonString(Schema.Array(WikiArticleId)),
 })
 
@@ -172,6 +175,7 @@ export const findPublicationCardContent = SqlSchema.findOneOption({
         json_object('id', owner.id, 'type', owner.type, 'handle', owner.handle, 'name', owner.name,
           'location', json(${latestPublicProfileLocationJson(sql, { profileIdColumn: "owner.id", language })}),
           'photoId', photo.id) AS owner,
+        owner.visibility AS owner_visibility,
         (SELECT json_group_array(DISTINCT linked.wiki_article_id)
           FROM publication_wiki_articles linked
           JOIN wiki_article_projections article ON article.id = linked.wiki_article_id
@@ -362,4 +366,11 @@ export const listPublicationMediaAttachments = SqlSchema.findAll({
     SqlClient.use(
       (sql) => sql`SELECT * FROM publication_media_assets WHERE publication_id = ${id}`,
     ),
+})
+
+/** Whose profile a publications listing filters by, to check the reader may know it's theirs. */
+export const findOwnerVisibility = SqlSchema.findOneOption({
+  Request: ProfileId,
+  Result: Schema.Struct({ visibility: ProfileVisibility }),
+  execute: (id) => SqlClient.use((sql) => sql`SELECT visibility FROM profiles WHERE id = ${id}`),
 })

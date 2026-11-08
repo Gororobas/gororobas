@@ -10,6 +10,12 @@ import {
 import { Schema } from "effect"
 export const authenticationNamespace = "gororobas/auth"
 export const sessionCookieName = "__Host-gororobas-session"
+
+/**
+ * The header browser writes carry to prove they come from the app: cross-site forms can't set it.
+ * Both the authentication routes and the application API require it on every write.
+ */
+export const csrfProtection = { header: "x-effect-auth-csrf", value: "1" } as const
 export const AuthenticationClaims = Schema.Struct({})
 export const AuthenticationSession = Schema.Struct({
   ...Sessions.SessionMetadata.fields,

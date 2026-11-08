@@ -10,6 +10,7 @@ import { Effect, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
 import { deleteAuthSubject } from "../authentication/delete-auth-subject.js"
+import { deletePublicationCommentsOwnedBy } from "../publication-comments/comment-deletion.js"
 import { latestPublicProfileLocationJson } from "./location-sql.js"
 
 const SearchableProfileFields = Schema.Struct({
@@ -76,6 +77,8 @@ export const deleteProfileReturningMediaAssets = SqlSchema.findAll({
         const media =
           yield* sql`SELECT id AS media_asset_id FROM media_assets WHERE owner_profile_id = ${id}`
         yield* deleteAuthSubject(ProfileId.make(id))
+        // Their comments become tombstones where others replied, instead of taking replies along.
+        yield* deletePublicationCommentsOwnedBy(ProfileId.make(id))
         yield* sql`DELETE FROM profiles WHERE id = ${id}`
         return media
       }).pipe(sql.withTransaction),

@@ -31,7 +31,7 @@ import { SourceContent, SourceContentFields, TranslatedContent } from "../common
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { LinkInferenceRun, makeLink, makeLinkRow } from "../links/domain.js"
 import { MediaAssetRow } from "../media-assets/domain.js"
-import { ProfileCardData } from "../profiles/domain.js"
+import { HiddenProfile, ProfileCardData } from "../profiles/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 import { WikiArticleQueriedCardData } from "../wiki/wiki-article.js"
 
@@ -152,8 +152,8 @@ export type ApiGetPublicationPageParams = typeof ApiGetPublicationPageParams.Typ
 export const ApiPublicationCardData = Schema.Struct({
   handle: Handle,
   id: PublicationId,
-  ownerProfileId: ProfileId,
-  owner: ProfileCardData,
+  /** Hidden when the reader can't see the owner's profile: no name, photo, location, nor ID. */
+  owner: Schema.Union([ProfileCardData, HiddenProfile]),
   publishedAt: Schema.NullOr(TimestampColumn),
   kind: PublicationKind,
   visibility: PublicationVisibility,

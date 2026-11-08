@@ -51,7 +51,8 @@ export const visibleTo = (
     WHEN ${sql.literal(input.moderationStatus)} = 'CENSORED'
       THEN ${isOwner} OR ${ownedByOneOf(organizationsWith("publications:edit"))}
     WHEN EXISTS (
-      SELECT 1 FROM people newcomer WHERE newcomer.id = ${owner} AND newcomer.access_level = 'NEWCOMER'
+      SELECT 1 FROM people unapproved
+      WHERE unapproved.id = ${owner} AND unapproved.access_level IN ('NEWCOMER', 'BLOCKED')
     ) THEN ${isOwner} OR ${flag(isReviewer)}
     ELSE ${isOwner} OR ${visibility} = 'PUBLIC' OR (${visibility} = 'COMMUNITY' AND ${flag(isTrusted)})
       OR ${ownedByOneOf(organizationsWith("publications:view"))}

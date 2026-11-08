@@ -20,12 +20,17 @@ const isPublicationOwner = (publication: Pick<CorePublicationMetadata, "ownerPro
     publication.ownerProfileId === session.personId ? allow(session) : deny(),
   )
 
+/** Blocked people can't rewrite what they published, though they can still delete it. */
 const canEdit = (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
-  or(
-    isPublicationOwner(publication),
-    organizationPermission(
-      "publications:edit",
-      Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
+  assertNonBlockedPerson.pipe(
+    Effect.flatMap(() =>
+      or(
+        isPublicationOwner(publication),
+        organizationPermission(
+          "publications:edit",
+          Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
+        ),
+      ),
     ),
   )
 

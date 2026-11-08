@@ -4,7 +4,15 @@
 import { Schema, Struct } from "effect"
 
 import { InformationVisibility, ProfileType, ProfileVisibility } from "../common/enums.js"
-import { MediaAssetId, OrganizationId, PersonId, ProfileId } from "../common/ids.js"
+import {
+  MediaAssetId,
+  OrganizationId,
+  PersonId,
+  ProfileId,
+  PublicationCommentId,
+  PublicationId,
+  WikiArticleId,
+} from "../common/ids.js"
 import { Handle, TimestampedStruct } from "../common/primitives.js"
 import { toSearchableText } from "../common/utils/strings.js"
 import { OrganizationRow } from "../organizations/domain.js"
@@ -39,6 +47,17 @@ export const ProfileCardData = Schema.Struct({
 })
 
 export type ProfileCardData = typeof ProfileCardData.Type
+
+/**
+ * Stands in for a profile the reader may not see (`profilePolicies.canRead`), where content it
+ * owns appears: people with community-only profiles can still publish publicly, without their name.
+ */
+export const HiddenProfile = Schema.TaggedStruct("HiddenProfile", {})
+export type HiddenProfile = typeof HiddenProfile.Type
+
+export const isHiddenProfile = (
+  profile: ProfileCardData | HiddenProfile,
+): profile is HiddenProfile => "_tag" in profile
 
 const CoreProfileRow = Schema.Struct({
   ...TimestampedStruct.fields,
@@ -102,10 +121,34 @@ export const ProfileMetadataResult = Schema.Struct({
 })
 export type ProfileMetadataResult = typeof ProfileMetadataResult.Type
 
+/**
+ * What deleting a profile removes, by ID. Deletion confirmations name exactly this, so nothing
+ * created after someone reviewed it is deleted under their confirmation.
+ */
+export const ProfileContent = Schema.Struct({
+  postIds: Schema.Array(PublicationId),
+  eventIds: Schema.Array(PublicationId),
+  wikiArticleBookmarkIds: Schema.Array(WikiArticleId),
+  publicationCommentIds: Schema.Array(PublicationCommentId),
+  imageIds: Schema.Array(MediaAssetId),
+})
+
+export type ProfileContent = typeof ProfileContent.Type
+
 export const ProfileContentCounts = Schema.Struct({
   posts: Schema.Finite,
   events: Schema.Finite,
   wikiArticleBookmarks: Schema.Finite,
   publicationComments: Schema.Finite,
   images: Schema.Finite,
+})
+
+export type ProfileContentCounts = typeof ProfileContentCounts.Type
+
+export const countProfileContent = (content: ProfileContent): ProfileContentCounts => ({
+  posts: content.postIds.length,
+  events: content.eventIds.length,
+  wikiArticleBookmarks: content.wikiArticleBookmarkIds.length,
+  publicationComments: content.publicationCommentIds.length,
+  images: content.imageIds.length,
 })

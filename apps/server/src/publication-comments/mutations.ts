@@ -1,20 +1,14 @@
 import {
+  ActivePublicationCommentRow,
   PublicationCommentContentRevisionRow,
-  PublicationCommentId,
-  PublicationCommentRow,
   PublicationCommentTranslationRow,
 } from "@gororobas/domain"
 import { Struct } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
 
-export const deletePublicationComment = SqlSchema.void({
-  Request: PublicationCommentId,
-  execute: (id) => SqlClient.use((sql) => sql`DELETE FROM publication_comments WHERE id = ${id}`),
-})
-
 export const insertPublicationCommentRow = SqlSchema.void({
-  Request: PublicationCommentRow,
+  Request: ActivePublicationCommentRow,
   execute: (row) =>
     SqlClient.use((sql) => sql`INSERT INTO publication_comments ${sql.insert(row)}`),
 })
@@ -28,7 +22,7 @@ export const insertPublicationCommentContentRevisionRow = SqlSchema.void({
 })
 
 export const updatePublicationCommentRow = SqlSchema.void({
-  Request: PublicationCommentRow.mapFields(
+  Request: ActivePublicationCommentRow.mapFields(
     Struct.pick(["id", "sourceLanguage", "sourceContent", "updatedAt"]),
   ),
   execute: ({ id, ...update }) =>
@@ -47,7 +41,7 @@ export const upsertPublicationCommentTranslationRow = SqlSchema.void({
 })
 
 export const updatePublicationCommentLanguage = SqlSchema.void({
-  Request: PublicationCommentRow.mapFields(Struct.pick(["id", "sourceLanguage"])),
+  Request: ActivePublicationCommentRow.mapFields(Struct.pick(["id", "sourceLanguage"])),
   execute: ({ id, sourceLanguage }) =>
     SqlClient.use(
       (sql) =>

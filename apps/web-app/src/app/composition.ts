@@ -10,7 +10,7 @@ import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
 import { PopoverDrawerBlock } from "../ui/popover-drawer"
-import { NavigateInternal } from "./command"
+import { LoadExternal, NavigateInternal } from "./command"
 import { ApplicationBlock } from "./definition"
 import type { Model } from "./model"
 import { ApplicationRoute, applicationRouteUrl, profileEditorUrl, searchUrl } from "./route"
@@ -23,10 +23,11 @@ export const AuthenticationBinding = ApplicationBlock.makeRequiredFieldBinding(
   },
 ).withOutMessagePolicy({
   fold: ApplicationBlock.makeOutMessageFold(AuthenticationBlock, {
-    // New accounts go on to fill in the rest of their profile.
+    // New accounts go on to fill in the rest of their profile. A full load leaves nothing on
+    // screen that was loaded while they were a visitor.
     CompletedOnboarding: () =>
       ApplicationBlock.makeCommandsStep((model) => [
-        NavigateInternal({ url: profileEditorUrl(model.language) }),
+        LoadExternal({ href: profileEditorUrl(model.language) }),
       ]),
   }),
 })

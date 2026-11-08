@@ -283,7 +283,7 @@ describe("Policies", () => {
   })
 
   describe("publications", () => {
-    it.effect("owner can always edit their own publication", () =>
+    it.effect("owners can edit their own publication unless they're blocked", () =>
       assertPropertyEffect({
         arbitrary: accountSessionArbitrary,
         predicate: (session) =>
@@ -295,9 +295,33 @@ describe("Policies", () => {
               visibility: "PUBLIC",
             })
 
-            return yield* runPolicySuccess(Policies.publications.canEdit(publication), session)
+            const canEdit = yield* runPolicySuccess(
+              Policies.publications.canEdit(publication),
+              session,
+            )
+            return canEdit === (session.accessLevel !== "BLOCKED")
           }),
       }),
+    )
+
+    it.effect(
+      "owners can edit their own comments unless they're blocked, and always delete them",
+      () =>
+        assertPropertyEffect({
+          arbitrary: accountSessionArbitrary,
+          predicate: (session) =>
+            Effect.gen(function* () {
+              const canEdit = yield* runPolicySuccess(
+                Policies.publicationComments.canEdit(session.personId),
+                session,
+              )
+              const canDelete = yield* runPolicySuccess(
+                Policies.publicationComments.canDelete(session.personId),
+                session,
+              )
+              return canEdit === (session.accessLevel !== "BLOCKED") && canDelete
+            }),
+        }),
     )
 
     it.effect("owner can always delete their own publication", () =>

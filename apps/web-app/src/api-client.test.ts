@@ -25,7 +25,6 @@ it.effect("does not send application requests until deferred sign-out has settle
       },
       storage: localStorage,
       online: () => true,
-      changed: () => {},
     })
 
     const client = yield* makeClient.pipe(

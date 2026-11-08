@@ -1,14 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "@effect/vitest"
 import { AuthenticationSession } from "@gororobas/domain/authentication/auth-contract"
 import { Sessions } from "@yielded/auth"
-import { Deferred, Effect, Fiber, Schema } from "effect"
+import { Deferred, Effect, Fiber, Schema, Stream } from "effect"
 
-import {
-  AuthenticationRequestError,
-  makeSessionAccess,
-  sessionStorageKey,
-  type SessionState,
-} from "./session-access"
+import { AuthenticationRequestError, makeSessionAccess, sessionStorageKey } from "./session-access"
 
 const session = Schema.decodeSync(AuthenticationSession)({
   sessionId: "session-1",
@@ -27,7 +22,6 @@ const session = Schema.decodeSync(AuthenticationSession)({
 
 const fixture = async (remember = true) => {
   let online = true
-  const states: SessionState[] = []
 
   const auth = {
     getSession: vi.fn<() => Effect.Effect<typeof session | null, unknown>>(() =>
@@ -45,7 +39,6 @@ const fixture = async (remember = true) => {
         auth,
         storage: localStorage,
         online: () => online,
-        changed: (state) => states.push(state),
       }),
     )
 
@@ -57,7 +50,6 @@ const fixture = async (remember = true) => {
   return {
     access,
     auth,
-    states,
     create,
     setOnline: (value: boolean) => {
       online = value
@@ -68,6 +60,41 @@ const fixture = async (remember = true) => {
 beforeEach(() => localStorage.clear())
 
 describe("local session access", () => {
+  it("reports account switches after the page-load check, except this tab's own sign-in", async () => {
+    const { create } = await fixture()
+    const otherTab = await create()
+    const switches: Array<string | null> = []
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const page = yield* Effect.tryPromise(create)
+
+        const watching = yield* page.switchedAccounts.pipe(
+          Stream.take(3),
+          Stream.runForEach((subjectId) => Effect.sync(() => switches.push(subjectId))),
+          Effect.forkChild,
+        )
+
+        yield* Effect.yieldNow
+
+        yield* page.ensureReady()
+        yield* page.signOut
+        yield* page.remember({ subjectId: session.subjectId, name: "Ana" })
+        yield* otherTab.remember({
+          subjectId: AuthenticationSession.fields.subjectId.make("person-2"),
+          name: "Bia",
+        })
+        yield* page.connectionChanged
+        yield* otherTab.signOut
+        yield* page.connectionChanged
+
+        yield* Fiber.join(watching)
+      }),
+    )
+
+    expect(switches).toEqual([null, "person-2", null])
+  })
+
   it("restores identity offline after reopening, even with an old credential", async () => {
     const fixtureValue = await fixture()
     fixtureValue.setOnline(false)

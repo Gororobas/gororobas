@@ -52,8 +52,11 @@ export const findOrganizationsWhereSoleManager = SqlSchema.findAll({
       return yield* sql`
       SELECT
         om.organization_id AS organizationId,
+        profile.name,
+        profile.handle,
         COUNT(members.person_id) AS memberCount
       FROM organization_memberships om
+      INNER JOIN profiles profile ON profile.id = om.organization_id
       INNER JOIN organization_memberships members
         ON members.organization_id = om.organization_id
       WHERE om.person_id = ${personId}

@@ -1,4 +1,9 @@
-import { AuthenticationApi, AuthenticationHttp, sessionCookieName } from "@gororobas/domain"
+import {
+  AuthenticationApi,
+  AuthenticationHttp,
+  csrfProtection,
+  sessionCookieName,
+} from "@gororobas/domain"
 import { Auth, Email, Http } from "@yielded/auth"
 import { makeSessionHttpContract } from "@yielded/auth/SessionContract"
 
@@ -17,6 +22,7 @@ export const makeAuthentication = (origin: string, environment: Environment) => 
 
   const http = Http.make(AppAuth, {
     origin,
+    csrf: csrfProtection,
     cookie: {
       name: cookieName,
       prefix: secure ? "__Host-gororobas-" : "gororobas-",

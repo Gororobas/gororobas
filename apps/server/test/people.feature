@@ -151,7 +151,8 @@ Feature: People
       Then access is denied
 
   Rule: People can delete their account
-    Deletion requires confirmation of content deletion.
+    Deletion requires confirmation of content deletion. Confirmations name what the person
+    reviewed: when that changed, they're asked again.
     A sole manager must transfer management if other organization members remain.
     A sole member can instead confirm deletion of their organization and its content.
 
@@ -165,6 +166,18 @@ Feature: People
       Then "Maria"'s profile no longer exists
       And "Maria"'s personal publications are deleted
       And "Maria"'s publication comments are deleted
+
+    Scenario: Replies to a deleted person's comments remain
+      Given someone replied to "Maria"'s comment
+      When "Maria" deletes their account
+      Then the reply remains, under a deleted comment
+
+    Scenario: A confirmation covers only what was reviewed
+      Given "Maria" has reviewed what deleting their account removes
+      And "Maria" then publishes another post
+      When "Maria" confirms deletion with that review
+      Then they are asked to confirm again, including the new post
+      And "Maria"'s profile still exists
 
     Scenario: Deleted person's wiki contributions remain but are anonymized
       Given "Maria" has approved revisions on wiki article "Mandioca"

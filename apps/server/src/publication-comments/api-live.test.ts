@@ -4,13 +4,14 @@ import {
   ApiAuthentication,
   GororobasApi,
   IdGen,
-  SessionContext,
   type CreatePublicationCommentData,
   type ApiUpdatePublicationCommentData,
-  PublicationCommentData,
+  ActivePublicationCommentData,
+  DeletedPublicationCommentRow,
   ModerationResult,
   type ModerateContentPayload,
   type Session,
+  provideSession,
 } from "@gororobas/domain"
 import { Effect, Layer, Option, Schema } from "effect"
 import { HttpRouter } from "effect/http"
@@ -72,9 +73,7 @@ it.live(
                 Layer.succeed(
                   ApiAuthentication,
                   ApiAuthentication.of((effect) =>
-                    Effect.suspend(() =>
-                      effect.pipe(Effect.provideService(SessionContext, session)),
-                    ),
+                    Effect.suspend(() => effect.pipe(provideSession(session))),
                   ),
                 ),
               ),
@@ -112,7 +111,12 @@ it.live(
       const decodePublicationComment = (response: Response) =>
         Effect.tryPromise(() => response.json()).pipe(
           // The HTTP response JSON is an untrusted boundary.
-          Effect.flatMap(Schema.decodeUnknownEffect(PublicationCommentData)),
+          Effect.flatMap(Schema.decodeUnknownEffect(ActivePublicationCommentData)),
+        )
+
+      const decodeDeletedPublicationComment = (response: Response) =>
+        Effect.tryPromise(() => response.json()).pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(DeletedPublicationCommentRow)),
         )
 
       expect(
@@ -229,6 +233,11 @@ it.live(
       expect(
         (yield* request({ path: `/publication-comments/${created.id}`, method: "DELETE" })).status,
       ).toBe(200)
-      expect((yield* request({ path: `/publication-comments/${reply.id}` })).status).toBe(404)
+      // Replies outlive the comment they answered, which stays in the thread without its content.
+      expect((yield* request({ path: `/publication-comments/${reply.id}` })).status).toBe(200)
+      const deleted = yield* decodeDeletedPublicationComment(
+        yield* request({ path: `/publication-comments/${created.id}` }),
+      )
+      expect(deleted).toMatchObject({ ownerProfileId: null, sourceContent: null })
     }).pipe(Effect.provide(dependencies)),
 )

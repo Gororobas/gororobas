@@ -8,6 +8,7 @@ import {
   EMAIL_FIELD_ID,
   FocusField,
   NAME_FIELD_ID,
+  ReloadPage,
   ResendCode,
   RestoreSession,
   SendCode,
@@ -78,6 +79,7 @@ export const update = AuthenticationComposition.makeUpdate.withContext(
       return { model }
     },
     ChangedConnection: (model) => ({ model, commands: [CheckConnection()] }),
+    SwitchedAccount: (model) => ({ model, commands: [ReloadPage()] }),
     UpdatedEmail: (model, { value }) =>
       Predicate.isTagged(model.stage, "EnteringEmail")
         ? { model: { stage: { ...model.stage, email: value } } }
@@ -165,8 +167,8 @@ export const update = AuthenticationComposition.makeUpdate.withContext(
         : { model },
     SucceededVerifyCode: (_, { name }) => ({
       model: { stage: signedIn(name) },
-      // New accounts continue with their name.
-      commands: EffectArray.filter([FocusField({ id: NAME_FIELD_ID })], () => name === null),
+      // New accounts continue with their name; others see the page again as themselves.
+      commands: [name === null ? FocusField({ id: NAME_FIELD_ID }) : ReloadPage()],
     }),
     // A wrong code is cleared so the next attempt starts from an empty field.
     FailedVerifyCode: (model, { error }) =>
@@ -190,5 +192,6 @@ export const update = AuthenticationComposition.makeUpdate.withContext(
         ? { model: { stage: { ...model.stage, isSigningOut: false } } }
         : { model },
     CompletedFocusField: (model) => ({ model }),
+    CompletedReloadPage: (model) => ({ model }),
   }),
 )

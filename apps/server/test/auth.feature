@@ -4,6 +4,10 @@ Feature: Authentication
   it. New addresses get welcome wording and stay visitors until they complete onboarding, which
   makes them newcomers.
 
+  Browsers send the session cookie with any request to the API, including ones other sites make.
+  Writes only count when they prove they come from the app, and when they're meant for the account
+  the cookie belongs to: another tab may have switched accounts since the page loaded.
+
   Background:
     Given the following people exist:
       | name  | accessLevel |
@@ -39,3 +43,15 @@ Feature: Authentication
     Given "Maria" has signed in
     When they sign out
     Then they are not signed in
+
+  Scenario: Writes another site submits with someone's cookie are refused
+    Given "Maria" has signed in
+    When another site submits a change to their account
+    Then the change is refused as forbidden
+    And their account is unchanged
+
+  Scenario: Writes meant for another account are refused
+    Given "Maria" has signed in
+    When the app submits a change to their account meant for another account
+    Then the change is refused as unauthenticated
+    And their account is unchanged

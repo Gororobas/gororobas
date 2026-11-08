@@ -453,10 +453,9 @@ const seedComment = (
       }),
     )
 
-    const currentRevision = Effect.flatMap(comments.findPublicationCommentRowById(id), (row) =>
-      Option.isSome(row)
-        ? Effect.succeed(row.value.currentRevisionId)
-        : Effect.die(`Seeded comment ${id} is missing`),
+    const currentRevision = comments.getActivePublicationComment(id).pipe(
+      Effect.map((row) => row.currentRevisionId),
+      Effect.orDie,
     )
 
     if (yield* chance(0.15)) {

@@ -1,11 +1,11 @@
 import {
-  SessionContext,
   UnauthorizedError,
   WikiArticleCrdt,
   WikiArticleEditableData,
   type WikiArticleId,
   WikiArticleNotFoundError,
   snapshotToLoroDoc,
+  currentSession,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Option, Predicate, Record, Schema } from "effect"
 import { SqlClient } from "effect/sql"
@@ -66,7 +66,7 @@ export const getWikiArticleDebug = Effect.fn("Wiki.getArticleDebug")(function* (
 ) {
   if ((yield* environmentConfig.pipe(Effect.orDie)) === "production") {
     return yield* new UnauthorizedError({
-      session: yield* SessionContext,
+      session: yield* currentSession,
       message: "Article debugging is development-only",
     })
   }

@@ -1,15 +1,20 @@
 import {
   ApiAuthentication,
-  SessionContext,
   DEFAULT_AUTHENTICATION_RETURN_TARGET,
+  EXPECTED_SUBJECT_HEADER,
+  OutsideWriteTransaction,
+  SessionContext,
+  SessionSubjectMismatchError,
+  UntrustedWriteError,
 } from "@gororobas/domain"
 import { Auth, Email, Proofs, WebCrypto } from "@yielded/auth"
-import { Config, Effect, Layer, Option, Redacted } from "effect"
+import { Config, Context, Effect, Layer, Option, Redacted } from "effect"
+import { HttpServerRequest } from "effect/http"
 import { SqlClient } from "effect/sql"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
 import { environmentConfig, type Environment } from "../environment-config.js"
-import { resolveSession } from "../session-service.js"
+import { makeSessionContext } from "../session-service.js"
 import { AppAuth, makeAuthentication } from "./app-auth.js"
 import { AuthStorageLive } from "./auth-storage.js"
 import { AuthenticationEmailsLive } from "./authentication-emails.js"
@@ -17,27 +22,52 @@ import { authenticationOrigin } from "./authentication-origin.js"
 import { EmailSignInTargetsLive, claimEmailAccount } from "./email-sign-in.js"
 import { UnclaimedAccountsCleanupLive } from "./unclaimed-accounts.js"
 
+const SAFE_METHODS: ReadonlyArray<string> = ["GET", "HEAD", "OPTIONS"]
+
 export const ApiAuthenticationLive = Layer.effect(
   ApiAuthentication,
   Effect.gen(function* () {
     const authentication = yield* AppAuth
     const sql = yield* SqlClient.SqlClient
 
-    return ApiAuthentication.of((httpEffect) =>
+    return ApiAuthentication.of((httpEffect, { endpoint }) =>
       Effect.gen(function* () {
         // The auth HTTP boundary installs credentials per request; never capture them when building the layer.
         const request = yield* Effect.serviceOption(Auth.AuthRequest)
         if (Option.isNone(request)) {
           return yield* Effect.die("Authentication HTTP request context is missing")
         }
+        const httpRequest = yield* HttpServerRequest.HttpServerRequest
+        const isWrite = !SAFE_METHODS.includes(httpRequest.method)
 
-        const session = yield* resolveSession.pipe(
-          Effect.provideService(Auth.AuthRequest, request.value),
-          Effect.provideService(AppAuth, authentication),
+        // Cookies ride along with any request to the API, so writes must prove they come from the app.
+        if (isWrite && request.value.beforeMutation !== undefined) {
+          yield* request.value.beforeMutation.pipe(
+            Effect.catchIf(
+              (denied) => denied.reason === "policy",
+              () => Effect.fail(new UntrustedWriteError()),
+            ),
+          )
+        }
+
+        const authenticated = yield* authentication
+          .getSession()
+          .pipe(Effect.provideService(Auth.AuthRequest, request.value))
+        const authSubjectId = authenticated?.subjectId ?? null
+
+        const expectedSubjectId = httpRequest.headers[EXPECTED_SUBJECT_HEADER]
+        if (isWrite && expectedSubjectId !== undefined && expectedSubjectId !== authSubjectId) {
+          return yield* new SessionSubjectMismatchError()
+        }
+
+        const session = yield* makeSessionContext(authSubjectId).pipe(
           Effect.provideService(SqlClient.SqlClient, sql),
         )
+        const handled = httpEffect.pipe(Effect.provideService(SessionContext, session))
 
-        return yield* httpEffect.pipe(Effect.provideService(SessionContext, session))
+        return yield* isWrite && !Context.get(endpoint.annotations, OutsideWriteTransaction)
+          ? sql.withTransaction(handled)
+          : handled
       }).pipe(withApiInfrastructureErrors({ group: "authentication", endpoint: "getSession" })),
     )
   }),

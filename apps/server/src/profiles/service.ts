@@ -7,7 +7,6 @@ import {
   type ProfilePhotosQuery,
   type ProfilePageData,
   type ProfileWikiContribution,
-  SessionContext,
   type SupportedLanguage,
   type WikiArticleId,
   ProfileId,
@@ -15,6 +14,7 @@ import {
   ProfileRowUpdate,
   type ProfileRow,
   type MediaAssetId,
+  currentSession,
 } from "@gororobas/domain"
 import { InvalidMediaAssetError } from "@gororobas/domain/media-assets/errors"
 import { Array as EffectArray, DateTime, Effect, HashMap, Option, Context } from "effect"
@@ -142,7 +142,7 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
     const listPhotos = (handle: Handle, { currentPage }: ProfilePhotosQuery) =>
       Effect.gen(function* () {
         const profile = yield* findReadable(handle)
-        const photos = yield* listVisiblePhotos(yield* SessionContext)({
+        const photos = yield* listVisiblePhotos(yield* currentSession)({
           profileId: profile.id,
           currentPage,
         })

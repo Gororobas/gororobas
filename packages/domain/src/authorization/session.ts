@@ -1,4 +1,4 @@
-import { Context, HashSet, Predicate, Record, Schema } from "effect"
+import { Context, Effect, HashSet, Predicate, Record, Schema } from "effect"
 /**
  * Session types for authentication.
  */
@@ -54,9 +54,31 @@ export const Session = Schema.Union([VisitorSession, AccountSession])
 export type Session = typeof Session.Type
 
 /**
+ * The session of whoever is making the request, read when something first needs it.
+ *
+ * The server resolves roles and memberships from the database on demand, and again inside each
+ * transaction, under its lock: a write is authorized by the roles it commits with, and a demotion
+ * that commits first denies it. `fixed` serves a session that's already known.
+ *
  * @effect-leakable-service
  */
-export class SessionContext extends Context.Service<SessionContext, Session>()("Session") {}
+export class SessionContext extends Context.Service<
+  SessionContext,
+  { readonly current: Effect.Effect<Session> }
+>()("Session") {
+  static fixed(session: Session) {
+    return SessionContext.of({ current: Effect.succeed(session) })
+  }
+}
+
+export const currentSession: Effect.Effect<Session, never, SessionContext> = SessionContext.use(
+  (context) => context.current,
+)
+
+export const provideSession =
+  (session: Session) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, Exclude<R, SessionContext>> =>
+    Effect.provideService(effect, SessionContext, SessionContext.fixed(session))
 
 export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
   "UnauthorizedError",

@@ -30,6 +30,7 @@ import {
   snapshotToLoroDoc,
   nodeIdOf,
   type PlantCultivarEditableAttributes,
+  provideSession,
 } from "@gororobas/domain"
 import { LinkInferenceModel } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
@@ -2706,9 +2707,7 @@ it.live(
                 Layer.succeed(
                   ApiAuthentication,
                   ApiAuthentication.of((effect) =>
-                    Effect.suspend(() =>
-                      effect.pipe(Effect.provideService(SessionContext, session)),
-                    ),
+                    Effect.suspend(() => effect.pipe(provideSession(session))),
                   ),
                 ),
               ),

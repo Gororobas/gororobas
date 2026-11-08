@@ -13,7 +13,7 @@ import {
   type ProfileRowUpdate,
 } from "@gororobas/domain"
 import { resolveSessionFromAuthSubjectId } from "@gororobas/server/session-service"
-import { DateTime, Effect, Layer, Match, Option, Record, Schema } from "effect"
+import { DateTime, Effect, Layer, Match, Option, Predicate, Record, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { OrganizationsRepository } from "../src/organizations/repository.js"
@@ -161,6 +161,35 @@ export const withPerson = <A, E, R>(
 ) =>
   resolveSessionFromAuthSubjectId(personId).pipe(
     Effect.flatMap((session) => withSession(action, session)),
+  )
+
+/**
+ * Deletes `personId`'s account the way the settings page does: each confirmation names what the
+ * previous step showed. Stops at the organizations step unless `shouldDeleteOrganizations`.
+ */
+export const confirmAccountDeletion = (personId: PersonId, shouldDeleteOrganizations = false) =>
+  PeopleService.use((people) =>
+    withPerson(
+      Effect.gen(function* () {
+        const preview = yield* people.deleteCurrentPerson()
+        const isAskingAboutOrganizations = Predicate.isTagged(preview, "ConfirmOrgDeletion")
+        if (isAskingAboutOrganizations && !shouldDeleteOrganizations) return preview
+
+        const organizationIds = isAskingAboutOrganizations
+          ? preview.organizations.map(({ organizationId }) => organizationId)
+          : []
+        const review = isAskingAboutOrganizations
+          ? yield* people.deleteCurrentPerson({ organizationIds })
+          : preview
+        if (!Predicate.isTagged(review, "ConfirmContentDeletion")) return review
+
+        return yield* people.deleteCurrentPerson({
+          organizationIds,
+          scope: { personalContent: review.personalContent, organizations: review.organizations },
+        })
+      }),
+      personId,
+    ),
   )
 
 /** Editor content carries node IDs (see `NodeIdExtension`), so stored content equals what was sent. */
