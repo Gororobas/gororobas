@@ -58,7 +58,12 @@ const makeObjectBase = (
         parser = compileField(property.type)
         parsers.set(property.type, parser)
       }
-      return { parser, name: property.name, type: property.type }
+      return {
+        parser,
+        name: property.name,
+        type: property.type,
+        ownOnly: SchemaAST.requiresOwnProperty(property.name)
+      }
     })
   }
   let fallback: SchemaIssueParser | undefined
@@ -266,7 +271,7 @@ export const runtime = {
   invalid,
   missing: InternalParser.missing,
   missingExit: InternalParser.missingExit,
-  sameExit: InternalParser.sameExit,
+  isSameExit: InternalParser.isSameExit,
   args: InternalParser.args,
   succeed: InternalParser.succeed,
   effectIsExit,
