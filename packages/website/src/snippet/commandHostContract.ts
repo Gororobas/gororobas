@@ -31,20 +31,19 @@ export const EditorStartup = Schema.Struct({ contents: Schema.String })
 export type EditorStartup = typeof EditorStartup.Type
 
 export const EditorKey = Symbol('Editor')
-
 export const EditorBlock = Block.make('Editor', {
   key: EditorKey,
   Model,
   Message,
-  Init: Schema.Tuple([EditorStartup]),
+  InitArgs: Schema.Tuple([EditorStartup]),
   view: { kind: 'Element' },
   effects: { services: [EditorStorage] },
 })
 
-const { makeFieldsStep } = EditorBlock
-const EditorComposition = EditorBlock.makeComposition()
+const { makeFieldsStep, makeComposition, makeCommand } = EditorBlock
+const EditorComposition = makeComposition()
 
-export const SaveDocument = EditorBlock.makeCommand('SaveDocument', {
+export const SaveDocument = makeCommand('SaveDocument', {
   args: { contents: Schema.String },
   messages: [Message.SucceededSaveDocument, Message.FailedSaveDocument],
   handler: function* () {
@@ -87,14 +86,9 @@ const view = EditorComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = EditorBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-      EffectsLayer: SaveDocument.layer,
-    }
-  }),
-)
+export const layer = EditorBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer: SaveDocument.layer,
+})

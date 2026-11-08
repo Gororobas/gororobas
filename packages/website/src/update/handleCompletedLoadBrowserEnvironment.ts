@@ -1,10 +1,10 @@
 import { Option } from 'effect'
 import { Update } from 'foldkit'
-import { initAndSet } from 'foldkit/bindingInit'
+import { initAndSet } from 'foldkit/binding'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeStep } from '../block'
 import { PlaygroundBinding, UiPagesBinding } from '../composition'
-import { makeStep } from '../definition'
 import { findActiveSectionKeyForRoute } from '../docsNav'
 import type { Message, ThemePreference } from '../message'
 import { initialSidebarGroups } from '../sidebarStorage'
@@ -52,7 +52,7 @@ export const handleCompletedLoadBrowserEnvironment = makeStep.fromMessage(
 
     return Update.combineSteps([
       applyBrowserEnvironment,
-      PlaygroundBinding.informSupport({ isSupported: isPlaygroundSupported }),
+      PlaygroundBinding.informOfSupport({ isSupported: isPlaygroundSupported }),
       initUiPages,
     ])
   },

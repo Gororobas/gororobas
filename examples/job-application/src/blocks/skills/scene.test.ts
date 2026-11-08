@@ -1,18 +1,17 @@
-import { init } from 'foldkit/scene'
-import { expect, label, role, scene } from 'foldkit/scene'
+import { Scene } from 'foldkit'
 import { describe } from 'vitest'
 
 import { it } from '@effect/vitest'
 
-import { SkillsBlock, layer } from './block'
+import { SkillsBlock, layer } from './index'
 
 describe('skills', () => {
   it.effect('renders the first skill field and the add control', () =>
-    scene(
+    Scene.scene(
       { block: SkillsBlock, layer },
-      init('skills-entry-1'),
-      expect(label('Skill')).toExist(),
-      expect(role('button', { name: '+ Add Skill' })).toExist(),
+      Scene.init('skills-entry-1'),
+      Scene.expect(Scene.label('Skill')).toExist(),
+      Scene.expect(Scene.role('button', { name: '+ Add Skill' })).toExist(),
     ),
   )
 })

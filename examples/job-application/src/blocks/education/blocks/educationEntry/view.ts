@@ -2,14 +2,14 @@ import clsx from 'clsx'
 import { Array, Option } from 'effect'
 import { type CalendarDate } from 'foldkit/calendar'
 
-import { view as buttonView } from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import { Field, Icon } from '../../../../view'
+import { Message } from './block'
 import {
   EducationEntryComposition,
   GraduationYearListboxBinding,
 } from './composition'
-import { Message } from './definition'
 
 const GRADUATION_YEAR_WINDOW_SIZE = 30
 const GRADUATION_YEAR_FORWARD_OFFSET = 6
@@ -137,7 +137,7 @@ export const view = EducationEntryComposition.makeView.withInputs(
         h.div(
           [h.Class('flex justify-end')],
           [
-            buttonView(
+            Button.view(
               {
                 onClick: Message.ClickedRemoveSelf(),
                 toView: attributes =>

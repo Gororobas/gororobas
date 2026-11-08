@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
@@ -11,7 +11,7 @@ type Model = typeof Model.Type
 const PopoverTriggerClickTestKey = Symbol('PopoverTriggerClickTest')
 const PopoverTriggerClickTestBlock = Block.make('PopoverTriggerClickTest', {
   key: PopoverTriggerClickTestKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message: Schema.Never,
@@ -23,10 +23,13 @@ const foldPopoverOutMessage = PopoverTriggerClickTestBlock.makeOutMessageFold(
     Closed: () => PopoverTriggerClickTestBlock.makeNoopStep(),
   },
 )
-const PopoverBinding = PopoverTriggerClickTestBlock.makeBinding(PopoverBlock, {
-  field: 'popover',
-  init: false,
-}).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+const PopoverBinding = PopoverTriggerClickTestBlock.makeRequiredFieldBinding(
+  PopoverBlock,
+  {
+    field: 'popover',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
 const PopoverTriggerClickTestComposition =
   PopoverTriggerClickTestBlock.makeComposition({
     bindings: [PopoverBinding],
@@ -72,23 +75,16 @@ const view = PopoverTriggerClickTestComposition.makeView((model, h) =>
 const makeProgram = (container: HTMLElement, isModal: boolean) => {
   const block = {
     block: PopoverTriggerClickTestBlock,
-    layer: PopoverTriggerClickTestBlock.makeLayer(
-      Effect.gen(function* () {
-        const popover = yield* PopoverBinding
-
-        return {
-          children: [popover],
-          init: PopoverTriggerClickTestComposition.makeInit(() =>
-            PopoverBinding.init({
-              args: [{ id: 'sort', isModal }],
-              toParentModel: popover => ({ popover }),
-            }),
-          ),
-          update: PopoverTriggerClickTestComposition.makeUpdate({}),
-          view,
-        }
-      }),
-    ).pipe(Layer.provide(layer)),
+    layer: PopoverTriggerClickTestBlock.makeLayer({
+      init: PopoverTriggerClickTestComposition.makeInit(() =>
+        PopoverBinding.init({
+          args: [{ id: 'sort', isModal }],
+          toParentModel: popover => ({ popover }),
+        }),
+      ),
+      update: PopoverTriggerClickTestComposition.makeUpdate({}),
+      view,
+    }).pipe(Layer.provide(layer)),
   }
 
   return Program.makeElement({

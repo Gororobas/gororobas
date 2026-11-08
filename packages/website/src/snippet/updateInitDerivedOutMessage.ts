@@ -1,17 +1,14 @@
-import { Effect, Layer, Option, Schema } from 'effect'
+import { Layer, Option, Schema } from 'effect'
 import { Block, Calendar } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import {
-  DatePickerBlock,
-  layer as DatePickerLayer,
-} from '@foldkit/ui/datePicker'
+import { DatePicker } from '@foldkit/ui'
 
 const Model = Schema.Struct({
   maybeStartDate: Schema.Option(Calendar.CalendarDate),
   maybeEndDate: Schema.Option(Calendar.CalendarDate),
-  endDatePicker: DatePickerBlock.Model,
+  endDatePicker: DatePicker.DatePickerBlock.Model,
 })
 type Model = typeof Model.Type
 
@@ -31,20 +28,34 @@ const OutMessage = defineMessageUnion({
 type OutMessage = typeof OutMessage.Type
 
 export const DateRangeKey = Symbol('DateRange')
-
 export const DateRangeBlock = Block.make('DateRange', {
   key: DateRangeKey,
   Model,
   Message,
   OutMessage,
-  Init: Schema.Tuple([Calendar.CalendarDate]),
+  InitArgs: Schema.Tuple([Calendar.CalendarDate]),
   ChildInitContext: Calendar.CalendarDate,
 })
-const { makeStep, makeFieldsStep, makeNoopStep } = DateRangeBlock
+const {
+  makeStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeOutMessageForward,
+  makeComposition,
+} = DateRangeBlock
 
-const foldEndDateOutMessage = DateRangeBlock.makeOutMessageFold(
-  DatePickerBlock,
+const EndDatePickerBinding = makeRequiredFieldBinding(
+  DatePicker.DatePickerBlock,
   {
+    field: 'endDatePicker',
+    init: {
+      contextToArgs: today => [{ id: 'end-date', today }],
+    },
+  },
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(DatePicker.DatePickerBlock, {
     SelectedDate: ({ date }) =>
       makeStep(model => {
         const nextModel = modifyFields(model, {
@@ -62,24 +73,15 @@ const foldEndDateOutMessage = DateRangeBlock.makeOutMessageFold(
     ClearedDate: () =>
       makeFieldsStep(() => ({ maybeEndDate: () => Option.none() })),
     ChangedViewMonth: makeNoopStep,
-  },
-)
-
-const EndDatePickerBinding = DateRangeBlock.makeBinding(DatePickerBlock, {
-  field: 'endDatePicker',
-  init: {
-    contextToArgs: today => [{ id: 'end-date', today }],
-  },
-}).withOutMessagePolicy({
-  fold: foldEndDateOutMessage,
-  forward: DateRangeBlock.makeOutMessageForward(DatePickerBlock, {
+  }),
+  forward: makeOutMessageForward(DatePicker.DatePickerBlock, {
     SelectedDate: ({ date }) => OutMessage.SelectedEndDate({ date }),
     ClearedDate: () => undefined,
     ChangedViewMonth: () => undefined,
   }),
 })
 
-const DateRangeComposition = DateRangeBlock.makeComposition({
+const DateRangeComposition = makeComposition({
   bindings: [EndDatePickerBinding],
 })
 const init = DateRangeComposition.makeInit(today => ({
@@ -94,14 +96,7 @@ const update = DateRangeComposition.makeUpdate({
     EndDatePickerBinding.requestSelectDate(date)(model),
 })
 
-export const layer = DateRangeBlock.makeLayer(
-  Effect.gen(function* () {
-    const endDatePicker = yield* EndDatePickerBinding
-
-    return {
-      children: [endDatePicker],
-      init,
-      update,
-    }
-  }),
-).pipe(Layer.provide(DatePickerLayer))
+export const layer = DateRangeBlock.makeLayer({
+  init,
+  update,
+}).pipe(Layer.provide(DatePicker.layer))

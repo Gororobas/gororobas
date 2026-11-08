@@ -1,5 +1,5 @@
 import { Effect, Schema } from 'effect'
-import { describe, expect } from 'vitest'
+import { describe, expect, expectTypeOf } from 'vitest'
 
 import { it } from '@effect/vitest'
 
@@ -15,7 +15,7 @@ const ChildMessage = defineMessageUnion({
 })
 const ChildDefinition = Block.makeDefinition('ParentBoundDeliveryChild', {
   key: ChildKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: Schema.Struct({ count: Schema.Number }),
   Message: ChildMessage,
 })
@@ -34,7 +34,7 @@ const Child = ChildDefinition.makeBlock(
 const ParentKey = Symbol('ParentBoundDeliveryParent')
 const ParentDefinition = Block.makeDefinition('ParentBoundDeliveryParent', {
   key: ParentKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: Schema.Struct({
     left: ChildDefinition.contract.Model,
     right: ChildDefinition.contract.Model,
@@ -42,16 +42,25 @@ const ParentDefinition = Block.makeDefinition('ParentBoundDeliveryParent', {
   }),
   Message: Schema.Never,
 })
-const LeftBinding = ParentDefinition.makeBinding(ChildDefinition.contract, {
-  field: 'left',
-})
-const RightBinding = ParentDefinition.makeBinding(ChildDefinition.contract, {
-  field: 'right',
-})
-const EntryBinding = ParentDefinition.makeMapBinding(ChildDefinition.contract, {
-  field: 'entries',
-})
-const UnregisteredBinding = ParentDefinition.makeBinding(
+const LeftBinding = ParentDefinition.makeRequiredFieldBinding(
+  ChildDefinition.contract,
+  {
+    field: 'left',
+  },
+)
+const RightBinding = ParentDefinition.makeRequiredFieldBinding(
+  ChildDefinition.contract,
+  {
+    field: 'right',
+  },
+)
+const EntryBinding = ParentDefinition.makeRecordBinding(
+  ChildDefinition.contract,
+  {
+    field: 'entries',
+  },
+)
+const UnregisteredBinding = ParentDefinition.makeRequiredFieldBinding(
   ChildDefinition.contract,
   { field: 'left', placement: 'Unregistered' },
 )
@@ -74,23 +83,29 @@ const Parent = ParentDefinition.makeBlock(
 const ForeignKey = Symbol('ParentBoundDeliveryForeign')
 const ForeignDefinition = Block.makeDefinition('ParentBoundDeliveryForeign', {
   key: ForeignKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: ParentDefinition.Model,
   Message: Schema.Never,
 })
-const ForeignBinding = ForeignDefinition.makeBinding(ChildDefinition.contract, {
-  field: 'left',
-})
+const ForeignBinding = ForeignDefinition.makeRequiredFieldBinding(
+  ChildDefinition.contract,
+  {
+    field: 'left',
+  },
+)
 const TopKey = Symbol('ParentBoundDeliveryTop')
 const TopDefinition = Block.makeDefinition('ParentBoundDeliveryTop', {
   key: TopKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: Schema.Struct({ group: ParentDefinition.contract.Model }),
   Message: Schema.Never,
 })
-const GroupBinding = TopDefinition.makeBinding(ParentDefinition.contract, {
-  field: 'group',
-})
+const GroupBinding = TopDefinition.makeRequiredFieldBinding(
+  ParentDefinition.contract,
+  {
+    field: 'group',
+  },
+)
 const TopComposition = TopDefinition.makeComposition({
   bindings: [GroupBinding],
 })
@@ -107,6 +122,35 @@ const Top = TopDefinition.makeBlock(
 ).provide(Parent.layer)
 
 describe('toParentMessageFor', () => {
+  it.effect(
+    'resolves nested child delivery inside a Model comparison group',
+    () =>
+      Effect.gen(function* () {
+        const finalModel = yield* Story.story(
+          Parent,
+          Story.init(),
+          Story.models(
+            Story.steps(
+              Story.messageIn(
+                LeftBinding,
+                ChildMessage.UpdatedCount({ count: 3 }),
+              ),
+            ),
+            (before, after) => {
+              expectTypeOf(before).toEqualTypeOf<typeof Parent.Model.Type>()
+              expectTypeOf(after).toEqualTypeOf<typeof Parent.Model.Type>()
+              expect(before.left.count).toBe(0)
+              expect(after.left.count).toBe(3)
+              expect(after.right).toBe(before.right)
+            },
+          ),
+        )
+
+        expectTypeOf(finalModel).toEqualTypeOf<typeof Parent.Model.Type>()
+        expect(finalModel.left.count).toBe(3)
+      }),
+  )
+
   it.effect(
     'maps nested delivery against the selected child graph and retains provenance',
     () =>

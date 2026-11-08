@@ -1,21 +1,20 @@
-import { Effect, Option, Schema } from 'effect'
+import { Option, Schema } from 'effect'
 import { Block } from 'foldkit'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const RoomModel = Schema.Struct({ title: Schema.String })
 type RoomModel = typeof RoomModel.Type
 
-const RoomInMessage = defineMessageUnion({
+const RoomInMessage = defineInMessageUnion({
   RequestedRename: { title: Schema.String },
 })
 type RoomInMessage = typeof RoomInMessage.Type
 
 export const RoomKey = Symbol('Room')
-
 export const RoomBlock = Block.make('Room', {
   key: RoomKey,
-  Init: Schema.Tuple([Schema.String]),
+  InitArgs: Schema.Tuple([Schema.String]),
   InMessage: RoomInMessage,
   isMessageFree: true,
 
@@ -25,20 +24,15 @@ export const RoomBlock = Block.make('Room', {
 
 const RoomComposition = RoomBlock.makeComposition()
 
-const layer = RoomBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init: RoomComposition.makeInit((title: string) => ({ model: { title } })),
-      update: RoomComposition.makeUpdate({}),
-      inMessageUpdate: RoomComposition.makeInMessageUpdate({
-        RequestedRename: (model, { title }) => ({
-          model: modifyFields(model, { title: () => title }),
-        }),
-      }),
-    }
+const layer = RoomBlock.makeLayer({
+  init: RoomComposition.makeInit((title: string) => ({ model: { title } })),
+  update: RoomComposition.makeUpdate({}),
+  inMessageUpdate: RoomComposition.makeInMessageUpdate({
+    RequestedRename: (model, { title }) => ({
+      model: modifyFields(model, { title: () => title }),
+    }),
   }),
-)
+})
 
 const RoomInstance = Schema.Struct({
   roomId: Schema.String,
@@ -58,19 +52,21 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const ApplicationKey = Symbol('Application')
-
 const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const MaybeRoomInstanceBinding = ApplicationBlock.makeBinding(RoomBlock, {
-  field: 'maybeRoomInstance',
-  key: 'roomId',
-  childField: 'model',
-})
+const MaybeRoomInstanceBinding = ApplicationBlock.makeOptionalKeyedFieldBinding(
+  RoomBlock,
+  {
+    field: 'maybeRoomInstance',
+    key: 'roomId',
+    childField: 'model',
+  },
+)
 const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [MaybeRoomInstanceBinding],
 })

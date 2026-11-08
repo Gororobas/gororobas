@@ -14,6 +14,10 @@ import {
   attachOutMessagePolicy,
   deferredOutMessagePolicy,
 } from './bindingOutMessagePolicy.js'
+import type {
+  FieldRelationship,
+  RelationshipStorageFields,
+} from './bindingRelationshipTypes.js'
 import {
   type ChildEnvelope,
   type KeyedChildEnvelope,
@@ -57,6 +61,7 @@ import {
   normalizeKeyedMapFieldConfig,
 } from './keyedMapFieldConnection.js'
 import type { OutMessageHelperEvidence } from './outMessageHelperEvidence.js'
+import type { PrivateDelivery } from './privateDelivery.js'
 import type { ValidateConcreteComposition } from './requirements.js'
 import type { Qualify } from './scope.js'
 
@@ -83,6 +88,11 @@ type IsAny<Value> = 0 extends 1 & Value ? true : false
 
 type IsUnknown<Value> =
   IsAny<Value> extends true ? false : unknown extends Value ? true : false
+
+type LocalMessageOfBlock<BlockValue extends BindableBlock> = Exclude<
+  BlockValue['Message']['Type'],
+  PrivateDelivery<any>
+>
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -793,53 +803,71 @@ type ValidateKeyedFieldSource<
   BlockValue extends BindableBlock,
   ParentModelSchema extends AnySchema,
   Config,
+  Relationship extends FieldRelationship = 'Implicit',
 > =
   ParentModelSchema extends Schema.Struct<Schema.Struct.Fields>
     ? Config extends Readonly<{
         field: infer Field extends keyof ParentModelSchema['Type'] & string
         key: infer KeyField extends string
       }>
-      ? Config extends Readonly<{ childField: infer ChildField extends string }>
-        ? Config extends Pick<
-            WrappedKeyedFieldConfig<
-              BlockValue,
-              ParentModelSchema,
-              never,
-              never,
-              Field,
-              KeyField,
-              ChildField,
-              PlacementOfConfig<BlockValue, Config>
-            >,
-            'field' | 'key' | 'childField'
-          >
-          ? WrappedItemAt<
-              ParentModelSchema['Type'],
-              Field
-            > extends InstanceEvidence<infer InstanceOwner>
-            ? Equal<InstanceOwner, BlockValue['owner']> extends true
-              ? Extract<keyof BlockValue['operations'], 'create'> extends never
-                ? readonly []
-                : InvalidBindChildConfig<'Instance Bindings reserve create for occurrence initialization'>
-              : InvalidBindChildConfig<'Instance storage belongs to another child Block contract'>
-            : readonly []
-          : InvalidBindChildConfig<'Invalid wrapped keyed field storage'>
-        : KeyField extends keyof BlockValue['Model']['Type'] & string
+      ? (
+          Relationship extends 'OptionalKeyed'
+            ? ParentModelSchema['Type'][Field] extends Option.Option<unknown>
+              ? true
+              : false
+            : Relationship extends 'KeyedArray'
+              ? ParentModelSchema['Type'][Field] extends ReadonlyArray<unknown>
+                ? true
+                : false
+              : true
+        ) extends true
+        ? Config extends Readonly<{
+            childField: infer ChildField extends string
+          }>
           ? Config extends Pick<
-              KeyedFieldConfig<
+              WrappedKeyedFieldConfig<
                 BlockValue,
                 ParentModelSchema,
                 never,
                 never,
                 Field,
                 KeyField,
+                ChildField,
                 PlacementOfConfig<BlockValue, Config>
               >,
-              'field' | 'key'
+              'field' | 'key' | 'childField'
             >
-            ? readonly []
-            : InvalidBindChildConfig<'Invalid keyed field storage'>
-          : InvalidBindChildConfig<'Invalid keyed field key'>
+            ? WrappedItemAt<
+                ParentModelSchema['Type'],
+                Field
+              > extends InstanceEvidence<infer InstanceOwner>
+              ? Equal<InstanceOwner, BlockValue['owner']> extends true
+                ? Extract<
+                    keyof BlockValue['operations'],
+                    'create'
+                  > extends never
+                  ? readonly []
+                  : InvalidBindChildConfig<'Instance Bindings reserve create for occurrence initialization'>
+                : InvalidBindChildConfig<'Instance storage belongs to another child Block contract'>
+              : readonly []
+            : InvalidBindChildConfig<'Invalid wrapped keyed field storage'>
+          : KeyField extends keyof BlockValue['Model']['Type'] & string
+            ? Config extends Pick<
+                KeyedFieldConfig<
+                  BlockValue,
+                  ParentModelSchema,
+                  never,
+                  never,
+                  Field,
+                  KeyField,
+                  PlacementOfConfig<BlockValue, Config>
+                >,
+                'field' | 'key'
+              >
+              ? readonly []
+              : InvalidBindChildConfig<'Invalid keyed field storage'>
+            : InvalidBindChildConfig<'Invalid keyed field key'>
+        : InvalidBindChildConfig<'The keyed field container must match the selected Binding relationship'>
       : InvalidBindChildConfig<'Keyed field storage requires field and key'>
     : InvalidBindChildConfig<'Keyed field storage requires a parent Struct Model'>
 
@@ -850,10 +878,11 @@ type ValidateStaticStorage<
   Field extends string,
   KeyField extends string,
   ChildField extends string,
+  Relationship extends FieldRelationship = 'Implicit',
 > = 'childField' extends Keys
   ? Extract<
       Keys,
-      'readAll' | 'read' | 'write' | 'writeAt' | 'presentWhen'
+      'readAll' | 'read' | 'write' | 'writeAt' | 'activeWhen'
     > extends never
     ? ValidateKeyedFieldSource<
         BlockValue,
@@ -862,13 +891,14 @@ type ValidateStaticStorage<
           field: Field
           key: KeyField
           childField: ChildField
-        }>
+        }>,
+        Relationship
       >
     : InvalidBindChildConfig<'Wrapped keyed storage cannot include accessor or general keyed adapters'>
   : 'key' extends Keys
     ? Extract<
         Keys,
-        'readAll' | 'read' | 'write' | 'writeAt' | 'presentWhen'
+        'readAll' | 'read' | 'write' | 'writeAt' | 'activeWhen'
       > extends never
       ? ValidateKeyedFieldSource<
           BlockValue,
@@ -876,7 +906,8 @@ type ValidateStaticStorage<
           Readonly<{
             field: Field
             key: KeyField
-          }>
+          }>,
+          Relationship
         >
       : InvalidBindChildConfig<'Keyed field storage cannot include accessor or general keyed adapters'>
     : 'field' extends Keys
@@ -890,7 +921,13 @@ type ValidateStaticStorage<
               : [Field] extends [
                     DirectField<
                       ParentModelSchema['Type'],
-                      BlockValue['Model']['Type']
+                      BlockValue['Model']['Type'],
+                      Extract<
+                        Relationship,
+                        'Required' | 'Optional'
+                      > extends never
+                        ? 'Implicit'
+                        : Extract<Relationship, 'Required' | 'Optional'>
                     >,
                   ]
                 ? Extract<
@@ -905,8 +942,8 @@ type ValidateStaticStorage<
         : InvalidBindChildConfig<'Direct field storage requires a Struct Model'>
       : 'read' extends Keys
         ? 'write' extends Keys
-          ? 'presentWhen' extends Keys
-            ? InvalidBindChildConfig<'Accessor storage cannot include presentWhen'>
+          ? 'activeWhen' extends Keys
+            ? InvalidBindChildConfig<'Accessor storage cannot include activeWhen'>
             : readonly []
           : InvalidBindChildConfig<'Accessor storage requires both read and write functions'>
         : InvalidBindChildConfig<'A Binding requires direct, accessor, or keyed storage'>
@@ -1020,6 +1057,7 @@ export type ValidateStaticBindingConfigWithoutPolicy<
   KeyField extends string,
   ChildField extends string,
   Config,
+  Relationship extends FieldRelationship = 'Implicit',
 > =
   IsAny<Config> extends true
     ? InvalidBindChildConfig<'Binding config cannot use any'>
@@ -1039,7 +1077,8 @@ export type ValidateStaticBindingConfigWithoutPolicy<
                   Keys,
                   Field,
                   KeyField,
-                  ChildField
+                  ChildField,
+                  Relationship
                 > extends readonly []
                 ? ValidateStaticMessageMapping<
                     BlockValue,
@@ -1057,11 +1096,59 @@ export type ValidateStaticBindingConfigWithoutPolicy<
                     Keys,
                     Field,
                     KeyField,
-                    ChildField
+                    ChildField,
+                    Relationship
                   >
               : ValidateProjectedInitialModel<ParentModelSchema['Type'], Config>
             : ValidateInitialKeys<Config>
           : ValidateBindChildConfigKeys<Config>
+
+type ConfiguredBindingKeys<Config> = {
+  [Key in keyof Config]-?: [Exclude<Config[Key], undefined>] extends [never]
+    ? never
+    : Key
+}[keyof Config]
+
+/** @internal Validates direct keyed initialization as the identity item projection. */
+export type ValidateDirectKeyedInitialBindingConfig<
+  BlockValue extends BindableBlock,
+  ParentModelSchema extends AnySchema,
+  Field extends keyof ParentModelSchema['Type'] & string,
+  KeyField extends string,
+  InitialArguments extends ReadonlyArray<unknown>,
+  ChildInitContext,
+  Config extends DirectKeyedInitialBindingConfig<
+    BlockValue,
+    ParentModelSchema,
+    Field,
+    KeyField,
+    InitialArguments,
+    ChildInitContext
+  >,
+> = ValidateStaticBindingConfigWithoutPolicy<
+  BlockValue,
+  ParentModelSchema,
+  Extract<ConfiguredBindingKeys<Config>, BindChildConfigKey>,
+  Field,
+  KeyField,
+  never,
+  Omit<Config, 'init'> &
+    Readonly<{
+      init: Omit<Config['init'], 'toItem'> &
+        Readonly<{
+          toItem: (
+            occurrence: InitialWrappedOccurrence<
+              BlockValue,
+              ParentModelSchema['Type'],
+              Field,
+              KeyField
+            >,
+            childModel: BlockValue['Model']['Type'],
+          ) => BlockValue['Model']['Type']
+        }>
+    }>,
+  'KeyedArray'
+>
 
 type ContextualKeyedOutMessageConfig<
   BlockValue extends BindableBlock,
@@ -1116,11 +1203,28 @@ type ContextualPolicyFold<Fold> = Fold extends (
   ? ContextualPolicyFunction<Fold>
   : Fold
 
+type ContextualBindingPolicyFold<Fold, Config, ChildMessage> =
+  Config extends Readonly<{ key: unknown }>
+    ? Fold extends (
+        key: any,
+        outMessage: infer ChildOutMessage,
+        context: any,
+      ) => any
+      ?
+          | ContextualPolicyFold<Fold>
+          | OutMessageHelperEvidence<ChildOutMessage, 'fold', ChildMessage>
+      : ContextualPolicyFold<Fold>
+    : ContextualPolicyFold<Fold>
+
 /** @internal Preserves the native policy contextual typing in named descriptor authoring. */
-export type ContextualOutMessagePolicy<Policy> = Policy extends unknown
+export type ContextualOutMessagePolicy<
+  Policy,
+  Config = unknown,
+  ChildMessage = never,
+> = Policy extends unknown
   ? {
       [Key in keyof Policy]: Key extends 'fold'
-        ? ContextualPolicyFold<Policy[Key]>
+        ? ContextualBindingPolicyFold<Policy[Key], Config, ChildMessage>
         : ContextualPolicyFunction<Policy[Key]>
     }
   : never
@@ -1177,7 +1281,9 @@ export type GeneralKeyedContextualProperties<
                   KeyValue,
                   never,
                   never
-                >
+                >,
+                unknown,
+                LocalMessageOfBlock<BlockValue>
               >
             : Key extends 'subscriptions'
               ? KeyedSubscriptionsContext<
@@ -1215,7 +1321,7 @@ interface BindChildConfigDocumentation {
   /** Stable Binding identity within this parent, independent of DOM placement. Defaults to the field for unkeyed direct storage and the child Block ID otherwise. */
   placement: unknown
   /** Makes a direct-field child absent while false, including updates and lifecycle effects. Distinct from the Subscription-only gate. */
-  presentWhen: unknown
+  activeWhen: unknown
   /** Selects update delivery context and optionally gates generated child Message delivery. */
   delivery: unknown
   /** Declares a general selector's exact decoded string or finite-number key type. Its encoded channel is the wire-key channel. */
@@ -1230,7 +1336,7 @@ interface BindChildConfigDocumentation {
 
 type CoreConfigKey =
   | 'placement'
-  | 'presentWhen'
+  | 'activeWhen'
   | 'outMessage'
   | 'subscriptions'
   | 'delivery'
@@ -1452,6 +1558,8 @@ type InitialContext<
           InitialArguments
         >
       >
+      contextToArgs?: never
+      toParentFields?: never
       /**
        * Keeps the exact initialized child and planned key, adding parent-owned
        * wrapper fields when needed. Return a plain wrapper record: a Schema
@@ -1470,9 +1578,57 @@ type InitialContext<
         ParentModelSchema['Type'],
         Extract<Field, keyof ParentModelSchema['Type'] & string>
       >
-      contextToArgs?: never
-      toParentFields?: never
     }>
+
+/** @internal Contextually types direct keyed initialization without an identity adapter. */
+export type DirectKeyedInitialBindingConfig<
+  BlockValue extends BindableBlock,
+  ParentModelSchema extends AnySchema,
+  Field extends keyof ParentModelSchema['Type'] & string,
+  KeyField extends string,
+  InitialArguments extends ReadonlyArray<unknown>,
+  ChildInitContext,
+> = Readonly<{
+  field: Field
+  key: KeyField
+  childField?: never
+  placement?: string
+  activeWhen?: never
+  outMessage?: never
+  read?: never
+  readAll?: never
+  write?: never
+  writeAt?: never
+  keySchema?: never
+  init: Readonly<{
+    instances: (
+      ...context: [ChildInitContext] extends [never]
+        ? ReadonlyArray<any>
+        : [childInitContext: ChildInitContext]
+    ) => ReadonlyArray<
+      InitialWrappedOccurrence<
+        BlockValue,
+        ParentModelSchema['Type'],
+        NoInfer<Field>,
+        NoInfer<KeyField>,
+        InitialArguments
+      >
+    >
+    toItem?: never
+  }>
+  subscriptions?: KeyedSubscriptionsContext<
+    BlockValue,
+    ParentModelSchema['Type'],
+    KeyAt<BlockValue['Model']['Type'], NoInfer<KeyField>>
+  >
+}> &
+  ([BlockValue['Message']['Type']] extends [never]
+    ? Readonly<{ delivery?: never }>
+    : GeneratedDeliveryRequirement<
+        BlockValue,
+        ParentModelSchema['Type'],
+        KeyAt<BlockValue['Model']['Type'], NoInfer<KeyField>>
+      >)
 
 type StorageConfigKey =
   | 'field'
@@ -1566,7 +1722,7 @@ export type BindChildContextualProperties<
         ? string
         : Key extends 'init'
           ? unknown
-          : Key extends 'presentWhen'
+          : Key extends 'activeWhen'
             ? (model: ParentModelSchema['Type']) => boolean
             : Key extends 'subscriptions'
               ? 'key' extends Keys
@@ -1598,7 +1754,9 @@ export type BindChildContextualProperties<
                         KeyValue,
                         Field,
                         KeyField
-                      >
+                      >,
+                      unknown,
+                      LocalMessageOfBlock<BlockValue>
                     >
                   : ContextualOutMessagePolicy<
                       StaticOutMessageContext<
@@ -1606,7 +1764,9 @@ export type BindChildContextualProperties<
                         ParentModelSchema,
                         ParentMessageSchema,
                         ParentOutMessageSchema
-                      >
+                      >,
+                      unknown,
+                      LocalMessageOfBlock<BlockValue>
                     >
                 : Key extends 'delivery'
                   ? GeneratedDeliveryContext<
@@ -2008,7 +2168,8 @@ export type OutMessagePolicyForBindingConfig<
 type InvalidOutMessageHelperMember<BlockValue, Key, Candidate> =
   Candidate extends OutMessageHelperEvidence<
     infer HelperOutMessage,
-    infer HelperRole
+    infer HelperRole,
+    infer HelperMessage
   >
     ? IsAny<HelperOutMessage> extends true
       ? Key
@@ -2022,7 +2183,18 @@ type InvalidOutMessageHelperMember<BlockValue, Key, Candidate> =
               }>
             }>
             ? Equal<HelperOutMessage, ChildOutMessage> extends true
-              ? never
+              ? HelperRole extends 'fold'
+                ? BlockValue extends Readonly<{
+                    Message: Readonly<{ Type: infer ChildMessage }>
+                  }>
+                  ? Equal<
+                      HelperMessage,
+                      Exclude<ChildMessage, PrivateDelivery<any>>
+                    > extends true
+                    ? never
+                    : Key
+                  : Key
+                : never
               : Key
             : Key
           : Key
@@ -2045,13 +2217,19 @@ export type ValidateOutMessageHelperPolicy<BlockValue, Policy> = [
 ] extends [never]
   ? unknown
   : Readonly<{
-      'OutMessage helpers must use the exact tagged-union child OutMessage contract': InvalidOutMessageHelperPolicyKeys<
+      'OutMessage helpers must use the exact child Message and tagged-union OutMessage contracts required by their role': InvalidOutMessageHelperPolicyKeys<
         BlockValue,
         Policy
       >
     }>
 
-/** Selects the exact parent-owned OutMessage policy for a child Binding. */
+/**
+ * Selects the exact parent-owned OutMessage policy for a child Binding.
+ * A keyed Binding accepts an authored fold directly, or a key-dependent
+ * callback returning `makeOutMessageFold`. Its handlers retain the exact key,
+ * child payloads and FoldContext. Selection runs no handlers; the parent Step
+ * runs after the child's next Model has been written.
+ */
 export interface WithOutMessagePolicy<
   BlockValue extends BindableBlock,
   ParentModelSchema extends AnySchema,
@@ -2070,7 +2248,9 @@ export interface WithOutMessagePolicy<
           ParentMessageSchema,
           ParentOutMessageSchema,
           Config
-        >
+        >,
+        Config,
+        LocalMessageOfBlock<BlockValue>
       > &
       ValidateOutMessageHelperPolicy<BlockValue, NoInfer<Policy>>,
   ): SelectedChildBinding<
@@ -2195,19 +2375,89 @@ export type BindChildConstructorResult<
  * Model and Message types happen to match. Its Composition validates policy
  * outputs and the sibling Bindings used by those policies. Creating the Binding
  * records passive composition policy; a Runtime starts its lifecycle work later. */
-interface BindChildConstructor<
+/** Authors one direct field or a custom unkeyed relationship. */
+export interface BindSingularChild<
   ParentModelSchema extends AnySchema,
   ParentMessageSchema extends AnySchema,
   ParentOutMessageSchema extends AnySchema | undefined = undefined,
   ChildInitContext = never,
+  Relationship extends 'Required' | 'Optional' | 'Custom' = 'Required',
 > {
   <
     const BlockValue extends BindableBlock,
     const Keys extends BindChildConfigKey,
-    const ReadAll extends (
-      model: ParentModelSchema['Type'],
-    ) => ReadonlyArray<unknown>,
-    const KeyValue extends InstanceKey,
+    const Field extends string,
+    const Source extends object,
+    const InitialArguments extends Parameters<BlockValue['init']> = Parameters<
+      BlockValue['init']
+    >,
+  >(
+    block: BlockValue,
+    config: Source &
+      RelationshipStorageFields<Relationship, Field, never, never> &
+      Readonly<{ outMessage?: never }> &
+      BindChildContextualProperties<
+        Keys,
+        BlockValue,
+        ParentModelSchema,
+        ParentMessageSchema,
+        ParentOutMessageSchema,
+        never,
+        never,
+        Field,
+        never,
+        never,
+        InitialArguments,
+        ChildInitContext
+      > &
+      Readonly<{
+        readAll?: never
+        key?: never
+        field?: Field
+        childField?: never
+        writeAt?: never
+      }> &
+      ([BlockValue['Message']['Type']] extends [never]
+        ? Readonly<{ delivery?: never; keySchema?: never }>
+        : GeneratedDeliveryRequirement<
+            BlockValue,
+            ParentModelSchema['Type'],
+            never
+          >),
+    ...validation: readonly [
+      ...ValidateStaticBindingConfigWithoutPolicy<
+        BlockValue,
+        ParentModelSchema,
+        NoInfer<Keys>,
+        NoInfer<Field>,
+        never,
+        never,
+        NoInfer<Source>,
+        Relationship
+      >,
+      ...ValidateConcreteCompositionArguments<BlockValue>,
+    ]
+  ): BindChildConstructorResult<
+    BlockValue,
+    ParentModelSchema,
+    ParentMessageSchema,
+    ParentOutMessageSchema,
+    Source,
+    ChildInitContext
+  >
+}
+
+/** @internal Names native field authoring for explicit keyed storage. */
+export interface BindFieldChild<
+  ParentModelSchema extends AnySchema,
+  ParentMessageSchema extends AnySchema,
+  ParentOutMessageSchema extends AnySchema | undefined = undefined,
+  ChildInitContext = never,
+  Relationship extends FieldRelationship = 'Implicit',
+> {
+  <
+    const BlockValue extends BindableBlock,
+    const Keys extends BindChildConfigKey,
     const Field extends string,
     const KeyField extends string,
     const ChildField extends string,
@@ -2218,6 +2468,7 @@ interface BindChildConstructor<
   >(
     block: BlockValue,
     config: Source &
+      RelationshipStorageFields<Relationship, Field, KeyField, ChildField> &
       Readonly<{ outMessage?: never }> &
       BindChildContextualProperties<
         Keys,
@@ -2225,21 +2476,23 @@ interface BindChildConstructor<
         ParentModelSchema,
         ParentMessageSchema,
         ParentOutMessageSchema,
-        ReadAll,
-        KeyValue,
+        never,
+        never,
         Field,
         KeyField,
         ChildField,
         InitialArguments,
         ChildInitContext
       > &
-      Readonly<{
-        readAll?: never
-        key?: KeyField
-        field?: Field
-        childField?: ChildField
-        writeAt?: never
-      }> &
+      (Relationship extends 'Implicit'
+        ? Readonly<{
+            readAll?: never
+            key?: KeyField
+            field?: Field
+            childField?: ChildField
+            writeAt?: never
+          }>
+        : unknown) &
       ([BlockValue['Message']['Type']] extends [never]
         ? Readonly<{ delivery?: never; keySchema?: never }>
         : GeneratedDeliveryRequirement<
@@ -2250,7 +2503,7 @@ interface BindChildConstructor<
                   Keys,
                   BlockValue,
                   ParentModelSchema,
-                  KeyValue,
+                  never,
                   Field,
                   KeyField
                 >
@@ -2264,7 +2517,8 @@ interface BindChildConstructor<
         NoInfer<Field>,
         NoInfer<KeyField>,
         NoInfer<ChildField>,
-        NoInfer<Source>
+        NoInfer<Source>,
+        Relationship
       >,
       ...ValidateConcreteCompositionArguments<BlockValue>,
     ]
@@ -2277,8 +2531,53 @@ interface BindChildConstructor<
     ChildInitContext
   >
   <
-    const BlockValue extends BindableBlock &
-      Readonly<{ Message: Readonly<{ Type: never }> }>,
+    const BlockValue extends BindableBlock,
+    const Field extends keyof ParentModelSchema['Type'] & string,
+    const KeyField extends string,
+    const Config extends DirectKeyedInitialBindingConfig<
+      BlockValue,
+      ParentModelSchema,
+      Field,
+      KeyField,
+      Parameters<BlockValue['init']>,
+      ChildInitContext
+    >,
+  >(
+    block: BlockValue,
+    config: Relationship extends 'KeyedArray'
+      ? Config & Readonly<{ field: Field; key: KeyField }>
+      : never,
+    ...validation: readonly [
+      ...ValidateDirectKeyedInitialBindingConfig<
+        BlockValue,
+        ParentModelSchema,
+        NoInfer<Field>,
+        NoInfer<KeyField>,
+        Parameters<BlockValue['init']>,
+        ChildInitContext,
+        NoInfer<Config>
+      >,
+      ...ValidateConcreteCompositionArguments<BlockValue>,
+    ]
+  ): BindChildConstructorResult<
+    BlockValue,
+    ParentModelSchema,
+    ParentMessageSchema,
+    ParentOutMessageSchema,
+    Config,
+    ChildInitContext
+  >
+}
+
+/** Creates a keyed child relationship through explicit parent-owned accessors. */
+export interface BindCustomKeyedChild<
+  ParentModelSchema extends AnySchema,
+  ParentMessageSchema extends AnySchema,
+  ParentOutMessageSchema extends AnySchema | undefined = undefined,
+  ChildInitContext = never,
+> {
+  <
+    const BlockValue extends BindableBlock,
     const Keys extends GeneralKeyedConfigKey,
     const ReadAll extends (
       model: ParentModelSchema['Type'],
@@ -2312,64 +2611,7 @@ interface BindChildConstructor<
         ) => ParentModelSchema['Type']
         field?: never
         childField?: never
-        presentWhen?: never
-        init?: never
-        write?: never
-        delivery?: never
-        keySchema?: never
-      }>,
-    ...validation: readonly [
-      ...ValidateGeneralKeyedSourceWithoutPolicy<NoInfer<Source>>,
-      ...ValidateConcreteCompositionArguments<BlockValue>,
-    ]
-  ): BindChildConstructorResult<
-    BlockValue,
-    ParentModelSchema,
-    ParentMessageSchema,
-    ParentOutMessageSchema,
-    Source,
-    ChildInitContext
-  >
-  <
-    const BlockValue extends BindableBlock,
-    const Keys extends GeneralKeyedConfigKey,
-    const ReadAll extends (
-      model: ParentModelSchema['Type'],
-    ) => ReadonlyArray<any>,
-    const KeyOf extends (item: ItemOfReadAll<NoInfer<ReadAll>>) => InstanceKey,
-    const KeyValue extends Extract<ReturnType<KeyOf>, InstanceKey> = Extract<
-      ReturnType<KeyOf>,
-      InstanceKey
-    >,
-    const Source extends object = object,
-  >(
-    block: BlockValue,
-    config: Source &
-      Readonly<{ outMessage?: never }> &
-      GeneralKeyedContextualProperties<
-        Keys,
-        BlockValue,
-        ParentModelSchema,
-        ParentMessageSchema,
-        ParentOutMessageSchema,
-        ReadAll,
-        KeyOf,
-        KeyValue
-      > &
-      Readonly<{
-        readAll: ReadAll
-        key: KeyOf
-        read: (
-          item: ItemOfReadAll<NoInfer<ReadAll>>,
-        ) => BlockValue['Model']['Type']
-        writeAt: (
-          model: ParentModelSchema['Type'],
-          key: KeyValue,
-          nextChildModel: BlockValue['Model']['Type'],
-        ) => ParentModelSchema['Type']
-        field?: never
-        childField?: never
-        presentWhen?: never
+        activeWhen?: never
         init?: never
         write?: never
       }> &
@@ -2379,7 +2621,7 @@ interface BindChildConstructor<
             keySchema?: never
           }>
         : Readonly<{
-            keySchema: Schema.Top & Schema.Schema<KeyValue>
+            keySchema: Schema.Top & Schema.Schema<NoInfer<KeyValue>>
           }> &
             GeneratedDeliveryRequirement<
               BlockValue,
@@ -2402,17 +2644,23 @@ interface BindChildConstructor<
 
 /** Creates a child Binding before selecting its exact parent-owned policy with
  * `withOutMessagePolicy`. */
-export interface BindChild<
+export type BindChild<
   ParentModelSchema extends AnySchema,
   ParentMessageSchema extends AnySchema,
   ParentOutMessageSchema extends AnySchema | undefined = undefined,
   ChildInitContext = never,
-> extends BindChildConstructor<
+> = BindFieldChild<
   ParentModelSchema,
   ParentMessageSchema,
   ParentOutMessageSchema,
   ChildInitContext
-> {}
+> &
+  BindCustomKeyedChild<
+    ParentModelSchema,
+    ParentMessageSchema,
+    ParentOutMessageSchema,
+    ChildInitContext
+  >
 
 const assertGeneralKeyedConfig = (config: object): void => {
   const allowedFields = new Set([
@@ -2425,7 +2673,7 @@ const assertGeneralKeyedConfig = (config: object): void => {
     'outMessage',
     'field',
     'childField',
-    'presentWhen',
+    'activeWhen',
     'delivery',
     'keySchema',
   ])
@@ -2437,12 +2685,12 @@ const assertGeneralKeyedConfig = (config: object): void => {
     }
   }
 
-  for (const forbiddenField of ['field', 'childField', 'presentWhen']) {
+  for (const forbiddenField of ['field', 'childField', 'activeWhen']) {
     if (Object.hasOwn(config, forbiddenField)) {
       throw new Error(
         forbiddenField === 'childField'
           ? '[foldkit] A general keyed Binding cannot supply childField.'
-          : '[foldkit] A general keyed Binding cannot supply field or presentWhen.',
+          : '[foldkit] A general keyed Binding cannot supply field or activeWhen.',
       )
     }
   }
@@ -2941,7 +3189,7 @@ const assertBindingConfig: (
 
   if (Object.hasOwn(config, 'outMessage')) {
     throw new Error(
-      '[foldkit] Definition.makeBinding no longer accepts outMessage. Select a callable policy with Binding.withOutMessagePolicy({ fold, forward }).',
+      '[foldkit] Binding constructors do not accept outMessage. Select a callable policy with Binding.withOutMessagePolicy({ fold, forward }).',
     )
   }
 }
@@ -2981,6 +3229,7 @@ export const makeBindChild = <
       BindingValue extends Readonly<{ placement: string }>,
     >(
       binding: BindingValue,
+      isKeyed = false,
     ) => {
       currentBinding = binding
       registerBindingReconstructor(binding, nextBlock =>
@@ -2991,7 +3240,7 @@ export const makeBindChild = <
       )
 
       if (hasOutMessage) {
-        attachOutMessagePolicy(binding)
+        attachOutMessagePolicy(binding, isKeyed)
       }
       return Object.freeze(binding)
     }
@@ -3071,7 +3320,7 @@ export const makeBindChild = <
       if (generated !== undefined) {
         registerGeneratedDelivery(binding, generated.envelope)
       }
-      return finishBinding(binding)
+      return finishBinding(binding, true)
     }
 
     if (
@@ -3126,7 +3375,7 @@ export const makeBindChild = <
       if (generated !== undefined) {
         registerGeneratedDelivery(binding, generated.envelope)
       }
-      return finishBinding(binding)
+      return finishBinding(binding, true)
     }
 
     if (
@@ -3194,7 +3443,7 @@ export const makeBindChild = <
       if (init !== undefined) {
         registerBindingInitialPolicy(binding, init)
       }
-      return finishBinding(binding)
+      return finishBinding(binding, true)
     }
 
     if (!Predicate.isObject(config)) {

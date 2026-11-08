@@ -1,9 +1,14 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { DragAndDropBlock } from '@foldkit/ui/dragAndDrop'
+import { DragAndDrop } from '@foldkit/ui'
 
-import { UiBlock, makeFieldsStep, makeNoopStep } from '../definition'
+import {
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+} from '../block'
 import type { DemoColumn } from '../domain'
 
 const reorderColumns = (
@@ -45,11 +50,14 @@ const reorderColumns = (
   })
 }
 
-export const DragAndDropDemoBinding = UiBlock.makeBinding(DragAndDropBlock, {
-  field: 'dragAndDropDemo',
-  init: { contextToArgs: () => [{ id: 'drag-and-drop-demo' }] },
-}).withOutMessagePolicy({
-  fold: UiBlock.makeOutMessageFold(DragAndDropBlock, {
+export const DragAndDropDemoBinding = makeRequiredFieldBinding(
+  DragAndDrop.DragAndDropBlock,
+  {
+    field: 'dragAndDropDemo',
+    init: { contextToArgs: () => [{ id: 'drag-and-drop-demo' }] },
+  },
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(DragAndDrop.DragAndDropBlock, {
     Reordered: ({ itemId, fromContainerId, toContainerId, toIndex }) =>
       makeFieldsStep(() => ({
         dragAndDropDemoColumns: dragAndDropDemoColumns =>

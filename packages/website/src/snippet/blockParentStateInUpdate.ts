@@ -1,4 +1,4 @@
-import { Array, Effect, Schema } from 'effect'
+import { Array, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -21,10 +21,9 @@ const AccountSettingsMessage = defineMessageUnion({
 type AccountSettingsMessage = typeof AccountSettingsMessage.Type
 
 export const AccountSettingsKey = Symbol('AccountSettings')
-
 export const AccountSettingsBlock = Block.make('AccountSettings', {
   key: AccountSettingsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Context: Schema.Tuple([CurrentUser]),
   view: { kind: 'Element' },
   Model: AccountSettingsModel,
@@ -53,16 +52,11 @@ const accountSettingsView = AccountSettingsComposition.makeView((model, h) =>
   h.p([], [`${model.theme}; audit: ${Array.join(model.auditTrail, ', ')}`]),
 )
 
-const layer = AccountSettingsBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init: accountSettingsInit,
-      update: accountSettingsUpdate,
-      view: accountSettingsView,
-    }
-  }),
-)
+const layer = AccountSettingsBlock.makeLayer({
+  init: accountSettingsInit,
+  update: accountSettingsUpdate,
+  view: accountSettingsView,
+})
 
 const ProfileModel = Schema.Struct({
   currentUser: CurrentUser,
@@ -74,15 +68,14 @@ const ProfileMessage = defineMessageUnion({})
 type ProfileMessage = typeof ProfileMessage.Type
 
 export const ProfileKey = Symbol('Profile')
-
 const ProfileBlock = Block.make('Profile', {
   key: ProfileKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: ProfileModel,
   Message: ProfileMessage,
 })
 
-export const AccountSettingsBinding = ProfileBlock.makeBinding(
+export const AccountSettingsBinding = ProfileBlock.makeRequiredFieldBinding(
   AccountSettingsBlock,
   {
     field: 'accountSettings',

@@ -13,7 +13,7 @@ const ApplicationDefinition = Block.makeDefinition('Application', {
   Model,
   Message,
 })
-const SettingsBinding = ApplicationDefinition.makeBinding(
+const SettingsBinding = ApplicationDefinition.makeCustomBinding(
   BoundSettings.BoundSettingsBlock,
   {
     read: (model: Model) => Option.some(model.settings),
@@ -25,5 +25,5 @@ const ApplicationComposition = ApplicationDefinition.makeComposition({
   bindings: [SettingsBinding],
 })
 export const updateBinding = ApplicationComposition.makeUpdate({
-  ClickedApplyTheme: SettingsBinding.informThemeChanged({ theme: 'Light' }),
+  ClickedApplyTheme: SettingsBinding.informOfThemeChanged({ theme: 'Light' }),
 })

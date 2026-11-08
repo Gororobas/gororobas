@@ -1,23 +1,14 @@
-import { Array, Effect, Option, pipe } from 'effect'
-import { Calendar, Url } from 'foldkit'
-import {
-  Command,
-  Mount,
-  click,
-  expect,
-  given,
-  role,
-  scene,
-  within,
-} from 'foldkit/scene'
-import { type TestBlock, withBlock } from 'foldkit/story'
-import { describe, test } from 'vitest'
+import { Array, Option, pipe } from 'effect'
+import { Calendar, Scene, Url } from 'foldkit'
+import { describe } from 'vitest'
 
-import { test as TabsTest } from '@foldkit/ui/tabs'
+import { it } from '@effect/vitest'
+import { Tabs } from '@foldkit/ui'
 
 import { SnippetDisclosureBlock } from '..'
-import { ApplicationBlock, layer } from '../../block'
 import { Deployment } from '../../deployment'
+import { ApplicationBlock, layer } from '../../index'
+import { resolveApiData, resolveBrowserStartup } from '../../scene.fixture'
 import { SnippetSize } from '../snippetDisclosure/model'
 import { MeasureSnippetHeight } from '../snippetDisclosure/mount'
 import { SourceFileTabsBlock } from './fileTabs'
@@ -59,61 +50,48 @@ const flags = {
   maybeExampleSources: Option.some(sources),
 }
 
-const makeFixture = (block: TestBlock<typeof application>) => {
-  const init = block.init
-  const update = block.update
-  const view = block.view
-
-  return { block, init, update, view }
-}
-
 describe('example detail', () => {
-  test('source files share their code disclosure state', async () => {
-    await Effect.runPromise(
-      withBlock(application, executable => {
-        const { init, update, view } = makeFixture(executable)
-
-        scene(
-          { update, view },
-          given(init(flags, url).model),
-          Mount.resolve(
-            MeasureSnippetHeight({
-              snippetId: 'example-ssr-source-src/application.ts',
-            }),
-            SnippetDisclosureBlock.Message.CompletedMeasureSnippetHeight({
-              snippetId: 'example-ssr-source-src/application.ts',
-              snippetSize: SnippetSize.Overflows(),
-            }),
-          ),
-          click(
-            within(
-              role('tabpanel', { name: /application\.ts$/ }),
-              role('button', { name: 'Show code' }),
-            ),
-          ),
-          expect(
-            within(
-              role('tabpanel', { name: /application\.ts$/ }),
-              role('button', { name: 'Hide code' }),
-            ),
-          ).toExist(),
-          click(role('tab', { name: /entry\.server\.ts$/ })),
-          expect(role('tab', { name: /entry\.server\.ts$/ })).toHaveAttr(
-            'aria-selected',
-            'true',
-          ),
-          Command.resolve(
-            TabsTest.FocusTab,
-            SourceFileTabsBlock.Message.CompletedFocusTab(),
-          ),
-          expect(
-            within(
-              role('tabpanel', { name: /entry\.server\.ts$/ }),
-              role('button', { name: 'Hide code' }),
-            ),
-          ).toExist(),
-        )
-      }),
-    )
-  })
+  it.effect('source files share their code disclosure state', () =>
+    Scene.scene(
+      application,
+      Scene.init(flags, url),
+      resolveBrowserStartup(flags),
+      resolveApiData,
+      Scene.Mount.resolve(
+        MeasureSnippetHeight({
+          snippetId: 'example-ssr-source-src/application.ts',
+        }),
+        SnippetDisclosureBlock.Message.CompletedMeasureSnippetHeight({
+          snippetId: 'example-ssr-source-src/application.ts',
+          snippetSize: SnippetSize.Overflows(),
+        }),
+      ),
+      Scene.click(
+        Scene.within(
+          Scene.role('tabpanel', { name: /application\.ts$/ }),
+          Scene.role('button', { name: 'Show code' }),
+        ),
+      ),
+      Scene.expect(
+        Scene.within(
+          Scene.role('tabpanel', { name: /application\.ts$/ }),
+          Scene.role('button', { name: 'Hide code' }),
+        ),
+      ).toExist(),
+      Scene.click(Scene.role('tab', { name: /entry\.server\.ts$/ })),
+      Scene.expect(
+        Scene.role('tab', { name: /entry\.server\.ts$/ }),
+      ).toHaveAttr('aria-selected', 'true'),
+      Scene.Command.resolve(
+        Tabs.test.FocusTab,
+        SourceFileTabsBlock.Message.CompletedFocusTab(),
+      ),
+      Scene.expect(
+        Scene.within(
+          Scene.role('tabpanel', { name: /entry\.server\.ts$/ }),
+          Scene.role('button', { name: 'Hide code' }),
+        ),
+      ).toExist(),
+    ),
+  )
 })

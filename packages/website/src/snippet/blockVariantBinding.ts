@@ -1,7 +1,6 @@
 import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { taggedStruct } from 'foldkit/schema'
-import { makeVariantBinding } from 'foldkit/variantBinding'
 
 import { EditorBlock } from './blockVariantChild'
 
@@ -11,15 +10,16 @@ const Model = Schema.Union([EditorBlock.Model, Submitted])
 type Model = typeof Model.Type
 
 export const ProfileKey = Symbol('Profile')
-
 const ProfileBlock = Block.make('Profile', {
   key: ProfileKey,
-  Init: Schema.Tuple([Schema.String]),
+  InitArgs: Schema.Tuple([Schema.String]),
   Model,
   Message: Schema.Never,
 })
-export const EditorBinding = makeVariantBinding(ProfileBlock, EditorBlock)
-export const ProfileComposition = ProfileBlock.makeComposition({
+
+const { makeComposition } = ProfileBlock
+export const EditorBinding = ProfileBlock.makeVariantBinding(EditorBlock)
+export const ProfileComposition = makeComposition({
   bindings: [EditorBinding],
 })
 export const init = ProfileComposition.makeInit(displayName =>

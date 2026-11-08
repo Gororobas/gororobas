@@ -48,11 +48,11 @@ With no `args`, `Query.define` returns a Query that retains one value. In this d
 
 Set `staleTime` to an Effect `Duration.Input` when the parent should revalidate successful data after a fixed interval. The default is `Duration.infinity`, so successful data remains fresh until the parent explicitly requests revalidation. Query records the successful fetch's completion time from Effect Clock; a failed refresh keeps the previous successful timestamp. The interval does not change `read` or remove retained data.
 
-Bind the Query contract through the parent Block, register that Binding in the Composition, and yield it in the parent constructor. Provide `Query.layer` so construction can acquire the implementation. The selected child contributes its handler recipe; do not duplicate it in the parent’s local `EffectsLayer`. The entry supplies ordinary service providers through `ApplicationLayer`. The handler generator captures stable services when the Runtime builds its Layer, and the fetch function uses those services for each request.
+Bind the Query contract through the parent Block and register that Binding in the Composition. Ordinary record completion acquires it from init's registered inventory; provide `Query.layer` so construction can acquire the implementation. The selected child contributes its handler recipe; do not duplicate it in the parent’s local `EffectsLayer`. The entry supplies ordinary service providers through `ApplicationLayer`. The handler generator captures stable services when the Runtime builds its Layer, and the fetch function uses those services for each request.
 
 Omit `handler` when an external host supplies the fetch implementation. Complete that Query with `query.provideHandlers(query.toLayer(constructor))` before binding it into a runnable application. `toLayer` accepts an Effect constructor and can also provide an alternative to an attached handler. For direct `query.run` outside application composition, provide `query.EffectsLayer` to the Effect. Ordinary execution tests retain the handler and replace its underlying services.
 
-The `data` and `error` values must be Schema Codecs that require no encoding or decoding services. Query uses them to build its Model and completion Message Schemas.
+The `data` and `error` values must be Schema Codecs that require no encoding or decoding Services and complete synchronously when Foldkit serializes them. Query uses them to build its Model and completion Message Schemas.
 
 #### Returned Contract {#returned-definition}
 
@@ -60,13 +60,13 @@ The returned `postsQuery` is the public contract for a viewless Block. It expose
 
 ### Bind the Query to Its Parent
 
-Composition derives delivery for the Query's Messages from its registered Binding. `makeBinding` also projects the loading operations so they read and write the Query field inside the parent Model:
+Composition derives delivery for the Query's Messages from its registered Binding. The Binding also projects the loading operations so they read and write the Query field inside the parent Model:
 
 ::Snippet{name="queryLift" label="Binding Query to its parent"}
 
 #### Binding Configuration
 
-The `field` form tells `makeBinding` which exact field contains the Query Model or `Option<QueryModel>`. Composition derives a `Got*Message` envelope carrying the Binding's placement and originating instance generation; parents do not declare a wrapper or supply a Message mapper. The Binding returns the child fold and Query operations expressed in the parent Model and Message types. Its projected operations return connected Steps whose Model input requires the registering Composition's graph. Apply them inside `makeUpdate`, include them in `makeInit` startup, or preserve them through a Block-owned Step. Return or compose their opaque results intact; the Composition consumes them during checked execution. They do not perform Effects.
+Use `makeRequiredFieldBinding` for the Query Model field or `makeOptionalFieldBinding` for an `Option<QueryModel>` field. Composition derives a `Got*Message` envelope carrying the Binding's placement and originating instance generation; parents do not declare a wrapper or supply a Message mapper. The Binding returns the child fold and Query operations expressed in the parent Model and Message types. Its projected operations return connected Steps whose Model input requires the registering Composition's graph. Apply them inside `makeUpdate`, include them in `makeInit` startup, or preserve them through a Block-owned Step. Return or compose their opaque results intact; the Composition consumes them during checked execution. They do not perform Effects.
 
 #### Bound Operations
 
@@ -78,7 +78,7 @@ The `field` form tells `makeBinding` which exact field contains the Query Model 
 
 #### Optional and Nested Queries
 
-Use `field` when an optional Query occupies an exact Option field. After checked execution, its bound operations produce the unchanged parent Model and no Commands while the field is `None`; they never insert a missing Query Model. Add `presentWhen` when a parent condition governs the whole direct child while retaining its stored Model. Use explicit `read` and `write` when the Query is nested, spans tagged parent variants, or needs a custom write. When `read` returns `None`, it has the same absent behavior.
+Use `makeOptionalFieldBinding(QueryBlock, { field })` when the Query occupies an exact Option field. After checked execution, its bound operations produce the unchanged parent Model and no Commands while the field is `None`; they never insert a missing Query Model. Add `activeWhen` when a parent condition governs the whole direct child while retaining its stored Model. Use `makeCustomBinding` with explicit `read` and `write` when the Query is nested, spans tagged parent variants, or needs a custom write. When `read` returns `None`, it has the same absent behavior.
 
 #### Starting a Load
 
@@ -200,7 +200,7 @@ The bound operations also have data-last forms for direct use as Steps in update
 
 By default, KeyedQuery encodes the complete args value as the key. Object field order does not change the key; array order does. Two argument records with different values retain different entries.
 
-Each `args` field has the same restriction as `data` and `error`: its Schema Codec must require no encoding or decoding services. KeyedQuery encodes args when it derives the default key.
+Each `args` field has the same restriction as `data` and `error`: its Schema Codec must require no encoding or decoding Services and must complete synchronously. KeyedQuery encodes args when it derives the default key.
 
 ### Request Identity
 

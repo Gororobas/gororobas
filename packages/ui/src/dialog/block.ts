@@ -12,7 +12,7 @@ import * as Block from 'foldkit/block'
 import { DEVTOOLS_HOST_ID } from 'foldkit/devtools-host'
 import * as Dom from 'foldkit/dom'
 import { type ChildAttribute, type Html, childAttributes } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 import type * as Mount from 'foldkit/mount'
 import { modifyFields } from 'foldkit/struct'
 import * as Update from 'foldkit/update'
@@ -60,7 +60,7 @@ export type CompletedReleaseDialogResources =
   typeof Message.CompletedReleaseDialogResources.Type
 
 /** Requests accepted from a parent independently of local Dialog events. */
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   RequestedOpen: {},
   RequestedClose: {},
 })
@@ -71,7 +71,9 @@ export type RequestedClose = typeof InMessage.RequestedClose.Type
 
 // OUT MESSAGE
 
-/** Union of out-messages the dialog component can produce. */
+/** Parent lifecycle facts. `Opened` and `Closed` report Model transitions.
+ * `CompletedClose` follows native cleanup, including cleanup after failed
+ * showing or lifecycle acquisition. */
 export const OutMessage = defineMessageUnion({
   Opened: {},
   Closed: {},
@@ -128,7 +130,7 @@ export const mounts = [AcquireResources]
 
 export const DialogBlock = Block.make(DialogNamespace, {
   key: DialogKey,
-  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  InitArgs: Block.makeInputContract<readonly [config: InitConfig]>(),
   view: {
     kind: 'Element',
     Inputs: Block.makeInputContract<ViewInputs>(),
@@ -229,8 +231,9 @@ const acquireDialogResourcesResult = (
  *  Dialog component supplies its own backdrop. If the dialog element is gone
  *  by the time the show runs, the Command reports `FailedShowDialog` without
  *  taking the scroll lock. The update function then closes the Model and emits
- *  `Closed` if it was open. The
- *  acquisition becomes uninterruptible after the committed element is found,
+ *  `Closed` if it was open. It schedules `CloseDialog` to finish cleanup;
+ *  `CompletedClose` follows that Command's acknowledgement. Acquisition
+ *  becomes uninterruptible after the committed element is found,
  *  so modal resources and the scroll lock cannot split. A concurrent
  *  lifecycle acquisition reuses the resources already held by the id. */
 export const ShowDialog = DialogBlock.makeCommand('ShowDialog', {
@@ -249,7 +252,9 @@ export const ShowDialog = DialogBlock.makeCommand('ShowDialog', {
  *  closes the dialog again. If the dialog element is gone by the time the
  *  close runs, the Command calls `Dom.releaseDialogResources` instead. That
  *  releases the scroll lock, focus trap, return focus, and stack entry if the
- *  dialog still holds them. The background is restored before return focus. */
+ *  dialog still holds them. The background is restored before return focus.
+ *  A failed show or lifecycle acquisition that resets an active Dialog also
+ *  schedules this Command, so its acknowledgement reports terminal cleanup. */
 export const CloseDialog = DialogBlock.makeCommand('CloseDialog', {
   args: { id: Schema.String },
   messages: [Message.CompletedCloseDialog],
@@ -298,10 +303,13 @@ const isLeaving = (model: Model): boolean =>
 const isOpenOrAnimating = (model: Model): boolean =>
   model.isOpen || model.animation.transitionState !== 'Idle'
 
-const BaseAnimationBinding = DialogBlock.makeBinding(Animation.AnimationBlock, {
-  field: 'animation',
-  init: { contextToArgs: id => [{ id: `${id}-panel` }] },
-})
+const BaseAnimationBinding = DialogBlock.makeRequiredFieldBinding(
+  Animation.AnimationBlock,
+  {
+    field: 'animation',
+    init: { contextToArgs: id => [{ id: `${id}-panel` }] },
+  },
+)
 
 const closeNativeDialog = DialogBlock.makeCommandsStep(model => [
   CloseDialog({ id: model.id }),
@@ -326,7 +334,7 @@ const resetToClosed = DialogBlock.makeStep(() =>
 )
 const resetAndReportClose = DialogBlock.makeStep(model =>
   Function.compose(
-    resetToClosed,
+    Update.combineSteps([resetToClosed, closeNativeDialog]),
     Update.withOutMessage(model.isOpen ? OutMessage.Closed() : undefined),
   ),
 )
@@ -683,20 +691,13 @@ export const view = DialogComposition.makeView.withInputs(
   },
 )
 
-export const layer = DialogBlock.makeLayer(
-  Effect.gen(function* () {
-    const animation = yield* AnimationBinding
-
-    return {
-      children: [animation],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-      EffectsLayer,
-    }
-  }),
-).pipe(Layer.provide(Animation.layer))
+export const layer = DialogBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+  view,
+  EffectsLayer,
+}).pipe(Layer.provide(Animation.layer))
 
 /** @internal Selected implementation used by component tests. */
 export const block = { block: DialogBlock, layer }

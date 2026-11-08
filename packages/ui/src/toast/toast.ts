@@ -335,21 +335,14 @@ export class ToastFamily extends Context.Service<
 >()('@foldkit/ui/ToastFamily') {}
 
 const constructToast: ToastConstructor = (runtime, view) =>
-  runtime.ToastDefinition.makeLayer(
-    Effect.gen(function* () {
-      const animation = yield* runtime.EntryAnimationBinding
-
-      return {
-        children: [animation],
-        init: runtime.init,
-        update: runtime.update,
-        inMessageUpdate: runtime.inMessageUpdate,
-        view,
-        subscriptions: runtime.subscriptions,
-        EffectsLayer: runtime.EffectsLayer,
-      }
-    }),
-  ).pipe(Layer.provide(AnimationLayer))
+  runtime.ToastDefinition.makeLayer({
+    init: runtime.init,
+    update: runtime.update,
+    inMessageUpdate: runtime.inMessageUpdate,
+    view,
+    subscriptions: runtime.subscriptions,
+    EffectsLayer: runtime.EffectsLayer,
+  }).pipe(Layer.provide(AnimationLayer))
 
 /** Constructs Toast payload specializations and their private Animation dependency. */
 export const layer = Layer.effect(ToastFamily)(

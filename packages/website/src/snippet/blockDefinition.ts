@@ -1,6 +1,6 @@
 import { Context, Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 
 export const Theme = Schema.Literals(['Light', 'Dark', 'System'])
 export type Theme = typeof Theme.Type
@@ -15,7 +15,7 @@ export const Message = defineMessageUnion({
 })
 export type Message = typeof Message.Type
 
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   RequestedThemeChange: { theme: Theme },
   RequestedReset: {},
 })
@@ -34,10 +34,9 @@ export class SettingsStore extends Context.Service<
 >()('SettingsStore') {}
 
 export const SettingsKey = Symbol('Settings')
-
 export const SettingsBlock = Block.make('Settings', {
   key: SettingsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   effects: { services: [SettingsStore] },
   inMessageOutputs: {
@@ -51,11 +50,12 @@ export const SettingsBlock = Block.make('Settings', {
   OutMessage,
 })
 
-export const { makeStep, makeNoopStep } = SettingsBlock
+export const { makeStep, makeNoopStep, makeComposition, makeCommand } =
+  SettingsBlock
 
-export const SettingsComposition = SettingsBlock.makeComposition()
+export const SettingsComposition = makeComposition()
 
-export const SaveTheme = SettingsBlock.makeCommand('SaveTheme', {
+export const SaveTheme = makeCommand('SaveTheme', {
   args: { theme: Theme },
   messages: [Message.CompletedSaveTheme, Message.FailedSaveTheme],
   handler: function* () {

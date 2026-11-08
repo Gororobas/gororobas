@@ -1,16 +1,12 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  TooltipBlock,
-  layer as TooltipLayer,
-  type RenderInfo as TooltipRenderInfo,
-} from '@foldkit/ui/tooltip'
+import { Tooltip } from '@foldkit/ui'
 
 // Add a field to your Model for the Tooltip Block:
 const Model = Schema.Struct({
-  tooltip: TooltipBlock.Model,
+  tooltip: Tooltip.TooltipBlock.Model,
   // ...your other fields
 })
 type Model = typeof Model.Type
@@ -19,25 +15,33 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const TooltipExampleKey = Symbol('TooltipExample')
-
 export const TooltipExampleBlock = Block.make('TooltipExample', {
   key: TooltipExampleKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = TooltipExampleBlock
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = TooltipExampleBlock
 
 // At module scope, fold the OutMessage into your own Model. `Shown` and
 // `Hidden` mark the visibility transitions. Fire analytics or coordinate with
 // the rest of your UI from the parent. Each arm returns an Update.Step over
 // the parent Model, which already has the next Tooltip Model written back.
 // The parent Block checks every named child variant:
-const foldTooltipOutMessage = TooltipExampleBlock.makeOutMessageFold(
-  TooltipBlock,
-  {
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const TooltipBinding = makeRequiredFieldBinding(Tooltip.TooltipBlock, {
+  field: 'tooltip',
+  init: { contextToArgs: () => [{ id: 'save-button' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Tooltip.TooltipBlock, {
     // The child has emitted `Shown`. In this arm the parent can update its
     // own state or dispatch its own Commands, for example log analytics,
     // prefetch content, or trigger a downstream Command.
@@ -46,17 +50,10 @@ const foldTooltipOutMessage = TooltipExampleBlock.makeOutMessageFold(
     // own state or dispatch its own Commands, for example clear ephemeral
     // state, fire analytics, or trigger a downstream Command.
     Hidden: makeNoopStep,
-  },
-)
+  }),
+})
 
-// The Binding declares placement, typed startup, and OutMessage policy.
-// The construction Layer below supplies the child implementation.
-const TooltipBinding = TooltipExampleBlock.makeBinding(TooltipBlock, {
-  field: 'tooltip',
-  init: { contextToArgs: () => [{ id: 'save-button' }] },
-}).withOutMessagePolicy({ fold: foldTooltipOutMessage })
-
-const TooltipExampleComposition = TooltipExampleBlock.makeComposition({
+const TooltipExampleComposition = makeComposition({
   bindings: [TooltipBinding],
 })
 
@@ -75,7 +72,7 @@ const update = TooltipExampleComposition.makeUpdate({})
 // label element instead when one exists.) The attribute is only emitted when
 // provided, so the trigger never carries a dangling `aria-labelledby`.
 const view = TooltipExampleComposition.makeView((model, h) => {
-  const tooltipView = ({ trigger, panel, isVisible }: TooltipRenderInfo) =>
+  const tooltipView = ({ trigger, panel, isVisible }: Tooltip.RenderInfo) =>
     h.div(
       [h.Class('relative inline-block')],
       [
@@ -113,15 +110,8 @@ const view = TooltipExampleComposition.makeView((model, h) => {
   )
 })
 
-export const layer = TooltipExampleBlock.makeLayer(
-  Effect.gen(function* () {
-    const tooltip = yield* TooltipBinding
-
-    return {
-      children: [tooltip],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(TooltipLayer))
+export const layer = TooltipExampleBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Tooltip.layer))

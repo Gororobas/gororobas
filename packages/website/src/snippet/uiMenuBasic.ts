@@ -1,15 +1,12 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  layer as MenuLayer,
-  makeBlock as makeMenuBlock,
-} from '@foldkit/ui/menu'
+import { Menu } from '@foldkit/ui'
 
 type Action = 'Edit' | 'Duplicate' | 'Archive' | 'Delete'
 
-const ActionMenu = makeMenuBlock<Action>()
+const ActionMenu = Menu.makeBlock<Action>()
 
 // Add a field to your Model for the Menu Block:
 const Model = Schema.Struct({
@@ -22,16 +19,20 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const ActionMenuExampleKey = Symbol('ActionMenuExample')
-
 export const ActionMenuExampleBlock = Block.make('ActionMenuExample', {
   key: ActionMenuExampleKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = ActionMenuExampleBlock
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = ActionMenuExampleBlock
 
 const actions: ReadonlyArray<Action> = [
   'Edit',
@@ -45,25 +46,22 @@ const actions: ReadonlyArray<Action> = [
 // without selection. Each arm returns an Update.Step over the parent Model,
 // which already has the next Menu Model written back. The parent Block
 // infers the factory-refined child contract from the completed Block:
-const foldMenuOutMessage = ActionMenuExampleBlock.makeOutMessageFold(
-  ActionMenu,
-  {
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const MenuBinding = makeRequiredFieldBinding(ActionMenu, {
+  field: 'menu',
+  init: { contextToArgs: () => [{ id: 'actions' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ActionMenu, {
     // The child has emitted `Selected`. In this arm the parent can update
     // its own state or dispatch its own Commands, for example transition a
     // page, mutate domain state, or trigger a downstream Command.
     Selected: makeNoopStep,
     Closed: makeNoopStep,
-  },
-)
+  }),
+})
 
-// The Binding declares placement, typed startup, and OutMessage policy.
-// The construction Layer below supplies the child implementation.
-const MenuBinding = ActionMenuExampleBlock.makeBinding(ActionMenu, {
-  field: 'menu',
-  init: { contextToArgs: () => [{ id: 'actions' }] },
-}).withOutMessagePolicy({ fold: foldMenuOutMessage })
-
-const ActionMenuExampleComposition = ActionMenuExampleBlock.makeComposition({
+const ActionMenuExampleComposition = makeComposition({
   bindings: [MenuBinding],
 })
 
@@ -105,15 +103,8 @@ const view = ActionMenuExampleComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = ActionMenuExampleBlock.makeLayer(
-  Effect.gen(function* () {
-    const menu = yield* MenuBinding
-
-    return {
-      children: [menu],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(MenuLayer))
+export const layer = ActionMenuExampleBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Menu.layer))

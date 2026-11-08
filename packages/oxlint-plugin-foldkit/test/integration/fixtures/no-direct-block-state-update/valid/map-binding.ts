@@ -20,8 +20,8 @@ const ApplicationDefinition = Block.makeDefinition('MapApplication', {
   Model,
   Message,
 })
-const { makeMapBinding: bindMap } = ApplicationDefinition
-const EntriesBinding = ApplicationDefinition.makeMapBinding(
+const { makeHashMapBinding: bindMap } = ApplicationDefinition
+const EntriesBinding = ApplicationDefinition.makeHashMapBinding(
   KeyedEntry.KeyedEntryBlock,
   { field: 'entriesById' },
 )
@@ -42,7 +42,7 @@ export const initial: Model = Model.make({
 })
 
 export const update = ApplicationComposition.makeUpdate({
-  ClickedApplyTheme: EntriesBinding.informThemeChanged('initial', {
+  ClickedApplyTheme: EntriesBinding.informOfThemeChanged('initial', {
     theme: 'Light',
   }),
 })

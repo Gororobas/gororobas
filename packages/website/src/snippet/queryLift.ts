@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { Query } from 'foldkit/experimental'
 import { defineMessageUnion } from 'foldkit/message'
@@ -16,19 +16,20 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 export const ApplicationKey = Symbol('Application')
-
 export const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const PostsBinding = ApplicationBlock.makeBinding(postsQuery, {
+const { makeRequiredFieldBinding, makeComposition } = ApplicationBlock
+
+const PostsBinding = makeRequiredFieldBinding(postsQuery, {
   field: 'posts',
 })
 
-const ApplicationComposition = ApplicationBlock.makeComposition({
+const ApplicationComposition = makeComposition({
   bindings: [PostsBinding],
 })
 
@@ -43,14 +44,7 @@ const update = ApplicationComposition.makeUpdate({
   ClickedRefreshPosts: model => PostsBinding.requestRevalidationOrLoad()(model),
 })
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    const posts = yield* PostsBinding
-
-    return {
-      children: [posts],
-      init,
-      update,
-    }
-  }),
-).pipe(Layer.provide(Query.layer))
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+}).pipe(Layer.provide(Query.layer))

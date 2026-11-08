@@ -1,17 +1,22 @@
 import type { Block } from 'foldkit'
 
-import { PlaygroundBlock, makeFieldsStep } from './definition'
+import {
+  makeComposition,
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+} from './block'
 import { PlaygroundFileTabsBlock } from './fileTabs'
 import { MountPlaygroundEditor } from './mount'
 
-export const FileTabsBinding = PlaygroundBlock.makeBinding(
+export const FileTabsBinding = makeRequiredFieldBinding(
   PlaygroundFileTabsBlock,
   {
     field: 'fileTabs',
     init: { contextToArgs: () => [{ id: 'playground-files' }] },
   },
 ).withOutMessagePolicy({
-  fold: PlaygroundBlock.makeOutMessageFold(PlaygroundFileTabsBlock, {
+  fold: makeOutMessageFold(PlaygroundFileTabsBlock, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({
         activeFilePath: () => value,
@@ -19,7 +24,7 @@ export const FileTabsBinding = PlaygroundBlock.makeBinding(
   }),
 })
 
-export const PlaygroundComposition = PlaygroundBlock.makeComposition({
+export const PlaygroundComposition = makeComposition({
   mounts: [MountPlaygroundEditor],
   bindings: [FileTabsBinding],
 })

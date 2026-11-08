@@ -1,15 +1,12 @@
+import { type Option } from 'effect'
+
+import { type Issue } from '../../domain'
 import { IssueDetailComposition } from './composition'
-import { reconcileIssue } from './draft'
-import type { InformedOfIssueChange } from './inMessage'
-import type { Model } from './model'
 import { saveIssue } from './steps'
 
-const handleInformedOfIssueChange = (
-  model: Model,
-  { issue }: InformedOfIssueChange,
-) => ({ model: reconcileIssue(model, issue) })
-
-export const inMessageUpdate = IssueDetailComposition.makeInMessageUpdate({
-  RequestedSave: saveIssue,
-  InformedOfIssueChange: handleInformedOfIssueChange,
-})
+export const inMessageUpdate =
+  IssueDetailComposition.makeInMessageUpdate.withContext(
+    (maybeIssue: Option.Option<Issue.Issue>) => ({
+      RequestedSave: saveIssue(maybeIssue),
+    }),
+  )

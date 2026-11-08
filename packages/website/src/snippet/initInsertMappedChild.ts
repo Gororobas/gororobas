@@ -1,7 +1,7 @@
-import { initAndInsert } from 'foldkit/bindingInit'
+import { initAndInsert } from 'foldkit/binding'
 
+import { makeStep } from './block'
 import { EditorsBinding } from './composition'
-import { makeStep } from './definition'
 import { Issue } from './domain'
 
 const initIssueEditor = (issue: Issue) =>

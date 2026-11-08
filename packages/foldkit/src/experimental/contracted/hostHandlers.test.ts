@@ -36,7 +36,7 @@ const HostDefinition = Block.makeDefinition('ContractedHostHandlers', {
   key: HostKey,
   Model,
   Message,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [HostValue] },
   view: { kind: 'Element' },
 })
@@ -123,6 +123,46 @@ describe('ordinary Block host-handler selection', () => {
     expect(events).toEqual(['graph acquired', 'graph released'])
   })
 
+  it('returns the final Story Model and releases graph resources', async () => {
+    events.length = 0
+
+    const finalModel = await Effect.runPromise(
+      Story.story(
+        SelectedHostBlock,
+        Story.init(),
+        Story.Command.resolve(
+          ReadValue,
+          Message.CompletedReadValue({ value: 'resolved' }),
+        ),
+      ),
+    )
+
+    expectTypeOf(finalModel).toEqualTypeOf<Model>()
+    expect(finalModel).toEqual({ value: 'resolved' })
+    expect(events).toEqual(['graph acquired', 'graph released'])
+  })
+
+  it('releases graph resources when a Model comparison fails', async () => {
+    events.length = 0
+
+    await expect(
+      Effect.runPromise(
+        Story.story(
+          SelectedHostBlock,
+          Story.init(),
+          Story.models(Story.steps(), () => {
+            throw new Error('comparison failed')
+          }),
+          Story.Command.resolve(
+            ReadValue,
+            Message.CompletedReadValue({ value: 'resolved' }),
+          ),
+        ),
+      ),
+    ).rejects.toThrow('comparison failed')
+    expect(events).toEqual(['graph acquired', 'graph released'])
+  })
+
   it('builds the original provider under the handler scope and preserves cleanup order', async () => {
     events.length = 0
 
@@ -196,7 +236,7 @@ describe('ordinary Block host-handler selection', () => {
       key: FailureKey,
       Model,
       Message,
-      Init: Schema.Tuple([]),
+      InitArgs: Schema.Tuple([]),
       effects: Block.makeEffectsContract<BuildFailure>(),
     })
     const ReadFailure = FailureDefinition.makeCommand('ReadFailure', {
@@ -275,7 +315,7 @@ describe('ordinary Block host-handler selection', () => {
       key: ServerKey,
       Model,
       Message,
-      Init: Schema.Tuple([]),
+      InitArgs: Schema.Tuple([]),
       view: { kind: 'Document' },
       effects: { services: [HostValue] },
     })
@@ -363,7 +403,7 @@ describe('ordinary Block host-handler selection', () => {
       Model: Schema.Number,
       Message: Schema.Never,
       isMessageFree: true,
-      Init: Schema.Tuple([]),
+      InitArgs: Schema.Tuple([]),
     })
     const ChildComposition = ChildDefinition.makeComposition()
     const ChildBlock = ChildDefinition.makeBlock(
@@ -381,10 +421,10 @@ describe('ordinary Block host-handler selection', () => {
         child: ChildDefinition.contract.Model,
       }),
       Message,
-      Init: Schema.Tuple([]),
+      InitArgs: Schema.Tuple([]),
       effects: { services: [HostValue] },
     })
-    const ChildBinding = ParentDefinition.makeBinding(
+    const ChildBinding = ParentDefinition.makeRequiredFieldBinding(
       ChildDefinition.contract,
       { field: 'child', init: { contextToArgs: () => [] } },
     )

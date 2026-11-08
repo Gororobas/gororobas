@@ -1,10 +1,10 @@
 import { Effect, Schema } from 'effect'
 
 import { WorkspaceRepository } from '../../../../repository'
-import { CommentComposerBlock } from './definition'
+import { makeCommand } from './block'
 import { Message } from './message'
 
-export const AddComment = CommentComposerBlock.makeCommand('AddComment', {
+export const AddComment = makeCommand('AddComment', {
   args: {
     issueId: Schema.String,
     body: Schema.String,
@@ -15,7 +15,7 @@ export const AddComment = CommentComposerBlock.makeCommand('AddComment', {
     const repository = yield* WorkspaceRepository
 
     return args =>
-      repository.addComment(args).pipe(
+      repository.addIssueComment(args).pipe(
         Effect.map(comment => Message.SucceededAddComment({ comment })),
         Effect.catch(error =>
           Effect.succeed(
@@ -27,5 +27,3 @@ export const AddComment = CommentComposerBlock.makeCommand('AddComment', {
       )
   },
 })
-
-export const EffectsLayer = AddComment.layer

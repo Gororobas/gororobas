@@ -1,9 +1,9 @@
-import { Effect, Layer, Option, Predicate, Schema, Tuple } from 'effect'
+import { Layer, Option, Predicate, Schema, Tuple } from 'effect'
 import * as Block from 'foldkit/block'
 import * as Calendar from 'foldkit/calendar'
 import type { CalendarDate } from 'foldkit/calendar'
 import type { ChildAttribute, Html } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 import * as Update from 'foldkit/update'
 
 import type { AnchorConfig } from '../anchor/index.js'
@@ -50,7 +50,7 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 /** Parent requests handled independently of local UI facts. */
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   RequestedOpen: {},
   RequestedClose: {},
   RequestedClear: {},
@@ -92,10 +92,9 @@ export type InitConfig = typeof InitConfig.Type
 
 /** @internal Stable identity of the DatePicker contract. */
 export const DatePickerKey = Symbol('DatePicker')
-
 export const DatePickerBlock = Block.make('DatePicker', {
   key: DatePickerKey,
-  Init: Schema.Tuple([InitConfig]),
+  InitArgs: Schema.Tuple([InitConfig]),
   ChildInitContext: InitConfig,
   view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
   Model,
@@ -113,13 +112,14 @@ export const DatePickerBlock = Block.make('DatePicker', {
     },
     requestFocusDate: (date: CalendarDate) =>
       Tuple.make(Message.RequestedFocusDate({ date })),
-    informMinDateChanged: (maybeMinDate: Option.Option<CalendarDate>) =>
+    informOfMinDateChanged: (maybeMinDate: Option.Option<CalendarDate>) =>
       Tuple.make(Message.InformedOfMinDateChange({ maybeMinDate })),
-    informMaxDateChanged: (maybeMaxDate: Option.Option<CalendarDate>) =>
+    informOfMaxDateChanged: (maybeMaxDate: Option.Option<CalendarDate>) =>
       Tuple.make(Message.InformedOfMaxDateChange({ maybeMaxDate })),
-    informDisabledDatesChanged: (disabledDates: ReadonlyArray<CalendarDate>) =>
-      Tuple.make(Message.InformedOfDisabledDatesChange({ disabledDates })),
-    informDisabledDaysOfWeekChanged: (
+    informOfDisabledDatesChanged: (
+      disabledDates: ReadonlyArray<CalendarDate>,
+    ) => Tuple.make(Message.InformedOfDisabledDatesChange({ disabledDates })),
+    informOfDisabledDaysOfWeekChanged: (
       disabledDaysOfWeek: ReadonlyArray<Calendar.DayOfWeek>,
     ) =>
       Tuple.make(
@@ -134,7 +134,7 @@ export type DatePickerBlock = typeof DatePickerBlock
 // UPDATE
 
 /** @internal DatePicker's Popover relationship for typed test delivery. */
-export const BasePopoverBinding = DatePickerBlock.makeBinding(
+export const BasePopoverBinding = DatePickerBlock.makeRequiredFieldBinding(
   Popover.PopoverBlock,
   {
     field: 'popover',
@@ -153,7 +153,7 @@ export const BasePopoverBinding = DatePickerBlock.makeBinding(
 )
 
 /** @internal DatePicker's Calendar relationship for typed test delivery. */
-export const BaseCalendarBinding = DatePickerBlock.makeBinding(
+export const BaseCalendarBinding = DatePickerBlock.makeRequiredFieldBinding(
   UiCalendar.CalendarBlock,
   {
     field: 'calendar',
@@ -256,16 +256,16 @@ export const update = DatePickerComposition.makeUpdate({
     BaseCalendarBinding.requestFocusDate(date)(model),
 
   InformedOfMinDateChange: (model, { maybeMinDate }) =>
-    BaseCalendarBinding.informMinDateChanged(maybeMinDate)(model),
+    BaseCalendarBinding.informOfMinDateChanged(maybeMinDate)(model),
 
   InformedOfMaxDateChange: (model, { maybeMaxDate }) =>
-    BaseCalendarBinding.informMaxDateChanged(maybeMaxDate)(model),
+    BaseCalendarBinding.informOfMaxDateChanged(maybeMaxDate)(model),
 
   InformedOfDisabledDatesChange: (model, { disabledDates }) =>
-    BaseCalendarBinding.informDisabledDatesChanged(disabledDates)(model),
+    BaseCalendarBinding.informOfDisabledDatesChanged(disabledDates)(model),
 
   InformedOfDisabledDaysOfWeekChange: (model, { disabledDaysOfWeek }) =>
-    BaseCalendarBinding.informDisabledDaysOfWeekChanged(disabledDaysOfWeek)(
+    BaseCalendarBinding.informOfDisabledDaysOfWeekChanged(disabledDaysOfWeek)(
       model,
     ),
 })
@@ -479,20 +479,12 @@ export const view = DatePickerComposition.makeView.withInputs(
   },
 )
 
-export const layer = DatePickerBlock.makeLayer(
-  Effect.gen(function* () {
-    const popover = yield* PopoverBinding
-    const calendar = yield* CalendarBinding
-
-    return {
-      children: [popover, calendar],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-    }
-  }),
-).pipe(Layer.provide(Layer.mergeAll(Popover.layer, UiCalendar.layer)))
+export const layer = DatePickerBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+  view,
+}).pipe(Layer.provide(Layer.mergeAll(Popover.layer, UiCalendar.layer)))
 
 /** @internal Selected implementation used by component tests. */
 export const block = { block: DatePickerBlock, layer }

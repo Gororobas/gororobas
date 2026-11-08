@@ -1,15 +1,21 @@
-import { Effect, Layer } from 'effect'
+import { Layer } from 'effect'
 
-import { ApplicationBlock, makeFieldsStep } from './blockProfileContract'
+import {
+  ApplicationBlock,
+  makeFieldsStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} from './blockProfileContract'
 import * as Settings from './blockSettings'
 
-export const SettingsBinding = ApplicationBlock.makeBinding(
+export const SettingsBinding = makeRequiredFieldBinding(
   Settings.SettingsBlock,
   {
     field: 'settings',
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(Settings.SettingsBlock, {
+  fold: makeOutMessageFold(Settings.SettingsBlock, {
     ChangedTheme: ({ theme }) =>
       makeFieldsStep(() => ({
         previewTheme: () => theme,
@@ -17,7 +23,7 @@ export const SettingsBinding = ApplicationBlock.makeBinding(
   }),
 })
 
-export const ApplicationComposition = ApplicationBlock.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [SettingsBinding],
 })
 
@@ -40,17 +46,10 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    const settings = yield* SettingsBinding
-
-    return {
-      children: [settings],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(Settings.layer))
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Settings.layer))
 
 export { ApplicationBlock } from './blockProfileContract'

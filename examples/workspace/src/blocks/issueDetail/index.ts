@@ -1,3 +1,8 @@
-export { IssueDetailBlock } from './definition'
-export { layer } from './block'
-export { maybeDraftSummary } from './draft'
+export { IssueDetailBlock } from './block'
+export { layer } from './layer'
+export {
+  draftForDisplay,
+  hasConflict,
+  hasUnsavedIssueChanges,
+  maybeUnsavedChangesSummary,
+} from './draft'

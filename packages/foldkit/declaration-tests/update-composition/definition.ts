@@ -27,7 +27,7 @@ export type Message = typeof Message.Type
 export const ApplicationKey = Symbol('DraftApplication')
 export const ApplicationBlock = Block.make('DraftApplication', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [DraftStore] },
   Model,
   Message,
@@ -38,6 +38,5 @@ export const {
   makeFieldsStep,
   makeCommandsStep,
   makeNoopStep,
-  makeMapBinding,
   makeComposition,
 } = ApplicationBlock

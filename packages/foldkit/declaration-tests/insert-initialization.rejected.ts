@@ -1,6 +1,6 @@
-import { Array, HashMap, Option, Record, Schema, Tuple } from 'effect'
+import { Array, Effect, HashMap, Option, Record, Schema, Tuple } from 'effect'
 import { Block, Message, Struct } from 'foldkit'
-import { initAndInsert, makeInitIfMissingStep } from 'foldkit/bindingInit'
+import { initAndInsert, makeInitIfMissingStep } from 'foldkit/binding'
 
 import {
   ChildBlock,
@@ -10,6 +10,7 @@ import {
   ParentMessage,
   ParentModel,
   RowsByIdBinding,
+  ZeroChildrenByIdBinding,
   firstId,
   initRecordIfMissing,
   insertRecord,
@@ -64,7 +65,7 @@ MissingComposition.prepareBlock({
   init: MissingComposition.makeInit(() => ({ model })),
   update: missingUpdate,
 })
-const ForeignBinding = ParentDefinition.makeMapBinding(ChildBlock, {
+const ForeignBinding = ParentDefinition.makeRecordBinding(ChildBlock, {
   field: 'childrenById',
   placement: 'foreign',
 }).withOutMessagePolicy({ fold: () => ParentDefinition.makeNoopStep() })
@@ -99,24 +100,24 @@ const otherModel = OtherModel.make({
   children: {},
   otherChildren: {},
 })
-const DirectBinding = OtherDefinition.makeBinding(ChildBlock, {
+const DirectBinding = OtherDefinition.makeRequiredFieldBinding(ChildBlock, {
   field: 'child',
   init: { contextToArgs: () => [1] },
 })
 // @ts-expect-error Singular child fields do not support map insertion.
 initAndInsert(DirectBinding, otherModel, { key: firstId, args: [1] })
-const OptionalBinding = OtherDefinition.makeBinding(ChildBlock, {
+const OptionalBinding = OtherDefinition.makeOptionalFieldBinding(ChildBlock, {
   field: 'maybeChild',
 })
 // @ts-expect-error Option storage does not support map insertion.
 initAndInsert(OptionalBinding, otherModel, { key: firstId, args: [1] })
-const AccessorBinding = OtherDefinition.makeBinding(ChildBlock, {
+const AccessorBinding = OtherDefinition.makeCustomBinding(ChildBlock, {
   read: model => Option.some(model.child),
   write: (model, child) => Struct.modifyFields(model, { child: () => child }),
 })
 // @ts-expect-error Custom accessors do not declare direct map storage.
 initAndInsert(AccessorBinding, otherModel, { key: firstId, args: [1] })
-const GeneralBinding = OtherDefinition.makeBinding(ChildBlock, {
+const GeneralBinding = OtherDefinition.makeCustomKeyedBinding(ChildBlock, {
   readAll: model =>
     Array.map(Record.toEntries(model.children), ([key, child]) => ({
       key,
@@ -129,10 +130,10 @@ const GeneralBinding = OtherDefinition.makeBinding(ChildBlock, {
 })
 // @ts-expect-error General keyed accessors do not declare map storage.
 initAndInsert(GeneralBinding, otherModel, { key: firstId, args: [1] })
-const FirstMapBinding = OtherDefinition.makeMapBinding(ChildBlock, {
+const FirstMapBinding = OtherDefinition.makeRecordBinding(ChildBlock, {
   field: 'children',
 })
-const SecondMapBinding = OtherDefinition.makeMapBinding(ChildBlock, {
+const SecondMapBinding = OtherDefinition.makeRecordBinding(ChildBlock, {
   field: 'otherChildren',
 })
 const ambiguousBinding =
@@ -150,7 +151,7 @@ const HashDefinition = Block.makeDefinition('HashInsertParent', {
   Model: HashModel,
   Message: Message.defineMessageUnion({}),
 })
-const HashBinding = HashDefinition.makeMapBinding(ChildBlock, {
+const HashBinding = HashDefinition.makeHashMapBinding(ChildBlock, {
   field: 'children',
 })
 const hashModel = HashModel.make({ children: HashMap.empty() })
@@ -203,6 +204,84 @@ declare const impossibleBinding: never
 makeInitIfMissingStep(impossibleBinding, { key: firstId, args: [1] })
 // @ts-expect-error HashMap keys retain the exact numeric Schema key.
 makeInitIfMissingStep(HashBinding, { key: firstId, args: [1] })
+
+makeInitIfMissingStep(ChildrenByIdBinding, model => {
+  model.label
+  // @ts-expect-error The producer receives the complete inferred parent Model.
+  model.missingField
+  return Option.none()
+})
+const wrongModelProducer = (_model: typeof OtherModel.Type) => Option.none()
+// @ts-expect-error An extracted producer must accept the Binding's parent Model.
+makeInitIfMissingStep(ChildrenByIdBinding, wrongModelProducer)
+// @ts-expect-error A producer retains the exact branded Record key.
+makeInitIfMissingStep(ChildrenByIdBinding, () =>
+  Option.some({ key: 'first', args: [1] }),
+)
+// @ts-expect-error A producer retains the required child init argument.
+makeInitIfMissingStep(ChildrenByIdBinding, () =>
+  Option.some({ key: firstId, args: [] }),
+)
+// @ts-expect-error A producer retains the numeric first child init argument.
+makeInitIfMissingStep(ChildrenByIdBinding, () =>
+  Option.some({ key: firstId, args: ['wrong'] }),
+)
+// @ts-expect-error A producer retains the string child init rest arguments.
+makeInitIfMissingStep(ChildrenByIdBinding, () =>
+  Option.some({ key: firstId, args: [1, 'valid', 2] }),
+)
+// @ts-expect-error A producer cannot append parent Commands.
+makeInitIfMissingStep(ChildrenByIdBinding, () =>
+  Option.some({ key: firstId, args: [1], commands: Array.empty() }),
+)
+// @ts-expect-error A producer cannot provide a parent writer.
+makeInitIfMissingStep(ChildrenByIdBinding, () =>
+  Option.some({ key: firstId, args: [1], toParentModel: () => model }),
+)
+// @ts-expect-error A producer must return an Option, not a plain config object.
+makeInitIfMissingStep(ChildrenByIdBinding, () => ({
+  key: firstId,
+  args: [1],
+}))
+// @ts-expect-error A producer cannot defer its config through Promise.
+makeInitIfMissingStep(ChildrenByIdBinding, async () =>
+  Option.some({ key: firstId, args: [1] }),
+)
+// @ts-expect-error A producer cannot return an Effect.
+makeInitIfMissingStep(ChildrenByIdBinding, () =>
+  Effect.succeed(Option.some({ key: firstId, args: [1] })),
+)
+// @ts-expect-error A numeric HashMap producer retains its exact numeric key.
+makeInitIfMissingStep(HashBinding, () =>
+  Option.some({ key: firstId, args: [1] }),
+)
+// @ts-expect-error A zero-argument child producer cannot add init arguments.
+makeInitIfMissingStep(ZeroChildrenByIdBinding, () =>
+  Option.some({ key: firstId, args: [1] }),
+)
+const skipInitialization = makeInitIfMissingStep(ChildrenByIdBinding, () =>
+  Option.none(),
+)
+// @ts-expect-error Option.none does not remove the registered graph requirement.
+skipInitialization(model)
+const missingSkippedInitializationUpdate = MissingComposition.makeUpdate({
+  // @ts-expect-error A skipped initialization still requires its registered Binding.
+  RequestedInsert: skipInitialization,
+})
+// @ts-expect-error The missing graph cannot execute a producer that returns None.
+MissingComposition.prepareBlock({
+  init: MissingComposition.makeInit(() => ({ model })),
+  update: missingSkippedInitializationUpdate,
+})
+const foreignSkippedInitializationUpdate = ForeignComposition.makeUpdate({
+  // @ts-expect-error A foreign graph cannot execute a producer that returns None.
+  RequestedInsert: skipInitialization,
+})
+// @ts-expect-error A sibling placement cannot satisfy a skipped initialization.
+ForeignComposition.prepareBlock({
+  init: ForeignComposition.makeInit(() => ({ model })),
+  update: foreignSkippedInitializationUpdate,
+})
 // @ts-expect-error Applying the Step requires the registered graph, even for an existing key.
 const uncheckedInitialization = initRecordIfMissing(model)
 // @ts-expect-error The connected result exposes no Model projection.

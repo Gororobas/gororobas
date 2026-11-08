@@ -82,7 +82,7 @@ const Model = Schema.Struct({
 })
 const Message = defineMessageUnion({ RequestedChange: { label: Schema.String } })
 const ParentDefinition = Block.makeDefinition('Parent', { Model, Message })
-const ChildBinding = ParentDefinition.makeBinding(Child.ChildBlock, { field: 'child' })
+const ChildBinding = ParentDefinition.makeRequiredFieldBinding(Child.ChildBlock, { field: 'child' })
 const ParentComposition = ParentDefinition.makeComposition({ bindings: [ChildBinding] })
 `
 
@@ -445,7 +445,7 @@ export const { makeFieldsStep } = ParentDefinition
 import { modifyFields } from 'foldkit/struct'
 import * as Child from './child'
 import { ParentDefinition, makeFieldsStep as fieldsStep } from './imported-fields-definition'
-const ChildBinding = ParentDefinition.makeBinding(Child.ChildBlock, { field: 'child' })
+const ChildBinding = ParentDefinition.makeRequiredFieldBinding(Child.ChildBlock, { field: 'child' })
 const ParentComposition = ParentDefinition.makeComposition({ bindings: [ChildBinding] })
 const changeFields = message => ({
   child: child => modifyFields(child, { theme: () => 'Light' }),
@@ -620,7 +620,7 @@ export const { makeFieldsStep } = OtherDefinition
 import { modifyFields } from 'foldkit/struct'
 import * as Child from './child'
 import { ParentDefinition, makeFieldsStep } from './wrong-fields-definition'
-const ChildBinding = ParentDefinition.makeBinding(Child.ChildBlock, { field: 'child' })
+const ChildBinding = ParentDefinition.makeRequiredFieldBinding(Child.ChildBlock, { field: 'child' })
 const ParentComposition = ParentDefinition.makeComposition({ bindings: [ChildBinding] })
 const changeChild = makeFieldsStep(() => ({
   child: child => modifyFields(child, { theme: () => 'Light' }),
@@ -1373,7 +1373,7 @@ export const { makeFieldsStep } = ParentDefinition
 import { modifyFields } from 'foldkit/struct'
 import * as Child from './child'
 import { ParentDefinition, makeFieldsStep as fields } from './${name}-definition'
-const ChildBinding = ParentDefinition.makeBinding(Child.ChildBlock, { field: 'child' })
+const ChildBinding = ParentDefinition.makeRequiredFieldBinding(Child.ChildBlock, { field: 'child' })
 const ParentComposition = ParentDefinition.makeComposition({ bindings: [ChildBinding] })
 const changeChild = fields.fromMessage(input => ({ child: ${childTransform} }))
 const { ${method}: authorUpdate } = ParentComposition
@@ -1466,4 +1466,103 @@ const run = ChildComposition => ${author(`ChildComposition.${method}`, form, han
       })
     }
   }
+})
+
+describe('canonical InMessage union recognition through real oxlint', () => {
+  const importedUnion = (body: string) => `
+import { defineInMessageUnion as defineInputs } from 'foldkit/message'
+const InMessage = defineInputs(${body})
+`
+  const namespacedUnion = (body: string) => `
+import * as Message from 'foldkit/message'
+const InMessage = Message.defineInMessageUnion(${body})
+`
+  const shadowedUnion = (body: string) => `
+const Message = { defineInMessageUnion: cases => cases }
+const InMessage = Message.defineInMessageUnion(${body})
+`
+
+  it('checks imported and namespaced InMessage cases without trusting shadows', () => {
+    const body = '{ NoOp: {} }'
+
+    expect(
+      diagnosticsFor(
+        'inmessage-noop-import',
+        'no-noop-message',
+        importedUnion(body),
+      ),
+    ).toHaveLength(1)
+    expect(
+      diagnosticsFor(
+        'inmessage-noop-namespace',
+        'no-noop-message',
+        namespacedUnion(body),
+      ),
+    ).toHaveLength(1)
+    expect(
+      diagnosticsFor(
+        'inmessage-noop-shadow',
+        'no-noop-message',
+        shadowedUnion(body),
+      ),
+    ).toEqual([])
+  })
+
+  it('checks imported and namespaced empty constructor calls without trusting shadows', () => {
+    const body = '{ RequestedRefresh: {} }'
+    const call = 'InMessage.RequestedRefresh({})'
+
+    expect(
+      diagnosticsFor(
+        'inmessage-empty-constructor-import',
+        'no-empty-object-tagged-call',
+        importedUnion(body) + call,
+      ),
+    ).toHaveLength(1)
+    expect(
+      diagnosticsFor(
+        'inmessage-empty-constructor-namespace',
+        'no-empty-object-tagged-call',
+        namespacedUnion(body) + call,
+      ),
+    ).toHaveLength(1)
+    expect(
+      diagnosticsFor(
+        'inmessage-empty-constructor-shadow',
+        'no-empty-object-tagged-call',
+        shadowedUnion(body) + call,
+      ),
+    ).toEqual([])
+  })
+
+  it('detects imported and namespaced constructors in mapEffect without trusting shadows', () => {
+    const body = '{ ReceivedChild: { message: {} } }'
+    const mapEffect = `
+import { Effect } from 'effect'
+import * as Command from 'foldkit/command'
+Command.mapEffect(command, Effect.map(InMessage.ReceivedChild))
+`
+
+    expect(
+      diagnosticsFor(
+        'inmessage-mapmessage-import',
+        'prefer-command-mapmessage',
+        importedUnion(body) + mapEffect,
+      ),
+    ).toHaveLength(1)
+    expect(
+      diagnosticsFor(
+        'inmessage-mapmessage-namespace',
+        'prefer-command-mapmessage',
+        namespacedUnion(body) + mapEffect,
+      ),
+    ).toHaveLength(1)
+    expect(
+      diagnosticsFor(
+        'inmessage-mapmessage-shadow',
+        'prefer-command-mapmessage',
+        shadowedUnion(body) + mapEffect,
+      ),
+    ).toEqual([])
+  })
 })

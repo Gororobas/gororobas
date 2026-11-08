@@ -1,17 +1,13 @@
-import { Effect, Layer, Option, Schema } from 'effect'
+import { Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  buttonId as ListboxButtonId,
-  layer as ListboxLayer,
-  makeBlock as makeListboxBlock,
-} from '@foldkit/ui/listbox'
+import { Listbox } from '@foldkit/ui'
 
 const Plan = Schema.Literals(['Free', 'Pro', 'Enterprise'])
 type Plan = typeof Plan.Type
 // One passive contract retains Plan in its view inputs and OutMessages.
-const PlanListbox = makeListboxBlock<Plan>()
+const PlanListbox = Listbox.makeBlock(Plan)
 
 // Add a field to your Model for the Listbox Block, plus a field for
 // the selected value your app actually cares about. Using the `Plan`
@@ -27,37 +23,41 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const PlanPickerKey = Symbol('PlanPicker')
-
 export const PlanPickerBlock = Block.make('PlanPicker', {
   key: PlanPickerKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = PlanPickerBlock
+const {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = PlanPickerBlock
 
 // At module scope, fold the OutMessage into your own Model. When the user
 // commits a selection it carries `Selected({ value })` where `value: Plan`.
 // The arm returns an Update.Step over the parent Model, which already has the
 // next Listbox Model written back. Passing the completed child Block preserves
 // the factory's refined `Plan` payload without a repeated type argument:
-const foldListboxOutMessage = PlanPickerBlock.makeOutMessageFold(PlanListbox, {
-  Selected: ({ value }) =>
-    makeFieldsStep(() => ({
-      maybePlan: () => Option.some(value),
-    })),
-})
-
 // The Binding declares placement, typed startup, and OutMessage policy.
 // The construction Layer below supplies the child implementation.
-const ListboxBinding = PlanPickerBlock.makeBinding(PlanListbox, {
+const ListboxBinding = makeRequiredFieldBinding(PlanListbox, {
   field: 'listbox',
   init: { contextToArgs: () => [{ id: 'plan' }] },
-}).withOutMessagePolicy({ fold: foldListboxOutMessage })
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(PlanListbox, {
+    Selected: ({ value }) =>
+      makeFieldsStep(() => ({
+        maybePlan: () => Option.some(value),
+      })),
+  }),
+})
 
-const PlanPickerComposition = PlanPickerBlock.makeComposition({
+const PlanPickerComposition = makeComposition({
   bindings: [ListboxBinding],
 })
 
@@ -83,13 +83,13 @@ const view = PlanPickerComposition.makeView((model, h) =>
   h.div(
     [],
     [
-      h.label([h.For(ListboxButtonId('plan'))], ['Plan']),
+      h.label([h.For(Listbox.buttonId('plan'))], ['Plan']),
       h.block(
         ListboxBinding.embedView({
           slotId: 'plan',
           model: model.listbox,
           viewInputs: {
-            // `items` must be ReadonlyArray<Plan>. The factory's <Plan> parameter constrains the shape.
+            // `items` must be ReadonlyArray<Plan>. The supplied Plan Schema constrains the shape.
             items: plans,
             // The parent owns the selection and passes it in. Single-select
             // takes an Option: None when nothing is selected yet.
@@ -119,15 +119,8 @@ const view = PlanPickerComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = PlanPickerBlock.makeLayer(
-  Effect.gen(function* () {
-    const planListbox = yield* ListboxBinding
-
-    return {
-      children: [planListbox],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(ListboxLayer))
+export const layer = PlanPickerBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Listbox.layer))

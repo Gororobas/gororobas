@@ -1,11 +1,18 @@
-import { type Effect, type Layer, Predicate } from 'effect'
+import { Effect, type Layer, Predicate, Scope } from 'effect'
 
+import type { BindingParent } from '../../../block/bindingConnection.js'
 import type {
   DeclaredRootBlock,
   SelectedBlockLayerFacts,
   SelectedLayeredRoot,
 } from '../../../runtime/rootBlock.js'
+import type {
+  KeyedSelection as KeyedSubscriptionSelection,
+  Subscription,
+} from '../../../subscription/subscription.js'
 import * as CoreScene from '../../../test/scene.js'
+import { SceneHostTypeId, makeSceneHost } from '../../../test/sceneHost.js'
+import { sceneGraphOf } from '../../../test/testGraph.js'
 import type { Url } from '../../../url/index.js'
 import type { FactsOf, ViewContract } from '../../constructed/contract.js'
 import { resolveInMessageSteps } from './inMessage.js'
@@ -72,14 +79,32 @@ type InitialState<Block extends BlockSubject> =
   | TestInit<Block>
   | ReturnType<typeof CoreScene.given<TestModel<Block>>>
 
-type Step<Block extends BlockSubject, Routing> = CoreScene.SceneStep<
-  TestModel<Block>,
-  TestMessage<Block>,
-  TestOutMessage<Block>,
-  TestBlock<Block>['subscriptions'],
-  Routing,
-  TestInMessage<Block>
->
+type SelectedKeyedSubscription<Block extends BlockSubject> =
+  KeyedSubscriptionSelection<
+    string | number,
+    string,
+    Subscription<any, any, any, any>,
+    BindingParent<TestContract<Block>['owner']>
+  >
+
+type SelectedKeyedSubscriptionStep<Block extends BlockSubject> =
+  | CoreScene.SubscriptionMessageStep<unknown, SelectedKeyedSubscription<Block>>
+  | Readonly<{
+      _tag: 'SubscriptionActivityStep'
+      entry: SelectedKeyedSubscription<Block>
+      expected: 'Active' | 'Inactive'
+    }>
+
+type Step<Block extends BlockSubject, Routing> =
+  | CoreScene.SceneStep<
+      TestModel<Block>,
+      TestMessage<Block>,
+      TestOutMessage<Block>,
+      TestBlock<Block>['subscriptions'],
+      Routing,
+      TestInMessage<Block>
+    >
+  | SelectedKeyedSubscriptionStep<Block>
 
 /**
  * Acquires a Block graph and drives its default view with ordinary Scene
@@ -186,34 +211,44 @@ export function scene(
   initial: unknown,
   ...steps: ReadonlyArray<unknown>
 ): Effect.Effect<unknown, unknown, unknown> {
-  const run = (block: object) => {
-    const view = Reflect.get(block, 'view')
+  const run = (block: object) =>
+    Effect.gen(function* () {
+      const graph = sceneGraphOf(block)
+      if (graph === undefined) {
+        throw new Error('[foldkit] A Scene requires an acquired Block graph.')
+      }
+      const host = makeSceneHost(graph, yield* Effect.context<Scope.Scope>())
+      const view = Reflect.get(block, 'view')
 
-    if (!Predicate.isFunction(view)) {
-      throw new Error('[foldkit] A Scene requires a Block with a default view.')
-    }
+      if (!Predicate.isFunction(view)) {
+        throw new Error(
+          '[foldkit] A Scene requires a Block with a default view.',
+        )
+      }
 
-    const inputs: unknown =
-      'block' in subject ? Reflect.get(subject, 'viewInputs') : undefined
-    const isViewInputsSupplied = 'block' in subject && 'viewInputs' in subject
-    const render = isViewInputsSupplied
-      ? (model: unknown, html: unknown): unknown =>
-          Reflect.apply(view, undefined, [model, inputs, html])
-      : view
+      const inputs: unknown =
+        'block' in subject ? Reflect.get(subject, 'viewInputs') : undefined
+      const isViewInputsSupplied = 'block' in subject && 'viewInputs' in subject
+      const render = isViewInputsSupplied
+        ? (model: unknown, html: unknown): unknown =>
+            Reflect.apply(view, undefined, [model, inputs, html])
+        : view
 
-    Reflect.apply(CoreScene.scene, undefined, [
-      {
-        update: subjectUpdate(subject, block),
-        view: render,
-        subscriptions: Reflect.get(block, 'subscriptions'),
-        ...('block' in subject
-          ? { routing: Reflect.get(subject, 'routing') }
-          : {}),
-      },
-      initialStep(block, initial, CoreScene.__givenInit),
-      ...resolveInMessageSteps(steps, subjectInMessageUpdate(subject, block)),
-    ])
-  }
+      Reflect.apply(CoreScene.scene, undefined, [
+        {
+          [SceneHostTypeId]: host,
+          update: subjectUpdate(subject, block),
+          view: render,
+          subscriptions: Reflect.get(block, 'subscriptions'),
+          managedResources: Reflect.get(block, 'managedResources'),
+          ...('block' in subject
+            ? { routing: Reflect.get(subject, 'routing') }
+            : {}),
+        },
+        initialStep(block, initial, CoreScene.__givenInit),
+        ...resolveInMessageSteps(steps, subjectInMessageUpdate(subject, block)),
+      ])
+    })
 
   if ('layer' in subject) {
     return withBlock(subject, run)

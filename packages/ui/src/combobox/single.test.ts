@@ -52,7 +52,7 @@ const FruitComboboxTestKey = Symbol('FruitComboboxTest')
 
 const FruitComboboxTestBlock = Block.make('FruitComboboxTest', {
   key: FruitComboboxTestKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   operations: {
     requestSelectFruitAndClose: (item: Fruit) =>
       Tuple.make(FruitParentMessage.RequestedSelectFruitAndClose({ item })),
@@ -75,10 +75,13 @@ const foldFruitComboboxOutMessage = FruitComboboxTestBlock.makeOutMessageFold(
   },
 )
 
-const ComboboxBinding = FruitComboboxTestBlock.makeBinding(FruitCombobox, {
-  field: 'combobox',
-  init: { contextToArgs: () => [{ id: 'fruit' }] },
-}).withOutMessagePolicy({ fold: foldFruitComboboxOutMessage })
+const ComboboxBinding = FruitComboboxTestBlock.makeRequiredFieldBinding(
+  FruitCombobox,
+  {
+    field: 'combobox',
+    init: { contextToArgs: () => [{ id: 'fruit' }] },
+  },
+).withOutMessagePolicy({ fold: foldFruitComboboxOutMessage })
 
 const FruitComboboxTestComposition = FruitComboboxTestBlock.makeComposition({
   bindings: [ComboboxBinding],
@@ -94,19 +97,12 @@ const fruitParentUpdate = FruitComboboxTestComposition.makeUpdate({
 
 const fruitComboboxTest = {
   block: FruitComboboxTestBlock,
-  layer: FruitComboboxTestBlock.makeLayer(
-    Effect.gen(function* () {
-      const combobox = yield* ComboboxBinding
-
-      return {
-        children: [combobox],
-        init: FruitComboboxTestComposition.makeInit(() => ({
-          model: { maybeSelectedFruit: Option.none() },
-        })),
-        update: fruitParentUpdate,
-      }
-    }),
-  ).pipe(Layer.provide(layer)),
+  layer: FruitComboboxTestBlock.makeLayer({
+    init: FruitComboboxTestComposition.makeInit(() => ({
+      model: { maybeSelectedFruit: Option.none() },
+    })),
+    update: fruitParentUpdate,
+  }).pipe(Layer.provide(layer)),
 }
 
 type TestHtmlBuilder = Parameters<
@@ -259,17 +255,7 @@ const makeFixture = (block: Story.TestBlock<typeof TestCombobox>) => {
 
   const closedModel = () => init({ id: 'test' }).model
 
-  const openModel = (): Model => {
-    let model!: Model
-    Story.story(
-      update,
-      givenOpen,
-      Story.model(extractedModel => {
-        model = extractedModel
-      }),
-    )
-    return model
-  }
+  const openModel = (): Model => Story.story(update, givenOpen)
 
   const sceneView =
     (

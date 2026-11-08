@@ -1,18 +1,11 @@
-import { Array, Effect, pipe } from 'effect'
-import {
-  Mount,
-  click,
-  expect,
-  given,
-  role,
-  scene,
-  text,
-  within,
-} from 'foldkit/scene'
-import { type TestBlock, withBlock } from 'foldkit/story'
-import { describe, test } from 'vitest'
+import { Array, pipe } from 'effect'
+import { Scene, Story } from 'foldkit'
+import { inertHtml as ih } from 'foldkit/html'
+import { describe } from 'vitest'
 
-import { SnippetDisclosureBlock, layer } from './block'
+import { it } from '@effect/vitest'
+
+import { SnippetDisclosureBlock, layer } from './index'
 import { Message } from './message'
 import { type Model, SnippetSize } from './model'
 import { MeasureSnippetHeight } from './mount'
@@ -26,31 +19,15 @@ const longCode = pipe(
   Array.join('\n'),
 )
 
-const makeFixture = (block: TestBlock<typeof snippetDisclosureSubject>) => {
+const makeFixture = (
+  block: Story.TestBlock<typeof snippetDisclosureSubject>,
+) => {
   const init = block.init
   const update = block.update
   const view = block.view
-  const testView =
-    (rawCode: string) =>
-    (
-      model: Model,
-      h: Parameters<TestBlock<typeof snippetDisclosureSubject>['view']>[2],
-    ) =>
-      view(
-        model,
-        {
-          id: snippetId,
-          title: 'Counter state',
-          content: h.pre([], [rawCode]),
-          rawCode,
-          copyAriaLabel: 'Copy counter state',
-          renderCopyButton: () => h.empty,
-        },
-        h,
-      )
   const groupedView = (
     model: Model,
-    h: Parameters<TestBlock<typeof snippetDisclosureSubject>['view']>[2],
+    h: Parameters<Story.TestBlock<typeof snippetDisclosureSubject>['view']>[2],
   ) => {
     return h.div(
       [],
@@ -84,110 +61,108 @@ const makeFixture = (block: TestBlock<typeof snippetDisclosureSubject>) => {
       ],
     )
   }
-  return { block, init, update, view, testView, groupedView }
+  return { init, update, groupedView }
 }
 
+const snippetViewInputs = (rawCode: string) => ({
+  id: snippetId,
+  title: 'Counter state',
+  content: ih.pre([], [rawCode]),
+  rawCode,
+  copyAriaLabel: 'Copy counter state',
+  renderCopyButton: () => ih.empty,
+})
+
 describe('snippet disclosure', () => {
-  test('shows and hides the full code', async () => {
-    await Effect.runPromise(
-      withBlock(snippetDisclosureSubject, executable => {
-        const { init, update, testView } = makeFixture(executable)
+  it.effect('shows and hides the full code', () =>
+    Scene.scene(
+      {
+        ...snippetDisclosureSubject,
+        viewInputs: snippetViewInputs(longCode),
+      },
+      Scene.init(),
+      Scene.Mount.resolve(
+        MeasureSnippetHeight,
+        Message.CompletedMeasureSnippetHeight({
+          snippetId,
+          snippetSize: SnippetSize.Overflows(),
+        }),
+      ),
+      Scene.expect(Scene.role('figure', { name: 'Counter state' })).toExist(),
+      Scene.expect(Scene.text('Counter state')).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Show code' })).toExist(),
+      Scene.click(Scene.role('button', { name: 'Show code' })),
+      Scene.expect(Scene.role('button', { name: 'Hide code' })).toExist(),
+      Scene.click(Scene.role('button', { name: 'Hide code' })),
+      Scene.expect(Scene.role('button', { name: 'Show code' })).toExist(),
+    ),
+  )
 
-        scene(
-          {
-            update,
-            view: testView(longCode),
-          },
-          given(init().model),
-          Mount.resolve(
-            MeasureSnippetHeight,
-            Message.CompletedMeasureSnippetHeight({
-              snippetId,
-              snippetSize: SnippetSize.Overflows(),
-            }),
-          ),
-          expect(role('figure', { name: 'Counter state' })).toExist(),
-          expect(text('Counter state')).toExist(),
-          expect(role('button', { name: 'Show code' })).toExist(),
-          click(role('button', { name: 'Show code' })),
-          expect(role('button', { name: 'Hide code' })).toExist(),
-          click(role('button', { name: 'Hide code' })),
-          expect(role('button', { name: 'Show code' })).toExist(),
-        )
-      }),
-    )
-  })
+  it.effect('does not offer to expand code that fits', () =>
+    Scene.scene(
+      {
+        ...snippetDisclosureSubject,
+        viewInputs: snippetViewInputs(shortCode),
+      },
+      Scene.init(),
+      Scene.Mount.resolve(
+        MeasureSnippetHeight,
+        Message.CompletedMeasureSnippetHeight({
+          snippetId,
+          snippetSize: SnippetSize.Fits(),
+        }),
+      ),
+      Scene.expect(Scene.role('button', { name: 'Show code' })).not.toExist(),
+      Scene.expect(Scene.role('button', { name: 'Hide code' })).not.toExist(),
+    ),
+  )
 
-  test('does not offer to expand code that fits', async () => {
-    await Effect.runPromise(
-      withBlock(snippetDisclosureSubject, executable => {
-        const { init, update, testView } = makeFixture(executable)
+  it.effect('shares open state across snippets in one disclosure group', () =>
+    Story.withBlock(snippetDisclosureSubject, executable => {
+      const { init, update, groupedView } = makeFixture(executable)
 
-        scene(
-          { update, view: testView(shortCode) },
-          given(init().model),
-          Mount.resolve(
-            MeasureSnippetHeight,
-            Message.CompletedMeasureSnippetHeight({
-              snippetId,
-              snippetSize: SnippetSize.Fits(),
-            }),
+      Scene.scene(
+        { update, view: groupedView },
+        Scene.given(init().model),
+        Scene.Mount.resolve(
+          MeasureSnippetHeight({ snippetId: 'main-source' }),
+          Message.CompletedMeasureSnippetHeight({
+            snippetId: 'main-source',
+            snippetSize: SnippetSize.Overflows(),
+          }),
+        ),
+        Scene.Mount.resolve(
+          MeasureSnippetHeight({ snippetId: 'server-source' }),
+          Message.CompletedMeasureSnippetHeight({
+            snippetId: 'server-source',
+            snippetSize: SnippetSize.Overflows(),
+          }),
+        ),
+        Scene.click(
+          Scene.within(
+            Scene.role('figure', { name: 'Main source' }),
+            Scene.role('button', { name: 'Show code' }),
           ),
-          expect(role('button', { name: 'Show code' })).not.toExist(),
-          expect(role('button', { name: 'Hide code' })).not.toExist(),
-        )
-      }),
-    )
-  })
-
-  test('shares open state across snippets in one disclosure group', async () => {
-    await Effect.runPromise(
-      withBlock(snippetDisclosureSubject, executable => {
-        const { init, update, groupedView } = makeFixture(executable)
-
-        scene(
-          { update, view: groupedView },
-          given(init().model),
-          Mount.resolve(
-            MeasureSnippetHeight({ snippetId: 'main-source' }),
-            Message.CompletedMeasureSnippetHeight({
-              snippetId: 'main-source',
-              snippetSize: SnippetSize.Overflows(),
-            }),
+        ),
+        Scene.expect(
+          Scene.within(
+            Scene.role('figure', { name: 'Server source' }),
+            Scene.role('button', { name: 'Hide code' }),
           ),
-          Mount.resolve(
-            MeasureSnippetHeight({ snippetId: 'server-source' }),
-            Message.CompletedMeasureSnippetHeight({
-              snippetId: 'server-source',
-              snippetSize: SnippetSize.Overflows(),
-            }),
+        ).toExist(),
+        Scene.click(
+          Scene.within(
+            Scene.role('figure', { name: 'Server source' }),
+            Scene.role('button', { name: 'Hide code' }),
           ),
-          click(
-            within(
-              role('figure', { name: 'Main source' }),
-              role('button', { name: 'Show code' }),
-            ),
+        ),
+        Scene.expect(
+          Scene.within(
+            Scene.role('figure', { name: 'Main source' }),
+            Scene.role('button', { name: 'Show code' }),
           ),
-          expect(
-            within(
-              role('figure', { name: 'Server source' }),
-              role('button', { name: 'Hide code' }),
-            ),
-          ).toExist(),
-          click(
-            within(
-              role('figure', { name: 'Server source' }),
-              role('button', { name: 'Hide code' }),
-            ),
-          ),
-          expect(
-            within(
-              role('figure', { name: 'Main source' }),
-              role('button', { name: 'Show code' }),
-            ),
-          ).toExist(),
-        )
-      }),
-    )
-  })
+        ).toExist(),
+      )
+    }),
+  )
 })

@@ -32,7 +32,7 @@ const ItemDefinition = Block.makeDefinition('CancelableOccurrenceItem', {
   Model: ItemModel,
   Message: ItemMessage,
   OutMessage: ItemOutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [TestControls] },
   view: { kind: 'Element' },
 })
@@ -153,7 +153,7 @@ const RootDefinition = Block.makeDefinition('CancelableOccurrenceRoot', {
   key: RootKey,
   Model: RootModel,
   Message: RootMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [TestControls] },
   view: { kind: 'Element' },
 })
@@ -177,7 +177,7 @@ const foldItemOutMessage = RootDefinition.makeOutMessageFold(ItemBlock, {
   RemovedSelf: () =>
     RootDefinition.makeFieldsStep(() => ({ entries: () => ({}) })),
 })
-const EntriesBinding = RootDefinition.makeMapBinding(ItemBlock, {
+const EntriesBinding = RootDefinition.makeRecordBinding(ItemBlock, {
   field: 'entries',
 }).withOutMessagePolicy({
   fold: (_key, outMessage) => foldItemOutMessage(outMessage),

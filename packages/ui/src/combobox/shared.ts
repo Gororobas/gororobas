@@ -12,7 +12,11 @@ import {
 import * as Block from 'foldkit/block'
 import * as Dom from 'foldkit/dom'
 import type { ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
-import { type MessageUnion, defineMessageUnion } from 'foldkit/message'
+import {
+  type MessageUnion,
+  defineInMessageUnion,
+  defineMessageUnion,
+} from 'foldkit/message'
 import * as Mount from 'foldkit/mount'
 import { makeModifyFieldsFor } from 'foldkit/struct'
 import * as Update from 'foldkit/update'
@@ -173,7 +177,7 @@ export const makeMessage = <Item extends string, ItemEncoded = Item>(
 export const Message = makeMessage(Schema.String)
 
 /** Parent requests that need no selection or display-value adaptation. */
-export const InMessage = defineMessageUnion({ RequestedOpen: {} })
+export const InMessage = defineInMessageUnion({ RequestedOpen: {} })
 export type InMessage = typeof InMessage.Type
 
 export type Opened = typeof Message.Opened.Type
@@ -427,13 +431,14 @@ export const makeUpdateHandlers = <
   ParentOutMessageSchema extends Schema.Top,
   ParentOwner,
 >(
-  bindChild: Block.MakeBinding<
+  makeRequiredFieldBinding: Block.MakeSingularBinding<
     typeof BaseModel,
     MessageSchema<Item, ItemEncoded>,
     ParentOutMessageSchema,
     typeof InitConfig,
     'Provided',
-    ParentOwner
+    ParentOwner,
+    'Required'
   >,
   makeOutMessageFold: Block.MakeDescriptorOutMessageFold<
     BaseModel,
@@ -476,7 +481,7 @@ export const makeUpdateHandlers = <
     TransitionedOut: stepNoop,
   })
 
-  const AnimationBinding = bindChild(Animation.AnimationBlock, {
+  const AnimationBinding = makeRequiredFieldBinding(Animation.AnimationBlock, {
     field: 'animation',
     init: { contextToArgs: config => [{ id: `${config.id}-items` }] },
   }).withOutMessagePolicy({ fold: foldAnimationOutMessage })

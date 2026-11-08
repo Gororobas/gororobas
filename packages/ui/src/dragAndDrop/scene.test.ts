@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import type { ChildAttribute, TaggedAttribute } from 'foldkit/html'
 import * as Scene from 'foldkit/scene'
@@ -11,7 +11,7 @@ import { DragAndDropBlock, type RenderInfo, layer } from './block.js'
 const DragAndDropSceneKey = Symbol('DragAndDropScene')
 const DragAndDropSceneBlock = Block.make('DragAndDropScene', {
   key: DragAndDropSceneKey,
-  Init: Block.makeInputContract<readonly []>(),
+  InitArgs: Block.makeInputContract<readonly []>(),
   Model: Schema.Struct({ dragAndDrop: DragAndDropBlock.Model }),
   Message: Schema.Never,
   view: { kind: 'Element' },
@@ -27,10 +27,13 @@ const foldDragAndDropOutMessage = DragAndDropSceneBlock.makeOutMessageFold(
   },
 )
 
-const DragAndDropBinding = DragAndDropSceneBlock.makeBinding(DragAndDropBlock, {
-  field: 'dragAndDrop',
-  init: { contextToArgs: () => [{ id: 'board' }] },
-}).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
+const DragAndDropBinding = DragAndDropSceneBlock.makeRequiredFieldBinding(
+  DragAndDropBlock,
+  {
+    field: 'dragAndDrop',
+    init: { contextToArgs: () => [{ id: 'board' }] },
+  },
+).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
 
 const DragAndDropSceneComposition = DragAndDropSceneBlock.makeComposition({
   bindings: [DragAndDropBinding],
@@ -77,18 +80,11 @@ const card = Scene.selector('#card')
 
 const dragAndDropScene = {
   block: DragAndDropSceneBlock,
-  layer: DragAndDropSceneBlock.makeLayer(
-    Effect.gen(function* () {
-      const child = yield* DragAndDropBinding
-
-      return {
-        children: [child],
-        init,
-        update,
-        view: view,
-      }
-    }),
-  ).pipe(Layer.provide(layer)),
+  layer: DragAndDropSceneBlock.makeLayer({
+    init,
+    update,
+    view: view,
+  }).pipe(Layer.provide(layer)),
 }
 
 describe('DragAndDrop view', () => {

@@ -40,13 +40,16 @@ const checkRejectedInputs = (model: Model) => {
     key: OtherKey,
     Model,
     Message,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
   })
-  const OtherCountersBinding = OtherDefinition.makeBinding(CounterBlock, {
-    field: 'counters',
-    key: 'key',
-    childField: 'model',
-  }).withOutMessagePolicy({ fold: () => OtherDefinition.makeNoopStep() })
+  const OtherCountersBinding = OtherDefinition.makeKeyedArrayBinding(
+    CounterBlock,
+    {
+      field: 'counters',
+      key: 'key',
+      childField: 'model',
+    },
+  ).withOutMessagePolicy({ fold: () => OtherDefinition.makeNoopStep() })
 
   makeFieldsStep(() => ({
     // @ts-expect-error Matching structural Models do not authorize another parent's creation requests.
@@ -70,15 +73,13 @@ const checkRejectedInputs = (model: Model) => {
     Model: CounterBlock.Model,
     Message: Schema.Never,
     isMessageFree: true,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
   })
 
-  ApplicationDefinition.makeBinding(WrongCounterDefinition.contract, {
-    // @ts-expect-error Identical child Models do not authorize another child contract's Instance field.
+  // @ts-expect-error Identical child Models do not authorize another child contract's Instance field.
+  ApplicationDefinition.makeKeyedArrayBinding(WrongCounterDefinition.contract, {
     field: 'counters',
-    // @ts-expect-error The invalid Instance relationship cannot select a wrapper key.
     key: 'key',
-    // @ts-expect-error The invalid Instance relationship cannot select a child field.
     childField: 'model',
   })
 

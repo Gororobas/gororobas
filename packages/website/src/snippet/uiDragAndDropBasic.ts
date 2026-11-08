@@ -1,18 +1,15 @@
-import { Array, Effect, Layer, Schema } from 'effect'
+import { Array, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  DragAndDropBlock,
-  layer as DragAndDropLayer,
-} from '@foldkit/ui/dragAndDrop'
+import { DragAndDrop } from '@foldkit/ui'
 
 // Add a field to your Model for the DragAndDrop Block plus the items being sorted:
 const Model = Schema.Struct({
   items: Schema.Array(
     Schema.Struct({ id: Schema.String, label: Schema.String }),
   ),
-  dragAndDrop: DragAndDropBlock.Model,
+  dragAndDrop: DragAndDrop.DragAndDropBlock.Model,
   // ...your other fields
 })
 type Model = typeof Model.Type
@@ -27,25 +24,36 @@ declare const reorder: (
 ) => Model['items']
 
 export const SortableListKey = Symbol('SortableList')
-
 export const SortableListBlock = Block.make('SortableList', {
   key: SortableListKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = SortableListBlock
+const {
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = SortableListBlock
 
 // At module scope, fold the OutMessage into your own Model. `Reordered`
 // carries the move so you can apply it to your own list. Each arm returns an
 // Update.Step over the parent Model, which already has the next DragAndDrop
 // Model written back. The parent Block checks the complete child union
 // and infers each parent Step:
-const foldDragAndDropOutMessage = SortableListBlock.makeOutMessageFold(
-  DragAndDropBlock,
+// The Binding retains the child contract; construction supplies its implementation.
+const DragAndDropBinding = makeRequiredFieldBinding(
+  DragAndDrop.DragAndDropBlock,
   {
+    field: 'dragAndDrop',
+    init: { contextToArgs: () => [{ id: 'sortable-list' }] },
+  },
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(DragAndDrop.DragAndDropBlock, {
     Reordered: ({ itemId, fromIndex, toIndex }) =>
       makeFieldsStep(() => ({
         // reorder is your own function that moves the item
@@ -57,16 +65,10 @@ const foldDragAndDropOutMessage = SortableListBlock.makeOutMessageFold(
     StartedKeyboardDrag: makeNoopStep,
     ChangedKeyboardTarget: makeNoopStep,
     Cancelled: makeNoopStep,
-  },
-)
+  }),
+})
 
-// The Binding retains the child contract; construction supplies its implementation.
-const DragAndDropBinding = SortableListBlock.makeBinding(DragAndDropBlock, {
-  field: 'dragAndDrop',
-  init: { contextToArgs: () => [{ id: 'sortable-list' }] },
-}).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
-
-const SortableListComposition = SortableListBlock.makeComposition({
+const SortableListComposition = makeComposition({
   bindings: [DragAndDropBinding],
 })
 
@@ -120,15 +122,8 @@ const view = SortableListComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = SortableListBlock.makeLayer(
-  Effect.gen(function* () {
-    const dragAndDrop = yield* DragAndDropBinding
-
-    return {
-      children: [dragAndDrop],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(DragAndDropLayer))
+export const layer = SortableListBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(DragAndDrop.layer))

@@ -1,4 +1,4 @@
-import { Array, Effect, Layer, Schema } from 'effect'
+import { Array, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
@@ -18,20 +18,24 @@ const ParentMessage = defineMessageUnion({})
 type ParentMessage = typeof ParentMessage.Type
 
 export const FruitSelectionKey = Symbol('FruitSelection')
-
 export const FruitSelectionBlock = Block.make('FruitSelection', {
   key: FruitSelectionKey,
   Model: ParentModel,
   Message: ParentMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-const { makeFieldsStep } = FruitSelectionBlock
+const {
+  makeFieldsStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = FruitSelectionBlock
 
-const PickerBinding = FruitSelectionBlock.makeBinding(FruitPicker, {
+const PickerBinding = makeRequiredFieldBinding(FruitPicker, {
   field: 'picker',
 }).withOutMessagePolicy({
-  fold: FruitSelectionBlock.makeOutMessageFold(FruitPicker, {
+  fold: makeOutMessageFold(FruitPicker, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({ selectionHistory: Array.append(value) })),
   }),
@@ -39,7 +43,7 @@ const PickerBinding = FruitSelectionBlock.makeBinding(FruitPicker, {
 
 export const selectApple = PickerBinding.requestSelectValue('Apple')
 
-const FruitSelectionComposition = FruitSelectionBlock.makeComposition({
+const FruitSelectionComposition = makeComposition({
   bindings: [PickerBinding],
 })
 const init = FruitSelectionComposition.makeInit(() => ({
@@ -56,15 +60,8 @@ const view = FruitSelectionComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = FruitSelectionBlock.makeLayer(
-  Effect.gen(function* () {
-    const picker = yield* PickerBinding
-
-    return {
-      children: [picker],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(PickerLayer))
+export const layer = FruitSelectionBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(PickerLayer))

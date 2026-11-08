@@ -102,7 +102,7 @@ const Room = Block.makeDefinition('Room', {
   OutMessage: RoomOutMessage,
 })
 const RoomComposition = Room.makeComposition()
-const informJoined = Room.makeStep(
+const informOfJoined = Room.makeStep(
   (model, username: string, _context: RoomContext) => ({
     model: modifyFields(model, { maybeUsername: () => Option.some(username) }),
   }),
@@ -114,14 +114,14 @@ const prepareRoomBlock = () =>
     })),
     update: RoomComposition.makeUpdate.withContext((context: RoomContext) => ({
       RequestedInformJoined: (model, { username }) =>
-        informJoined(model, username, context),
+        informOfJoined(model, username, context),
       CompletedLeaveRoom: model => ({
         model,
         outMessage: RoomOutMessage.LeftRoom({ roomId: context.roomId }),
       }),
     })),
     operations: {
-      informJoined: (username: string, context: RoomContext) =>
+      informOfJoined: (username: string, context: RoomContext) =>
         Tuple.make(RoomMessage.RequestedInformJoined({ username }), context),
     },
     EffectsLayer: Layer.empty,
@@ -181,7 +181,7 @@ const foldHomeOutMessage = Application.makeOutMessageFold(HomeBlock, {
             }),
         }),
       ),
-      RoomBinding.informJoined(roomId, username, { roomId }),
+      RoomBinding.informOfJoined(roomId, username, { roomId }),
       Application.makeStep(model => ({
         model: modifyFields(model, {
           route: () => ApplicationRoute.Room({ roomId }),
@@ -190,15 +190,15 @@ const foldHomeOutMessage = Application.makeOutMessageFold(HomeBlock, {
     ]),
 })
 
-const HomeBinding = Application.makeBinding(HomeBlock, {
+const HomeBinding = Application.makeRequiredFieldBinding(HomeBlock, {
   field: 'home',
-  presentWhen: model => model.route._tag === 'Home',
+  activeWhen: model => model.route._tag === 'Home',
   init: false,
 }).withOutMessagePolicy({
   fold: foldHomeOutMessage,
 })
 
-const RoomBinding = Application.makeBinding(RoomBlock, {
+const RoomBinding = Application.makeCustomKeyedBinding(RoomBlock, {
   readAll: model => Option.toArray(model.maybeRoomInstance),
   key: instance => instance.roomId,
   read: instance => instance.model,
@@ -327,10 +327,11 @@ describe('reciprocal sibling coordination', () => {
   ])(
     'rejects $name OutMessage policy from erased configuration',
     ({ policy, error }) => {
-      const binding = Reflect.apply(Application.makeBinding, undefined, [
-        HomeBlock,
-        { field: 'home' },
-      ])
+      const binding = Reflect.apply(
+        Application.makeRequiredFieldBinding,
+        undefined,
+        [HomeBlock, { field: 'home' }],
+      )
 
       expect(() => {
         const selectedBinding =
@@ -347,10 +348,11 @@ describe('reciprocal sibling coordination', () => {
   it('validates a policy without calling it during Binding construction', () => {
     const fold = vi.fn(() => Application.makeStep(model => ({ model })))
 
-    const binding = Reflect.apply(Application.makeBinding, undefined, [
-      HomeBlock,
-      { field: 'home' },
-    ])
+    const binding = Reflect.apply(
+      Application.makeRequiredFieldBinding,
+      undefined,
+      [HomeBlock, { field: 'home' }],
+    )
     const selectedBinding = Reflect.apply(
       binding.withOutMessagePolicy,
       binding,

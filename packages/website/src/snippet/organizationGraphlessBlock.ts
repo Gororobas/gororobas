@@ -1,28 +1,27 @@
-import { Effect, Number, Schema } from 'effect'
+import { Number, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-// definition.ts
+// block.ts
 export const Model = Schema.Struct({ count: Schema.Number })
 export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({ ClickedIncrement: {} })
 export type Message = typeof Message.Type
-// composition.ts
 export const CounterKey = Symbol('Counter')
-
 export const CounterBlock = Block.make('Counter', {
   key: CounterKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-export const CounterComposition = CounterBlock.makeComposition()
+const { makeComposition } = CounterBlock
 
-// counter.ts
+export const CounterComposition = makeComposition()
+
 const init = CounterComposition.makeInit(() => ({
   model: Model.make({ count: 0 }),
 }))
@@ -35,13 +34,8 @@ const view = CounterComposition.makeView((model, h) =>
   h.button([h.OnClick(Message.ClickedIncrement())], [`Count: ${model.count}`]),
 )
 
-export const layer = CounterBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-    }
-  }),
-)
+export const layer = CounterBlock.makeLayer({
+  init,
+  update,
+  view,
+})

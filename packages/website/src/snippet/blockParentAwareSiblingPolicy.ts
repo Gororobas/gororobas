@@ -1,24 +1,29 @@
 import { Option } from 'effect'
 
-import { ApplicationBlock } from './application/definition'
+import {
+  makeOutMessageFold,
+  makeOptionalFieldBinding,
+  makeRequiredFieldBinding,
+  makeComposition,
+} from './application/block'
 import { DetailsBlock } from './details'
 import { SearchBlock } from './search'
 
-const foldSearchOutMessage = ApplicationBlock.makeOutMessageFold(SearchBlock, {
-  SelectedResult: ({ resultId }, { modelBeforeUpdate }) =>
-    Option.isSome(modelBeforeUpdate.maybeDetails)
-      ? MaybeDetailsBinding.informResultChanged({ resultId })
-      : MaybeDetailsBinding.requestOpen({ resultId }),
+export const SearchBinding = makeRequiredFieldBinding(SearchBlock, {
+  field: 'search',
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(SearchBlock, {
+    SelectedResult: ({ resultId }, { modelBeforeUpdate }) =>
+      Option.isSome(modelBeforeUpdate.maybeDetails)
+        ? MaybeDetailsBinding.informOfResultChanged({ resultId })
+        : MaybeDetailsBinding.requestOpen({ resultId }),
+  }),
 })
 
-export const SearchBinding = ApplicationBlock.makeBinding(SearchBlock, {
-  field: 'search',
-}).withOutMessagePolicy({ fold: foldSearchOutMessage })
-
-export const MaybeDetailsBinding = ApplicationBlock.makeBinding(DetailsBlock, {
+export const MaybeDetailsBinding = makeOptionalFieldBinding(DetailsBlock, {
   field: 'maybeDetails',
 })
 
-export const ApplicationComposition = ApplicationBlock.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [SearchBinding, MaybeDetailsBinding],
 })

@@ -67,7 +67,7 @@ const ParentDefinition = Block.makeDefinition('AppendParent', {
   Model,
   Message,
 })
-const EntriesBinding = ParentDefinition.makeBinding(ChildBlock, {
+const EntriesBinding = ParentDefinition.makeKeyedArrayBinding(ChildBlock, {
   field: 'entries',
   key: 'id',
   childField: 'child',
@@ -110,14 +110,139 @@ const ParentBlock: Block.FromAssemblyWithoutViewOrOutMessage<
   typeof prepareParent
 > = Block.assemble(prepareParent)
 
+const DirectChildModel = Schema.Struct({
+  id: Schema.String,
+  count: Schema.Number,
+})
+type DirectChildModel = typeof DirectChildModel.Type
+const DirectChildDefinition = Block.makeDefinition('DirectAppendChild', {
+  Model: DirectChildModel,
+  Message: ChildMessage,
+})
+const DirectRead = DirectChildDefinition.makeCommand('Read', {
+  args: { count: Schema.Number },
+  messages: [ChildMessage.CompletedRead],
+  handler: function* () {
+    return ({ count }) => Effect.succeed(ChildMessage.CompletedRead({ count }))
+  },
+})
+const directInstances = vi.fn<
+  () => ReadonlyArray<
+    Readonly<{ key: string; args: readonly [id: string, count: number] }>
+  >
+>(() => [{ key: 'initial', args: ['initial', 1] }])
+const directInitializedModels: globalThis.Array<DirectChildModel> = []
+const DirectChildComposition = DirectChildDefinition.makeComposition()
+const prepareDirectChild = () =>
+  DirectChildComposition.prepareBlock({
+    init: DirectChildComposition.makeInit((id: string, count: number) => {
+      const model = DirectChildModel.make({ id, count })
+      directInitializedModels.push(model)
+
+      return { model, commands: [DirectRead({ count })] }
+    }),
+    update: DirectChildComposition.makeUpdate({
+      CompletedRead: model => ({ model }),
+    }),
+    EffectsLayer: DirectRead.layer,
+  })
+const DirectChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
+  typeof DirectChildModel,
+  typeof prepareDirectChild
+> = Block.assemble(prepareDirectChild)
+const DirectModel = Schema.Struct({
+  entries: Schema.Array(DirectChildModel),
+  label: Schema.String,
+})
+const DirectParentDefinition = Block.makeDefinition('DirectAppendParent', {
+  Model: DirectModel,
+  Message,
+})
+const DirectEntriesBinding = DirectParentDefinition.makeKeyedArrayBinding(
+  DirectChildBlock,
+  {
+    field: 'entries',
+    key: 'id',
+    init: { instances: () => directInstances() },
+  },
+)
+const DirectParentComposition = DirectParentDefinition.makeComposition({
+  bindings: [DirectEntriesBinding],
+})
+
 beforeEach(() => {
   initialized.mockClear()
   wrapped.mockClear()
+  directInstances.mockClear()
+  directInitializedModels.splice(0)
 })
 
 describe('initAndAppend', () => {
+  it('uses identity storage lazily and preserves direct child init Commands', () => {
+    const init = DirectParentComposition.makeInit(() => ({
+      model: { label: 'current' },
+    }))
+    expect(directInstances).not.toHaveBeenCalled()
+    expect(directInitializedModels).toEqual([])
+
+    const initializedParent = init()
+    const child = Option.getOrThrow(Array.head(initializedParent.model.entries))
+    const initializedChild = Option.getOrThrow(
+      Array.head(directInitializedModels),
+    )
+
+    expect(directInstances).toHaveBeenCalledExactlyOnceWith()
+    expect(child).toStrictEqual(initializedChild)
+    expect(initializedParent.commands).toMatchObject([
+      { name: 'DirectAppendChild["initial"]/Read' },
+    ])
+
+    const recipe = initAndAppend(
+      DirectEntriesBinding,
+      initializedParent.model,
+      { key: 'second', args: ['second', 2] },
+    )
+    expect(directInitializedModels).toHaveLength(1)
+
+    const appended = withOperationGraph([DirectEntriesBinding], () =>
+      runBindingInitRecipe(recipe, new Map()),
+    )
+
+    expect(appended).toMatchObject({
+      model: {
+        entries: [
+          { id: 'initial', count: 1 },
+          Option.getOrThrow(Array.last(directInitializedModels)),
+        ],
+      },
+      commands: [{ name: 'DirectAppendChild["second"]/Read' }],
+    })
+  })
+
+  it('rejects a default identity item whose child key differs from its plan', () => {
+    const MismatchedEntriesBinding =
+      DirectParentDefinition.makeKeyedArrayBinding(DirectChildBlock, {
+        field: 'entries',
+        key: 'id',
+        placement: 'mismatchedEntries',
+        init: {
+          instances: () => [{ key: 'planned', args: ['initialized', 1] }],
+        },
+      })
+    const MismatchedComposition = DirectParentDefinition.makeComposition({
+      bindings: [MismatchedEntriesBinding],
+    })
+    const init = MismatchedComposition.makeInit(() => ({
+      model: { label: 'current' },
+    }))
+
+    expect(() => init()).toThrow(
+      'cannot initialize or replace a child with a different key',
+    )
+  })
+
   it('resolves deferred storage against the active graph and snapshots its arguments', () => {
-    const DeferredBinding = ParentDefinition.makeBinding(ChildBlock, {
+    const DeferredBinding = ParentDefinition.makeKeyedArrayBinding(ChildBlock, {
       field: 'entries',
       key: 'id',
       childField: 'child',
@@ -315,7 +440,7 @@ describe('initAndAppend', () => {
   })
 
   it('rejects a Binding without stored initialization metadata', () => {
-    const binding = ParentDefinition.makeBinding(ChildBlock, {
+    const binding = ParentDefinition.makeKeyedArrayBinding(ChildBlock, {
       field: 'entries',
       key: 'id',
       childField: 'child',
@@ -326,14 +451,28 @@ describe('initAndAppend', () => {
         ParentBlock.init().model,
         { key: 'first', args: [4] },
       ]),
-    ).toThrow('keyed array init.instances and init.toItem')
+    ).toThrow('keyed array initialization')
     expect(initialized).not.toHaveBeenCalled()
+  })
+
+  it('rejects erased wrapped initialization without an item adapter', () => {
+    expect(() =>
+      Reflect.apply(ParentDefinition.makeKeyedArrayBinding, undefined, [
+        ChildBlock,
+        {
+          field: 'entries',
+          key: 'id',
+          childField: 'child',
+          init: { instances: () => [] },
+        },
+      ]),
+    ).toThrow('must supply a toItem function')
   })
 
   it.each(['wrong key', 'reconstructed child', 'discarded child'])(
     'rejects init.toItem with %s',
     mode => {
-      const binding = ParentDefinition.makeBinding(ChildBlock, {
+      const binding = ParentDefinition.makeKeyedArrayBinding(ChildBlock, {
         field: 'entries',
         key: 'id',
         childField: 'child',

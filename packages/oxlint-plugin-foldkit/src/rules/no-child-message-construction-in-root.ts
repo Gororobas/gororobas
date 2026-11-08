@@ -406,7 +406,7 @@ type DefinitionOperation = Readonly<{
   importedDefinitionPath: ImportedMessagePath | undefined
   members: ReadonlyArray<string>
   operation:
-    | 'makeBinding'
+    | 'binding'
     | 'makeCommand'
     | 'makeCommandsStep'
     | 'makeFieldsStep'
@@ -454,7 +454,6 @@ const definitionOperationName = (
     )
   }
   if (
-    method === 'makeBinding' ||
     method === 'makeCommand' ||
     method === 'makeCommandsStep' ||
     method === 'makeFieldsStep' ||
@@ -559,7 +558,7 @@ const definitionOperationForCall = (
           importedBindingParentPath,
         ),
         members: bindingParentPath.members,
-        operation: 'makeBinding',
+        operation: 'binding',
         root: bindingParentPath.root,
       }
     }
@@ -996,7 +995,12 @@ const featureDefinitionDirectory = (
       filename,
       messagePath.source,
     )
-    if (!Option.contains(Array.last(messageModule), 'definition')) {
+    if (
+      !Option.exists(
+        Array.last(messageModule),
+        name => name === 'definition' || name === 'block',
+      )
+    ) {
       return yield* Option.none()
     }
 
@@ -1157,7 +1161,7 @@ const definitionOperationCallOwnsMessage = (
     operation =>
       (operation.operation === 'update' ||
         operation.operation === 'inMessageUpdate' ||
-        operation.operation === 'makeBinding') &&
+        operation.operation === 'binding') &&
       operationOwnsMessage(references, operation, messagePath, filename),
   )
 
@@ -1373,7 +1377,11 @@ const isTopLevelRootAlias = (source: string): boolean => {
   return !source.slice(2).includes('/')
 }
 
-const isRootMessageModule = (source: string): boolean => {
+const isRootMessageModule = (
+  source: string,
+  members: ReadonlyArray<string>,
+  filename: string | undefined,
+): boolean => {
   if (isLocalSiblingModule(source, 'definition')) {
     return true
   }
@@ -1383,6 +1391,14 @@ const isRootMessageModule = (source: string): boolean => {
   const [parentSourceSegment] = sourceSegments.slice(-2, -1)
 
   if (lastSourceSegment === undefined) {
+    return true
+  }
+
+  if (
+    moduleSegmentName(lastSourceSegment) === 'block' &&
+    filename !== undefined &&
+    Option.isSome(featureDefinitionDirectory({ source, members }, filename))
+  ) {
     return true
   }
 
@@ -1552,6 +1568,7 @@ const isWithinBlockAuthoring = (
 const childMessageConstruction = (
   callee: unknown,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<ChildMessageConstruction> => {
   if (hasComputedMember(callee)) {
     return Option.none()
@@ -1586,7 +1603,7 @@ const childMessageConstruction = (
         constructorName === undefined ||
         constructorName === 'Message' ||
         !pascalIdentifierPattern.test(constructorName) ||
-        isRootMessageModule(path.source)
+        isRootMessageModule(path.source, path.members.slice(0, -1), filename)
       ) {
         return Option.none()
       }
@@ -1651,7 +1668,7 @@ export const noChildMessageConstructionInRoot = Rule.define({
         }
 
         const construction = Option.getOrUndefined(
-          childMessageConstruction(node.callee, references),
+          childMessageConstruction(node.callee, references, ctx.filename),
         )
         if (construction === undefined) {
           return Effect.void

@@ -1,69 +1,64 @@
 import { Array, Option, pipe } from 'effect'
-import { Calendar } from 'foldkit'
-import { init, messageFrom } from 'foldkit/story'
-import { Command, message, model, story } from 'foldkit/story'
+import { Calendar, Story } from 'foldkit'
 import { describe, expect } from 'vitest'
 
 import { it } from '@effect/vitest'
 
-import { WorkHistoryBlock, layer } from './block'
+import { Message } from './block'
 import { WorkHistoryEntryBlock } from './blocks/workHistoryEntry'
 import { GenerateWorkHistoryEntryId } from './command'
 import { EntriesBinding } from './composition'
-import { Message } from './definition'
-
-type WorkHistoryEntryMessage = typeof WorkHistoryEntryBlock.Message.Type
+import { WorkHistoryBlock, layer } from './index'
 
 const today = Calendar.make(2026, 4, 16)
-const givenInitial = init(today, 'work-history-entry-1')
-
-const entryMessage = (entryId: string, message: WorkHistoryEntryMessage) =>
-  messageFrom(EntriesBinding, entryId, message)
+const givenInitial = Story.init(today, 'work-history-entry-1')
 
 describe('workHistory', () => {
   it.effect('ClickedAddEntry generates an id and appends an entry', () =>
-    story(
+    Story.story(
       { block: WorkHistoryBlock, layer },
       givenInitial,
-      message(Message.ClickedAddEntry()),
-      Command.expectHas(GenerateWorkHistoryEntryId),
-      Command.resolve(
+      Story.message(Message.ClickedAddEntry()),
+      Story.Command.expectHas(GenerateWorkHistoryEntryId),
+      Story.Command.resolve(
         GenerateWorkHistoryEntryId,
         Message.CompletedGenerateWorkHistoryEntryId({
           entryId: 'test-work-1',
         }),
       ),
-      model(model => {
+      Story.model(model => {
         expect(model.entries).toHaveLength(2)
       }),
     ),
   )
 
   it.effect('an entry OutMessage.Removed removes that entry', () =>
-    story(
+    Story.story(
       { block: WorkHistoryBlock, layer },
       givenInitial,
-      entryMessage(
+      Story.messageIn(
+        EntriesBinding,
         'work-history-entry-1',
         WorkHistoryEntryBlock.Message.ClickedRemoveSelf(),
       ),
-      model(model => {
+      Story.model(model => {
         expect(model.entries).toHaveLength(0)
       }),
     ),
   )
 
   it.effect('a generated entry Message updates the matching entry', () =>
-    story(
+    Story.story(
       { block: WorkHistoryBlock, layer },
       givenInitial,
-      entryMessage(
+      Story.messageIn(
+        EntriesBinding,
         'work-history-entry-1',
         WorkHistoryEntryBlock.Message.UpdatedCompany({
           value: 'Foldkit Inc.',
         }),
       ),
-      model(model => {
+      Story.model(model => {
         expect(
           pipe(
             model.entries,

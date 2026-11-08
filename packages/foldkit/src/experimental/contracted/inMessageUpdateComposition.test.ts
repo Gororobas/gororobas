@@ -5,7 +5,10 @@ import { it } from '@effect/vitest'
 
 import { makeCompositionInputUpdate } from '../../block/delivery.js'
 import * as Block from '../../block/public.js'
-import { defineMessageUnion } from '../../message/index.js'
+import {
+  defineInMessageUnion,
+  defineMessageUnion,
+} from '../../message/index.js'
 import * as Story from '../../story/public.js'
 import { modifyFields } from '../../struct/index.js'
 
@@ -14,7 +17,7 @@ const EditorModel = Schema.Struct({ text: Schema.String })
 const EditorMessage = defineMessageUnion({
   UpdatedText: { text: Schema.String },
 })
-const EditorInMessage = defineMessageUnion({
+const EditorInMessage = defineInMessageUnion({
   InformedOfTextChange: { text: Schema.String },
 })
 const EditorOutMessage = defineMessageUnion({ Edited: {} })
@@ -24,7 +27,7 @@ const EditorDefinition = Block.makeDefinition('InputEditor', {
   Message: EditorMessage,
   InMessage: EditorInMessage,
   OutMessage: EditorOutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   inMessageOutputs: {
     InformedOfTextChange: { outMessage: EditorOutMessage.Edited },
   },
@@ -69,7 +72,7 @@ const Message = defineMessageUnion({
   SubmittedForm: { text: Schema.String },
   CompletedSaveDraft: {},
 })
-const InMessage = defineMessageUnion({
+const InMessage = defineInMessageUnion({
   RequestedSet: { value: Schema.Number },
   RequestedSubmit: { text: Schema.String },
   RequestedSave: { text: Schema.String },
@@ -84,7 +87,7 @@ const ApplicationDefinition = Block.makeDefinition('InputApplication', {
   Message,
   InMessage,
   OutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [DraftStore] },
   inMessageOutputs: { RequestedSubmit: { outMessage: OutMessage.Submitted } },
 })
@@ -100,9 +103,12 @@ const SaveDraft = ApplicationDefinition.makeCommand('SaveDraft', {
       store.save(text).pipe(Effect.as(Message.CompletedSaveDraft()))
   },
 })
-const EditorBinding = ApplicationDefinition.makeBinding(EditorBlock, {
-  field: 'editor',
-}).withOutMessagePolicy({
+const EditorBinding = ApplicationDefinition.makeRequiredFieldBinding(
+  EditorBlock,
+  {
+    field: 'editor',
+  },
+).withOutMessagePolicy({
   fold: ApplicationDefinition.makeOutMessageFold(EditorBlock, {
     Edited: () => makeFieldsStep(() => ({ count: count => count + 1 })),
   }),
@@ -147,7 +153,7 @@ const inMessageUpdate = makeInMessageUpdate.compose(
   makeInMessageUpdate.compose(
     base,
     makeInMessageUpdate.cases({
-      RequestedSet: EditorBinding.informTextChange({ text: 'connected' }),
+      RequestedSet: EditorBinding.informOfTextChange({ text: 'connected' }),
     }),
   ),
   makeInMessageUpdate.each((model, _input, { before }) => ({
@@ -180,7 +186,7 @@ const ContextModel = Schema.Struct({
 const ContextMessage = defineMessageUnion({
   UpdatedValue: { value: Schema.Number },
 })
-const ContextInMessage = defineMessageUnion({
+const ContextInMessage = defineInMessageUnion({
   RequestedValue: { value: Schema.Number },
 })
 const ContextDefinition = Block.makeDefinition('InputContexts', {
@@ -188,7 +194,7 @@ const ContextDefinition = Block.makeDefinition('InputContexts', {
   Model: ContextModel,
   Message: ContextMessage,
   InMessage: ContextInMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Context: Schema.Tuple([Schema.Number]),
   InMessageContext:
     Block.makeInputContract<

@@ -1,10 +1,10 @@
 # Block type performance
 
-This harness measures deterministic TypeScript diagnostics for completed Block
-composition through Foldkit's published declarations. Each checked-in fixture
-imports public `foldkit` package entry points, completes its Block graph, and
-finishes with an Application update, `ApplicationComposition.prepareBlock`,
-`Program.makeElement`, and the completed Program's `.provide(...)` method.
+This harness measures TypeScript allocation counts through Foldkit's published
+declarations. Block-composition fixtures complete their graphs with an
+Application update, `ApplicationComposition.prepareBlock`, `Program.makeElement`,
+and the completed Program's `.provide(...)` method. Other fixtures cover
+Subscription requirements, Machine authoring and shared HTML attributes.
 
 The shared baseline contains the imports and warmup expressions repeated by
 every fixture. Fixture cost is the fixture total minus that baseline for these
@@ -34,9 +34,26 @@ pnpm update:block-type-performance
 pnpm update:block-type-performance command-requirements-200
 ```
 
-Only update budgets after reviewing an intentional type-level change. The
-ordinary check never changes them and fails when either gated metric exceeds
-its stored maximum.
+Only update budgets after reviewing an intentional type-level change or a
+coordinated compiler-version or measurement-mode change. The ordinary check
+never changes them and fails when either gated metric exceeds its stored maximum.
+
+## Measurement mode
+
+The baseline and every fixture run with TypeScript's `--singleThreaded` option.
+This keeps one checker's type cache for the workload. Parallel workers can each
+check the same dependency, so changing which worker receives a source file can
+increase aggregate counts without increasing its underlying type work.
+
+The TypeScript version and checker mode are part of the metric. All eight
+ceilings were calibrated together against the current candidate and the
+previously accepted declarations. Each ceiling admits the greater observed
+single-checker count for its metric, without an additional tolerance. The
+fixture sources and their completion contracts are unchanged.
+
+These allocation counts do not measure compiler duration or editor latency.
+Application builds retain their normal compiler mode; compare parallel
+wall-time and editor workflows separately when investigating performance.
 
 ## Workspace composition scale
 
@@ -67,16 +84,17 @@ Service requirement before and after Program provision. These fixtures extend
 the count workload; ownership rejection and declaration safety remain covered by
 the existing emitted-declaration fixtures.
 
-Initial exact budgets with TypeScript `7.1.0-beta` are:
+The initial parallel counts with TypeScript `7.1.0-beta` are retained below as
+historical reference. Current single-checker ceilings live in `budgets.json`:
 
 | Groups | Instantiations above baseline | Types above baseline | Symbols above baseline |
 | ------ | ----------------------------- | -------------------- | ---------------------- |
 | 4      | 2,639,574                     | 206,314              | 276,265                |
 | 8      | 4,515,010                     | 280,523              | 402,969                |
 
-The original deep, wide, and Command budgets are unchanged. Counts do not
-measure editor latency, and this synthetic static graph does not claim that
-every feature of the handwritten workspace example is represented.
+The deep, wide, Command and Workspace fixture sources are unchanged. This
+synthetic static graph does not claim that every feature of the handwritten
+workspace example is represented.
 
 ### Declaration emission and the larger-size limit
 
@@ -479,3 +497,14 @@ contains timings, ranges, memory, correctness checks and reproduction artifacts.
 `attribute-bundles-200` passes one `ReadonlyArray<Attribute<never>>` bundle to 200 builders with distinct Message unions. It checks the element input alias through the published declarations. The fixture imports the shared warmup unchanged; its budget is additional to the original seven ceilings.
 
 When changing attribute aliases, also compare the one-checker workload with an array that mixes the shared spread and a local handler. That mixed array creates a distinct source union and can retain structural comparison cost. Source/emitted acceptance, raw-only publishing, Message payloads, and registered Mount capabilities are covered by the `attribute-alias` declaration fixtures.
+
+## Explicit Binding relationship constructors
+
+The storage-specific constructors preserve the existing workload graphs and
+callback contracts. The approved adoption sets only the two Workspace
+instantiation/type ceilings to their measured counts: 1,609,171/117,873 for
+four groups and 2,787,171/160,966 for eight. All other limits are unchanged.
+All eight workloads pass. The [comparison and raw adoption run](../../../internal/binding-relationships-20261106/README.md#compiler-measurements)
+record the original costs and the budget decision. These counters do not measure
+editor or browser rendering latency. Earlier sections retain their historical
+API spellings and source measurements.

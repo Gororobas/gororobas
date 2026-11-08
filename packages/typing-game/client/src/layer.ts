@@ -1,9 +1,15 @@
 import { Layer } from 'effect'
 
-import * as Command from './command'
-import { NavigateToRoom } from './composition'
+import { ApplicationBlock } from './block'
+import { Home, Room } from './blocks'
+import { EffectsLayer } from './effectsLayer'
+import { init } from './init'
+import { update } from './update'
+import { view } from './view'
 
-export const EffectsLayer = Layer.mergeAll(
-  Command.EffectsLayer,
-  NavigateToRoom.layer,
-)
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer,
+}).pipe(Layer.provide(Layer.mergeAll(Home.layer, Room.layer)))

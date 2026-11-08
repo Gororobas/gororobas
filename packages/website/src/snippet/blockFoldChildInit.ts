@@ -1,4 +1,4 @@
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -15,10 +15,9 @@ const ThemePickerMessage = defineMessageUnion({
 type ThemePickerMessage = typeof ThemePickerMessage.Type
 
 export const ThemePickerKey = Symbol('ThemePicker')
-
 export const ThemePickerBlock = Block.make('ThemePicker', {
   key: ThemePickerKey,
-  Init: Schema.Tuple([Theme]),
+  InitArgs: Schema.Tuple([Theme]),
   view: { kind: 'Element' },
   Model: ThemePickerModel,
   Message: ThemePickerMessage,
@@ -38,16 +37,11 @@ const themePickerView = ThemePickerComposition.makeView((model, h) =>
   h.p([], [`Theme: ${model.theme}`]),
 )
 
-const layer = ThemePickerBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init: themePickerInit,
-      update: themePickerUpdate,
-      view: themePickerView,
-    }
-  }),
-)
+const layer = ThemePickerBlock.makeLayer({
+  init: themePickerInit,
+  update: themePickerUpdate,
+  view: themePickerView,
+})
 
 const ProfileModel = Schema.Struct({
   username: Schema.String,
@@ -65,21 +59,23 @@ const ProfileChildInitContext = Schema.Struct({
 type ProfileChildInitContext = typeof ProfileChildInitContext.Type
 
 export const ProfileKey = Symbol('Profile')
-
 const ProfileBlock = Block.make('Profile', {
   key: ProfileKey,
-  Init: Schema.Tuple([ProfileChildInitContext]),
+  InitArgs: Schema.Tuple([ProfileChildInitContext]),
   Model: ProfileModel,
   Message: ProfileMessage,
   ChildInitContext: ProfileChildInitContext,
 })
 
-const ThemePickerBinding = ProfileBlock.makeBinding(ThemePickerBlock, {
-  field: 'themePicker',
-  init: {
-    contextToArgs: ({ savedTheme }) => [savedTheme],
+const ThemePickerBinding = ProfileBlock.makeRequiredFieldBinding(
+  ThemePickerBlock,
+  {
+    field: 'themePicker',
+    init: {
+      contextToArgs: ({ savedTheme }) => [savedTheme],
+    },
   },
-})
+)
 
 const ProfileComposition = ProfileBlock.makeComposition({
   bindings: [ThemePickerBinding],

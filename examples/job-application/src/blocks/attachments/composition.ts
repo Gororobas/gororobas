@@ -1,15 +1,24 @@
 import { Array, Option } from 'effect'
 import type { Block } from 'foldkit'
 
-import { FileDropBlock } from '@foldkit/ui/fileDrop'
+import { FileDrop } from '@foldkit/ui'
 
-import { AttachmentsBlock, makeFieldsStep, makeNoopStep } from './definition'
+import {
+  makeComposition,
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+} from './block'
 
-export const ResumeDropBinding = AttachmentsBlock.makeBinding(FileDropBlock, {
-  field: 'resumeDrop',
-  init: { contextToArgs: () => [{ id: 'attachments-resume' }] },
-}).withOutMessagePolicy({
-  fold: AttachmentsBlock.makeOutMessageFold(FileDropBlock, {
+export const ResumeDropBinding = makeRequiredFieldBinding(
+  FileDrop.FileDropBlock,
+  {
+    field: 'resumeDrop',
+    init: { contextToArgs: () => [{ id: 'attachments-resume' }] },
+  },
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(FileDrop.FileDropBlock, {
     ReceivedFiles: ({ files }) =>
       makeFieldsStep(() => ({
         maybeResume: maybeResume =>
@@ -19,14 +28,14 @@ export const ResumeDropBinding = AttachmentsBlock.makeBinding(FileDropBlock, {
   }),
 })
 
-export const AdditionalFilesDropBinding = AttachmentsBlock.makeBinding(
-  FileDropBlock,
+export const AdditionalFilesDropBinding = makeRequiredFieldBinding(
+  FileDrop.FileDropBlock,
   {
     field: 'additionalFilesDrop',
     init: { contextToArgs: () => [{ id: 'attachments-additional' }] },
   },
 ).withOutMessagePolicy({
-  fold: AttachmentsBlock.makeOutMessageFold(FileDropBlock, {
+  fold: makeOutMessageFold(FileDrop.FileDropBlock, {
     ReceivedFiles: ({ files }) =>
       makeFieldsStep(() => ({
         additionalFiles: Array.appendAll(files),
@@ -35,7 +44,7 @@ export const AdditionalFilesDropBinding = AttachmentsBlock.makeBinding(
   }),
 })
 
-export const AttachmentsComposition = AttachmentsBlock.makeComposition({
+export const AttachmentsComposition = makeComposition({
   bindings: [ResumeDropBinding, AdditionalFilesDropBinding],
 })
 export type AttachmentsViewBuilder = Block.ViewBuilderFor<

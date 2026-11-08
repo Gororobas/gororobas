@@ -134,7 +134,7 @@ export const EffectsLayer = Layer.mergeAll(FocusOption.layer)
 export const RadioGroupKey = Symbol('RadioGroup')
 const RadioGroupBlock = Block.make(RadioGroupNamespace, {
   key: RadioGroupKey,
-  Init: Schema.Tuple([InitConfig]),
+  InitArgs: Schema.Tuple([InitConfig]),
   view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
   Model,
   Message,
@@ -465,17 +465,12 @@ const internalView = RadioGroupComposition.makeView.withInputs(
 )
 
 /** @internal Checked canonical implementation for scoped library tests. */
-const canonicalLayer = RadioGroupBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view: internalView,
-      EffectsLayer,
-    }
-  }),
-)
+const canonicalLayer = RadioGroupBlock.makeLayer({
+  init,
+  update,
+  view: internalView,
+  EffectsLayer,
+})
 
 /** Constructs the implementation shared by all type-only RadioGroup specializations. */
 type CanonicalIdentity = Block.SelectedPublicIdentity<typeof RadioGroupBlock>
@@ -548,7 +543,7 @@ type RefinedContract<Value extends string> = Block.Contract<
 
 type RefinedConfiguration<Value extends string> = Readonly<{
   key: typeof RadioGroupKey
-  Init: Schema.Tuple<readonly [typeof InitConfig]>
+  InitArgs: Schema.Tuple<readonly [typeof InitConfig]>
   view: Readonly<{
     kind: 'Element'
     Inputs: Block.InputContract<ViewInputs<Value>>

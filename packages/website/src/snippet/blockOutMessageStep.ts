@@ -6,10 +6,9 @@ const OutMessage = defineMessageUnion({ Removed: {} })
 type OutMessage = typeof OutMessage.Type
 
 export const EntryKey = Symbol('Entry')
-
 const EntryBlock = Block.make('Entry', {
   key: EntryKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   isMessageFree: true,
 
   Model: Schema.Struct({ id: Schema.String }),

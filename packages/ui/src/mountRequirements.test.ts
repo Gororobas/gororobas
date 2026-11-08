@@ -33,7 +33,7 @@ const ComboboxMountRequirementsKey = Symbol('ComboboxMountRequirements')
 
 const ComboboxMountRequirementsBlock = Block.make('ComboboxMountRequirements', {
   key: ComboboxMountRequirementsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: TestCombobox.Model,
   Message: Schema.Never,
 })
@@ -44,7 +44,7 @@ const foldComboboxOutMessage =
     ClearedSelection: () => model => ({ model }),
   })
 
-const ComboboxBinding = ComboboxMountRequirementsBlock.makeBinding(
+const ComboboxBinding = ComboboxMountRequirementsBlock.makeCustomBinding(
   TestCombobox,
   {
     read: model => Option.some(model),
@@ -65,7 +65,7 @@ const ListboxMountRequirementsKey = Symbol('ListboxMountRequirements')
 
 const ListboxMountRequirementsBlock = Block.make('ListboxMountRequirements', {
   key: ListboxMountRequirementsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: TestListbox.Model,
   Message: Schema.Never,
 })
@@ -77,10 +77,13 @@ const foldListboxOutMessage = ListboxMountRequirementsBlock.makeOutMessageFold(
   },
 )
 
-const ListboxBinding = ListboxMountRequirementsBlock.makeBinding(TestListbox, {
-  read: model => Option.some(model),
-  write: (_model, nextListbox) => nextListbox,
-}).withOutMessagePolicy({ fold: foldListboxOutMessage })
+const ListboxBinding = ListboxMountRequirementsBlock.makeCustomBinding(
+  TestListbox,
+  {
+    read: model => Option.some(model),
+    write: (_model, nextListbox) => nextListbox,
+  },
+).withOutMessagePolicy({ fold: foldListboxOutMessage })
 
 const embedListbox = (
   model: typeof TestListbox.Model.Type,
@@ -95,7 +98,7 @@ const MenuMountRequirementsKey = Symbol('MenuMountRequirements')
 
 const MenuMountRequirementsBlock = Block.make('MenuMountRequirements', {
   key: MenuMountRequirementsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: TestMenu.Model,
   Message: Schema.Never,
 })
@@ -108,7 +111,7 @@ const foldMenuOutMessage = MenuMountRequirementsBlock.makeOutMessageFold(
   },
 )
 
-const MenuBinding = MenuMountRequirementsBlock.makeBinding(TestMenu, {
+const MenuBinding = MenuMountRequirementsBlock.makeCustomBinding(TestMenu, {
   read: model => Option.some(model),
   write: (_model, nextMenu) => nextMenu,
 }).withOutMessagePolicy({ fold: foldMenuOutMessage })

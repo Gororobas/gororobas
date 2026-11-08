@@ -2,8 +2,16 @@ import { Array, Option } from 'effect'
 import { type Block } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { DialogBlock } from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
+import {
+  makeComposition,
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from './block'
 import { saveCanvas } from './command'
 import {
   GRID_SIZE_RADIO_GROUP_ID,
@@ -15,21 +23,15 @@ import {
   ToolRadioGroupBlock,
 } from './components'
 import { DEFAULT_COLOR_INDEX } from './constant'
-import {
-  ApplicationBlock,
-  makeFieldsStep,
-  makeNoopStep,
-  makeStep,
-} from './definition'
 import { paletteIndexFromValue } from './model'
 import { PALETTE_THEMES } from './palette'
-import { requestGridSizeChange, selectColor, selectTool } from './steps'
+import { changeGridSize, selectColor, selectTool } from './steps'
 
-export const ErrorDialogBinding = ApplicationBlock.makeBinding(DialogBlock, {
+export const ErrorDialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
   field: 'errorDialog',
   init: { contextToArgs: () => [{ id: 'export-error-dialog' }] },
 }).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(DialogBlock, {
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: () =>
       makeFieldsStep(() => ({
@@ -39,14 +41,14 @@ export const ErrorDialogBinding = ApplicationBlock.makeBinding(DialogBlock, {
   }),
 })
 
-export const GridSizeConfirmDialogBinding = ApplicationBlock.makeBinding(
-  DialogBlock,
+export const GridSizeConfirmDialogBinding = makeRequiredFieldBinding(
+  Dialog.DialogBlock,
   {
     field: 'gridSizeConfirmDialog',
     init: { contextToArgs: () => [{ id: 'grid-size-confirm-dialog' }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(DialogBlock, {
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: () =>
       makeFieldsStep(() => ({
@@ -56,38 +58,38 @@ export const GridSizeConfirmDialogBinding = ApplicationBlock.makeBinding(
   }),
 })
 
-export const ToolRadioGroupBinding = ApplicationBlock.makeBinding(
+export const ToolRadioGroupBinding = makeRequiredFieldBinding(
   ToolRadioGroupBlock,
   {
     field: 'toolRadioGroup',
     init: { contextToArgs: () => [{ id: TOOL_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(ToolRadioGroupBlock, {
+  fold: makeOutMessageFold(ToolRadioGroupBlock, {
     Selected: ({ value }) => selectTool(value),
   }),
 })
 
-export const GridSizeRadioGroupBinding = ApplicationBlock.makeBinding(
+export const GridSizeRadioGroupBinding = makeRequiredFieldBinding(
   GridSizeRadioGroupBlock,
   {
     field: 'gridSizeRadioGroup',
     init: { contextToArgs: () => [{ id: GRID_SIZE_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(GridSizeRadioGroupBlock, {
-    Selected: ({ value }) => requestGridSizeChange(Number(value)),
+  fold: makeOutMessageFold(GridSizeRadioGroupBlock, {
+    Selected: ({ value }) => changeGridSize(Number(value)),
   }),
 })
 
-export const PaletteRadioGroupBinding = ApplicationBlock.makeBinding(
+export const PaletteRadioGroupBinding = makeRequiredFieldBinding(
   PaletteRadioGroupBlock,
   {
     field: 'paletteRadioGroup',
     init: { contextToArgs: () => [{ id: PALETTE_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(PaletteRadioGroupBlock, {
+  fold: makeOutMessageFold(PaletteRadioGroupBlock, {
     Selected: ({ value }) =>
       makeStep(model =>
         selectColor(paletteIndexFromValue(value, model.selectedColorIndex))(
@@ -97,9 +99,11 @@ export const PaletteRadioGroupBinding = ApplicationBlock.makeBinding(
   }),
 })
 
-const foldThemeListboxOutMessage = ApplicationBlock.makeOutMessageFold(
-  ThemeListboxBlock,
-  {
+export const ThemeListboxBinding = makeRequiredFieldBinding(ThemeListboxBlock, {
+  field: 'themeListbox',
+  init: { contextToArgs: () => [{ id: 'theme-picker' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ThemeListboxBlock, {
     Selected: ({ value }) =>
       makeStep(model => {
         const themeIndex = Number(value)
@@ -113,18 +117,10 @@ const foldThemeListboxOutMessage = ApplicationBlock.makeOutMessageFold(
         })
         return { model: nextModel, commands: [saveCanvas(nextModel)] }
       }),
-  },
-)
+  }),
+})
 
-export const ThemeListboxBinding = ApplicationBlock.makeBinding(
-  ThemeListboxBlock,
-  {
-    field: 'themeListbox',
-    init: { contextToArgs: () => [{ id: 'theme-picker' }] },
-  },
-).withOutMessagePolicy({ fold: foldThemeListboxOutMessage })
-
-export const ApplicationComposition = ApplicationBlock.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [
     ErrorDialogBinding,
     ThemeListboxBinding,

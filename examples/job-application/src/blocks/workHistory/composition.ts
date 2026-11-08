@@ -1,32 +1,31 @@
 import { Array } from 'effect'
 
+import {
+  makeComposition,
+  makeFieldsStep,
+  makeKeyedArrayBinding,
+  makeOutMessageFold,
+} from './block'
 import { WorkHistoryEntryBlock } from './blocks/workHistoryEntry'
-import { WorkHistoryBlock, makeFieldsStep } from './definition'
 
-const foldEntryOutMessage = (entryId: string) =>
-  WorkHistoryBlock.makeOutMessageFold(WorkHistoryEntryBlock, {
-    Removed: () =>
-      makeFieldsStep(() => ({
-        entries: Array.filter(entry => entry.id !== entryId),
-      })),
-  })
-
-export const EntriesBinding = WorkHistoryBlock.makeBinding(
-  WorkHistoryEntryBlock,
-  {
-    field: 'entries',
-    key: 'id',
-    init: {
-      instances: ({ today, initialEntryId }) => [
-        { key: initialEntryId, args: [initialEntryId, today] },
-      ],
-      toItem: (_occurrence, entry) => entry,
-    },
+export const EntriesBinding = makeKeyedArrayBinding(WorkHistoryEntryBlock, {
+  field: 'entries',
+  key: 'id',
+  init: {
+    instances: ({ today, initialEntryId }) => [
+      { key: initialEntryId, args: [initialEntryId, today] },
+    ],
   },
-).withOutMessagePolicy({
-  fold: (entryId, outMessage) => foldEntryOutMessage(entryId)(outMessage),
+}).withOutMessagePolicy({
+  fold: entryId =>
+    makeOutMessageFold(WorkHistoryEntryBlock, {
+      Removed: () =>
+        makeFieldsStep(() => ({
+          entries: Array.filter(entry => entry.id !== entryId),
+        })),
+    }),
 })
 
-export const WorkHistoryComposition = WorkHistoryBlock.makeComposition({
+export const WorkHistoryComposition = makeComposition({
   bindings: [EntriesBinding],
 })

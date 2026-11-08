@@ -49,17 +49,23 @@ const EmittingChildBlock: Block.FromAssemblyWithOutMessage<
   typeof ChildModel,
   typeof prepareEmittingChild
 > = Block.assemble(prepareEmittingChild)
-const EmittingLeftBinding = ParentDefinition.makeBinding(EmittingChildBlock, {
-  field: 'left',
-}).withOutMessagePolicy({
+const EmittingLeftBinding = ParentDefinition.makeRequiredFieldBinding(
+  EmittingChildBlock,
+  {
+    field: 'left',
+  },
+).withOutMessagePolicy({
   forward: ParentDefinition.makeOutMessageForward(EmittingChildBlock, {
     Selected: ({ value }) => ParentOutMessage.ForwardedSelection({ value }),
     Closed: () => undefined,
   }),
 })
-const EmittingRightBinding = ParentDefinition.makeBinding(EmittingChildBlock, {
-  field: 'right',
-})
+const EmittingRightBinding = ParentDefinition.makeRequiredFieldBinding(
+  EmittingChildBlock,
+  {
+    field: 'right',
+  },
+)
 
 const combineForwardingPolicyOperation = ParentDefinition.makeStep(() =>
   Update.combineSteps([
@@ -441,11 +447,12 @@ LeftBindingWithOutMessagePolicy.init({
     ParentModel.make({ left: child, right: child, entries: [] }),
 })
 
-LeftBindingWithOutMessagePolicy.embedView({
+const invalidChildView = {
   slotId: 'left',
-  // @ts-expect-error Selected embedView preserves the child Model.
   model: Schema.Struct({ wrong: Schema.Boolean }).make({ wrong: true }),
-})
+}
+// @ts-expect-error Selected embedView preserves the child Model.
+LeftBindingWithOutMessagePolicy.embedView(invalidChildView)
 
 void RightBindingWithOutMessagePolicy
 void ChildModel

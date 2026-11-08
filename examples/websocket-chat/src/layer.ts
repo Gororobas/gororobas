@@ -1,17 +1,16 @@
-import { Layer } from 'effect'
-
-import {
-  SendMessage,
-  TimestampReceivedMessage,
-  TimestampSentMessage,
-} from './command'
+import { ApplicationBlock } from './block'
+import { EffectsLayer } from './effectsLayer'
+import { init } from './init'
 import { managedResources } from './managedResource'
 import { subscriptions } from './subscription'
+import { update } from './update'
+import { view } from './view'
 
-export const EffectsLayer = Layer.mergeAll(
-  TimestampSentMessage.layer,
-  TimestampReceivedMessage.layer,
-  SendMessage.layer,
-  managedResources.layer,
-  subscriptions.layer,
-)
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+  subscriptions,
+  managedResources,
+  EffectsLayer,
+})

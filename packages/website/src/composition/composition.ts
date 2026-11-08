@@ -2,8 +2,16 @@ import { Option, pipe } from 'effect'
 import { type Block } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { DialogBlock } from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
+import {
+  makeComposition,
+  makeNoopStep,
+  makeOptionalFieldBinding,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from '../block'
 import {
   ApiReferenceBlock,
   BlockPageBlock,
@@ -15,32 +23,28 @@ import {
   SnippetDisclosureBlock,
   UiBlock,
 } from '../blocks'
-import { ApplicationBlock, makeNoopStep, makeStep } from '../definition'
 import { ApplicationRoute, maybeExampleSlugForRoute } from '../route'
 import { ApplyTheme, SaveThemePreference, resolveTheme } from '../theme'
 import { type ThemePreference } from '../themePreference'
 import * as ThemeMenu from '../view/themeMenu'
 import { MaybeHomeBinding } from './home'
 
-export const SearchBinding = ApplicationBlock.makeBinding(SearchBlock, {
+export const SearchBinding = makeRequiredFieldBinding(SearchBlock, {
   field: 'search',
 })
 
-export const SnippetCopyBinding = ApplicationBlock.makeBinding(
-  SnippetCopyBlock,
-  {
-    field: 'snippetCopy',
-  },
-)
+export const SnippetCopyBinding = makeRequiredFieldBinding(SnippetCopyBlock, {
+  field: 'snippetCopy',
+})
 
-export const SnippetDisclosureBinding = ApplicationBlock.makeBinding(
+export const SnippetDisclosureBinding = makeRequiredFieldBinding(
   SnippetDisclosureBlock,
   {
     field: 'snippetDisclosure',
   },
 )
 
-export const ExampleDetailBinding = ApplicationBlock.makeBinding(
+export const ExampleDetailBinding = makeRequiredFieldBinding(
   ExampleDetailBlock,
   {
     field: 'exampleDetail',
@@ -53,7 +57,7 @@ export const ExampleDetailBinding = ApplicationBlock.makeBinding(
   },
 )
 
-export const PlaygroundBinding = ApplicationBlock.makeBinding(PlaygroundBlock, {
+export const PlaygroundBinding = makeOptionalFieldBinding(PlaygroundBlock, {
   field: 'playground',
   init: {
     contextToArgs: ({ route }) =>
@@ -65,41 +69,35 @@ export const PlaygroundBinding = ApplicationBlock.makeBinding(PlaygroundBlock, {
   },
 })
 
-export const UiPagesBinding = ApplicationBlock.makeBinding(UiBlock, {
+export const UiPagesBinding = makeRequiredFieldBinding(UiBlock, {
   field: 'uiPages',
   init: { contextToArgs: ({ today }) => [today] },
 })
 
-export const ApiReferenceBinding = ApplicationBlock.makeBinding(
-  ApiReferenceBlock,
-  {
-    field: 'apiReference',
-    init: { contextToArgs: ({ maybeApiData }) => [maybeApiData] },
-  },
-)
+export const ApiReferenceBinding = makeRequiredFieldBinding(ApiReferenceBlock, {
+  field: 'apiReference',
+  init: { contextToArgs: ({ maybeApiData }) => [maybeApiData] },
+})
 
-export const ComingFromReactBinding = ApplicationBlock.makeBinding(
+export const ComingFromReactBinding = makeRequiredFieldBinding(
   ComingFromReactBlock,
   {
     field: 'comingFromReact',
   },
 )
 
-export const CoreBlockPageBinding = ApplicationBlock.makeBinding(
-  BlockPageBlock,
-  {
-    field: 'coreBlockPage',
-  },
-)
+export const CoreBlockPageBinding = makeRequiredFieldBinding(BlockPageBlock, {
+  field: 'coreBlockPage',
+})
 
-export const MobileMenuDialogBinding = ApplicationBlock.makeBinding(
-  DialogBlock,
+export const MobileMenuDialogBinding = makeRequiredFieldBinding(
+  Dialog.DialogBlock,
   {
     field: 'mobileMenuDialog',
     init: { contextToArgs: () => [{ id: 'mobile-menu' }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(DialogBlock, {
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
     CompletedClose: makeNoopStep,
@@ -122,20 +120,20 @@ const applyThemePreference = (preference: ThemePreference) =>
     }
   })
 
-export const ThemeMenuBinding = ApplicationBlock.makeBinding(
+export const ThemeMenuBinding = makeRequiredFieldBinding(
   ThemeMenu.ThemeMenuBlock,
   {
     field: 'themeMenu',
     init: { contextToArgs: () => [{ id: 'theme-menu' }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(ThemeMenu.ThemeMenuBlock, {
+  fold: makeOutMessageFold(ThemeMenu.ThemeMenuBlock, {
     Selected: ({ value }) => applyThemePreference(value),
     Closed: makeNoopStep,
   }),
 })
 
-export const ApplicationComposition = ApplicationBlock.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [
     ApiReferenceBinding,
     ComingFromReactBinding,

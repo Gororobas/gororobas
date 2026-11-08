@@ -1,4 +1,18 @@
-const formSubmit = update(model, Message.SubmittedForm())
+import { Story } from 'foldkit'
+import { expect } from 'vitest'
 
-expect(formSubmit.model.status).toBe('Submitting')
-expect(formSubmit.commands ?? []).toHaveLength(1)
+import { SubmitForm } from './command'
+import { FormBlock, layer } from './index'
+import { Message } from './message'
+import { readyForm } from './model.fixture'
+
+export const formSubmission = Story.story(
+  { block: FormBlock, layer },
+  Story.given(readyForm),
+  Story.message(Message.SubmittedForm()),
+  Story.model(model => {
+    expect(model.status).toBe('Submitting')
+  }),
+  Story.Command.expectExact(SubmitForm),
+  Story.Command.resolve(SubmitForm, Message.CompletedSubmitForm()),
+)

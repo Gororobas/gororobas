@@ -59,7 +59,7 @@ export const FoldParityChildDefinition = Block.makeDefinition(
   'FoldParityChild',
   {
     key: ChildKey,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
     Model: ChildModel,
     Message: ChildMessage,
     OutMessage: ChildOutMessage,
@@ -74,30 +74,31 @@ export const FoldParityParentDefinition = Block.makeDefinition(
   'FoldParityParent',
   {
     key: ParentKey,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
     Model,
     Message: ParentMessage,
     OutMessage: ParentOutMessage,
   },
 )
-export const FoldParitySiblingBinding = FoldParityParentDefinition.makeBinding(
-  FoldParityChildDefinition.contract,
-  {
-    field: 'sibling',
-  },
-).withOutMessagePolicy({
-  fold: FoldParityParentDefinition.makeOutMessageFold(
+export const FoldParitySiblingBinding =
+  FoldParityParentDefinition.makeRequiredFieldBinding(
     FoldParityChildDefinition.contract,
     {
-      Chose: ({ value }) =>
-        FoldParityParentDefinition.makeStep(model => ({
-          model,
-          outMessage: ParentOutMessage.Chose({ value }),
-        })),
-      Closed: () => FoldParityParentDefinition.makeNoopStep(),
+      field: 'sibling',
     },
-  ),
-})
+  ).withOutMessagePolicy({
+    fold: FoldParityParentDefinition.makeOutMessageFold(
+      FoldParityChildDefinition.contract,
+      {
+        Chose: ({ value }) =>
+          FoldParityParentDefinition.makeStep(model => ({
+            model,
+            outMessage: ParentOutMessage.Chose({ value }),
+          })),
+        Closed: () => FoldParityParentDefinition.makeNoopStep(),
+      },
+    ),
+  })
 
 const conditionalCases = {
   Chose:
@@ -170,7 +171,7 @@ export const FoldParityLiteralDefinition = Block.makeDefinition(
   'FoldParityLiteral',
   {
     key: LiteralKey,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
     Model: LiteralModel,
     Message: LiteralMessage,
   },
@@ -420,22 +421,24 @@ export const oldNativeFold = DeclarationFoldParentDefinition.makeOutMessageFold(
   conditionalCases,
 )
 
-export const plainBinding = FoldParityParentDefinition.makeBinding(
+export const plainBinding = FoldParityParentDefinition.makeRequiredFieldBinding(
   FoldParityChildDefinition.contract,
   { field: 'child' },
 ).withOutMessagePolicy({ fold: conditionalFold })
 const augmentedFold = Object.assign(conditionalFold, { label: 'Tracked' })
-export const augmentedBinding = FoldParityParentDefinition.makeBinding(
-  FoldParityChildDefinition.contract,
-  { field: 'child' },
-).withOutMessagePolicy({ fold: augmentedFold })
+export const augmentedBinding =
+  FoldParityParentDefinition.makeRequiredFieldBinding(
+    FoldParityChildDefinition.contract,
+    { field: 'child' },
+  ).withOutMessagePolicy({ fold: augmentedFold })
 const mutablePolicy: { fold: typeof conditionalFold } = {
   fold: conditionalFold,
 }
-export const mutableBinding = FoldParityParentDefinition.makeBinding(
-  FoldParityChildDefinition.contract,
-  { field: 'child' },
-).withOutMessagePolicy(mutablePolicy)
+export const mutableBinding =
+  FoldParityParentDefinition.makeRequiredFieldBinding(
+    FoldParityChildDefinition.contract,
+    { field: 'child' },
+  ).withOutMessagePolicy(mutablePolicy)
 const forward = FoldParityParentDefinition.makeOutMessageForward(
   FoldParityChildDefinition.contract,
   {
@@ -443,10 +446,11 @@ const forward = FoldParityParentDefinition.makeOutMessageForward(
     Closed: () => undefined,
   },
 )
-export const forwardingBinding = FoldParityParentDefinition.makeBinding(
-  FoldParityChildDefinition.contract,
-  { field: 'child' },
-).withOutMessagePolicy({ fold: conditionalFold, forward })
+export const forwardingBinding =
+  FoldParityParentDefinition.makeRequiredFieldBinding(
+    FoldParityChildDefinition.contract,
+    { field: 'child' },
+  ).withOutMessagePolicy({ fold: conditionalFold, forward })
 
 type PolicyOf<Binding> =
   Binding extends Block.BindingPolicyEvidence<infer Policy> ? Policy : never
@@ -464,10 +468,11 @@ export const forwardingComposition = FoldParityParentDefinition.makeComposition(
     bindings: [forwardingBinding],
   },
 )
-export const connectedBinding = FoldParityParentDefinition.makeBinding(
-  FoldParityChildDefinition.contract,
-  { field: 'child' },
-).withOutMessagePolicy({ fold: connectedFold })
+export const connectedBinding =
+  FoldParityParentDefinition.makeRequiredFieldBinding(
+    FoldParityChildDefinition.contract,
+    { field: 'child' },
+  ).withOutMessagePolicy({ fold: connectedFold })
 export const connectedComposition = FoldParityParentDefinition.makeComposition({
   bindings: [connectedBinding, FoldParitySiblingBinding],
 })
@@ -588,6 +593,7 @@ type RestoredBinding<Binding> = Block.BindingsFromSpecs<
 export type PolicySpecParity = readonly [
   Expect<
     SpecPolicyOf<typeof plainBinding> extends Block.FoldOnlyPolicySpec<
+      infer _Message,
       infer _Out,
       infer _Context,
       infer _Data

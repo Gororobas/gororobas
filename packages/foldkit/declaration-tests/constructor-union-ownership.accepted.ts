@@ -1,12 +1,12 @@
 import { Effect, Layer, Schema } from 'effect'
 import * as Block from 'foldkit/block'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 
 export const Model = Schema.Struct({ count: Schema.Number })
 export type Model = typeof Model.Type
 export const Message = defineMessageUnion({ CompletedTick: {} })
 export type Message = typeof Message.Type
-export const InMessage = defineMessageUnion({ RequestedReset: {} })
+export const InMessage = defineInMessageUnion({ RequestedReset: {} })
 export type InMessage = typeof InMessage.Type
 export const CounterKey = Symbol('InMessagePlanOwnership')
 export const CounterBlock = Block.make('InMessagePlanOwnership', {
@@ -14,7 +14,7 @@ export const CounterBlock = Block.make('InMessagePlanOwnership', {
   Model,
   Message,
   InMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 export const FirstMount = CounterBlock.makeMount('First', {
   messages: [Message.CompletedTick],
@@ -73,7 +73,7 @@ export const ChildBlock = Block.make('ConstructorUnionChild', {
   Model: Schema.Number,
   Message: Schema.Never,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const childComposition = ChildBlock.makeComposition()
 export const childLayer = ChildBlock.makeLayer(
@@ -94,13 +94,13 @@ export const ParentBlock = Block.make('ConstructorUnionParent', {
   Model: ParentModel,
   Message: Schema.Never,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
-export const FirstBinding = ParentBlock.makeBinding(ChildBlock, {
+export const FirstBinding = ParentBlock.makeRequiredFieldBinding(ChildBlock, {
   field: 'first',
   init: false,
 })
-export const SecondBinding = ParentBlock.makeBinding(ChildBlock, {
+export const SecondBinding = ParentBlock.makeRequiredFieldBinding(ChildBlock, {
   field: 'second',
   init: false,
 })
@@ -150,7 +150,7 @@ export const EffectsBlock = Block.make('ConstructorUnionEffects', {
   key: EffectsKey,
   Model: Schema.Number,
   Message: EffectsMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 export const First = EffectsBlock.makeCommand('First', {
   messages: [EffectsMessage.CompletedFirst],
@@ -216,7 +216,7 @@ export const HostBlock = Block.make('ConstructorUnionHost', {
   key: HostKey,
   Model: Schema.Number,
   Message: EffectsMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 export const HostFirst = HostBlock.makeCommand('First', {
   messages: [EffectsMessage.CompletedFirst],
@@ -266,14 +266,14 @@ export const selectedSecondHostLayer =
   HostBlock.provideHandlers(secondHandlers)(secondHostLayer)
 
 export const InputKey = Symbol('ConstructorUnionInputs')
-export const InputMessage = defineMessageUnion({ RequestedRead: {} })
+export const InputMessage = defineInMessageUnion({ RequestedRead: {} })
 export type InputMessage = typeof InputMessage.Type
 export const InputBlock = Block.make('ConstructorUnionInputs', {
   key: InputKey,
   Model: Schema.Number,
   Message: EffectsMessage,
   InMessage: InputMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 export const InputFirst = InputBlock.makeCommand('First', {
   messages: [EffectsMessage.CompletedFirst],

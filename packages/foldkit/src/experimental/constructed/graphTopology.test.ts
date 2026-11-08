@@ -11,7 +11,7 @@ const makeLeaf = () => {
     Model: Schema.Number,
     Message: Schema.Never,
     isMessageFree: true,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
   })
   const Composition = Definition.makeComposition()
   const descriptor = Definition.makeBlock(
@@ -33,12 +33,15 @@ const makeParent = (child: ReturnType<typeof makeLeaf>) => {
     Model: Schema.Struct({ child: child.Definition.contract.Model }),
     Message: Schema.Never,
     isMessageFree: true,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
   })
-  const binding = Definition.makeBinding(child.Definition.contract, {
-    field: 'child',
-    init: { contextToArgs: () => [] },
-  })
+  const binding = Definition.makeRequiredFieldBinding(
+    child.Definition.contract,
+    {
+      field: 'child',
+      init: { contextToArgs: () => [] },
+    },
+  )
   const Composition = Definition.makeComposition({ bindings: [binding] })
   const init = Composition.makeInit(() => ({ model: {} }))
   const update = Composition.makeUpdate({})
@@ -121,12 +124,15 @@ describe('construction graph Layer topology', () => {
       Model: Schema.Struct({ child: child.Definition.contract.Model }),
       Message: Schema.Never,
       isMessageFree: true,
-      Init: Schema.Tuple([]),
+      InitArgs: Schema.Tuple([]),
     })
-    const ChildBinding = Definition.makeBinding(child.Definition.contract, {
-      field: 'child',
-      init: { contextToArgs: () => [] },
-    })
+    const ChildBinding = Definition.makeRequiredFieldBinding(
+      child.Definition.contract,
+      {
+        field: 'child',
+        init: { contextToArgs: () => [] },
+      },
+    )
     const Composition = Definition.makeComposition({ bindings: [ChildBinding] })
     const descriptor = Definition.makeBlock(
       Effect.gen(function* () {

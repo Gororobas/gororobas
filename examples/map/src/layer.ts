@@ -1,19 +1,12 @@
-import { Layer } from 'effect'
+import { ApplicationBlock } from './block'
+import { EffectsLayer } from './effectsLayer'
+import { init } from './init'
+import { update } from './update'
+import { view } from './view'
 
-import {
-  FlyTo,
-  FocusSearchInput,
-  Geolocate,
-  LockBodyScroll,
-  UnlockBodyScroll,
-} from './command'
-import { MountMap } from './mount'
-
-export const EffectsLayer = Layer.mergeAll(
-  FlyTo.layer,
-  Geolocate.layer,
-  FocusSearchInput.layer,
-  LockBodyScroll.layer,
-  UnlockBodyScroll.layer,
-  MountMap.layer,
-)
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer,
+})

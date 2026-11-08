@@ -10,24 +10,30 @@ import * as VideoCall from './videoCall'
 const SIGNALING_URL = 'wss://example.com/call/signaling'
 
 export const CallKey = Symbol('Call')
-
 export const CallBlock = Block.make('Call', {
   key: CallKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
-const SignalingSocket = CallBlock.makeResource<WebSocket>()('SignalingSocket')
 
-const VideoCallBinding = CallBlock.makeBinding(VideoCall.VideoCallBlock, {
+const {
+  makeResource,
+  makeRequiredFieldBinding,
+  makeComposition,
+  makeManagedResources,
+} = CallBlock
+const SignalingSocket = makeResource<WebSocket>()('SignalingSocket')
+
+const VideoCallBinding = makeRequiredFieldBinding(VideoCall.VideoCallBlock, {
   field: 'videoCall',
 })
 
-const CallComposition = CallBlock.makeComposition({
+const CallComposition = makeComposition({
   bindings: [VideoCallBinding],
 })
 
-export const managedResources = CallBlock.makeManagedResources(entry => ({
+export const managedResources = makeManagedResources(entry => ({
   signalingSocket: entry('ManageSignalingSocket', Schema.Option(Schema.Null), {
     resource: SignalingSocket,
     modelToMaybeRequirements: model => Option.as(model.videoCall, null),
@@ -44,16 +50,9 @@ export const managedResources = CallBlock.makeManagedResources(entry => ({
   }),
 }))
 
-export const layer = CallBlock.makeLayer(
-  Effect.gen(function* () {
-    const videoCall = yield* VideoCallBinding
-
-    return {
-      children: [videoCall],
-      init,
-      update,
-      managedResources,
-      EffectsLayer: managedResources.signalingSocket.layer,
-    }
-  }),
-).pipe(Layer.provide(VideoCall.layer))
+export const layer = CallBlock.makeLayer({
+  init,
+  update,
+  managedResources,
+  EffectsLayer: managedResources.signalingSocket.layer,
+}).pipe(Layer.provide(VideoCall.layer))

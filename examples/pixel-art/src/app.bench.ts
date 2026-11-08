@@ -1,11 +1,11 @@
 import { Effect, Option } from 'effect'
-import * as Story from 'foldkit/story'
+import { Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { test as baseTest, describe } from 'vitest'
 
-import { ApplicationBlock, layer } from './block'
 import { Flags } from './flags'
 import { createEmptyGrid } from './grid'
+import { ApplicationBlock, layer } from './index'
 import { Message } from './message'
 import type { Model } from './model'
 

@@ -2,23 +2,27 @@
 
 ## Overview
 
+Application behavior tests use the Story or Scene DSL. Deliver Messages or InMessages, resolve Commands and assert through those steps. Do not replace the runner with a chain of acquired update calls or direct Step applications. A pure fixture may build an initial Model or deliberately use `given(model)`; an advanced scoped fixture may need acquired initialization, graph identity or view context. Keep the behavior itself in the DSL. Pure domain and selector unit tests remain separate; raw transition tests belong to framework infrastructure.
+
 A Block-aware Story acquires the chosen implementation, then calls its pure update with the Model and Messages you provide. Commands stay as data until the test supplies their result Messages. The returned Effect owns graph construction and cleanup; it does not run Command handlers or Streams.
 
-In Vitest, return that Effect from `it.effect` in `@effect/vitest`. The runner awaits the result and manages the test Scope. Prefer direct Block-aware calls for ordinary scenarios; keep `withBlock` for fixtures needing acquired operations or deliberately modified initialized Models. Start startup scenarios with `init` and explicit Command resolution so their initial Commands remain visible.
+In Vitest, return that Effect from `it.effect` in `@effect/vitest`. The runner awaits the result and manages the test Scope. Prefer direct Block-aware calls for ordinary scenarios; keep `withBlock` for fixtures needing initialized state, graph identity or custom view context. Start startup scenarios with `init` and explicit Command resolution so their initial Commands remain visible.
 
-Pass `{ block: FeatureBlock, layer }` so the runner checks the declaration against its selected implementation Layer. Start with `init(...args)` to retain startup Model and Commands, or `given(model)` for a deliberate fixture. Send Messages, resolve Commands, and assert on the Model. `withBlock` supports advanced fixtures that need direct synchronous operations.
+Pass `{ block: FeatureBlock, layer }` so the runner checks the Block contract against its selected implementation Layer. A test may name this pair `featureSubject` and reuse it. The contract declares the Model, Messages and other public types; the Layer supplies the executable implementation and its child graph.
+
+Start with `init(...args)` when initialization is part of the scenario. It runs the real initializer and retains its startup Commands for explicit resolution. Use `given(model)` when the scenario starts from an intentional immutable fixture; it skips initialization and adds no startup Commands. Send subsequent Messages and resolve Commands through the DSL. `withBlock` supplies acquired initialization, graph identity or custom view context for advanced fixtures.
 
 ## The API
 
 ### Import Story Steps
 
-Import the steps you need from `foldkit/story`.
+Import the `Story` namespace from `foldkit`.
 
-- Top-level steps start the test, group reusable setup, send Messages, and inspect results: `story`, `init`, `steps`, `given`, `message`, `messageFrom`, `messageWith`, `model`, `expectOutMessage`, and `expectNoOutMessage`.
-- The `Command` namespace handles pending Commands: `argsOf`, `resolve`, `resolveAll`, `resolveAllExact`, `expectHas`, `expectExact`, and `expectNone`.
+- Top-level steps start the test, group reusable setup, send Messages, and inspect results: `story`, `init`, `steps`, `given`, `message`, `messageIn`, `messageWith`, `model`, `models`, `expectOutMessage`, and `expectNoOutMessage`.
+- The `Command` namespace handles pending Commands: `argsOf`, `resolve`, `resolveAll`, `resolveAllExact`, `expectHas`, `expectExact`, `expectExactInOrder`, and `expectNone`.
 - `Subscription.from(block.subscriptions)` creates emission steps inside an acquired test fixture. For private registries, test the checked implementation that owns them.
 
-Use named imports when the file contains only Story tests. If a file contains both Story and Scene tests, import the namespaces from `foldkit` so `Story.given` and `Scene.given` stay distinct.
+Qualify every testing step through the namespace so call sites such as `Story.given`, `Story.message`, and `Story.model` identify the DSL directly.
 
 ::Snippet{name="testingApi" label="API reference"}
 
@@ -30,11 +34,13 @@ Use `FetchWeather` when the test only cares that this Command was dispatched. Us
 
 For before-and-after examples covering generated child delivery and completed UI Blocks, see [Migrate an existing test suite](/testing#migrate-an-existing-test-suite).
 
+`Command.expectExact` compares an exact set without requiring dispatch order. Use `Command.expectExactInOrder` when order is part of the behavior, such as parent startup Commands followed by child init Commands. It keeps the same identity, argument, occurrence and exact-count checks. Neither assertion implies that effects run or complete in that order. Keep ordinary expectations in these helpers rather than inspecting simulation internals.
+
 ### Inspect Captured Command Arguments
 
-Use `Command.argsOf(Definition)(pending)` when a test helper needs the args captured on pending Command metadata. It matches the Definition's source identity, including through qualified Binding paths, and returns `Option` of the Definition's exact args type. An argless match returns `Some(undefined)`; `None` means the pending Command came from another source.
+Use a Command instance in an ordinary assertion when its arguments matter. `Command.argsOf(Definition)(pending)` is available for custom testing adapters that already own a pending invocation. It matches the Definition's source identity, including through qualified Binding paths, and returns `Option` of the Definition's exact args type. An argless match returns `Some(undefined)`; `None` means the pending Command came from another source.
 
-Projection does not choose an occurrence. Map it across `simulation.commands`, then state the cardinality your helper requires. It also leaves the pending value's parent Message mapping, Effect channels, qualified name, and keys unchanged. Construct an instance from the projected args when the next step should resolve that exact dispatch.
+Projection does not select an occurrence or change the invocation's parent Message mapping, Effect channels, qualified name or keys. It does not require a custom Story callback for an ordinary argument expectation.
 
 ::Snippet{name="testingCommandArgs" label="Inspect captured Command arguments"}
 
@@ -48,7 +54,17 @@ Here’s a test for the delayed reset from the [Commands](/core/commands) page. 
 
 ::Snippet{name="counterCommandsTest" label="Delayed-reset Story test"}
 
-Read it from top to bottom. The Model starts at 5. `ClickedResetAfterDelay()` returns `DelayReset`. The test resolves that Command with `CompletedDelayReset()`, which update handles by setting the count to 0.
+Read it from top to bottom. The Model starts at 5. `ClickedResetAfterDelay()` returns `WaitBeforeReset`. The test resolves that Command with `CompletedWaitBeforeReset()`, which update handles by setting the count to 0.
+
+### Compare Models Without Mutable Captures
+
+Use `models(steps(...), (before, after) => ...)` to compare the Models around a sequence. The callback receives the exact Model type, including when the sequence delivers a child Message or an InMessage. It can compare values or check that an unchanged child retains its reference. The runner retains the original reference; it does not clone the Model.
+
+::Snippet{name="testingModelComparison" label="Compare Models around a transition"}
+
+`story` returns its final Model after checking that every Command was resolved. A Block-aware Story returns an Effect containing that Model. An immutable result can seed a later Story or Scene with `given`; pending Commands and graph resources do not carry into that new test.
+
+Do not assign Models into outer variables from an assertion callback. Use a comparison group, the returned Model or a deliberate immutable fixture. If those cannot express the scenario, check whether the test is asserting the right behavior or whether the DSL needs an operation for it.
 
 ## Multi-Step Flows
 
@@ -97,6 +113,10 @@ Pass the raw child entry only when it identifies one registration. If a child Su
 ### Resolve Child Commands
 
 When resolving a Command from a [child Block](/core/block), pass the child's result Message. Story applies the parent Message mapping automatically.
+
+Deliver a direct child fact with `Story.messageIn(Binding, message)`. For a descendant, supply a nonempty Binding path; each keyed segment is `{ binding, key }`. The runner checks the relationships and supplies the envelopes. Keep this step directly in the test unless a named concrete interaction makes the scenario clearer.
+
+::Snippet{name="testingNestedChildMessage" label="Deliver a nested child Message"}
 
 ### UI Component Test Helpers
 

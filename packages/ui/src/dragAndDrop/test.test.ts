@@ -29,7 +29,7 @@ type ParentMessage = typeof ParentMessage.Type
 const DragAndDropTestParentKey = Symbol('DragAndDropTestParent')
 const DragAndDropTestParentBlock = Block.make('DragAndDropTestParent', {
   key: DragAndDropTestParentKey,
-  Init: Block.makeInputContract<readonly []>(),
+  InitArgs: Block.makeInputContract<readonly []>(),
   Model: ParentModel,
   Message: ParentMessage,
 })
@@ -44,15 +44,21 @@ const foldDragAndDropOutMessage = DragAndDropTestParentBlock.makeOutMessageFold(
   },
 )
 
-const LeftBinding = DragAndDropTestParentBlock.makeBinding(DragAndDropBlock, {
-  field: 'left',
-  init: false,
-}).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
+const LeftBinding = DragAndDropTestParentBlock.makeRequiredFieldBinding(
+  DragAndDropBlock,
+  {
+    field: 'left',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
 
-const RightBinding = DragAndDropTestParentBlock.makeBinding(DragAndDropBlock, {
-  field: 'right',
-  init: false,
-}).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
+const RightBinding = DragAndDropTestParentBlock.makeRequiredFieldBinding(
+  DragAndDropBlock,
+  {
+    field: 'right',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
 
 const DragAndDropTestParentComposition =
   DragAndDropTestParentBlock.makeComposition({
@@ -112,24 +118,16 @@ const parentInit = DragAndDropTestParentComposition.makeInit(() => ({
 }))
 const ParentBlock = {
   block: DragAndDropTestParentBlock,
-  layer: DragAndDropTestParentBlock.makeLayer(
-    Effect.gen(function* () {
-      const left = yield* LeftBinding
-      const right = yield* RightBinding
-
-      return {
-        children: [left, right],
-        init: parentInit,
-        update,
-      }
-    }),
-  ).pipe(Layer.provide(layer)),
+  layer: DragAndDropTestParentBlock.makeLayer({
+    init: parentInit,
+    update,
+  }).pipe(Layer.provide(layer)),
 }
 const NestedParentBlock = DragAndDropTestParentBlock
 const OtherDragAndDropKey = Symbol('OtherDragAndDrop')
 const OtherDragAndDropBlock = Block.make('OtherDragAndDrop', {
   key: OtherDragAndDropKey,
-  Init: Block.makeInputContract<readonly []>(),
+  InitArgs: Block.makeInputContract<readonly []>(),
   Model: DragAndDropBlock.Model,
   Message: DragAndDropBlock.Message,
 })
@@ -332,13 +330,13 @@ const NestedDragAndDropTestParentBlock = Block.make(
   'NestedDragAndDropTestParent',
   {
     key: NestedDragAndDropTestParentKey,
-    Init: Block.makeInputContract<readonly []>(),
+    InitArgs: Block.makeInputContract<readonly []>(),
     Model: NestedModel,
     Message: NestedMessage,
   },
 )
 
-const NestedBinding = NestedDragAndDropTestParentBlock.makeBinding(
+const NestedBinding = NestedDragAndDropTestParentBlock.makeCustomKeyedBinding(
   NestedParentBlock,
   {
     placement: 'parents',
@@ -392,17 +390,10 @@ const NestedBlockInit = NestedDragAndDropTestParentComposition.makeInit(() => ({
 }))
 const NestedBlock = {
   block: NestedDragAndDropTestParentBlock,
-  layer: NestedDragAndDropTestParentBlock.makeLayer(
-    Effect.gen(function* () {
-      const child = yield* NestedBinding
-
-      return {
-        children: [child],
-        init: NestedBlockInit,
-        update: nestedUpdate,
-      }
-    }),
-  ).pipe(Layer.provide(ParentBlock.layer)),
+  layer: NestedDragAndDropTestParentBlock.makeLayer({
+    init: NestedBlockInit,
+    update: nestedUpdate,
+  }).pipe(Layer.provide(ParentBlock.layer)),
 }
 
 describe('DragAndDrop.test nested ancestor selection', () => {
@@ -446,7 +437,7 @@ const KeyedDragAndDropTestParentBlock = Block.make(
   'KeyedDragAndDropTestParent',
   {
     key: KeyedDragAndDropTestParentKey,
-    Init: Block.makeInputContract<readonly []>(),
+    InitArgs: Block.makeInputContract<readonly []>(),
     Model: KeyedParentModel,
     Message: KeyedParentMessage,
   },
@@ -460,7 +451,7 @@ const foldKeyedDragAndDropOutMessage =
     Cancelled: () => model => ({ model }),
   })
 
-const KeyedBinding = KeyedDragAndDropTestParentBlock.makeBinding(
+const KeyedBinding = KeyedDragAndDropTestParentBlock.makeCustomKeyedBinding(
   DragAndDropBlock,
   {
     placement: 'boards',
@@ -478,7 +469,7 @@ const KeyedBinding = KeyedDragAndDropTestParentBlock.makeBinding(
       }),
   },
 ).withOutMessagePolicy({
-  fold: (_key, outMessage) => foldKeyedDragAndDropOutMessage(outMessage),
+  fold: foldKeyedDragAndDropOutMessage,
 })
 
 const KeyedDragAndDropTestParentComposition =
@@ -513,17 +504,10 @@ const KeyedBlockInit = KeyedDragAndDropTestParentComposition.makeInit(() => ({
 }))
 const KeyedBlock = {
   block: KeyedDragAndDropTestParentBlock,
-  layer: KeyedDragAndDropTestParentBlock.makeLayer(
-    Effect.gen(function* () {
-      const child = yield* KeyedBinding
-
-      return {
-        children: [child],
-        init: KeyedBlockInit,
-        update: keyedUpdate,
-      }
-    }),
-  ).pipe(Layer.provide(layer)),
+  layer: KeyedDragAndDropTestParentBlock.makeLayer({
+    init: KeyedBlockInit,
+    update: keyedUpdate,
+  }).pipe(Layer.provide(layer)),
 }
 
 if (false) {

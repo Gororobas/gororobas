@@ -13,7 +13,7 @@ const CounterDefinition = Block.makeDefinition('ComposableViewCounter', {
   key: CounterKey,
   Model: CounterModel,
   Message: CounterMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
 const CounterComposition = CounterDefinition.makeComposition()
@@ -45,10 +45,10 @@ const PageDefinition = Block.makeDefinition('ComposableViewPage', {
   key: PageKey,
   Model,
   Message,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-const CounterBinding = PageDefinition.makeBinding(CounterBlock, {
+const CounterBinding = PageDefinition.makeRequiredFieldBinding(CounterBlock, {
   field: 'counter',
 })
 const PageComposition = PageDefinition.makeComposition({
@@ -95,7 +95,7 @@ const ForeignDefinition = Block.makeDefinition('ForeignComposableView', {
   key: ForeignKey,
   Model,
   Message,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
 const ForeignComposition = ForeignDefinition.makeComposition()
@@ -171,15 +171,21 @@ const ShellDefinition = Block.makeDefinition('AlternateViewShell', {
     second: PageDefinition.contract.Model,
   }),
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-const FirstPageBinding = ShellDefinition.makeBinding(PageDefinition.contract, {
-  field: 'first',
-})
-const SecondPageBinding = ShellDefinition.makeBinding(PageDefinition.contract, {
-  field: 'second',
-})
+const FirstPageBinding = ShellDefinition.makeRequiredFieldBinding(
+  PageDefinition.contract,
+  {
+    field: 'first',
+  },
+)
+const SecondPageBinding = ShellDefinition.makeRequiredFieldBinding(
+  PageDefinition.contract,
+  {
+    field: 'second',
+  },
+)
 const ShellComposition = ShellDefinition.makeComposition({
   bindings: [FirstPageBinding, SecondPageBinding],
 })
@@ -296,7 +302,7 @@ const ViewlessDefinition = Block.makeDefinition('ViewlessAlternateCounter', {
   key: ViewlessKey,
   Model: CounterModel,
   Message: CounterMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const ViewlessComposition = ViewlessDefinition.makeComposition()
 const ViewlessImplementation = ViewlessDefinition.makeBlock(
@@ -323,10 +329,10 @@ const ViewlessShellDefinition = Block.makeDefinition('ViewlessAlternateShell', {
   key: ViewlessShellKey,
   Model: Schema.Struct({ child: ViewlessDefinition.contract.Model }),
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-const ViewlessBinding = ViewlessShellDefinition.makeBinding(
+const ViewlessBinding = ViewlessShellDefinition.makeRequiredFieldBinding(
   ViewlessDefinition.contract,
   { field: 'child' },
 )
@@ -373,10 +379,10 @@ const KeyedShellDefinition = Block.makeDefinition('KeyedAlternateShell', {
     children: Schema.Record(Schema.String, ViewlessDefinition.contract.Model),
   }),
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-const KeyedChildBinding = KeyedShellDefinition.makeMapBinding(
+const KeyedChildBinding = KeyedShellDefinition.makeRecordBinding(
   ViewlessDefinition.contract,
   { field: 'children' },
 )

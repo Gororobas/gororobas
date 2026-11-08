@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Schema } from 'effect'
+import { Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import * as Scene from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
@@ -29,7 +29,7 @@ const RadioGroupSceneBlock = Block.make('RadioGroupScene', {
   key: RadioGroupSceneKey,
   Model,
   Message: Schema.Never,
-  Init: Schema.Tuple([Schema.Option(Schema.String)]),
+  InitArgs: Schema.Tuple([Schema.Option(Schema.String)]),
   ChildInitContext: Schema.String,
   view: { kind: 'Element', Inputs: Block.makeInputContract<Overrides>() },
 })
@@ -51,10 +51,13 @@ const foldRadioGroupOutMessage = RadioGroupSceneBlock.makeOutMessageFold(
   },
 )
 
-const RadioGroupBinding = RadioGroupSceneBlock.makeBinding(TestRadioGroup, {
-  field: 'radioGroup',
-  init: { contextToArgs: id => [{ id }] },
-}).withOutMessagePolicy({ fold: foldRadioGroupOutMessage })
+const RadioGroupBinding = RadioGroupSceneBlock.makeRequiredFieldBinding(
+  TestRadioGroup,
+  {
+    field: 'radioGroup',
+    init: { contextToArgs: id => [{ id }] },
+  },
+).withOutMessagePolicy({ fold: foldRadioGroupOutMessage })
 
 const RadioGroupSceneComposition = RadioGroupSceneBlock.makeComposition({
   bindings: [RadioGroupBinding],
@@ -99,18 +102,11 @@ const init = RadioGroupSceneComposition.makeInit(maybeSelectedValue => ({
 }))
 const radioGroupScene = {
   block: RadioGroupSceneBlock,
-  layer: RadioGroupSceneBlock.makeLayer(
-    Effect.gen(function* () {
-      const radioGroup = yield* RadioGroupBinding
-
-      return {
-        children: [radioGroup],
-        init,
-        update,
-        view: rootView,
-      }
-    }),
-  ).pipe(Layer.provide(RadioGroupLayer)),
+  layer: RadioGroupSceneBlock.makeLayer({
+    init,
+    update,
+    view: rootView,
+  }).pipe(Layer.provide(RadioGroupLayer)),
 }
 
 const resolveFocusOption = Scene.Command.resolve(

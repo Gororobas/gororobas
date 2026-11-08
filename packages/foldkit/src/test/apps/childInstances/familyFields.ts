@@ -10,7 +10,9 @@ export class ValueFamily extends Context.Service<
 const ValueFamilyLayer = Layer.effect(ValueFamily)(Block.familyLifetime)
 export const ValueNamespace = Block.makeNamespace('InstanceValueFamily')
 export const ValueKey = Symbol('InstanceValueFamily')
-const makeValueFamily = <Value extends Schema.Top>(Value: Value) => {
+const makeValueFamily = <Value extends Schema.Codec<any, any, never, never>>(
+  Value: Value,
+) => {
   const Model = Schema.Struct({ value: Value })
   type Model = typeof Model.Type
   const Definition = Block.makeFamilyDefinition(ValueNamespace, {
@@ -18,7 +20,7 @@ const makeValueFamily = <Value extends Schema.Top>(Value: Value) => {
     Model,
     Message: Schema.Never,
     isMessageFree: true,
-    Init: Schema.Tuple([Model]),
+    InitArgs: Schema.Tuple([Model]),
   })
   const Composition = Definition.makeComposition()
   const recipe = Definition.makeBlock(
@@ -55,21 +57,27 @@ export const FamilyDefinition = Block.makeDefinition(
     key: FamilyApplicationKey,
     Model: FamilyModel,
     Message: FamilyMessage,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
   },
 )
-export const NumbersBinding = FamilyDefinition.makeBinding(NumberFamily.block, {
-  field: 'numbers',
-  placement: 'numbers',
-  key: 'key',
-  childField: 'model',
-})
-export const StringsBinding = FamilyDefinition.makeBinding(StringFamily.block, {
-  field: 'strings',
-  placement: 'strings',
-  key: 'key',
-  childField: 'model',
-})
+export const NumbersBinding = FamilyDefinition.makeKeyedArrayBinding(
+  NumberFamily.block,
+  {
+    field: 'numbers',
+    placement: 'numbers',
+    key: 'key',
+    childField: 'model',
+  },
+)
+export const StringsBinding = FamilyDefinition.makeKeyedArrayBinding(
+  StringFamily.block,
+  {
+    field: 'strings',
+    placement: 'strings',
+    key: 'key',
+    childField: 'model',
+  },
+)
 const FamilyComposition = FamilyDefinition.makeComposition({
   bindings: [NumbersBinding, StringsBinding],
 })

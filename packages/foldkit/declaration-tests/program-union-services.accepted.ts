@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, Schema } from 'effect'
+import { Context, Effect, Layer, Option, Schema, Stream } from 'effect'
 import { Block, Message, Program } from 'foldkit'
 
 export const ResourceMessage = Message.defineMessageUnion({
@@ -34,6 +34,14 @@ export const managedResources = Definition.makeManagedResources(entry => ({
     },
   }),
 }))
+export const subscriptions = Definition.makeSubscriptions(entry => ({
+  ticks: entry('ObserveTicks', {
+    messages: [ResourceMessage.CompletedRead],
+    handler: function* () {
+      return () => Stream.succeed(ResourceMessage.CompletedRead())
+    },
+  }),
+}))
 export const Composition = Definition.makeComposition()
 export const implementation = {
   init: Composition.makeInit(() => ({
@@ -50,9 +58,11 @@ const prepareRegisteredBlock = () =>
   Composition.prepareBlock({
     ...implementation,
     managedResources,
-    EffectsLayer: Layer.merge(
+    subscriptions,
+    EffectsLayer: Layer.mergeAll(
       ReadSession.layer,
       managedResources.session.layer,
+      subscriptions.ticks.layer,
     ),
   })
 export const RegisteredBlock: CompletedAssembly<typeof prepareRegisteredBlock> =
@@ -121,12 +131,15 @@ export const KeyedDefinition = Block.makeDefinition('UnionKeyedServiceProof', {
   Model: KeyedModel,
   Message: ResourceMessage,
 })
-export const RegisteredBinding = KeyedDefinition.makeBinding(RegisteredBlock, {
-  field: 'sessions',
-  key: 'id',
-  childField: 'model',
-})
-export const UnregisteredBinding = KeyedDefinition.makeBinding(
+export const RegisteredBinding = KeyedDefinition.makeKeyedArrayBinding(
+  RegisteredBlock,
+  {
+    field: 'sessions',
+    key: 'id',
+    childField: 'model',
+  },
+)
+export const UnregisteredBinding = KeyedDefinition.makeKeyedArrayBinding(
   UnregisteredBlock,
   {
     field: 'sessions',
@@ -134,7 +147,7 @@ export const UnregisteredBinding = KeyedDefinition.makeBinding(
     childField: 'model',
   },
 )
-export const OtherPlacementBinding = KeyedDefinition.makeBinding(
+export const OtherPlacementBinding = KeyedDefinition.makeKeyedArrayBinding(
   RegisteredBlock,
   {
     field: 'sessions',
@@ -143,7 +156,7 @@ export const OtherPlacementBinding = KeyedDefinition.makeBinding(
     placement: 'otherSessions',
   },
 )
-export const RenamedRegisteredBinding = KeyedDefinition.makeBinding(
+export const RenamedRegisteredBinding = KeyedDefinition.makeKeyedArrayBinding(
   RenamedRegistrationBlock,
   {
     field: 'sessions',

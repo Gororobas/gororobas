@@ -1,16 +1,18 @@
 import { Option } from 'effect'
 import { Update } from 'foldkit'
 
-import { DatePickerBlock } from '@foldkit/ui/datePicker'
+import { DatePicker } from '@foldkit/ui'
 
 import {
-  WorkHistoryEntryBlock,
+  makeComposition,
   makeFieldsStep,
   makeNoopStep,
-} from './definition'
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+} from './block'
 
-export const StartDateBinding = WorkHistoryEntryBlock.makeBinding(
-  DatePickerBlock,
+export const StartDateBinding = makeRequiredFieldBinding(
+  DatePicker.DatePickerBlock,
   {
     field: 'startDate',
     init: {
@@ -23,8 +25,8 @@ export const StartDateBinding = WorkHistoryEntryBlock.makeBinding(
   fold: outMessage => foldStartDateOutMessage(outMessage),
 })
 
-export const EndDateBinding = WorkHistoryEntryBlock.makeBinding(
-  DatePickerBlock,
+export const EndDateBinding = makeRequiredFieldBinding(
+  DatePicker.DatePickerBlock,
   {
     field: 'endDate',
     init: {
@@ -35,49 +37,42 @@ export const EndDateBinding = WorkHistoryEntryBlock.makeBinding(
   fold: outMessage => foldEndDateOutMessage(outMessage),
 })
 
-const foldStartDateOutMessage = WorkHistoryEntryBlock.makeOutMessageFold(
-  DatePickerBlock,
-  {
-    ChangedViewMonth: makeNoopStep,
-    SelectedDate: ({ date }) =>
-      Update.combineSteps([
-        makeFieldsStep(() => ({
-          maybeStartDate: () => Option.some(date),
-        })),
-        EndDateBinding.informMinDateChanged(Option.some(date)),
-      ]),
-    ClearedDate: () =>
-      Update.combineSteps([
-        makeFieldsStep(() => ({
-          maybeStartDate: () => Option.none(),
-        })),
-        EndDateBinding.informMinDateChanged(Option.none()),
-      ]),
-  },
-)
+const foldStartDateOutMessage = makeOutMessageFold(DatePicker.DatePickerBlock, {
+  ChangedViewMonth: makeNoopStep,
+  SelectedDate: ({ date }) =>
+    Update.combineSteps([
+      makeFieldsStep(() => ({
+        maybeStartDate: () => Option.some(date),
+      })),
+      EndDateBinding.informOfMinDateChanged(Option.some(date)),
+    ]),
+  ClearedDate: () =>
+    Update.combineSteps([
+      makeFieldsStep(() => ({
+        maybeStartDate: () => Option.none(),
+      })),
+      EndDateBinding.informOfMinDateChanged(Option.none()),
+    ]),
+})
 
-const foldEndDateOutMessage = WorkHistoryEntryBlock.makeOutMessageFold(
-  DatePickerBlock,
-  {
-    ChangedViewMonth: makeNoopStep,
-    SelectedDate: ({ date }) =>
-      Update.combineSteps([
-        makeFieldsStep(() => ({
-          maybeEndDate: () => Option.some(date),
-        })),
-        StartDateBinding.informMaxDateChanged(Option.some(date)),
-      ]),
-    ClearedDate: () =>
-      Update.combineSteps([
-        makeFieldsStep(() => ({
-          maybeEndDate: () => Option.none(),
-        })),
-        StartDateBinding.informMaxDateChanged(Option.none()),
-      ]),
-  },
-)
+const foldEndDateOutMessage = makeOutMessageFold(DatePicker.DatePickerBlock, {
+  ChangedViewMonth: makeNoopStep,
+  SelectedDate: ({ date }) =>
+    Update.combineSteps([
+      makeFieldsStep(() => ({
+        maybeEndDate: () => Option.some(date),
+      })),
+      StartDateBinding.informOfMaxDateChanged(Option.some(date)),
+    ]),
+  ClearedDate: () =>
+    Update.combineSteps([
+      makeFieldsStep(() => ({
+        maybeEndDate: () => Option.none(),
+      })),
+      StartDateBinding.informOfMaxDateChanged(Option.none()),
+    ]),
+})
 
-export const WorkHistoryEntryComposition =
-  WorkHistoryEntryBlock.makeComposition({
-    bindings: [StartDateBinding, EndDateBinding],
-  })
+export const WorkHistoryEntryComposition = makeComposition({
+  bindings: [StartDateBinding, EndDateBinding],
+})

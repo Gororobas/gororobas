@@ -1,19 +1,23 @@
 import type { Block } from 'foldkit'
 
+import {
+  makeComposition,
+  makeOutMessageForward,
+  makeRequiredFieldBinding,
+} from './block'
 import { LoginBlock } from './blocks/login'
-import { LoggedOutBlock } from './definition'
 import { OutMessage } from './message'
 
-export const LoginModelBinding = LoggedOutBlock.makeBinding(LoginBlock, {
+export const LoginModelBinding = makeRequiredFieldBinding(LoginBlock, {
   field: 'loginModel',
   init: { contextToArgs: () => [] },
 }).withOutMessagePolicy({
-  forward: LoggedOutBlock.makeOutMessageForward({
+  forward: makeOutMessageForward({
     SucceededLogin: ({ session }) => OutMessage.SucceededLogin({ session }),
   }),
 })
 
-export const LoggedOutComposition = LoggedOutBlock.makeComposition({
+export const LoggedOutComposition = makeComposition({
   bindings: [LoginModelBinding],
 })
 export type LoggedOutViewBuilder = Block.ViewBuilderFor<

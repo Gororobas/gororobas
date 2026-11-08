@@ -1,9 +1,9 @@
 import clsx from 'clsx'
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { view as textareaView } from '@foldkit/ui/textarea'
+import { Textarea } from '@foldkit/ui'
 
 const Model = Schema.Struct({
   content: Schema.String,
@@ -18,15 +18,15 @@ type Message = typeof Message.Type
 export const CoverLetterKey = Symbol('CoverLetter')
 export const CoverLetterBlock = Block.make('CoverLetter', {
   key: CoverLetterKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = CoverLetterBlock
+const { makeComposition, makeFieldsStep } = CoverLetterBlock
 
-const CoverLetterComposition = CoverLetterBlock.makeComposition()
+const CoverLetterComposition = makeComposition()
 
 const init = CoverLetterComposition.makeInit(() => ({
   model: { content: '' },
@@ -46,7 +46,7 @@ export const view = CoverLetterComposition.makeView((model, h) => {
   const isOverLimit = remaining < 0
   const isWarning = !isOverLimit && remaining <= WARNING_THRESHOLD_CHARS
 
-  return textareaView(
+  return Textarea.view(
     {
       id: 'cover-letter',
       value: model.content,
@@ -100,13 +100,8 @@ export const view = CoverLetterComposition.makeView((model, h) => {
   )
 })
 
-export const layer = CoverLetterBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-    }
-  }),
-)
+export const layer = CoverLetterBlock.makeLayer({
+  init,
+  update,
+  view,
+})

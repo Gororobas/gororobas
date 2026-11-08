@@ -1,12 +1,9 @@
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import {
-  type CheckboxAttributes,
-  view as uiCheckboxView,
-} from '@foldkit/ui/checkbox'
+import { Checkbox } from '@foldkit/ui'
 
 // Store the checked state as a plain boolean field in your Model:
 const Model = Schema.Struct({
@@ -22,16 +19,17 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const TermsFormKey = Symbol('TermsForm')
-
 export const TermsFormBlock = Block.make('TermsForm', {
   key: TermsFormKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const TermsFormComposition = TermsFormBlock.makeComposition()
+const { makeComposition } = TermsFormBlock
+
+const TermsFormComposition = makeComposition()
 
 // In your init function, start it unchecked:
 const init = TermsFormComposition.makeInit(() => ({
@@ -52,7 +50,7 @@ const update = TermsFormComposition.makeUpdate({
 // Inside your view function, render the checkbox with Checkbox.view. It reads
 // the checked state from your Model and calls onToggle with the new state.
 const view = TermsFormComposition.makeView((model, h) => {
-  const checkboxView = (attributes: CheckboxAttributes<Message>) =>
+  const checkboxView = (attributes: Checkbox.CheckboxAttributes<Message>) =>
     h.div(
       [h.Class('flex flex-col gap-1')],
       [
@@ -76,7 +74,7 @@ const view = TermsFormComposition.makeView((model, h) => {
       ],
     )
 
-  return uiCheckboxView(
+  return Checkbox.view(
     {
       id: 'accept-terms',
       isChecked: model.acceptedTerms,
@@ -88,13 +86,8 @@ const view = TermsFormComposition.makeView((model, h) => {
   )
 })
 
-export const layer = TermsFormBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-    }
-  }),
-)
+export const layer = TermsFormBlock.makeLayer({
+  init,
+  update,
+  view,
+})

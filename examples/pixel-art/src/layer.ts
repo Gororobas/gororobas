@@ -1,10 +1,20 @@
 import { Layer } from 'effect'
 
-import { ExportPng, SaveCanvas } from './command'
-import { subscriptions } from './subscription'
+import { Dialog, Listbox, RadioGroup } from '@foldkit/ui'
 
-export const EffectsLayer = Layer.mergeAll(
-  SaveCanvas.layer,
-  ExportPng.layer,
-  subscriptions.layer,
+import { ApplicationBlock } from './block'
+import { EffectsLayer } from './effectsLayer'
+import { init } from './init'
+import { subscriptions } from './subscription'
+import { update } from './update'
+import { view } from './view'
+
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+  subscriptions,
+  EffectsLayer,
+}).pipe(
+  Layer.provide(Layer.mergeAll(Dialog.layer, Listbox.layer, RadioGroup.layer)),
 )

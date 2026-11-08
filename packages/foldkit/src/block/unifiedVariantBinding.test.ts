@@ -6,7 +6,6 @@ import { it } from '@effect/vitest'
 import { defineMessageUnion } from '../message/public.js'
 import { withBlock } from '../story/public.js'
 import * as Block from './public.js'
-import { makeVariantBinding } from './variantBinding.js'
 
 const Active = Schema.Struct({
   _tag: Schema.Literal('Active'),
@@ -37,7 +36,7 @@ const ChildBlock = Block.make('UnifiedActiveVariant', {
   Model: Active,
   Message: ChildMessage,
   OutMessage: ChildOutMessage,
-  Init: Schema.Tuple([Schema.Number]),
+  InitArgs: Schema.Tuple([Schema.Number]),
   operations: {
     setCount: ChildMessage.UpdatedCount,
     notify: {
@@ -71,10 +70,9 @@ const ParentBlock = Block.make('UnifiedVariantParent', {
   Model,
   Message,
   OutMessage,
-  Init: Schema.Tuple([Schema.Number]),
+  InitArgs: Schema.Tuple([Schema.Number]),
 })
-const ActiveBinding = makeVariantBinding(
-  ParentBlock,
+const ActiveBinding = ParentBlock.makeVariantBinding(
   ChildBlock,
 ).withOutMessagePolicy({
   fold: ParentBlock.makeOutMessageFold(ChildBlock, {
@@ -144,7 +142,7 @@ describe('whole-variant storage through a unified Block', () => {
       Model,
       Message,
       OutMessage,
-      Init: Schema.Tuple([Schema.Number]),
+      InitArgs: Schema.Tuple([Schema.Number]),
     })
     const NarrowKey = Symbol('NarrowVariantParent')
     const NarrowBlock = Block.make('NarrowVariantParent', {
@@ -154,14 +152,14 @@ describe('whole-variant storage through a unified Block', () => {
         Inactive,
       ]),
       Message,
-      Init: Schema.Tuple([]),
+      InitArgs: Schema.Tuple([]),
     })
 
     if (false) {
       // @ts-expect-error The relationship belongs to its original parent.
       UnrelatedBlock.makeComposition({ bindings: [ActiveBinding] })
       // @ts-expect-error A child must equal the complete selected parent variant.
-      makeVariantBinding(NarrowBlock, ChildBlock)
+      NarrowBlock.makeVariantBinding(ChildBlock)
       // @ts-expect-error Child startup arguments retain their exact tuple.
       ActiveBinding.init({ args: ['2'], toParentModel: child => child })
       // @ts-expect-error The bound operation retains the exact Message payload.

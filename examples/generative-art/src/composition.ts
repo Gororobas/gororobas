@@ -1,7 +1,13 @@
 import type { Block } from 'foldkit'
 
-import { SliderBlock } from '@foldkit/ui/slider'
+import { Slider } from '@foldkit/ui'
 
+import {
+  makeComposition,
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+} from './block'
 import {
   FLOW_STRENGTH_MAX,
   FLOW_STRENGTH_MIN,
@@ -10,9 +16,8 @@ import {
   NOISE_SCALE_MIN_DIVISOR,
   NOISE_SCALE_STEP,
 } from './constant'
-import { ApplicationBlock, makeFieldsStep } from './definition'
-export const FlowStrengthSliderBinding = ApplicationBlock.makeBinding(
-  SliderBlock,
+export const FlowStrengthSliderBinding = makeRequiredFieldBinding(
+  Slider.SliderBlock,
   {
     field: 'flowStrengthSlider',
     init: {
@@ -27,7 +32,7 @@ export const FlowStrengthSliderBinding = ApplicationBlock.makeBinding(
     },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(SliderBlock, {
+  fold: makeOutMessageFold(Slider.SliderBlock, {
     ChangedValue: ({ value }) =>
       makeFieldsStep(() => ({
         flowStrength: () => value,
@@ -35,8 +40,8 @@ export const FlowStrengthSliderBinding = ApplicationBlock.makeBinding(
   }),
 })
 
-export const NoiseScaleSliderBinding = ApplicationBlock.makeBinding(
-  SliderBlock,
+export const NoiseScaleSliderBinding = makeRequiredFieldBinding(
+  Slider.SliderBlock,
   {
     field: 'noiseScaleSlider',
     init: {
@@ -51,13 +56,13 @@ export const NoiseScaleSliderBinding = ApplicationBlock.makeBinding(
     },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(SliderBlock, {
+  fold: makeOutMessageFold(Slider.SliderBlock, {
     ChangedValue: ({ value }) =>
       makeFieldsStep(() => ({ noiseScale: () => value })),
   }),
 })
 
-export const ApplicationComposition = ApplicationBlock.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [FlowStrengthSliderBinding, NoiseScaleSliderBinding],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<

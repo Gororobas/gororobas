@@ -1,12 +1,9 @@
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import {
-  type DisclosureAttributes,
-  view as disclosureView,
-} from '@foldkit/ui/disclosure'
+import { Disclosure } from '@foldkit/ui'
 
 // Store the open state as a plain boolean field in your Model:
 const Model = Schema.Struct({
@@ -21,16 +18,17 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const ArticlePreviewKey = Symbol('ArticlePreview')
-
 export const ArticlePreviewBlock = Block.make('ArticlePreview', {
   key: ArticlePreviewKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const ArticlePreviewComposition = ArticlePreviewBlock.makeComposition()
+const { makeComposition } = ArticlePreviewBlock
+
+const ArticlePreviewComposition = makeComposition()
 
 // In your init function, start it closed:
 const init = ArticlePreviewComposition.makeInit(() => ({
@@ -56,7 +54,7 @@ const view = ArticlePreviewComposition.makeView((model, h) => {
     button,
     panel,
     animatePanel,
-  }: DisclosureAttributes<Message>) =>
+  }: Disclosure.DisclosureAttributes<Message>) =>
     h.article(
       [h.Class('relative overflow-hidden rounded-lg border bg-white')],
       [
@@ -108,7 +106,7 @@ const view = ArticlePreviewComposition.makeView((model, h) => {
       ],
     )
 
-  return disclosureView(
+  return Disclosure.view(
     {
       id: 'architecture-article',
       isOpen: model.isArticleOpen,
@@ -119,13 +117,8 @@ const view = ArticlePreviewComposition.makeView((model, h) => {
   )
 })
 
-export const layer = ArticlePreviewBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-    }
-  }),
-)
+export const layer = ArticlePreviewBlock.makeLayer({
+  init,
+  update,
+  view,
+})

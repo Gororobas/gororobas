@@ -1,9 +1,9 @@
 import { Update } from 'foldkit'
 
+import { makeFieldsStep, makeStep } from './block'
 import { DialogBinding } from './composition'
-import { makeFieldsStep, makeStep } from './definition'
 
-export const closeDialog = DialogBinding.requestClose()
+export const closePalette = makeStep(() => DialogBinding.requestClose())
 
 export const openPalette = makeStep(model => {
   if (model.dialog.isOpen) {

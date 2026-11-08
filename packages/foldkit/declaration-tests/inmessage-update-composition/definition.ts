@@ -1,6 +1,6 @@
 import { Context, Effect, Schema } from 'effect'
 import * as Block from 'foldkit/block'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 
 import { EditorBlock } from './editor.js'
 
@@ -20,7 +20,7 @@ export const Message = defineMessageUnion({
   SubmittedForm: { text: Schema.String },
   CompletedSaveDraft: {},
 })
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   RequestedSet: { value: Schema.Number },
   RequestedSubmit: { text: Schema.String },
   RequestedSave: { text: Schema.String },
@@ -35,7 +35,7 @@ export const ApplicationBlock = Block.make('InputApplication', {
   Message,
   InMessage,
   OutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [DraftStore] },
   inMessageOutputs: { RequestedSubmit: { outMessage: OutMessage.Submitted } },
 })

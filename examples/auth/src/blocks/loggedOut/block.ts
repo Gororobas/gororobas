@@ -1,23 +1,23 @@
-import { Effect, Layer } from 'effect'
+import { Schema } from 'effect'
+import { Block } from 'foldkit'
 
-import { Login } from './blocks'
-import { LoginModelBinding } from './composition'
-import { LoggedOutBlock } from './definition'
-import { init } from './init'
-import { update } from './update'
-import { view } from './view'
+import { LoggedOutRoute } from '../../route'
+import { Message, OutMessage } from './message'
+import { Model } from './model'
 
-export const layer = LoggedOutBlock.makeLayer(
-  Effect.gen(function* () {
-    const login = yield* LoginModelBinding
+export const LoggedOutKey = Symbol('LoggedOut')
+export const LoggedOutBlock = Block.make('LoggedOut', {
+  key: LoggedOutKey,
+  InitArgs: Schema.Tuple([LoggedOutRoute]),
+  view: { kind: 'Element' },
 
-    return {
-      children: [login],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(Login.layer))
+  Model,
+  Message,
+  OutMessage,
+})
 
-export { LoggedOutBlock } from './definition'
+export const {
+  makeRequiredFieldBinding,
+  makeComposition,
+  makeOutMessageForward,
+} = LoggedOutBlock

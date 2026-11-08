@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import * as Scene from 'foldkit/scene'
 import { expect } from 'vitest'
@@ -11,7 +11,7 @@ import { Message } from './message.js'
 const TooltipSceneKey = Symbol('TooltipScene')
 const TooltipSceneBlock = Block.make('TooltipScene', {
   key: TooltipSceneKey,
-  Init: Block.makeInputContract<readonly []>(),
+  InitArgs: Block.makeInputContract<readonly []>(),
   Model: Schema.Struct({ tooltip: TooltipBlock.Model }),
   Message: Schema.Never,
   view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
@@ -25,10 +25,13 @@ const foldTooltipOutMessage = TooltipSceneBlock.makeOutMessageFold(
   },
 )
 
-const TooltipBinding = TooltipSceneBlock.makeBinding(TooltipBlock, {
-  field: 'tooltip',
-  init: { contextToArgs: () => [{ id: 'test' }] },
-}).withOutMessagePolicy({ fold: foldTooltipOutMessage })
+const TooltipBinding = TooltipSceneBlock.makeRequiredFieldBinding(
+  TooltipBlock,
+  {
+    field: 'tooltip',
+    init: { contextToArgs: () => [{ id: 'test' }] },
+  },
+).withOutMessagePolicy({ fold: foldTooltipOutMessage })
 
 const TooltipSceneComposition = TooltipSceneBlock.makeComposition({
   bindings: [TooltipBinding],
@@ -75,18 +78,11 @@ const panel = Scene.selector('#test-panel')
 
 const tooltipScene = {
   block: TooltipSceneBlock,
-  layer: TooltipSceneBlock.makeLayer(
-    Effect.gen(function* () {
-      const child = yield* TooltipBinding
-
-      return {
-        children: [child],
-        init,
-        update,
-        view: rootView,
-      }
-    }),
-  ).pipe(Layer.provide(layer)),
+  layer: TooltipSceneBlock.makeLayer({
+    init,
+    update,
+    view: rootView,
+  }).pipe(Layer.provide(layer)),
 }
 
 describe('Tooltip', () => {

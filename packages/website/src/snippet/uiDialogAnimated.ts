@@ -1,16 +1,12 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  DialogBlock,
-  layer as DialogLayer,
-  type RenderInfo as DialogRenderInfo,
-} from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
 // Add a field to your Model for the Dialog Block:
 const Model = Schema.Struct({
-  dialog: DialogBlock.Model,
+  dialog: Dialog.DialogBlock.Model,
   // ...your other fields
 })
 type Model = typeof Model.Type
@@ -21,37 +17,37 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const AnimatedDialogExampleKey = Symbol('AnimatedDialogExample')
-
 export const AnimatedDialogExampleBlock = Block.make('AnimatedDialogExample', {
   key: AnimatedDialogExampleKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = AnimatedDialogExampleBlock
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = AnimatedDialogExampleBlock
 
-const foldDialogOutMessage = AnimatedDialogExampleBlock.makeOutMessageFold(
-  DialogBlock,
-  {
-    Opened: makeNoopStep,
-    Closed: makeNoopStep,
-    CompletedClose: makeNoopStep,
-  },
-)
-
-const DialogBinding = AnimatedDialogExampleBlock.makeBinding(DialogBlock, {
+const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
   field: 'dialog',
   init: {
     contextToArgs: () => [{ id: 'confirm', isAnimated: true }],
   },
-}).withOutMessagePolicy({ fold: foldDialogOutMessage })
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
+    Opened: makeNoopStep,
+    Closed: makeNoopStep,
+    CompletedClose: makeNoopStep,
+  }),
+})
 
-const AnimatedDialogExampleComposition =
-  AnimatedDialogExampleBlock.makeComposition({
-    bindings: [DialogBinding],
-  })
+const AnimatedDialogExampleComposition = makeComposition({
+  bindings: [DialogBinding],
+})
 
 // In your init function, set isAnimated: true to coordinate CSS transitions:
 const init = AnimatedDialogExampleComposition.makeInit(() => ({
@@ -73,7 +69,7 @@ const view = AnimatedDialogExampleComposition.makeView((model, h) => {
     description,
     closeButton,
     isVisible,
-  }: DialogRenderInfo) =>
+  }: Dialog.RenderInfo) =>
     h.dialog(
       [
         ...dialog,
@@ -131,15 +127,8 @@ const view = AnimatedDialogExampleComposition.makeView((model, h) => {
   )
 })
 
-export const layer = AnimatedDialogExampleBlock.makeLayer(
-  Effect.gen(function* () {
-    const dialog = yield* DialogBinding
-
-    return {
-      children: [dialog],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(DialogLayer))
+export const layer = AnimatedDialogExampleBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Dialog.layer))

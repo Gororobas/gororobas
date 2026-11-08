@@ -15,23 +15,29 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const ApplicationKey = Symbol('Application')
-
 export const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const PostsBinding = ApplicationBlock.makeBinding(postsQuery, {
+const {
+  makeRequiredFieldBinding,
+  makeComposition,
+  makeCommand,
+  makeCommandsStep,
+} = ApplicationBlock
+
+const PostsBinding = makeRequiredFieldBinding(postsQuery, {
   field: 'posts',
 })
 
-const ApplicationComposition = ApplicationBlock.makeComposition({
+const ApplicationComposition = makeComposition({
   bindings: [PostsBinding],
 })
 
-const ReadCurrentTime = ApplicationBlock.makeCommand('ReadCurrentTime', {
+const ReadCurrentTime = makeCommand('ReadCurrentTime', {
   messages: [Message.CompletedReadCurrentTime],
   handler: function* () {
     return () =>
@@ -42,24 +48,15 @@ const ReadCurrentTime = ApplicationBlock.makeCommand('ReadCurrentTime', {
 })
 
 const update = ApplicationComposition.makeUpdate({
-  EnteredPostsRoute: ApplicationBlock.makeCommandsStep(() => [
-    ReadCurrentTime(),
-  ]),
+  EnteredPostsRoute: makeCommandsStep(() => [ReadCurrentTime()]),
   CompletedReadCurrentTime: (model, { nowMillis }) =>
     PostsBinding.requestLoadIfStale(nowMillis)(model),
 })
 
 const init = ApplicationComposition.makeInit(() => ({ model: {} }))
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    const posts = yield* PostsBinding
-
-    return {
-      children: [posts],
-      init,
-      update,
-      EffectsLayer: ReadCurrentTime.layer,
-    }
-  }),
-).pipe(Layer.provide(Query.layer))
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  EffectsLayer: ReadCurrentTime.layer,
+}).pipe(Layer.provide(Query.layer))

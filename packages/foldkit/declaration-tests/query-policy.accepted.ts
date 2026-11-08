@@ -80,7 +80,7 @@ export const ParentMessage = defineMessageUnion({
 export const ParentKey = Symbol('QueryPolicyParent')
 export const ParentDefinition = Block.makeDefinition('QueryPolicyParent', {
   key: ParentKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: {
     Error: Schema.instanceOf(MissingCredentials),
     services: [QuoteCredentials, QuoteProvider],
@@ -88,9 +88,12 @@ export const ParentDefinition = Block.makeDefinition('QueryPolicyParent', {
   Model: ParentModel,
   Message: ParentMessage,
 })
-export const QuotesBinding = ParentDefinition.makeBinding(QuoteWindows, {
-  field: 'quotes',
-}).withOutMessagePolicy({
+export const QuotesBinding = ParentDefinition.makeRequiredFieldBinding(
+  QuoteWindows,
+  {
+    field: 'quotes',
+  },
+).withOutMessagePolicy({
   fold: ParentDefinition.makeOutMessageFold(QuoteWindows, {
     CompletedFetch: ({ args, result }) =>
       ParentDefinition.makeFieldsStep(() => ({
@@ -123,11 +126,11 @@ export const parentUpdate = ParentComposition.makeUpdate({
 const PlainParentKey = Symbol('PlainQueryPolicyParent')
 const PlainParent = Block.makeDefinition('PlainQueryPolicyParent', {
   key: PlainParentKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: Schema.Struct({ quotes: PlainWindows.Model }),
   Message: Schema.Never,
 })
-export const PlainBinding = PlainParent.makeBinding(PlainWindows, {
+export const PlainBinding = PlainParent.makeRequiredFieldBinding(PlainWindows, {
   field: 'quotes',
 })
 export const PlainComposition = PlainParent.makeComposition({

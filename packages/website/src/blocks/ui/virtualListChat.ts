@@ -2,17 +2,17 @@ import { Array, Effect, Match, Number, Option, Schema, pipe } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import {
-  HistoryPage as VirtualListHistoryPage,
-  type InitConfig as VirtualListInitConfig,
-  ScrollTarget as VirtualListScrollTarget,
-} from '@foldkit/ui/virtualList'
+import { VirtualList } from '@foldkit/ui'
 
-import { UiBlock, makeFieldsStep, makeNoopStep, makeStep } from './definition'
 import {
-  ChatVirtualListBlock,
-  HistoryModeRadioGroupBlock,
-} from './demo/components'
+  makeCommand,
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from './block'
+import { ChatVirtualListBlock, HistoryModeRadioGroupBlock } from './controls'
 import {
   VirtualListChatHistoryLoad,
   type VirtualListChatHistoryMode,
@@ -55,7 +55,7 @@ export const chatMessageKey = (message: VirtualListChatMessage): string =>
 
 const virtualListChatInitConfig = (
   source: VirtualListChatHistorySource,
-): VirtualListInitConfig => ({
+): VirtualList.InitConfig => ({
   id: VirtualListChatHistorySource.match(source, {
     Unbounded: () => 'virtual-list-chat-demo',
     Finite: () => 'virtual-list-chat-demo-finite',
@@ -68,11 +68,11 @@ const virtualListChatInitConfig = (
     }),
     prefetchViewports: CHAT_HISTORY_PREFETCH_VIEWPORTS,
   },
-  initialScroll: { target: VirtualListScrollTarget.End() },
+  initialScroll: { target: VirtualList.ScrollTarget.End() },
   followEnd: { thresholdPx: 8 },
 })
 
-export const FetchVirtualListChatHistory = UiBlock.makeCommand(
+export const FetchVirtualListChatHistory = makeCommand(
   'FetchVirtualListChatHistory',
   {
     args: {
@@ -106,11 +106,11 @@ export const FetchVirtualListChatHistory = UiBlock.makeCommand(
                 }),
             })
             const page = VirtualListChatHistorySource.match(source, {
-              Unbounded: () => VirtualListHistoryPage.More(),
+              Unbounded: () => VirtualList.HistoryPage.More(),
               Finite: ({ remainingCount }) =>
                 remainingCount - count <= 0
-                  ? VirtualListHistoryPage.Complete()
-                  : VirtualListHistoryPage.More(),
+                  ? VirtualList.HistoryPage.Complete()
+                  : VirtualList.HistoryPage.More(),
             })
 
             return Message.CompletedFetchVirtualListChatHistory({
@@ -125,7 +125,7 @@ export const FetchVirtualListChatHistory = UiBlock.makeCommand(
   },
 )
 
-const BaseVirtualListChatDemoBinding = UiBlock.makeBinding(
+const BaseVirtualListChatDemoBinding = makeRequiredFieldBinding(
   ChatVirtualListBlock,
   {
     field: 'virtualListChatDemo',
@@ -202,36 +202,31 @@ const markVirtualListChatHistoryAnnounced = makeStep(model => {
   }
 })
 
-const foldVirtualListChatOutMessage = UiBlock.makeOutMessageFold(
-  ChatVirtualListBlock,
-  {
-    ObservedContainerScroll: makeNoopStep,
-    ApproachedLoadedStart: ({ distanceToLoadedStartPx, containerHeight }) =>
-      makeStep(model => {
-        const neededHeight =
-          containerHeight * CHAT_HISTORY_PREFETCH_VIEWPORTS -
-          distanceToLoadedStartPx
-        const minimumCount = VirtualListChatHistorySource.match(
-          model.virtualListChatHistorySource,
-          {
-            Unbounded: () => VIRTUAL_LIST_CHAT_UNBOUNDED_HISTORY_BATCH_SIZE,
-            Finite: () => VIRTUAL_LIST_CHAT_HISTORY_BATCH_SIZE,
-          },
-        )
-        const requestedCount = Math.max(
-          minimumCount,
-          Math.ceil(neededHeight / COLLAPSED_HISTORY_MESSAGE_HEIGHT_PX),
-        )
-
-        return requestVirtualListChatHistory(requestedCount, 'Scroll')
-      }),
-    EndedContainerScroll: () => markVirtualListChatHistoryAnnounced,
-  },
-)
-
 export const VirtualListChatDemoBinding =
   BaseVirtualListChatDemoBinding.withOutMessagePolicy({
-    fold: foldVirtualListChatOutMessage,
+    fold: makeOutMessageFold(ChatVirtualListBlock, {
+      ObservedContainerScroll: makeNoopStep,
+      ApproachedLoadedStart: ({ distanceToLoadedStartPx, containerHeight }) =>
+        makeStep(model => {
+          const neededHeight =
+            containerHeight * CHAT_HISTORY_PREFETCH_VIEWPORTS -
+            distanceToLoadedStartPx
+          const minimumCount = VirtualListChatHistorySource.match(
+            model.virtualListChatHistorySource,
+            {
+              Unbounded: () => VIRTUAL_LIST_CHAT_UNBOUNDED_HISTORY_BATCH_SIZE,
+              Finite: () => VIRTUAL_LIST_CHAT_HISTORY_BATCH_SIZE,
+            },
+          )
+          const requestedCount = Math.max(
+            minimumCount,
+            Math.ceil(neededHeight / COLLAPSED_HISTORY_MESSAGE_HEIGHT_PX),
+          )
+
+          return requestVirtualListChatHistory(requestedCount, 'Scroll')
+        }),
+      EndedContainerScroll: () => markVirtualListChatHistoryAnnounced,
+    }),
   })
 
 const selectVirtualListChatHistoryMode = (mode: VirtualListChatHistoryMode) =>
@@ -267,7 +262,7 @@ const selectVirtualListChatHistoryMode = (mode: VirtualListChatHistoryMode) =>
     })
   })
 
-export const VirtualListChatHistoryModeGroupBinding = UiBlock.makeBinding(
+export const VirtualListChatHistoryModeGroupBinding = makeRequiredFieldBinding(
   HistoryModeRadioGroupBlock,
   {
     field: 'virtualListChatHistoryModeGroup',
@@ -276,7 +271,7 @@ export const VirtualListChatHistoryModeGroupBinding = UiBlock.makeBinding(
     },
   },
 ).withOutMessagePolicy({
-  fold: UiBlock.makeOutMessageFold(HistoryModeRadioGroupBlock, {
+  fold: makeOutMessageFold(HistoryModeRadioGroupBlock, {
     Selected: ({ value }) => selectVirtualListChatHistoryMode(value),
   }),
 })
@@ -295,7 +290,7 @@ export const updateVirtualListChatMessages = (
 
     return Update.combineSteps([
       updateMessages,
-      VirtualListChatDemoBinding.informItemsChanged(
+      VirtualListChatDemoBinding.informOfItemsChanged(
         Array.map(nextMessages, chatMessageKey),
       ),
     ])
@@ -336,7 +331,7 @@ export const handleCompletedFetchVirtualListChatHistory = makeStep(
 
     return Update.combineSteps([
       updateMessages,
-      VirtualListChatDemoBinding.informHistoryPrepended({
+      VirtualListChatDemoBinding.informOfHistoryPrepended({
         items: nextMessages,
         prependedItems: messages,
         itemToKey: chatMessageKey,

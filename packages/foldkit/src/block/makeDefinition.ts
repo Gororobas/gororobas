@@ -13,14 +13,14 @@ export const defineWithNamespace = (
   config: unknown,
   makeNative: (config: unknown) => object,
 ): any => {
-  if (Predicate.isObject(config) && ('key' in config || 'Init' in config)) {
+  if (Predicate.isObject(config) && ('key' in config || 'InitArgs' in config)) {
     const snapshot = Reflect.apply(snapshotDefinitionConfiguration, undefined, [
       config,
     ])
 
-    if (!('key' in snapshot) || !('Init' in snapshot)) {
+    if (!('key' in snapshot) || !('InitArgs' in snapshot)) {
       throw new Error(
-        '[foldkit] An independent Block Definition requires both a unique symbol key and an Init contract.',
+        '[foldkit] An independent Block Definition requires both a unique symbol key and an InitArgs contract.',
       )
     }
 
@@ -44,14 +44,14 @@ export const defineWithNamespace = (
 
 /**
  * Establishes one Block's typed authoring contracts. A declaration with a
- * unique `key` and `Init` contract supports independently supplied construction
+ * unique `key` and `InitArgs` contract supports independently supplied construction
  * through `Definition.makeBlock`. Schema-only declarations retain native
  * Composition preparation and assembly.
  *
  * An optional `InMessage` Schema declares parent requests separately from local
  * `Message` facts. Author its exhaustive handlers with `Composition.makeInMessageUpdate`
  * and return `inMessageUpdate` from the constructor. Bindings generate `requestX` and
- * `informX` methods from `RequestedX` and `InformedOfX` variants.
+ * `informOfX` methods from `RequestedX` and `InformedOfX` variants.
  */
 export const makeDefinition: typeof makeContractDefinition &
   typeof makeNativeDefinition = (
@@ -59,14 +59,14 @@ export const makeDefinition: typeof makeContractDefinition &
   config: unknown,
   ...validation: ReadonlyArray<unknown>
 ): any => {
-  if (Predicate.isObject(config) && ('key' in config || 'Init' in config)) {
+  if (Predicate.isObject(config) && ('key' in config || 'InitArgs' in config)) {
     const snapshot = Reflect.apply(snapshotDefinitionConfiguration, undefined, [
       config,
     ])
 
-    if (!('key' in snapshot) || !('Init' in snapshot)) {
+    if (!('key' in snapshot) || !('InitArgs' in snapshot)) {
       throw new Error(
-        '[foldkit] An independent Block Definition requires both a unique symbol key and an Init contract.',
+        '[foldkit] An independent Block Definition requires both a unique symbol key and an InitArgs contract.',
       )
     }
 

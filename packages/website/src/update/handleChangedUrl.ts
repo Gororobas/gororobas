@@ -1,10 +1,11 @@
 import { Array, Option, Record } from 'effect'
 import { Update } from 'foldkit'
-import { initAndSet } from 'foldkit/bindingInit'
+import { initAndSet } from 'foldkit/binding'
 import { Transition } from 'foldkit/route'
 import { modifyFields } from 'foldkit/struct'
 import { type Url } from 'foldkit/url'
 
+import { makeCommandsStep, makeFieldsStep, makeStep } from '../block'
 import * as Command from '../command'
 import {
   ApiReferenceBinding,
@@ -15,7 +16,6 @@ import {
   SearchBinding,
   ThemeMenuBinding,
 } from '../composition'
-import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
 import { findActiveSectionKeyForRoute } from '../docsNav'
 import type { Message } from '../message'
 import { type Model } from '../model'
@@ -45,7 +45,7 @@ export const handleChangedUrl = makeStep((model, { url }: ChangedUrl) => {
     reconcilePlayground(transition),
     MobileMenuDialogBinding.requestClose(),
     ThemeMenuBinding.requestClose(),
-    SearchBinding.informRouteChange(),
+    SearchBinding.informOfRouteChange(),
     loadRouteData(transition),
     scrollAfterUrlChange(url, isDifferentPathname),
   ])
@@ -116,7 +116,7 @@ const loadRouteData = (transition: ApplicationTransition) =>
             return { model }
           }
 
-          return ApiReferenceBinding.informRouteChange()
+          return ApiReferenceBinding.informOfRouteChange()
         },
         ExampleDetail: ({ exampleSlug }) => {
           if (
@@ -129,7 +129,7 @@ const loadRouteData = (transition: ApplicationTransition) =>
             return { model }
           }
 
-          return ExampleDetailBinding.informRouteChange({ slug: exampleSlug })
+          return ExampleDetailBinding.informOfRouteChange({ slug: exampleSlug })
         },
       },
       () => ({ model }),

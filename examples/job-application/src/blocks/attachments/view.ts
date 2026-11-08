@@ -3,15 +3,15 @@ import { Array, Match, Number, Option } from 'effect'
 import { File } from 'foldkit'
 import type { Html } from 'foldkit/html'
 
-import { view as buttonView } from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
+import { Message } from './block'
 import {
   AdditionalFilesDropBinding,
   AttachmentsComposition,
   type AttachmentsViewBuilder,
   ResumeDropBinding,
 } from './composition'
-import { Message } from './definition'
 
 const BYTES_PER_KB = 1024
 const BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB
@@ -59,7 +59,7 @@ const resumeView = (resume: File.File, h: AttachmentsViewBuilder): Html =>
           ),
         ],
       ),
-      buttonView(
+      Button.view(
         {
           onClick: Message.RemovedResume(),
           toView: attributes =>
@@ -102,7 +102,7 @@ const additionalFileView = (
           ),
         ],
       ),
-      buttonView(
+      Button.view(
         {
           onClick: Message.RemovedAdditionalFile({ fileIndex }),
           toView: attributes =>

@@ -4,14 +4,7 @@ import { defineMessageUnion } from 'foldkit/message'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-import {
-  AccessibleSet as VirtualListAccessibleSet,
-  HistoryPage as VirtualListHistoryPage,
-  type HistoryRows as VirtualListHistoryRows,
-  layer as VirtualListLayer,
-  ScrollTarget as VirtualListScrollTarget,
-  makeBlock as makeVirtualListBlock,
-} from '@foldkit/ui/virtualList'
+import { VirtualList } from '@foldkit/ui'
 
 const ChatMessage = Schema.Struct({ id: Schema.String, body: Schema.String })
 type ChatMessage = typeof ChatMessage.Type
@@ -30,8 +23,8 @@ const HistoryLoad = defineTaggedUnion({
 })
 type HistoryLoad = typeof HistoryLoad.Type
 
-const MessageListBlock = makeVirtualListBlock<ChatMessage>()
-const historyRows: VirtualListHistoryRows<ChatMessage> = {
+const MessageListBlock = VirtualList.makeBlock<ChatMessage>()
+const historyRows: VirtualList.HistoryRows<ChatMessage> = {
   itemToKey: message => message.id,
   dynamicRowHeights: true,
   itemToEstimatedRowHeightPx: message => (message.body.length > 120 ? 96 : 64),
@@ -53,17 +46,24 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const MessageListExampleKey = Symbol('MessageListExample')
-
 export const MessageListExampleBlock = Block.make('MessageListExample', {
   key: MessageListExampleKey,
-  Init: Schema.Tuple([Schema.Array(ChatMessage)]),
+  InitArgs: Schema.Tuple([Schema.Array(ChatMessage)]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
-const { makeFieldsStep, makeNoopStep, makeStep } = MessageListExampleBlock
+const {
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
+  makeCommand,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = MessageListExampleBlock
 
-const FetchHistory = MessageListExampleBlock.makeCommand('FetchHistory', {
+const FetchHistory = makeCommand('FetchHistory', {
   args: { maybeBeforeId: Schema.Option(Schema.String) },
   messages: [Message.SucceededFetchHistory, Message.FailedFetchHistory],
   handler: function* () {
@@ -110,31 +110,28 @@ const requestHistory = makeStep(model => {
   }
 })
 
-const MessageListBinding = MessageListExampleBlock.makeBinding(
-  MessageListBlock,
-  {
-    field: 'messageList',
-    init: {
-      contextToArgs: () => [
-        {
-          id: 'message-list',
-          rowHeightPx: 64,
-          initialScroll: { target: VirtualListScrollTarget.End() },
-          followEnd: { thresholdPx: 8 },
-          history: { reservePx: 800, prefetchViewports: 3 },
-        },
-      ],
-    },
+const MessageListBinding = makeRequiredFieldBinding(MessageListBlock, {
+  field: 'messageList',
+  init: {
+    contextToArgs: () => [
+      {
+        id: 'message-list',
+        rowHeightPx: 64,
+        initialScroll: { target: VirtualList.ScrollTarget.End() },
+        followEnd: { thresholdPx: 8 },
+        history: { reservePx: 800, prefetchViewports: 3 },
+      },
+    ],
   },
-).withOutMessagePolicy({
-  fold: MessageListExampleBlock.makeOutMessageFold(MessageListBlock, {
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(MessageListBlock, {
     ObservedContainerScroll: makeNoopStep,
     ApproachedLoadedStart: () => requestHistory,
     EndedContainerScroll: makeNoopStep,
   }),
 })
 
-const MessageListExampleComposition = MessageListExampleBlock.makeComposition({
+const MessageListExampleComposition = makeComposition({
   bindings: [MessageListBinding],
 })
 const init = MessageListExampleComposition.makeInit(initialMessages => ({
@@ -146,7 +143,7 @@ const update = MessageListExampleComposition.makeUpdate({
 
     return Update.combineSteps(model, [
       makeFieldsStep(() => ({ messages: () => nextMessages })),
-      MessageListBinding.informItemsChanged(
+      MessageListBinding.informOfItemsChanged(
         Array.map(nextMessages, historyRows.itemToKey),
       ),
     ])
@@ -161,13 +158,13 @@ const update = MessageListExampleComposition.makeUpdate({
         historyLoad: () =>
           response.hasMore ? HistoryLoad.Idle() : HistoryLoad.Complete(),
       })),
-      MessageListBinding.informHistoryPrepended({
+      MessageListBinding.informOfHistoryPrepended({
         items: nextMessages,
         prependedItems: response.messages,
         itemToKey: historyRows.itemToKey,
         page: response.hasMore
-          ? VirtualListHistoryPage.More()
-          : VirtualListHistoryPage.Complete(),
+          ? VirtualList.HistoryPage.More()
+          : VirtualList.HistoryPage.Complete(),
       }),
     ])
   },
@@ -204,8 +201,8 @@ const view = MessageListExampleComposition.makeView((model, h) =>
               h.div([h.Class('rounded-xl px-3 py-2')], [message.body]),
             accessibleSet:
               model.historyLoad._tag === 'Complete'
-                ? VirtualListAccessibleSet.Loaded()
-                : VirtualListAccessibleSet.Unknown(),
+                ? VirtualList.AccessibleSet.Loaded()
+                : VirtualList.AccessibleSet.Unknown(),
             contentAlignment: 'End',
             containerClassName: 'h-96 overflow-auto',
           },
@@ -215,16 +212,9 @@ const view = MessageListExampleComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = MessageListExampleBlock.makeLayer(
-  Effect.gen(function* () {
-    const messageList = yield* MessageListBinding
-
-    return {
-      children: [messageList],
-      init,
-      update,
-      view,
-      EffectsLayer: FetchHistory.layer,
-    }
-  }),
-).pipe(Layer.provide(VirtualListLayer))
+export const layer = MessageListExampleBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer: FetchHistory.layer,
+}).pipe(Layer.provide(VirtualList.layer))

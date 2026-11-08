@@ -374,7 +374,9 @@ const assertBindingConfigurationDocs = async (): Promise<void> => {
         declaration.initializer === undefined ||
         !isCallExpression(declaration.initializer)
       ) {
-        return fail(`Expected ${check.binding} to call makeBinding.`)
+        return fail(
+          `Expected ${check.binding} to call its relationship constructor.`,
+        )
       }
 
       const bindingCall =
@@ -754,6 +756,12 @@ const checks: ReadonlyArray<
     consumers: ['outmessage-fold.consume.ts'],
   },
   {
+    name: 'keyed-outmessage-fold',
+    accepted: ['keyed-outmessage-fold/accepted.ts'],
+    rejected: ['keyed-outmessage-fold/rejected.ts'],
+    consumers: ['keyed-outmessage-fold/consume.ts'],
+  },
+  {
     name: 'descriptor-fold',
     accepted: ['descriptor-fold.accepted.ts'],
     rejected: ['descriptor-fold.rejected.ts'],
@@ -784,7 +792,10 @@ const checks: ReadonlyArray<
   {
     name: 'optional-wrapped-keyed',
     accepted: ['optional-wrapped-keyed.accepted.ts'],
-    rejected: ['optional-wrapped-keyed.rejected.ts'],
+    rejected: [
+      'optional-wrapped-keyed.rejected.ts',
+      'canonical-keyed-scene.rejected.ts',
+    ],
     consumers: ['optional-wrapped-keyed.consume.ts'],
   },
   {
@@ -873,6 +884,12 @@ const checks: ReadonlyArray<
     consumers: ['helper-inputs.consume.ts'],
   },
   {
+    name: 'inmessage-union',
+    accepted: ['inmessage-union.accepted.ts'],
+    rejected: ['inmessage-union.rejected.ts'],
+    consumers: ['inmessage-union.consume.ts'],
+  },
+  {
     name: 'inmessage-update-composition',
     accepted: ['inmessage-update-composition/accepted.ts'],
     rejected: ['inmessage-update-composition/rejected.ts'],
@@ -909,6 +926,18 @@ const checks: ReadonlyArray<
     consumers: ['message-steps.consume.ts'],
   },
   {
+    name: 'codec-contract',
+    accepted: ['codec-contract.accepted.ts'],
+    rejected: ['codec-contract.rejected.ts'],
+    consumers: ['codec-contract.consume.ts'],
+  },
+  {
+    name: 'managed-resource-contract',
+    accepted: ['managed-resource-contract.accepted.ts'],
+    rejected: ['managed-resource-contract.rejected.ts'],
+    consumers: ['managed-resource-contract.consume.ts'],
+  },
+  {
     name: 'managed-resource-registry',
     accepted: ['managed-resource-registry.accepted.ts'],
     rejected: ['managed-resource-registry.rejected.ts'],
@@ -937,6 +966,30 @@ const checks: ReadonlyArray<
     accepted: ['variant-binding.accepted.ts'],
     rejected: ['variant-binding.rejected.ts'],
     consumers: ['variant-binding.consume.ts'],
+  },
+  {
+    name: 'binding-relationships',
+    accepted: ['binding-relationships.accepted.ts'],
+    rejected: ['binding-relationships.rejected.ts'],
+    consumers: ['binding-relationships.consume.ts'],
+  },
+  {
+    name: 'bulk-child-acquisition',
+    accepted: ['bulk-child-acquisition/accepted.ts'],
+    rejected: ['bulk-child-acquisition/rejected.ts'],
+    consumers: ['bulk-child-acquisition/consume.ts'],
+  },
+  {
+    name: 'record-completion',
+    accepted: ['record-completion/view.ts', 'record-completion/accepted.ts'],
+    rejected: ['record-completion/rejected.ts'],
+    consumers: ['record-completion/consume.ts'],
+  },
+  {
+    name: 'story-message-in-path',
+    accepted: ['story-message-in-path/accepted.ts'],
+    rejected: ['story-message-in-path/rejected.ts'],
+    consumers: ['story-message-in-path/consume.ts'],
   },
   {
     name: 'command-args',
@@ -1196,12 +1249,19 @@ const main = async (): Promise<void> => {
   )
 
   for (const name of [
+    'canonical-keyed-scene',
     'constructor-plan-ownership',
     'program',
     'command-args',
     'keyed-map-field',
     'map-binding-method',
     'variant-binding',
+    'binding-relationships',
+    'bulk-child-acquisition',
+    'record-completion',
+    'story-message-in-path',
+    'codec-contract',
+    'managed-resource-contract',
     'managed-resource-registry',
     'policy-graph',
     'story-concurrency',
@@ -1216,8 +1276,10 @@ const main = async (): Promise<void> => {
     'set-initialization',
     'set-optional-initialization',
     'insert-initialization',
+    'keyed-outmessage-fold',
     'generic-service-factory',
     'testing-event-delivery',
+    'inmessage-union',
     'unified-inmessages',
     'query-modes',
     'family-layer-members',

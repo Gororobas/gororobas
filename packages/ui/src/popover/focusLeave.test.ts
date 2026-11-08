@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
@@ -11,7 +11,7 @@ type Model = typeof Model.Type
 const PopoverFocusLeaveTestKey = Symbol('PopoverFocusLeaveTest')
 const PopoverFocusLeaveTestBlock = Block.make('PopoverFocusLeaveTest', {
   key: PopoverFocusLeaveTestKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message: Schema.Never,
@@ -23,10 +23,13 @@ const foldPopoverOutMessage = PopoverFocusLeaveTestBlock.makeOutMessageFold(
     Closed: () => PopoverFocusLeaveTestBlock.makeNoopStep(),
   },
 )
-const PopoverBinding = PopoverFocusLeaveTestBlock.makeBinding(PopoverBlock, {
-  field: 'popover',
-  init: false,
-}).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+const PopoverBinding = PopoverFocusLeaveTestBlock.makeRequiredFieldBinding(
+  PopoverBlock,
+  {
+    field: 'popover',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
 const PopoverFocusLeaveTestComposition =
   PopoverFocusLeaveTestBlock.makeComposition({
     bindings: [PopoverBinding],
@@ -72,23 +75,16 @@ const view = PopoverFocusLeaveTestComposition.makeView((model, h) =>
 const makeProgram = (container: HTMLElement) => {
   const block = {
     block: PopoverFocusLeaveTestBlock,
-    layer: PopoverFocusLeaveTestBlock.makeLayer(
-      Effect.gen(function* () {
-        const popover = yield* PopoverBinding
-
-        return {
-          children: [popover],
-          init: PopoverFocusLeaveTestComposition.makeInit(() =>
-            PopoverBinding.init({
-              args: [{ id: 'sort' }],
-              toParentModel: popover => ({ popover }),
-            }),
-          ),
-          update: PopoverFocusLeaveTestComposition.makeUpdate({}),
-          view,
-        }
-      }),
-    ).pipe(Layer.provide(layer)),
+    layer: PopoverFocusLeaveTestBlock.makeLayer({
+      init: PopoverFocusLeaveTestComposition.makeInit(() =>
+        PopoverBinding.init({
+          args: [{ id: 'sort' }],
+          toParentModel: popover => ({ popover }),
+        }),
+      ),
+      update: PopoverFocusLeaveTestComposition.makeUpdate({}),
+      view,
+    }).pipe(Layer.provide(layer)),
   }
 
   return Program.makeElement({

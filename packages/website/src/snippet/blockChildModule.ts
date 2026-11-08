@@ -25,15 +25,16 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 export const SettingsKey = Symbol('Settings')
-
 const SettingsBlock = Block.make('Settings', {
   key: SettingsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const SettingsComposition = SettingsBlock.makeComposition()
+const { makeComposition } = SettingsBlock
+
+const SettingsComposition = makeComposition()
 
 export const update = SettingsComposition.makeUpdate({
   ChangedTheme: (model, { theme }) => ({

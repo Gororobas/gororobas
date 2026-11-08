@@ -1,18 +1,14 @@
-import { Array, Effect, Layer, Option, Schema } from 'effect'
+import { Array, Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { childAttributes } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  inputId as ComboboxInputId,
-  layer as ComboboxLayer,
-  makeBlock as makeComboboxBlock,
-} from '@foldkit/ui/combobox'
+import { Combobox } from '@foldkit/ui'
 
 const City = Schema.Literals(['Johannesburg', 'Kyiv', 'Oxford', 'Wellington'])
 type City = typeof City.Type
 
-const CityCombobox = makeComboboxBlock(City)
+const CityCombobox = Combobox.makeBlock(City)
 
 const Model = Schema.Struct({
   maybeCity: Schema.Option(City),
@@ -24,37 +20,39 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const CityPickerKey = Symbol('CityPicker')
-
 export const CityPickerBlock = Block.make('CityPicker', {
   key: CityPickerKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = CityPickerBlock
+const {
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = CityPickerBlock
 
 // The parent stores the committed selection reported by the child.
-const foldComboboxOutMessage = CityPickerBlock.makeOutMessageFold(
-  CityCombobox,
-  {
+const ComboboxBinding = makeRequiredFieldBinding(CityCombobox, {
+  field: 'combobox',
+  init: { contextToArgs: () => [{ id: 'city' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(CityCombobox, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({
         maybeCity: () => Option.some(value),
       })),
     ClearedSelection: makeNoopStep,
-  },
-)
-
-const ComboboxBinding = CityPickerBlock.makeBinding(CityCombobox, {
-  field: 'combobox',
-  init: { contextToArgs: () => [{ id: 'city' }] },
-}).withOutMessagePolicy({ fold: foldComboboxOutMessage })
+  }),
+})
 
 // Including the Binding collects its lifecycle and handler graph.
 
-const CityPickerComposition = CityPickerBlock.makeComposition({
+const CityPickerComposition = makeComposition({
   bindings: [ComboboxBinding],
 })
 
@@ -84,7 +82,7 @@ const view = CityPickerComposition.makeView((model, h) => {
   return h.div(
     [h.Class('flex flex-col gap-1.5')],
     [
-      h.label([h.Id(labelId), h.For(ComboboxInputId('city'))], ['City']),
+      h.label([h.Id(labelId), h.For(Combobox.inputId('city'))], ['City']),
       h.block(
         ComboboxBinding.embedView({
           slotId: 'city',
@@ -122,15 +120,8 @@ const view = CityPickerComposition.makeView((model, h) => {
   )
 })
 
-export const layer = CityPickerBlock.makeLayer(
-  Effect.gen(function* () {
-    const combobox = yield* ComboboxBinding
-
-    return {
-      children: [combobox],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(ComboboxLayer))
+export const layer = CityPickerBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Combobox.layer))

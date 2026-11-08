@@ -1,12 +1,8 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  layer as VirtualListLayer,
-  ScrollContainer as VirtualListScrollContainer,
-  makeBlock as makeVirtualListBlock,
-} from '@foldkit/ui/virtualList'
+import { VirtualList } from '@foldkit/ui'
 
 const Activity = Schema.Struct({
   id: Schema.String,
@@ -15,7 +11,7 @@ const Activity = Schema.Struct({
 })
 type Activity = typeof Activity.Type
 
-const ActivityListBlock = makeVirtualListBlock<Activity>()
+const ActivityListBlock = VirtualList.makeBlock<Activity>()
 const Model = Schema.Struct({
   activities: Schema.Array(Activity),
   activityList: ActivityListBlock.Model,
@@ -26,35 +22,39 @@ const Message = defineMessageUnion({ ClickedJumpToLatestActivity: {} })
 type Message = typeof Message.Type
 
 export const ActivityFeedKey = Symbol('ActivityFeed')
-
 export const ActivityFeedBlock = Block.make('ActivityFeed', {
   key: ActivityFeedKey,
-  Init: Schema.Tuple([Schema.Array(Activity)]),
+  InitArgs: Schema.Tuple([Schema.Array(Activity)]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
-const { makeNoopStep } = ActivityFeedBlock
+const {
+  makeNoopStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = ActivityFeedBlock
 
-const ActivityListBinding = ActivityFeedBlock.makeBinding(ActivityListBlock, {
+const ActivityListBinding = makeRequiredFieldBinding(ActivityListBlock, {
   field: 'activityList',
   init: {
     contextToArgs: () => [
       {
         id: 'activity-feed',
         rowHeightPx: 88,
-        scrollContainer: VirtualListScrollContainer.Window(),
+        scrollContainer: VirtualList.ScrollContainer.Window(),
       },
     ],
   },
 }).withOutMessagePolicy({
-  fold: ActivityFeedBlock.makeOutMessageFold(ActivityListBlock, {
+  fold: makeOutMessageFold(ActivityListBlock, {
     ObservedContainerScroll: makeNoopStep,
     ApproachedLoadedStart: makeNoopStep,
     EndedContainerScroll: makeNoopStep,
   }),
 })
-const ActivityFeedComposition = ActivityFeedBlock.makeComposition({
+const ActivityFeedComposition = makeComposition({
   bindings: [ActivityListBinding],
 })
 const init = ActivityFeedComposition.makeInit(activities => ({
@@ -97,15 +97,8 @@ const view = ActivityFeedComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = ActivityFeedBlock.makeLayer(
-  Effect.gen(function* () {
-    const activityList = yield* ActivityListBinding
-
-    return {
-      children: [activityList],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(VirtualListLayer))
+export const layer = ActivityFeedBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(VirtualList.layer))

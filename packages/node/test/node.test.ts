@@ -9,7 +9,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { createServer, request } from 'node:http'
-import { createConnection } from 'node:net'
+import { Socket, createConnection } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -28,6 +28,7 @@ type BuildFixture = Readonly<{
 type BuildFixtureOptions = Readonly<{
   schemaVersion?: number
   isServerOutsideRoot?: boolean
+  handlerUrl?: URL
 }>
 
 const fixtureDirectories: Array<string> = []
@@ -70,18 +71,16 @@ const waitForResponse = async (url: string): Promise<Response> => {
   throw lastError
 }
 
-const waitForFile = async (path: string): Promise<string> => {
-  let lastError: unknown = undefined
-  for (let attempt = 0; attempt < 40; attempt++) {
-    try {
-      return await readFile(path, 'utf8')
-    } catch (error) {
-      lastError = error
-      await new Promise(resolveWait => setTimeout(resolveWait, 25))
-    }
-  }
-  throw lastError
-}
+const FILE_CONTENTS_POLL_INTERVAL_MS = 25
+const FILE_CONTENTS_TIMEOUT_MS = 1_000
+
+const expectFileContents = (path: string, contents: string) =>
+  expect
+    .poll(() => readFile(path, 'utf8'), {
+      interval: FILE_CONTENTS_POLL_INTERVAL_MS,
+      timeout: FILE_CONTENTS_TIMEOUT_MS,
+    })
+    .toBe(contents)
 
 const requestTarget = (
   port: number,
@@ -131,6 +130,7 @@ const expectTypedStartupFailure = async (
 const createFixture = async ({
   schemaVersion = 1,
   isServerOutsideRoot = false,
+  handlerUrl = handlerFixtureUrl,
 }: BuildFixtureOptions = {}): Promise<BuildFixture> => {
   const rootDirectory = await mkdtemp(join(tmpdir(), 'foldkit-node-'))
   fixtureDirectories.push(rootDirectory)
@@ -147,7 +147,7 @@ const createFixture = async ({
   await mkdir(serverDirectory, { recursive: true })
   await writeFile(join(clientDirectory, 'asset.txt'), 'static asset')
   await writeFile(join(clientDirectory, 'index.html'), 'static index')
-  await copyFile(handlerFixtureUrl, join(serverDirectory, 'handler.mjs'))
+  await copyFile(handlerUrl, join(serverDirectory, 'handler.mjs'))
   await writeFile(
     join(serverDirectory, 'handler.config.json'),
     `${JSON.stringify({ abortStartedPath, abortedPath, canceledPath })}\n`,
@@ -308,7 +308,7 @@ describe('serve', () => {
       )
       expect(response.status).toBe(200)
       expect(await response.text()).toBe('')
-      await expect(waitForFile(fixture.abortedPath)).resolves.toBe('canceled')
+      await expectFileContents(fixture.abortedPath, 'canceled')
     } finally {
       await Effect.runPromise(Fiber.interrupt(fiber))
     }
@@ -545,11 +545,9 @@ describe('serve', () => {
         )
       })
 
-      await expect(waitForFile(fixture.abortStartedPath)).resolves.toBe(
-        'started',
-      )
+      await expectFileContents(fixture.abortStartedPath, 'started')
       client.destroy()
-      await expect(waitForFile(fixture.abortedPath)).resolves.toBe('aborted')
+      await expectFileContents(fixture.abortedPath, 'aborted')
     } finally {
       await Effect.runPromise(Fiber.interrupt(fiber))
     }
@@ -583,11 +581,9 @@ describe('serve', () => {
         )
       })
 
-      await expect(waitForFile(fixture.abortStartedPath)).resolves.toBe(
-        'started',
-      )
+      await expectFileContents(fixture.abortStartedPath, 'started')
       await receivedResponse
-      await expect(waitForFile(fixture.abortedPath)).resolves.toBe('aborted')
+      await expectFileContents(fixture.abortedPath, 'aborted')
     } finally {
       await Effect.runPromise(Fiber.interrupt(fiber))
     }
@@ -625,10 +621,118 @@ describe('serve', () => {
       })
 
       await receivedBody
-      await expect(waitForFile(fixture.canceledPath)).resolves.toBe('canceled')
+      await expectFileContents(fixture.canceledPath, 'canceled')
       client.destroy()
     } finally {
       await Effect.runPromise(Fiber.interrupt(fiber))
     }
   })
+})
+
+const LATE_RESPONSE_TIMEOUT_MILLISECONDS = 2000
+
+const withTimeout = async <A>(
+  promise: Promise<A>,
+  label: string,
+): Promise<A> => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Timed out: ${label}`)),
+          LATE_RESPONSE_TIMEOUT_MILLISECONDS,
+        )
+      }),
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+const withDisconnectedHandler = async (
+  path: string,
+  check: (read: (path: string) => Promise<string>) => Promise<void>,
+) => {
+  const fixture = await createFixture({
+    handlerUrl: new URL('./fixture/late-response.mjs', import.meta.url),
+  })
+  const port = await getAvailablePort()
+  const fiber = Effect.runFork(
+    serve({
+      port: Config.succeed(port),
+      origin: Config.succeed(Option.none()),
+      manifestPath: fixture.manifestPath,
+    }),
+  )
+  const client = new Socket()
+  client.on('error', () => undefined)
+  const read = async (path: string) => {
+    const response = await fetch(`http://localhost:${String(port)}${path}`, {
+      signal: AbortSignal.timeout(LATE_RESPONSE_TIMEOUT_MILLISECONDS),
+    })
+    return response.text()
+  }
+
+  try {
+    const health = await waitForResponse(
+      `http://localhost:${String(port)}/health`,
+    )
+    await health.text()
+    client.connect({ host: 'localhost', port })
+    client.once('connect', () => {
+      client.write(
+        `GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`,
+      )
+    })
+    expect(await read('/started')).toBe('started')
+    client.destroy()
+    expect(await read('/aborted')).toBe('aborted')
+    await check(read)
+  } finally {
+    client.destroy()
+    await withTimeout(
+      Effect.runPromise(Fiber.interrupt(fiber)),
+      'host shutdown',
+    )
+  }
+}
+
+describe('late Fetch responses', () => {
+  it.each(['/late-body', '/reject-cancel'])(
+    'cancels %s exactly once after the client disconnects',
+    async path => {
+      await withDisconnectedHandler(path, async read => {
+        expect(await read('/release')).toBe('released')
+        expect(await read('/returned')).toBe('returned')
+        await expect(
+          read('/canceled'),
+          'the unused body must be canceled exactly once',
+        ).resolves.toBe('1')
+        expect(await read('/health')).toBe('ready')
+        await expect(
+          read('/canceled'),
+          'the unused body must be canceled exactly once',
+        ).resolves.toBe('1')
+      })
+    },
+  )
+
+  it('shuts down without waiting for a handler that ignores abort and never settles', async () => {
+    await withDisconnectedHandler('/never', async read => {
+      expect(await read('/health')).toBe('ready')
+    })
+  })
+
+  it.each(['/no-body', '/reject-handler'])(
+    'keeps serving after a disconnected handler returns %s',
+    async path => {
+      await withDisconnectedHandler(path, async read => {
+        expect(await read('/release')).toBe('released')
+        expect(await read('/returned')).toBe('returned')
+        expect(await read('/health')).toBe('ready')
+      })
+    },
+  )
 })

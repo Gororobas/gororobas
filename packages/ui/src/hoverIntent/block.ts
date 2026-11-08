@@ -26,13 +26,12 @@ export type Model = typeof Model.Type
 
 /** @internal Stable identity of the HoverIntent contract. */
 export const HoverIntentKey = Symbol('HoverIntent')
-
 export const HoverIntentBlock = Block.make('HoverIntent', {
   key: HoverIntentKey,
   Model,
   Message,
   OutMessage,
-  Init: Block.makeInputContract<readonly [config?: InitConfig]>(),
+  InitArgs: Block.makeInputContract<readonly [config?: InitConfig]>(),
   view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
   InMessage,
   inMessageOutputs: {
@@ -372,18 +371,13 @@ export const view = HoverIntentComposition.makeView.withInputs(
 )
 
 /** Constructs the HoverIntent implementation without starting occurrence effects. */
-export const layer = HoverIntentBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-      EffectsLayer,
-    }
-  }),
-)
+export const layer = HoverIntentBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+  view,
+  EffectsLayer,
+})
 
 /** @internal Selected implementation used by component tests. */
 export const block = { block: HoverIntentBlock, layer }

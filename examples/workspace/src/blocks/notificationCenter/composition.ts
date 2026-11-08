@@ -1,25 +1,25 @@
 import type { Block } from 'foldkit'
 
-import { PopoverBlock } from '@foldkit/ui/popover'
+import { Popover } from '@foldkit/ui'
 
 import {
-  makeBinding,
   makeComposition,
   makeNoopStep,
   makeOutMessageFold,
-} from './definition'
+  makeRequiredFieldBinding,
+} from './block'
 
-const foldPopoverOutMessage = makeOutMessageFold(PopoverBlock, {
-  Opened: makeNoopStep,
-  Closed: makeNoopStep,
-})
-
-export const PopoverBinding = makeBinding(PopoverBlock, {
+export const PopoverBinding = makeRequiredFieldBinding(Popover.PopoverBlock, {
   field: 'popover',
   init: {
     contextToArgs: () => [{ id: 'workspace-notifications' }],
   },
-}).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Popover.PopoverBlock, {
+    Opened: makeNoopStep,
+    Closed: makeNoopStep,
+  }),
+})
 
 export const NotificationCenterComposition = makeComposition({
   bindings: [PopoverBinding],

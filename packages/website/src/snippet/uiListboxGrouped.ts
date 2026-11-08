@@ -1,17 +1,15 @@
-import { Effect, Layer, Option, Schema } from 'effect'
+import { Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { childAttributes } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  layer as ListboxLayer,
-  makeBlock as makeListboxBlock,
-} from '@foldkit/ui/listbox'
+import { Listbox } from '@foldkit/ui'
 
-type Character = Readonly<{
-  firstName: string
-  lastName: string
-}>
+const Character = Schema.Struct({
+  firstName: Schema.String,
+  lastName: Schema.String,
+})
+type Character = typeof Character.Type
 
 const characterName = (character: Character): string =>
   `${character.firstName} ${character.lastName}`
@@ -19,7 +17,7 @@ const characterName = (character: Character): string =>
 // Declare the Listbox once at module scope, typed for the source item
 // (`Character`). `view`'s `items` are typed as `ReadonlyArray<Character>`;
 // the OutMessage carries the string returned by `itemToValue`:
-const CharacterListbox = makeListboxBlock<Character>()
+const CharacterListbox = Listbox.makeBlock(Character, Schema.String)
 
 // Add a field to your Model for the Listbox Block, plus a field for
 // the selected value your app actually cares about:
@@ -34,40 +32,41 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const CharacterPickerKey = Symbol('CharacterPicker')
-
 export const CharacterPickerBlock = Block.make('CharacterPicker', {
   key: CharacterPickerKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = CharacterPickerBlock
+const {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = CharacterPickerBlock
 
 // At module scope, fold the OutMessage into your own Model. On selection, the
 // `Selected` variant carries the chosen item's string value (the result of
 // `itemToValue`). The arm returns an Update.Step over the parent Model, which
 // already has the next Listbox Model written back. The whole child Block
 // preserves the refined string payload without repeated Step types:
-const foldListboxOutMessage = CharacterPickerBlock.makeOutMessageFold(
-  CharacterListbox,
-  {
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const ListboxBinding = makeRequiredFieldBinding(CharacterListbox, {
+  field: 'listbox',
+  init: { contextToArgs: () => [{ id: 'character' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(CharacterListbox, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({
         maybeCharacter: () => Option.some(value),
       })),
-  },
-)
+  }),
+})
 
-// The Binding declares placement, typed startup, and OutMessage policy.
-// The construction Layer below supplies the child implementation.
-const ListboxBinding = CharacterPickerBlock.makeBinding(CharacterListbox, {
-  field: 'listbox',
-  init: { contextToArgs: () => [{ id: 'character' }] },
-}).withOutMessagePolicy({ fold: foldListboxOutMessage })
-
-const CharacterPickerComposition = CharacterPickerBlock.makeComposition({
+const CharacterPickerComposition = makeComposition({
   bindings: [ListboxBinding],
 })
 
@@ -134,15 +133,8 @@ const view = CharacterPickerComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = CharacterPickerBlock.makeLayer(
-  Effect.gen(function* () {
-    const characterListbox = yield* ListboxBinding
-
-    return {
-      children: [characterListbox],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(ListboxLayer))
+export const layer = CharacterPickerBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Listbox.layer))

@@ -13,15 +13,16 @@ const Model = Schema.Struct({
 type Model = typeof Model.Type
 
 export const ShortcutsKey = Symbol('Shortcuts')
-
 const ShortcutsBlock = Block.make('Shortcuts', {
   key: ShortcutsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const subscriptions = ShortcutsBlock.makeSubscriptions(entry => ({
+const { makeSubscriptions } = ShortcutsBlock
+
+const subscriptions = makeSubscriptions(entry => ({
   shortcutKeyPresses: entry(
     'ShortcutKeyPresses',
     { isListening: Schema.Boolean },

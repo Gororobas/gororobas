@@ -3,6 +3,7 @@ import { Block, Program, Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import * as TerminalDialogParent from '../test/apps/dialogTerminal.js'
 import * as Dialog from './block.js'
 
 const dialogId = 'preserved-dialog'
@@ -19,7 +20,7 @@ type Model = typeof Model.Type
 const ApplicationKey = Symbol('DialogRuntimeApplication')
 const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message: Schema.Never,
@@ -42,10 +43,13 @@ const foldDialogOutMessage = ApplicationBlock.makeOutMessageFold(
   },
 )
 
-const DialogBinding = ApplicationBlock.makeBinding(Dialog.DialogBlock, {
-  field: 'dialog',
-  init: { contextToArgs: () => [{ id: dialogId }] },
-}).withOutMessagePolicy({ fold: foldDialogOutMessage })
+const DialogBinding = ApplicationBlock.makeRequiredFieldBinding(
+  Dialog.DialogBlock,
+  {
+    field: 'dialog',
+    init: { contextToArgs: () => [{ id: dialogId }] },
+  },
+).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
 const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [DialogBinding],
@@ -105,18 +109,11 @@ const preservedOpenModel = (config: Dialog.InitConfig) =>
 
 const application = {
   block: ApplicationBlock,
-  layer: ApplicationBlock.makeLayer(
-    Effect.gen(function* () {
-      const dialog = yield* DialogBinding
-
-      return {
-        children: [dialog],
-        init,
-        update,
-        view,
-      }
-    }),
-  ).pipe(Layer.provide(Dialog.layer)),
+  layer: ApplicationBlock.makeLayer({
+    init,
+    update,
+    view,
+  }).pipe(Layer.provide(Dialog.layer)),
 }
 
 const makeDialogProgram = (container: HTMLElement) =>
@@ -134,9 +131,98 @@ describe('Dialog runtime lifecycle', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
     document.body.innerHTML = ''
   })
+
+  for (const action of ['cancel', 'replace', 'reopen']) {
+    it(`drops the old close result when ${action} occurs during native cleanup`, async () => {
+      const container = document.createElement('div')
+      container.id = `terminal-dialog-${action}`
+      document.body.appendChild(container)
+      const program = Program.makeElement({
+        block: TerminalDialogParent.TerminalDialogParentBlock,
+        layer: TerminalDialogParent.layer,
+        container,
+      })
+      const runtime = Effect.runFork(program.start())
+      const click = (id: string) => {
+        const button = document.getElementById(id)
+
+        if (!(button instanceof HTMLButtonElement)) {
+          throw new Error(`Expected button ${id}`)
+        }
+
+        button.click()
+      }
+
+      try {
+        await vi.waitFor(() => {
+          expect(document.getElementById('terminal-open')).not.toBeNull()
+        })
+        click('terminal-open')
+        await vi.waitFor(() => {
+          expect(
+            document.getElementById('first')?.getAttribute('aria-modal'),
+          ).toBe('true')
+          expect(document.documentElement.style.overflow).toBe('hidden')
+        })
+
+        const nativeClose = HTMLDialogElement.prototype.close
+        const close = vi
+          .spyOn(HTMLDialogElement.prototype, 'close')
+          .mockImplementationOnce(function (this: HTMLDialogElement) {
+            expect(this.id).toBe('first')
+            if (action === 'reopen') {
+              click('terminal-cancel')
+              click('terminal-open')
+            } else {
+              click(`terminal-${action}`)
+            }
+            nativeClose.call(this)
+          })
+        const closeButton = document.querySelector('#first button')
+
+        if (!(closeButton instanceof HTMLButtonElement)) {
+          throw new Error('Expected the current Dialog close button')
+        }
+
+        closeButton.click()
+        await vi.waitFor(() => {
+          expect(close).toHaveBeenCalled()
+          expect(
+            document.getElementById('terminal-completed')?.textContent,
+          ).toBe('')
+
+          if (action === 'cancel') {
+            expect(document.getElementById('first')).toBeNull()
+            expect(document.documentElement.style.overflow).not.toBe('hidden')
+          } else {
+            expect(
+              document
+                .getElementById(action === 'replace' ? 'second' : 'first')
+                ?.getAttribute('aria-modal'),
+            ).toBe('true')
+          }
+        })
+        await Effect.runPromise(Effect.yieldNow)
+        expect(document.getElementById('terminal-completed')?.textContent).toBe(
+          '',
+        )
+
+        if (action !== 'cancel') {
+          expect(
+            document
+              .getElementById(action === 'replace' ? 'second' : 'first')
+              ?.getAttribute('aria-modal'),
+          ).toBe('true')
+        }
+      } finally {
+        await Effect.runPromise(Fiber.interrupt(runtime))
+      }
+    })
+  }
 
   it('reacquires modal resources for a preserved open Model', async () => {
     const background = document.createElement('main')

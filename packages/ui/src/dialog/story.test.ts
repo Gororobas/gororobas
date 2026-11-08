@@ -14,12 +14,13 @@ import * as Dom from 'foldkit/dom'
 import type { ChildAttribute } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
-import { expect } from 'vitest'
+import { expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
 import * as Animation from '../animation/block.js'
 import { makeInitialModel as makeAnimationModel } from '../animation/schema.js'
+import * as TerminalDialogParent from '../test/apps/dialogTerminal.js'
 import {
   AcquireResources,
   CloseDialog,
@@ -43,6 +44,11 @@ type TestHtmlBuilder = Parameters<
   Story.TestBlock<typeof DialogBlock>['view']
 >[2]
 
+const acknowledgeCloseDialog = Story.Command.resolve(
+  CloseDialog,
+  Message.CompletedCloseDialog(),
+)
+
 const acknowledgeAcquireResources = Scene.Mount.resolve(
   AcquireResources,
   Message.SucceededAcquireResources(),
@@ -65,7 +71,7 @@ type ParentMessage = typeof ParentMessage.Type
 const DialogParentTestKey = Symbol('DialogParentTest')
 const DialogParentTestBlock = Block.make('DialogParentTest', {
   key: DialogParentTestKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: ParentModel,
   Message: ParentMessage,
 })
@@ -98,10 +104,13 @@ const loadParentData = DialogParentTestBlock.makeCommandsStep(() => [
   LoadParentData(),
 ])
 
-const DialogBinding = DialogParentTestBlock.makeBinding(DialogBlock, {
-  field: 'dialog',
-  init: { contextToArgs: () => [{ id: 'initial-dialog' }] },
-}).withOutMessagePolicy({ fold: foldDialogOutMessage })
+const DialogBinding = DialogParentTestBlock.makeRequiredFieldBinding(
+  DialogBlock,
+  {
+    field: 'dialog',
+    init: { contextToArgs: () => [{ id: 'initial-dialog' }] },
+  },
+).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
 const DialogParentTestComposition = DialogParentTestBlock.makeComposition({
   bindings: [DialogBinding],
@@ -113,20 +122,13 @@ const parentInit = DialogParentTestComposition.makeInit(() => ({
 }))
 const ParentBlock = {
   block: DialogParentTestBlock,
-  layer: DialogParentTestBlock.makeLayer(
-    Effect.gen(function* () {
-      const dialog = yield* DialogBinding
-
-      return {
-        children: [dialog],
-        init: parentInit,
-        update: DialogParentTestComposition.makeUpdate({
-          CompletedLoadParentData: DialogParentTestBlock.makeNoopStep(),
-        }),
-        EffectsLayer: LoadParentData.layer,
-      }
+  layer: DialogParentTestBlock.makeLayer({
+    init: parentInit,
+    update: DialogParentTestComposition.makeUpdate({
+      CompletedLoadParentData: DialogParentTestBlock.makeNoopStep(),
     }),
-  ).pipe(Layer.provide(layer)),
+    EffectsLayer: LoadParentData.layer,
+  }).pipe(Layer.provide(layer)),
 }
 
 const provideEffects = Effect.provide(
@@ -147,56 +149,18 @@ const makeFixture = (block: Story.TestBlock<typeof DialogBlock>) => {
   const isDialogVisible = (model: Model): boolean =>
     model.isOpen || model.animation.transitionState !== 'Idle'
 
-  const isOnUnmount = <RequiredMountRequirements>(
-    childAttribute: ChildAttribute<RequiredMountRequirements>,
-  ): boolean => Predicate.isTagged(childAttribute.attribute, 'OnUnmount')
-
-  // Renders the dialog view through the Scene harness (which manages the runtime
-  // frame) and reports whether the published `dialog` attribute group carries the
-  // OnUnmount backstop.
-  const dialogHasOnUnmount = (model: Model): boolean => {
-    let hasOnUnmount = false
-    const sceneView = (currentModel: Model, h: TestHtmlBuilder) =>
-      view(
-        currentModel,
-        {
-          toView: ({ dialog }) => {
-            hasOnUnmount = dialog.some(isOnUnmount)
-            return h.dialog([...dialog])
-          },
-        },
-        h,
-      )
-
-    if (isDialogVisible(model)) {
-      Scene.scene(
-        { update, view: sceneView },
-        Scene.given(model),
-        acknowledgeAcquireResources,
-      )
-    } else {
-      Scene.scene({ update, view: sceneView }, Scene.given(model))
-    }
-    return hasOnUnmount
-  }
-
-  // Renders the dialog view through the Scene harness and returns the chosen
-  // RenderInfo attribute group so a test can inspect what the consumer receives.
-  const renderGroup = <RequiredMountRequirements>(
+  const assertRenderInfo = (
     model: Model,
-    selectGroup: (
-      render: RenderInfo,
-    ) => ReadonlyArray<ChildAttribute<RequiredMountRequirements>>,
+    assert: (render: RenderInfo) => void,
     hasDescription = false,
-  ): ReadonlyArray<ChildAttribute<RequiredMountRequirements>> => {
-    let captured: ReadonlyArray<ChildAttribute<RequiredMountRequirements>> = []
+  ): void => {
     const sceneView = (currentModel: Model, h: TestHtmlBuilder) =>
       view(
         currentModel,
         {
           hasDescription,
           toView: render => {
-            captured = selectGroup(render)
+            assert(render)
             return h.dialog([...render.dialog])
           },
         },
@@ -233,7 +197,6 @@ const makeFixture = (block: Story.TestBlock<typeof DialogBlock>) => {
     } else {
       Scene.scene({ update, view: sceneView }, Scene.given(model))
     }
-    return captured
   }
 
   const sceneView = (model: Model, h: TestHtmlBuilder) =>
@@ -244,8 +207,7 @@ const makeFixture = (block: Story.TestBlock<typeof DialogBlock>) => {
     update,
     view,
     openDialog,
-    dialogHasOnUnmount,
-    renderGroup,
+    assertRenderInfo,
     provideEffects,
   }
 }
@@ -309,6 +271,11 @@ const hasEscapeCancelMapping = <RequiredMountRequirements>(
       Predicate.hasProperty(attribute, 'maybeCustomEventMessage') &&
       Predicate.isTagged(attribute.maybeCustomEventMessage, 'Some'),
   )
+
+const hasOnUnmount = <RequiredMountRequirements>(
+  group: ReadonlyArray<ChildAttribute<RequiredMountRequirements>>,
+): boolean =>
+  group.some(({ attribute }) => Predicate.isTagged(attribute, 'OnUnmount'))
 
 it.layer(layer, { buildPerTest: true })(it => {
   describe('Dialog', () => {
@@ -562,6 +529,8 @@ it.layer(layer, { buildPerTest: true })(it => {
                 Story.model(model => {
                   expect(model.isOpen).toBe(false)
                 }),
+                acknowledgeCloseDialog,
+                Story.expectOutMessage(OutMessage.CompletedClose()),
                 Story.Command.expectNone(),
               )
             }),
@@ -598,6 +567,8 @@ it.layer(layer, { buildPerTest: true })(it => {
                   expect(model.animation.transitionState).toBe('Idle')
                   expect(model.animation.transitionGeneration).toBe(1)
                 }),
+                acknowledgeCloseDialog,
+                Story.expectOutMessage(OutMessage.CompletedClose()),
                 Story.Command.expectNone(),
               )
             }),
@@ -998,7 +969,7 @@ it.layer(layer, { buildPerTest: true })(it => {
 
       describe('FailedShowDialog', () => {
         it.effect(
-          'reports Closed without releasing resources when showing fails',
+          'reports Closed and completes native cleanup when showing fails',
           () =>
             Story.story(
               DialogBlock,
@@ -1009,6 +980,8 @@ it.layer(layer, { buildPerTest: true })(it => {
               Story.model(model => {
                 expect(model.isOpen).toBe(false)
               }),
+              acknowledgeCloseDialog,
+              Story.expectOutMessage(OutMessage.CompletedClose()),
               Story.Command.expectNone(),
             ),
         )
@@ -1041,42 +1014,56 @@ it.layer(layer, { buildPerTest: true })(it => {
                 expect(model.animation.transitionState).toBe('Idle')
                 expect(model.animation.transitionGeneration).toBe(1)
               }),
+              acknowledgeCloseDialog,
+              Story.expectOutMessage(OutMessage.CompletedClose()),
               Story.Command.expectNone(),
             )
           }),
         )
 
-        it.effect('resets a running leave animation to Idle', () =>
-          Story.withBlock(DialogBlock, block => {
-            const { openDialog } = makeFixture(block)
+        for (const failure of [
+          Message.FailedShowDialog(),
+          Message.FailedAcquireResources(),
+        ]) {
+          it.effect(
+            `resets a running leave animation after ${failure._tag}`,
+            () =>
+              Story.withBlock(DialogBlock, block => {
+                const { openDialog } = makeFixture(block)
 
-            const leavingModel = modifyFields(
-              openDialog({ id: 'test', isAnimated: true }).model,
-              {
-                isOpen: () => false,
-                animation: () =>
-                  modifyFields(
-                    makeAnimationModel({ id: 'test-panel', isShowing: false }),
-                    {
-                      transitionState: () => 'LeaveAnimating',
-                    },
-                  ),
-              },
-            )
-            return Story.story(
-              DialogBlock,
-              Story.given(leavingModel),
-              Story.message(Message.FailedShowDialog()),
-              Story.expectNoOutMessage(),
-              Story.model(model => {
-                expect(model.isOpen).toBe(false)
-                expect(model.animation.isShowing).toBe(false)
-                expect(model.animation.transitionState).toBe('Idle')
+                const leavingModel = modifyFields(
+                  openDialog({ id: 'test', isAnimated: true }).model,
+                  {
+                    isOpen: () => false,
+                    animation: () =>
+                      modifyFields(
+                        makeAnimationModel({
+                          id: 'test-panel',
+                          isShowing: false,
+                        }),
+                        {
+                          transitionState: () => 'LeaveAnimating',
+                        },
+                      ),
+                  },
+                )
+                return Story.story(
+                  DialogBlock,
+                  Story.given(leavingModel),
+                  Story.message(failure),
+                  Story.expectNoOutMessage(),
+                  Story.model(model => {
+                    expect(model.isOpen).toBe(false)
+                    expect(model.animation.isShowing).toBe(false)
+                    expect(model.animation.transitionState).toBe('Idle')
+                  }),
+                  acknowledgeCloseDialog,
+                  Story.expectOutMessage(OutMessage.CompletedClose()),
+                  Story.Command.expectNone(),
+                )
               }),
-              Story.Command.expectNone(),
-            )
-          }),
-        )
+          )
+        }
 
         it.effect('does nothing when the dialog is already closed', () =>
           Story.withBlock(DialogBlock, block => {
@@ -1087,6 +1074,11 @@ it.layer(layer, { buildPerTest: true })(it => {
               DialogBlock,
               Story.given(closedModel),
               Story.message(Message.FailedShowDialog()),
+              Story.expectNoOutMessage(),
+              Story.model(model => {
+                expect(model).toBe(closedModel)
+              }),
+              Story.message(Message.FailedAcquireResources()),
               Story.expectNoOutMessage(),
               Story.model(model => {
                 expect(model).toBe(closedModel)
@@ -1105,6 +1097,8 @@ it.layer(layer, { buildPerTest: true })(it => {
               Story.inMessage(InMessage.RequestedOpen()),
               Story.Command.resolve(ShowDialog, Message.FailedShowDialog()),
               Story.expectOutMessage(OutMessage.Closed()),
+              acknowledgeCloseDialog,
+              Story.expectOutMessage(OutMessage.CompletedClose()),
               Story.inMessage(InMessage.RequestedClose()),
               Story.expectNoOutMessage(),
               Story.Command.expectNone(),
@@ -1113,6 +1107,154 @@ it.layer(layer, { buildPerTest: true })(it => {
       })
 
       describe('parent close policy', () => {
+        for (const isAnimated of [false, true]) {
+          for (const failure of ['show', 'acquisition']) {
+            it.effect(
+              `retains the ${isAnimated ? 'animated' : 'plain'} child until ${failure} failure cleanup completes`,
+              () =>
+                Story.story(
+                  {
+                    block: TerminalDialogParent.TerminalDialogParentBlock,
+                    layer: TerminalDialogParent.layer,
+                  },
+                  Story.init(),
+                  Story.inMessage(
+                    TerminalDialogParent.TerminalDialogParentBlock.InMessage.RequestedOpen(
+                      {
+                        key: 'first',
+                        isAnimated,
+                      },
+                    ),
+                  ),
+                  Story.Command.resolve(
+                    ShowDialog,
+                    failure === 'show'
+                      ? Message.FailedShowDialog()
+                      : Message.SucceededShowDialog(),
+                  ),
+                  ...(failure === 'acquisition'
+                    ? [
+                        Story.messageIn(
+                          TerminalDialogParent.MaybeDialogInstanceBinding,
+                          'first',
+                          Message.FailedAcquireResources(),
+                        ),
+                      ]
+                    : []),
+                  Story.model(model => {
+                    expect(Option.isSome(model.maybeDialogInstance)).toBe(true)
+                    expect(model.closedKeys).toEqual(['first'])
+                    expect(model.completedKeys).toEqual([])
+                  }),
+                  Story.Command.expectHas(CloseDialog({ id: 'first' })),
+                  ...(isAnimated
+                    ? [
+                        Story.Command.resolve(
+                          Animation.WaitForPaint,
+                          Animation.Message.CompletedWaitForPaint({
+                            generation: 1,
+                          }),
+                        ),
+                      ]
+                    : []),
+                  Story.Command.resolve(
+                    CloseDialog,
+                    Message.CompletedCloseDialog(),
+                  ),
+                  Story.model(model => {
+                    expect(model.maybeDialogInstance).toEqual(Option.none())
+                    expect(model.closedKeys).toEqual(['first'])
+                    expect(model.completedKeys).toEqual(['first'])
+                  }),
+                  Story.Command.expectNone(),
+                ),
+            )
+          }
+        }
+
+        it.effect(
+          'ignores the cleanup result after the parent removes the occurrence',
+          () =>
+            Story.story(
+              {
+                block: TerminalDialogParent.TerminalDialogParentBlock,
+                layer: TerminalDialogParent.layer,
+              },
+              Story.init(),
+              Story.inMessage(
+                TerminalDialogParent.TerminalDialogParentBlock.InMessage.RequestedOpen(
+                  {
+                    key: 'first',
+                    isAnimated: false,
+                  },
+                ),
+              ),
+              Story.Command.resolve(ShowDialog, Message.FailedShowDialog()),
+              Story.inMessage(
+                TerminalDialogParent.TerminalDialogParentBlock.InMessage.RequestedCancel(),
+              ),
+              Story.Command.resolve(
+                CloseDialog,
+                Message.CompletedCloseDialog(),
+              ),
+              Story.model(model => {
+                expect(model.maybeDialogInstance).toEqual(Option.none())
+                expect(model.completedKeys).toEqual([])
+              }),
+              Story.Command.expectNone(),
+            ),
+        )
+
+        it.effect(
+          'does not route the old cleanup result into a replacement occurrence',
+          () =>
+            Story.story(
+              {
+                block: TerminalDialogParent.TerminalDialogParentBlock,
+                layer: TerminalDialogParent.layer,
+              },
+              Story.init(),
+              Story.inMessage(
+                TerminalDialogParent.TerminalDialogParentBlock.InMessage.RequestedOpen(
+                  {
+                    key: 'first',
+                    isAnimated: false,
+                  },
+                ),
+              ),
+              Story.Command.resolve(ShowDialog, Message.FailedShowDialog()),
+              Story.inMessage(
+                TerminalDialogParent.TerminalDialogParentBlock.InMessage.RequestedOpen(
+                  {
+                    key: 'second',
+                    isAnimated: false,
+                  },
+                ),
+              ),
+              Story.Command.resolve(ShowDialog, Message.SucceededShowDialog()),
+              Story.Command.resolve(
+                CloseDialog({ id: 'first' }),
+                Message.CompletedCloseDialog(),
+              ),
+              Story.model(model => {
+                expect(
+                  Option.map(
+                    model.maybeDialogInstance,
+                    instance => instance.key,
+                  ),
+                ).toEqual(Option.some('second'))
+                expect(
+                  Option.map(
+                    model.maybeDialogInstance,
+                    instance => instance.model.isOpen,
+                  ),
+                ).toEqual(Option.some(true))
+                expect(model.completedKeys).toEqual([])
+              }),
+              Story.Command.expectNone(),
+            ),
+        )
+
         it.effect('runs when the native dialog fails to show', () =>
           Story.story(
             ParentBlock,
@@ -1122,6 +1264,7 @@ it.layer(layer, { buildPerTest: true })(it => {
               ParentMessage.CompletedLoadParentData(),
             ),
             Story.Command.resolve(ShowDialog, Message.FailedShowDialog()),
+            acknowledgeCloseDialog,
             Story.model(model => {
               expect(model.dialog.isOpen).toBe(false)
               expect(model.dialogEvents).toStrictEqual(['Opened', 'Closed'])
@@ -1137,7 +1280,8 @@ it.layer(layer, { buildPerTest: true })(it => {
               [LoadParentData, ParentMessage.CompletedLoadParentData()],
               [ShowDialog, Message.SucceededShowDialog()],
             ),
-            Story.messageFrom(DialogBinding, Message.FailedAcquireResources()),
+            Story.messageIn(DialogBinding, Message.FailedAcquireResources()),
+            acknowledgeCloseDialog,
             Story.model(model => {
               expect(model.dialog.isOpen).toBe(false)
               expect(model.dialogEvents).toStrictEqual(['Opened', 'Closed'])
@@ -1153,7 +1297,7 @@ it.layer(layer, { buildPerTest: true })(it => {
               [LoadParentData, ParentMessage.CompletedLoadParentData()],
               [ShowDialog, Message.SucceededShowDialog()],
             ),
-            Story.messageFrom(DialogBinding, Message.Unmounted()),
+            Story.messageIn(DialogBinding, Message.Unmounted()),
             Story.model(model => {
               expect(model.dialog.isOpen).toBe(false)
               expect(model.dialogEvents).toStrictEqual(['Opened', 'Closed'])
@@ -1194,15 +1338,12 @@ it.layer(layer, { buildPerTest: true })(it => {
     describe('RenderInfo title and description', () => {
       it.effect('publishes the title id the dialog labels itself by', () =>
         Story.withBlock(DialogBlock, block => {
-          const { init, renderGroup } = makeFixture(block)
+          const { init, assertRenderInfo } = makeFixture(block)
 
           const model = init({ id: 'my-dialog' }).model
-          expect(
-            hasIdAttribute(
-              renderGroup(model, render => render.title),
-              titleId(model),
-            ),
-          ).toBe(true)
+          assertRenderInfo(model, ({ title }) =>
+            expect(hasIdAttribute(title, titleId(model))).toBe(true),
+          )
         }),
       )
 
@@ -1210,15 +1351,14 @@ it.layer(layer, { buildPerTest: true })(it => {
         'publishes the description id the dialog describes itself by',
         () =>
           Story.withBlock(DialogBlock, block => {
-            const { init, renderGroup } = makeFixture(block)
+            const { init, assertRenderInfo } = makeFixture(block)
 
             const model = init({ id: 'my-dialog' }).model
-            expect(
-              hasIdAttribute(
-                renderGroup(model, render => render.description),
-                descriptionId(model),
+            assertRenderInfo(model, ({ description }) =>
+              expect(hasIdAttribute(description, descriptionId(model))).toBe(
+                true,
               ),
-            ).toBe(true)
+            )
           }),
       )
     })
@@ -1226,64 +1366,48 @@ it.layer(layer, { buildPerTest: true })(it => {
     describe('RenderInfo dialog', () => {
       it.effect('omits aria-describedby by default', () =>
         Story.withBlock(DialogBlock, block => {
-          const { renderGroup, init } = makeFixture(block)
+          const { assertRenderInfo, init } = makeFixture(block)
 
-          expect(
-            hasAriaDescribedBy(
-              renderGroup(
-                init({ id: 'my-dialog' }).model,
-                render => render.dialog,
-              ),
-              'my-dialog-dialog-description',
-            ),
-          ).toBe(false)
+          assertRenderInfo(init({ id: 'my-dialog' }).model, ({ dialog }) =>
+            expect(
+              hasAriaDescribedBy(dialog, 'my-dialog-dialog-description'),
+            ).toBe(false),
+          )
         }),
       )
 
       it.effect('references the description when opted in', () =>
         Story.withBlock(DialogBlock, block => {
-          const { renderGroup, init } = makeFixture(block)
+          const { assertRenderInfo, init } = makeFixture(block)
 
-          expect(
-            hasAriaDescribedBy(
-              renderGroup(
-                init({ id: 'my-dialog' }).model,
-                render => render.dialog,
-                true,
-              ),
-              'my-dialog-dialog-description',
-            ),
-          ).toBe(true)
+          assertRenderInfo(
+            init({ id: 'my-dialog' }).model,
+            ({ dialog }) =>
+              expect(
+                hasAriaDescribedBy(dialog, 'my-dialog-dialog-description'),
+              ).toBe(true),
+            true,
+          )
         }),
       )
 
       it.effect('suppresses native cancel events', () =>
         Story.withBlock(DialogBlock, block => {
-          const { renderGroup, init } = makeFixture(block)
+          const { assertRenderInfo, init } = makeFixture(block)
 
-          expect(
-            hasCancelPrevention(
-              renderGroup(
-                init({ id: 'my-dialog' }).model,
-                render => render.dialog,
-              ),
-            ),
-          ).toBe(true)
+          assertRenderInfo(init({ id: 'my-dialog' }).model, ({ dialog }) =>
+            expect(hasCancelPrevention(dialog)).toBe(true),
+          )
         }),
       )
 
       it.effect('maps the showDialog Escape signal', () =>
         Story.withBlock(DialogBlock, block => {
-          const { renderGroup, init } = makeFixture(block)
+          const { assertRenderInfo, init } = makeFixture(block)
 
-          expect(
-            hasEscapeCancelMapping(
-              renderGroup(
-                init({ id: 'my-dialog' }).model,
-                render => render.dialog,
-              ),
-            ),
-          ).toBe(true)
+          assertRenderInfo(init({ id: 'my-dialog' }).model, ({ dialog }) =>
+            expect(hasEscapeCancelMapping(dialog)).toBe(true),
+          )
         }),
       )
     })
@@ -1293,18 +1417,18 @@ it.layer(layer, { buildPerTest: true })(it => {
         'publishes type button so a close control does not submit a form',
         () =>
           Story.withBlock(DialogBlock, block => {
-            const { openDialog, renderGroup } = makeFixture(block)
+            const { openDialog, assertRenderInfo } = makeFixture(block)
 
             const model = openDialog({ id: 'my-dialog' }).model
-            expect(
-              hasButtonType(renderGroup(model, render => render.closeButton)),
-            ).toBe(true)
+            assertRenderInfo(model, ({ closeButton }) =>
+              expect(hasButtonType(closeButton)).toBe(true),
+            )
           }),
       )
 
       it.effect('publishes type button while the leave animation runs', () =>
         Story.withBlock(DialogBlock, block => {
-          const { openDialog, renderGroup } = makeFixture(block)
+          const { openDialog, assertRenderInfo } = makeFixture(block)
 
           const leavingModel = modifyFields(
             openDialog({ id: 'my-dialog', isAnimated: true }).model,
@@ -1323,11 +1447,9 @@ it.layer(layer, { buildPerTest: true })(it => {
                 ),
             },
           )
-          expect(
-            hasButtonType(
-              renderGroup(leavingModel, render => render.closeButton),
-            ),
-          ).toBe(true)
+          assertRenderInfo(leavingModel, ({ closeButton }) =>
+            expect(hasButtonType(closeButton)).toBe(true),
+          )
         }),
       )
     })
@@ -1335,15 +1457,14 @@ it.layer(layer, { buildPerTest: true })(it => {
     describe('RenderInfo initialFocus', () => {
       it.effect('publishes the marker the dialog focuses on open', () =>
         Story.withBlock(DialogBlock, block => {
-          const { init, renderGroup } = makeFixture(block)
+          const { init, assertRenderInfo } = makeFixture(block)
 
           const model = init({ id: 'my-dialog' }).model
-          expect(
-            hasDataAttribute(
-              renderGroup(model, render => render.initialFocus),
-              initialFocusMarkerAttribute,
-            ),
-          ).toBe(true)
+          assertRenderInfo(model, ({ initialFocus }) =>
+            expect(
+              hasDataAttribute(initialFocus, initialFocusMarkerAttribute),
+            ).toBe(true),
+          )
         }),
       )
 
@@ -1509,6 +1630,85 @@ it.layer(layer, { buildPerTest: true })(it => {
       )
 
       it.effect(
+        'completes failure closure after native close, isolation and focus cleanup',
+        () => {
+          const background = document.createElement('main')
+          const trigger = document.createElement('button')
+          background.appendChild(trigger)
+          const dialog = document.createElement('dialog')
+          dialog.id = 'terminal-cleanup'
+          const dialogButton = document.createElement('button')
+          dialog.appendChild(dialogButton)
+          document.body.append(background, dialog)
+          trigger.focus()
+          const close = vi.spyOn(dialog, 'close')
+          const isolationAtFocus: Array<boolean> = []
+
+          return Story.withBlock(DialogBlock, executable =>
+            Effect.gen(function* () {
+              const dialogOpen = executable.inMessageUpdate(
+                executable.init({ id: dialog.id }).model,
+                InMessage.RequestedOpen(),
+              )
+              yield* ShowDialog({
+                id: dialog.id,
+                focusSelector: initialFocusMarkerSelector,
+              }).effect.pipe(provideEffects)
+              trigger.addEventListener('focus', () =>
+                isolationAtFocus.push(background.inert),
+              )
+
+              const dialogFailure = executable.update(
+                dialogOpen.model,
+                Message.FailedAcquireResources(),
+              )
+              expect(dialogFailure.outMessage).toEqual(OutMessage.Closed())
+              expect(
+                dialogFailure.commands?.map(command => ({
+                  name: command.name,
+                  args: command.args,
+                })),
+              ).toEqual([{ name: CloseDialog.name, args: { id: dialog.id } }])
+              expect(close).not.toHaveBeenCalled()
+              expect(background.inert).toBe(true)
+              expect(document.documentElement.style.overflow).toBe('hidden')
+              expect(document.activeElement).toBe(dialogButton)
+
+              const closeMessage = yield* CloseDialog({
+                id: dialog.id,
+              }).effect.pipe(provideEffects)
+              expect(close).toHaveBeenCalledTimes(1)
+              expect(dialog.open).toBe(false)
+              expect(background.inert).toBe(false)
+              expect(document.documentElement.style.overflow).not.toBe('hidden')
+              expect(document.activeElement).toBe(trigger)
+              expect(isolationAtFocus).toEqual([false])
+
+              const dialogClose = executable.update(
+                dialogFailure.model,
+                closeMessage,
+              )
+              expect(dialogClose.outMessage).toEqual(
+                OutMessage.CompletedClose(),
+              )
+            }),
+          ).pipe(
+            Effect.ensuring(
+              Dom.releaseDialogResources(dialog.id).pipe(
+                Effect.andThen(
+                  Effect.sync(() => {
+                    close.mockRestore()
+                    background.remove()
+                    dialog.remove()
+                  }),
+                ),
+              ),
+            ),
+          )
+        },
+      )
+
+      it.effect(
         'CloseDialog releases the dialog resources when the dialog is gone before it closes',
         () => {
           const dialog = document.createElement('dialog')
@@ -1612,19 +1812,21 @@ it.layer(layer, { buildPerTest: true })(it => {
         'includes the OnUnmount backstop on the dialog while it is open',
         () =>
           Story.withBlock(DialogBlock, block => {
-            const { dialogHasOnUnmount, openDialog } = makeFixture(block)
+            const { assertRenderInfo, openDialog } = makeFixture(block)
 
-            expect(dialogHasOnUnmount(openDialog({ id: 'test' }).model)).toBe(
-              true,
+            assertRenderInfo(openDialog({ id: 'test' }).model, ({ dialog }) =>
+              expect(hasOnUnmount(dialog)).toBe(true),
             )
           }),
       )
 
       it.effect('omits the OnUnmount backstop while the dialog is closed', () =>
         Story.withBlock(DialogBlock, block => {
-          const { dialogHasOnUnmount, init } = makeFixture(block)
+          const { assertRenderInfo, init } = makeFixture(block)
 
-          expect(dialogHasOnUnmount(init({ id: 'test' }).model)).toBe(false)
+          assertRenderInfo(init({ id: 'test' }).model, ({ dialog }) =>
+            expect(hasOnUnmount(dialog)).toBe(false),
+          )
         }),
       )
 
@@ -1632,21 +1834,17 @@ it.layer(layer, { buildPerTest: true })(it => {
         'renders the dialog closed with no OnUnmount backstop after a failed show',
         () =>
           Story.withBlock(DialogBlock, block => {
-            const { update, openDialog, renderGroup, dialogHasOnUnmount } =
-              makeFixture(block)
+            const { update, openDialog, assertRenderInfo } = makeFixture(block)
 
             const dialogShowFailed = update(
               openDialog({ id: 'test' }).model,
               Message.FailedShowDialog(),
             )
 
-            expect(
-              hasDataAttribute(
-                renderGroup(dialogShowFailed.model, render => render.dialog),
-                'open',
-              ),
-            ).toBe(false)
-            expect(dialogHasOnUnmount(dialogShowFailed.model)).toBe(false)
+            assertRenderInfo(dialogShowFailed.model, ({ dialog }) => {
+              expect(hasDataAttribute(dialog, 'open')).toBe(false)
+              expect(hasOnUnmount(dialog)).toBe(false)
+            })
           }),
       )
     })

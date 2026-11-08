@@ -1,64 +1,60 @@
 import { Array, Option, pipe } from 'effect'
-import { Calendar } from 'foldkit'
-import { init, messageFrom } from 'foldkit/story'
-import { Command, message, model, story } from 'foldkit/story'
+import { Calendar, Story } from 'foldkit'
 import { describe, expect } from 'vitest'
 
 import { it } from '@effect/vitest'
 
-import { EducationBlock, layer } from './block'
+import { Message } from './block'
 import { EducationEntryBlock } from './blocks/educationEntry'
 import { GenerateEducationEntryId } from './command'
 import { EntriesBinding } from './composition'
-import { Message } from './definition'
-
-type EducationEntryMessage = typeof EducationEntryBlock.Message.Type
+import { EducationBlock, layer } from './index'
 
 const today = Calendar.make(2026, 4, 16)
-const givenInitial = init(today, 'education-entry-1')
-const entryMessage = (entryId: string, message: EducationEntryMessage) =>
-  messageFrom(EntriesBinding, entryId, message)
+const givenInitial = Story.init(today, 'education-entry-1')
 
 describe('education', () => {
   it.effect('ClickedAddEntry generates an id and appends an entry', () =>
-    story(
+    Story.story(
       { block: EducationBlock, layer },
       givenInitial,
-      message(Message.ClickedAddEntry()),
-      Command.expectHas(GenerateEducationEntryId),
-      Command.resolve(
+      Story.message(Message.ClickedAddEntry()),
+      Story.Command.expectHas(GenerateEducationEntryId),
+      Story.Command.resolve(
         GenerateEducationEntryId,
         Message.CompletedGenerateEducationEntryId({ entryId: 'test-edu-1' }),
       ),
-      model(model => {
+      Story.model(model => {
         expect(model.entries).toHaveLength(2)
       }),
     ),
   )
 
   it.effect('an entry OutMessage.Removed removes that entry', () =>
-    story(
+    Story.story(
       { block: EducationBlock, layer },
       givenInitial,
-      entryMessage(
+      Story.messageIn(
+        EntriesBinding,
         'education-entry-1',
         EducationEntryBlock.Message.ClickedRemoveSelf(),
       ),
-      model(model => {
+      Story.model(model => {
         expect(model.entries).toHaveLength(0)
       }),
     ),
   )
 
   it.effect('a generated entry Message updates the matching entry', () =>
-    story(
+    Story.story(
       { block: EducationBlock, layer },
       givenInitial,
-      entryMessage(
+      Story.messageIn(
+        EntriesBinding,
         'education-entry-1',
         EducationEntryBlock.Message.UpdatedSchool({ value: 'MIT' }),
       ),
-      model(model => {
+      Story.model(model => {
         expect(
           pipe(
             model.entries,

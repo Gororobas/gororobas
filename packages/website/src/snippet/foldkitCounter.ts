@@ -14,16 +14,17 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const ApplicationKey = Symbol('Application')
-
 const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const ApplicationComposition = ApplicationBlock.makeComposition()
+const { makeComposition } = ApplicationBlock
+
+const ApplicationComposition = makeComposition()
 
 const update = ApplicationComposition.makeUpdate({
   ClickedIncrement: model => ({

@@ -237,9 +237,12 @@ export const ParentDefinition = Block.makeDefinition('RecordParent', {
   Message: ParentMessage,
   OutMessage,
 })
-export const ChildBinding = ParentDefinition.makeBinding(CounterBlock, {
-  field: 'child',
-}).withOutMessagePolicy({
+export const ChildBinding = ParentDefinition.makeRequiredFieldBinding(
+  CounterBlock,
+  {
+    field: 'child',
+  },
+).withOutMessagePolicy({
   forward: ParentDefinition.makeOutMessageForward(CounterBlock, {
     ReportedCount: ({ count }) => OutMessage.ReportedCount({ count }),
   }),
@@ -350,7 +353,9 @@ export type ContextualStatusReturn = Expect<
   >
 >
 
-export const makeGenericCounter = <Value>(Value: Schema.Schema<Value>) => {
+export const makeGenericCounter = <Value, Encoded>(
+  Value: Schema.Codec<Value, Encoded, never, never>,
+) => {
   const GenericModel = Schema.Struct({ value: Value })
   const GenericMessage = Message.defineMessageUnion({
     RequestedQuiet: {},

@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import * as Block from 'foldkit/block'
 import * as Scene from 'foldkit/scene'
 
@@ -11,15 +11,18 @@ type SceneViewInputs = Omit<Partial<ViewInputs>, 'toView'>
 const FileDropSceneKey = Symbol('FileDropScene')
 const FileDropSceneBlock = Block.make('FileDropScene', {
   key: FileDropSceneKey,
-  Init: Block.makeInputContract<readonly []>(),
+  InitArgs: Block.makeInputContract<readonly []>(),
   Model: Schema.Struct({ fileDrop: FileDropBlock.Model }),
   Message: Schema.Never,
   view: { kind: 'Element', Inputs: Block.makeInputContract<SceneViewInputs>() },
 })
-const FileDropBinding = FileDropSceneBlock.makeBinding(FileDropBlock, {
-  field: 'fileDrop',
-  init: { contextToArgs: () => [{ id: 'uploader' }] },
-}).withOutMessagePolicy({
+const FileDropBinding = FileDropSceneBlock.makeRequiredFieldBinding(
+  FileDropBlock,
+  {
+    field: 'fileDrop',
+    init: { contextToArgs: () => [{ id: 'uploader' }] },
+  },
+).withOutMessagePolicy({
   fold: FileDropSceneBlock.makeOutMessageFold(FileDropBlock, {
     ReceivedFiles: () => model => ({ model }),
     RejectedNonFiles: () => model => ({ model }),
@@ -49,18 +52,11 @@ const view = FileDropSceneComposition.makeView.withInputs(
 )
 const fileDropScene = {
   block: FileDropSceneBlock,
-  layer: FileDropSceneBlock.makeLayer(
-    Effect.gen(function* () {
-      const fileDrop = yield* FileDropBinding
-
-      return {
-        children: [fileDrop],
-        init,
-        update,
-        view,
-      }
-    }),
-  ).pipe(Layer.provide(layer)),
+  layer: FileDropSceneBlock.makeLayer({
+    init,
+    update,
+    view,
+  }).pipe(Layer.provide(layer)),
 }
 
 const dropZone = Scene.selector('label')

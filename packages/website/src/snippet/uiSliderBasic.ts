@@ -1,19 +1,14 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  SliderBlock,
-  layer as SliderLayer,
-  type SliderAttributes as SliderSliderAttributes,
-  snapAndClamp as SliderSnapAndClamp,
-} from '@foldkit/ui/slider'
+import { Slider } from '@foldkit/ui'
 
 // Add two fields to your Model: the value you own, and the Slider Block's
 // interaction state:
 const Model = Schema.Struct({
   ratingValue: Schema.Number,
-  ratingDemo: SliderBlock.Model,
+  ratingDemo: Slider.SliderBlock.Model,
   // ...your other fields
 })
 type Model = typeof Model.Type
@@ -22,42 +17,46 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const VolumeSliderKey = Symbol('VolumeSlider')
-
 export const VolumeSliderBlock = Block.make('VolumeSlider', {
   key: VolumeSliderKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = VolumeSliderBlock
+const {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = VolumeSliderBlock
 
 // At module scope, fold the OutMessage into your own Model. `ChangedValue`
 // carries the new number. Lift it to domain state, validate, or persist on
 // each commit. The arm returns an Update.Step over the parent Model, which
 // already has the next Slider Model written back. The parent Block
 // checks the complete child union and infers the handler's Model:
-const foldSliderOutMessage = VolumeSliderBlock.makeOutMessageFold(SliderBlock, {
-  // The child has emitted `ChangedValue`. Store the new value in the field
-  // you own. This arm is also where the parent can validate, persist, or
-  // trigger a downstream Command.
-  ChangedValue: ({ value }) =>
-    makeFieldsStep(() => ({
-      ratingValue: () => value,
-    })),
-})
-
 // The Binding declares placement, typed startup, and OutMessage policy.
 // The construction Layer below supplies the child implementation.
-const RatingDemoBinding = VolumeSliderBlock.makeBinding(SliderBlock, {
+const RatingDemoBinding = makeRequiredFieldBinding(Slider.SliderBlock, {
   field: 'ratingDemo',
   init: {
     contextToArgs: () => [{ id: 'rating', min: 0, max: 10, step: 1 }],
   },
-}).withOutMessagePolicy({ fold: foldSliderOutMessage })
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Slider.SliderBlock, {
+    // The child has emitted `ChangedValue`. Store the new value in the field
+    // you own. This arm is also where the parent can validate, persist, or
+    // trigger a downstream Command.
+    ChangedValue: ({ value }) =>
+      makeFieldsStep(() => ({
+        ratingValue: () => value,
+      })),
+  }),
+})
 
-const VolumeSliderComposition = VolumeSliderBlock.makeComposition({
+const VolumeSliderComposition = makeComposition({
   bindings: [RatingDemoBinding],
 })
 
@@ -65,7 +64,7 @@ const VolumeSliderComposition = VolumeSliderBlock.makeComposition({
 // the Slider Block with min / max / step and a unique id:
 const init = VolumeSliderComposition.makeInit(() => ({
   model: {
-    ratingValue: SliderSnapAndClamp(3, 0, 10, 1),
+    ratingValue: Slider.snapAndClamp(3, 0, 10, 1),
     // ...your other fields
   },
 }))
@@ -78,7 +77,7 @@ const update = VolumeSliderComposition.makeUpdate({})
 // markup and classes through the `toView` callback. The `attributes` groups
 // provide ARIA, pointer, and keyboard wiring:
 const view = VolumeSliderComposition.makeView((model, h) => {
-  const sliderView = (attributes: SliderSliderAttributes) =>
+  const sliderView = (attributes: Slider.SliderAttributes) =>
     h.div(
       [h.Class('flex flex-col gap-2 w-full max-w-sm')],
       [
@@ -134,15 +133,8 @@ const view = VolumeSliderComposition.makeView((model, h) => {
   )
 })
 
-export const layer = VolumeSliderBlock.makeLayer(
-  Effect.gen(function* () {
-    const slider = yield* RatingDemoBinding
-
-    return {
-      children: [slider],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(SliderLayer))
+export const layer = VolumeSliderBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Slider.layer))
