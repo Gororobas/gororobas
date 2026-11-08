@@ -87,7 +87,21 @@ export const defineKind = <
         en: Schema.optional(EditableTranslation),
         es: Schema.optional(EditableTranslation),
         pt: Schema.optional(EditableTranslation),
-      }),
+      }).check(
+        Schema.makeFilter(
+          (translations) =>
+            translations.en !== undefined ||
+            translations.es !== undefined ||
+            translations.pt !== undefined,
+          {
+            identifier: "WikiArticleTranslations",
+            title: "Wiki article translations",
+            description: "At least one supported language must have a translation.",
+            expected: "at least one translation",
+            arbitraryConstraint: { minProperties: 1 },
+          },
+        ),
+      ),
     }),
     ProjectionRow,
     QueriedPageData: Schema.Struct({

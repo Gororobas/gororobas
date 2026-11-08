@@ -24,6 +24,47 @@ const plant = Schema.decodeSync(WikiArticleEditableData)({
 
 const TestEnvironment = Layer.mergeAll(WorkflowEngine.layerMemory, TestLayer)
 
+it("requires at least one translation when creating an article", () => {
+  expect(
+    Option.isNone(
+      Schema.decodeOption(WikiArticleEditableData)({
+        kind: "PLANT",
+        attributes: {},
+        translations: {},
+      }),
+    ),
+  ).toBe(true)
+})
+
+it.effect("rejects removing an article's last translation", () =>
+  Effect.gen(function* () {
+    const { person } = yield* seedPerson("ADMIN")
+    const repository = yield* WikiArticlesRepository.make
+
+    const wikiArticleId = yield* repository.createWikiArticle({
+      wikiArticle: plant,
+      createdById: person.id,
+      status: "PUBLISHED",
+    })
+
+    const source = Option.getOrThrow(yield* repository.findSourceRowById(wikiArticleId))
+    const current = snapshotToLoroDoc(source.crdtSnapshot)
+    const edited = current.fork()
+    edited.getMap("translations").delete("pt")
+    edited.commit()
+
+    const error = yield* repository
+      .createRevision({
+        wikiArticleId,
+        createdById: person.id,
+        crdtUpdate: LoroDocUpdate.make(edited.export({ from: current.version(), mode: "update" })),
+      })
+      .pipe(Effect.flip)
+
+    expect(error).toMatchObject({ _tag: "InvalidCrdtUpdateError", reason: "SchemaValidation" })
+  }).pipe(Effect.provide(TestEnvironment)),
+)
+
 it.effect("rejects a revision that changes the article's kind", () =>
   Effect.gen(function* () {
     const { person } = yield* seedPerson("ADMIN")
@@ -165,4 +206,70 @@ it.effect("re-checks the parent on approval, which may have been unpublished mea
       "PENDING",
     )
   }).pipe(Effect.provide(TestEnvironment)),
+)
+
+it.effect(
+  "rejects approval when merging translation removals would leave an article without a route",
+  () =>
+    Effect.gen(function* () {
+      const { person } = yield* seedPerson("ADMIN")
+      const repository = yield* WikiArticlesRepository.make
+
+      const article = yield* Schema.decodeEffect(WikiArticleEditableData)({
+        kind: "PLANT",
+        attributes: {},
+        translations: {
+          pt: { commonNames: [{ id: "testname0001", name: "Milho" }] },
+          en: { commonNames: [{ id: "testname0002", name: "Corn" }] },
+        },
+      })
+
+      const wikiArticleId = yield* repository.createWikiArticle({
+        wikiArticle: article,
+        createdById: person.id,
+        status: "PUBLISHED",
+      })
+
+      const source = Option.getOrThrow(yield* repository.findSourceRowById(wikiArticleId))
+      const current = snapshotToLoroDoc(source.crdtSnapshot)
+
+      const removeTranslation = (language: string) => {
+        const edited = current.fork()
+        edited.getMap("translations").delete(language)
+        edited.commit()
+
+        return repository.createRevision({
+          wikiArticleId,
+          createdById: person.id,
+          crdtUpdate: LoroDocUpdate.make(
+            edited.export({ from: current.version(), mode: "update" }),
+          ),
+        })
+      }
+
+      const firstRevision = yield* removeTranslation("pt")
+      const secondRevision = yield* removeTranslation("en")
+
+      yield* repository.evaluateRevision({
+        revisionId: firstRevision,
+        evaluation: "APPROVED",
+        evaluatedById: person.id,
+      })
+
+      const error = yield* repository
+        .evaluateRevision({
+          revisionId: secondRevision,
+          evaluation: "APPROVED",
+          evaluatedById: person.id,
+        })
+        .pipe(Effect.flip)
+
+      expect(error).toMatchObject({ _tag: "InvalidCrdtUpdateError", reason: "SchemaValidation" })
+      expect(Option.getOrThrow(yield* repository.findRevisionById(secondRevision)).evaluation).toBe(
+        "PENDING",
+      )
+      const saved = Option.getOrThrow(yield* repository.findSourceRowById(wikiArticleId))
+      const data = yield* WikiArticleCrdt.read(snapshotToLoroDoc(saved.crdtSnapshot))
+      expect(data.translations.en).toBeDefined()
+    }).pipe(Effect.provide(TestEnvironment)),
 )
