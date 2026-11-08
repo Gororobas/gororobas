@@ -7,7 +7,7 @@ import { Message } from "./message"
 
 export const subscriptions = WikiArticleBlock.makeSubscriptions((entry) => ({
   viewerBookmarks: entry(
-    "WatchViewerBookmarks",
+    "WatchWikiArticleViewerBookmarks",
     {},
     {
       messages: [Message.UpdatedViewerBookmarks],

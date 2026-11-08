@@ -35,6 +35,7 @@ catalog:
   "@yielded/auth-persistence": "0.1.0-beta.47"
   effect: ^4.1.2
   effect-units: ^1.0.1
+  foldkit: 0.170.0-canary.54f8bcd443b4
   glob: ^13.0.6
   loro-crdt: ^1.16.4
   loro-prosemirror: ^0.4.4
@@ -73,8 +74,7 @@ overrides:
   # Pleat is a workspace package that pins its own dev versions; one copy of each runtime must serve the whole app.
   effect: "catalog:"
   "@effect/platform-browser": "catalog:"
-  # Built from the repos/foldkit subtree (the Blocks preview): `pnpm run build:foldkit`.
-  foldkit: "file:repos/foldkit/packages/foldkit"
+  foldkit: "catalog:"
   # Hoisted effect-oxlint and its plugins must share the same Schema runtime.
   "@mpsuesser/oxlint-plugin-effect>effect": "catalog:"
 

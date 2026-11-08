@@ -7,7 +7,7 @@ import { FilterGroupId } from "./filters"
 
 export const filterPopoverId = (group: FilterGroupId) => `search-filter-${group}`
 
-export const FiltersDrawerBinding = SearchBlock.makeBinding(DrawerBlock, {
+export const FiltersDrawerBinding = SearchBlock.makeRequiredFieldBinding(DrawerBlock, {
   field: "filtersDrawer",
   init: { contextToArgs: () => [{ id: "search-filters", isAnimated: true }] },
 }).withOutMessagePolicy({
@@ -23,7 +23,7 @@ const foldPopoverOutMessage = SearchBlock.makeOutMessageFold(PopoverBlock, {
 })
 
 /** One popover per filter group, so wide screens can open a group in place. */
-export const FilterPopoversBinding = SearchBlock.makeBinding(PopoverBlock, {
+export const FilterPopoversBinding = SearchBlock.makeKeyedArrayBinding(PopoverBlock, {
   field: "filterPopovers",
   key: "id",
   init: {

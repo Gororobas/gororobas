@@ -5,13 +5,13 @@ import { WikiArticleBlock } from "./definition"
 import { AttributedSection } from "./model"
 
 /** Someone's own relationship to the article. */
-export const BookmarkPickerBinding = WikiArticleBlock.makeBinding(PopoverDrawerBlock, {
+export const BookmarkPickerBinding = WikiArticleBlock.makeRequiredFieldBinding(PopoverDrawerBlock, {
   field: "bookmarkPicker",
   init: { contextToArgs: () => [{ id: "wiki-article-bookmark" }] },
 })
 
 /** A plant's whole classification, behind its one-line breadcrumb. */
-export const ClassificationBinding = WikiArticleBlock.makeBinding(PopoverDrawerBlock, {
+export const ClassificationBinding = WikiArticleBlock.makeRequiredFieldBinding(PopoverDrawerBlock, {
   field: "classification",
   init: { contextToArgs: () => [{ id: "wiki-article-classification" }] },
 })
@@ -22,7 +22,7 @@ export const attributionId = (section: AttributedSection) => `wiki-article-attri
  * One per section of provider data, crediting where it came from. Photos get theirs once the page
  * has loaded, as its photos are only known then.
  */
-export const AttributionsBinding = WikiArticleBlock.makeBinding(PopoverDrawerBlock, {
+export const AttributionsBinding = WikiArticleBlock.makeKeyedArrayBinding(PopoverDrawerBlock, {
   field: "attributions",
   key: "id",
   init: {

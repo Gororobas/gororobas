@@ -14,7 +14,7 @@ export const SearchKey = Symbol("Search")
 
 export const SearchBlock = Block.make("Search", {
   key: SearchKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   /** Searches navigate to URLs in the language the app is read in. */
   Context: Schema.Tuple([SupportedLanguage]),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },

@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@effect/platform-browser": "catalog:",
-    "@foldkit/ui": "file:../../repos/foldkit/packages/ui",
+    "@foldkit/ui": "0.170.0-canary.54f8bcd443b4",
     "@fontsource-variable/alan-sans": "^5.3.1",
     "@gororobas/domain": "workspace:^",
     "@lingui/core": "catalog:",
@@ -27,14 +27,14 @@
     "blobatar": "^2.7.0",
     "effect": "catalog:",
     "effect-units": "catalog:",
-    "foldkit": "file:../../repos/foldkit/packages/foldkit"
+    "foldkit": "catalog:"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
-    "@foldkit/devtools": "file:../../repos/foldkit/packages/devtools",
-    "@foldkit/devtools-mcp": "file:../../repos/foldkit/packages/devtools-mcp",
-    "@foldkit/vite-plugin": "file:../../repos/foldkit/packages/vite-plugin-foldkit",
+    "@foldkit/devtools": "0.170.0-canary.54f8bcd443b4",
+    "@foldkit/devtools-mcp": "0.26.0-canary.54f8bcd443b4",
+    "@foldkit/vite-plugin": "0.29.0-canary.54f8bcd443b4",
     "@lingui/cli": "catalog:",
     "@lingui/format-po": "catalog:",
     "@lingui/vite-plugin": "catalog:",

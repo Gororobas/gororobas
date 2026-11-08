@@ -3,7 +3,7 @@ import { Predicate } from "effect"
 import { Effect, Layer, Match, Option, Queue, Schema, Stream } from "effect"
 import { Block, Mount } from "foldkit"
 import { type ChildAttribute, type Html, childAttributes } from "foldkit/html"
-import { defineMessageUnion } from "foldkit/message"
+import { defineInMessageUnion, defineMessageUnion } from "foldkit/message"
 import { taggedStruct } from "foldkit/schema"
 import { modifyFields } from "foldkit/struct"
 
@@ -80,8 +80,8 @@ export type Message = typeof Message.Type
 
 // IN MESSAGE
 
-/** What a parent can ask of the drawer, through its Binding's `requestOpen`, `requestClose` and `informSwipeAvailability`. */
-export const InMessage = defineMessageUnion({
+/** What a parent can ask of the drawer, through its Binding's `requestOpen`, `requestClose` and `informOfSwipeAvailability`. */
+export const InMessage = defineInMessageUnion({
   RequestedOpen: {},
   RequestedClose: {},
   InformedOfSwipeAvailability: { isSwipeEnabled: Schema.Boolean },
@@ -101,7 +101,7 @@ export const DrawerKey = Symbol("Drawer")
 
 export const DrawerBlock = Block.make("Drawer", {
   key: DrawerKey,
-  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  InitArgs: Block.makeInputContract<readonly [config: InitConfig]>(),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
   ChildInitContext: Schema.Struct({
     id: Schema.String,
@@ -119,7 +119,7 @@ export const DrawerBlock = Block.make("Drawer", {
   OutMessage,
 })
 
-const DialogBinding = DrawerBlock.makeBinding(Dialog.DialogBlock, {
+const DialogBinding = DrawerBlock.makeRequiredFieldBinding(Dialog.DialogBlock, {
   field: "dialog",
   init: { contextToArgs: (config) => [config] },
 }).withOutMessagePolicy({
@@ -661,17 +661,10 @@ const init = DrawerComposition.makeInit((config: InitConfig) => ({
   },
 }))
 
-export const layer = DrawerBlock.makeLayer(
-  Effect.gen(function* () {
-    const dialog = yield* DialogBinding
-
-    return {
-      children: [dialog],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-      EffectsLayer: Layer.mergeAll(TrackVirtualKeyboard.layer, TrackDrawerSwipe.layer),
-    }
-  }),
-).pipe(Layer.provide(Dialog.layer))
+export const layer = DrawerBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+  view,
+  EffectsLayer: Layer.mergeAll(TrackVirtualKeyboard.layer, TrackDrawerSwipe.layer),
+}).pipe(Layer.provide(Dialog.layer))

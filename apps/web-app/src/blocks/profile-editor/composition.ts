@@ -9,14 +9,17 @@ import { LocateDevice } from "./command"
 import { ProfileEditorBlock } from "./definition"
 import { OutMessage } from "./message"
 
-export const AboutBinding = ProfileEditorBlock.makeBinding(ProfileAboutEditorBlock, {
+export const AboutBinding = ProfileEditorBlock.makeRequiredFieldBinding(ProfileAboutEditorBlock, {
   field: "about",
 })
 
-export const LocationsBinding = ProfileEditorBlock.makeBinding(ProfileLocationsEditorBlock, {
-  field: "locations",
-  delivery: { toUpdateContext: (model) => [model.deviceLocation] },
-}).withOutMessagePolicy({
+export const LocationsBinding = ProfileEditorBlock.makeRequiredFieldBinding(
+  ProfileLocationsEditorBlock,
+  {
+    field: "locations",
+    delivery: { toUpdateContext: (model) => [model.deviceLocation] },
+  },
+).withOutMessagePolicy({
   fold: ProfileEditorBlock.makeOutMessageFold(ProfileLocationsEditorBlock, {
     RequestedDeviceLocation: () =>
       ProfileEditorBlock.makeStep((model) => ({
@@ -26,9 +29,12 @@ export const LocationsBinding = ProfileEditorBlock.makeBinding(ProfileLocationsE
   }),
 })
 
-export const SettingsBinding = ProfileEditorBlock.makeBinding(ProfileSettingsEditorBlock, {
-  field: "settings",
-}).withOutMessagePolicy({
+export const SettingsBinding = ProfileEditorBlock.makeRequiredFieldBinding(
+  ProfileSettingsEditorBlock,
+  {
+    field: "settings",
+  },
+).withOutMessagePolicy({
   forward: ProfileEditorBlock.makeOutMessageForward({
     RequestedSignOut: () => OutMessage.RequestedSignOut(),
     ChoseLanguage: ({ language }) => OutMessage.ChoseLanguage({ language }),

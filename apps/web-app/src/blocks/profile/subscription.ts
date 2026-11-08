@@ -6,7 +6,7 @@ import { Message } from "./message"
 
 export const subscriptions = ProfileBlock.makeSubscriptions((entry) => ({
   photoColumnCount: entry(
-    "WatchPhotoColumnCount",
+    "WatchProfilePhotoColumnCount",
     {},
     {
       messages: [Message.ChangedPhotoColumnCount],

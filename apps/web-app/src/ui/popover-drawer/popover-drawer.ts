@@ -1,10 +1,10 @@
 import { PopoverBlock } from "@foldkit/ui"
 import { type AnchorConfig, layer as PopoverLayer } from "@foldkit/ui/popover"
 import { Style, When } from "@pleat/core"
-import { Effect, Layer, Schema } from "effect"
+import { Layer, Schema } from "effect"
 import { Block, Update } from "foldkit"
 import type { Html } from "foldkit/html"
-import { defineMessageUnion } from "foldkit/message"
+import { defineInMessageUnion, defineMessageUnion } from "foldkit/message"
 
 import * as AppDrawer from "../app-drawer/view"
 import { popoverBackdropStyle, popoverPanelStyle } from "../app-popover/styles"
@@ -42,7 +42,7 @@ const Message = defineMessageUnion({
 })
 
 /** What a parent can ask through its Binding's `requestClose`, such as once a choice is made. */
-const InMessage = defineMessageUnion({
+const InMessage = defineInMessageUnion({
   RequestedClose: {},
 })
 
@@ -78,7 +78,7 @@ export const PopoverDrawerKey = Symbol("PopoverDrawer")
 
 export const PopoverDrawerBlock = Block.make("PopoverDrawer", {
   key: PopoverDrawerKey,
-  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  InitArgs: Block.makeInputContract<readonly [config: InitConfig]>(),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
   ChildInitContext: Schema.Struct({ id: Schema.String }),
   InMessage,
@@ -86,7 +86,7 @@ export const PopoverDrawerBlock = Block.make("PopoverDrawer", {
   Message,
 })
 
-const PopoverBinding = PopoverDrawerBlock.makeBinding(PopoverBlock, {
+const PopoverBinding = PopoverDrawerBlock.makeRequiredFieldBinding(PopoverBlock, {
   field: "popover",
   init: { contextToArgs: ({ id }) => [{ id: `${id}-popover`, isAnimated: true }] },
 }).withOutMessagePolicy({
@@ -96,7 +96,7 @@ const PopoverBinding = PopoverDrawerBlock.makeBinding(PopoverBlock, {
   }),
 })
 
-const DrawerBinding = PopoverDrawerBlock.makeBinding(DrawerBlock, {
+const DrawerBinding = PopoverDrawerBlock.makeRequiredFieldBinding(DrawerBlock, {
   field: "drawer",
   init: { contextToArgs: ({ id }) => [{ id: `${id}-drawer`, isAnimated: true }] },
 }).withOutMessagePolicy({
@@ -223,17 +223,9 @@ const view = PopoverDrawerComposition.makeView.withInputs<ViewInputs>(
   },
 )
 
-export const layer = PopoverDrawerBlock.makeLayer(
-  Effect.gen(function* () {
-    const popover = yield* PopoverBinding
-    const drawer = yield* DrawerBinding
-
-    return {
-      children: [popover, drawer],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-    }
-  }),
-).pipe(Layer.provide(Layer.mergeAll(PopoverLayer, DrawerLayer)))
+export const layer = PopoverDrawerBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+  view,
+}).pipe(Layer.provide(Layer.mergeAll(PopoverLayer, DrawerLayer)))

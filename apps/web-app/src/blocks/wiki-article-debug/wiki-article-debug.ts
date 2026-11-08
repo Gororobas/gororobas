@@ -34,7 +34,7 @@ export const WikiArticleDebugKey = Symbol("WikiArticleDebug")
 
 export const WikiArticleDebugBlock = Block.make("WikiArticleDebug", {
   key: WikiArticleDebugKey,
-  Init: Schema.Tuple([WikiArticleId]),
+  InitArgs: Schema.Tuple([WikiArticleId]),
   view: { kind: "Element", Inputs: Block.makeInputContract<LanguageInputs>() },
   effects: { services: [GororobasApiClient] },
   Model,
@@ -165,15 +165,10 @@ const view = WikiArticleDebugComposition.makeView.withInputs<LanguageInputs>(
   },
 )
 
-export const layer = WikiArticleDebugBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-      subscriptions,
-      EffectsLayer: subscriptions.layer,
-    }
-  }),
-)
+export const layer = WikiArticleDebugBlock.makeLayer({
+  init,
+  update,
+  view,
+  subscriptions,
+  EffectsLayer: subscriptions.layer,
+})

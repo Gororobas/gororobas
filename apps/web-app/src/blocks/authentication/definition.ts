@@ -13,7 +13,7 @@ export const AuthenticationKey = Symbol("Authentication")
 
 export const AuthenticationBlock = Block.make("Authentication", {
   key: AuthenticationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   /** Emails and new accounts speak the language the app is read in. */
   Context: Schema.Tuple([SupportedLanguage]),
   view: { kind: "Element", Inputs: Block.makeInputContract<LanguageInputs>() },

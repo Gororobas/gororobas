@@ -11,7 +11,7 @@ export const ProfileSettingsEditorKey = Symbol("ProfileSettingsEditor")
 /** Who sees the signed-in person's profile and what they save, their language and their account. */
 export const ProfileSettingsEditorBlock = Block.make("ProfileSettingsEditor", {
   key: ProfileSettingsEditorKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: "Element", Inputs: Block.makeInputContract<LanguageInputs>() },
   effects: { services: [GororobasApiClient] },
   Model,

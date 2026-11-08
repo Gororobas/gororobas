@@ -246,7 +246,7 @@ catalogs:
 overrides:
   effect: ^4.1.2
   '@effect/platform-browser': ^4.1.2
-  foldkit: file:repos/foldkit/packages/foldkit
+  foldkit: 0.170.0-canary.54f8bcd443b4
   '@mpsuesser/oxlint-plugin-effect>effect': ^4.1.2
 
 patchedDependencies:
@@ -271,8 +271,8 @@ importers:
         specifier: 'catalog:'
         version: 4.1.2(effect@4.1.2)(vitest@5.0.5)
       '@foldkit/oxlint-plugin':
-        specifier: file:repos/foldkit/packages/oxlint-plugin-foldkit
-        version: file:repos/foldkit/packages/oxlint-plugin-foldkit(effect@4.1.2)
+        specifier: 0.15.4-canary.54f8bcd443b4
+        version: 0.15.4-canary.54f8bcd443b4(effect@4.1.2)
       '@manypkg/cli':
         specifier: ^0.25.1
         version: 0.25.1
@@ -416,8 +416,8 @@ importers:
         specifier: ^4.1.2
         version: 4.1.2(effect@4.1.2)
       '@foldkit/ui':
-        specifier: file:../../repos/foldkit/packages/ui
-        version: file:repos/foldkit/packages/ui(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
+        specifier: 0.170.0-canary.54f8bcd443b4
+        version: 0.170.0-canary.54f8bcd443b4(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
       '@fontsource-variable/alan-sans':
         specifier: ^5.3.1
         version: 5.3.1
@@ -446,8 +446,8 @@ importers:
         specifier: 'catalog:'
         version: 1.0.1(effect@4.1.2)
       foldkit:
-        specifier: file:../../repos/foldkit/packages/foldkit
-        version: file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
+        specifier: 0.170.0-canary.54f8bcd443b4
+        version: 0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
     devDependencies:
       '@effect/platform-node':
         specifier: 'catalog:'
@@ -456,14 +456,14 @@ importers:
         specifier: 'catalog:'
         version: 4.1.2(effect@4.1.2)(vitest@5.0.5)
       '@foldkit/devtools':
-        specifier: file:../../repos/foldkit/packages/devtools
-        version: file:repos/foldkit/packages/devtools(@effect/platform-browser@4.1.2(effect@4.1.2))(@foldkit/ui@file:repos/foldkit/packages/ui(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)))(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
+        specifier: 0.170.0-canary.54f8bcd443b4
+        version: 0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(@foldkit/ui@0.170.0-canary.54f8bcd443b4(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)))(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
       '@foldkit/devtools-mcp':
-        specifier: file:../../repos/foldkit/packages/devtools-mcp
-        version: file:repos/foldkit/packages/devtools-mcp(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))(supports-color@7.2.0)(zod@4.6.7)
+        specifier: 0.26.0-canary.54f8bcd443b4
+        version: 0.26.0-canary.54f8bcd443b4(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))(supports-color@7.2.0)(zod@4.6.7)
       '@foldkit/vite-plugin':
-        specifier: file:../../repos/foldkit/packages/vite-plugin-foldkit
-        version: file:repos/foldkit/packages/vite-plugin-foldkit(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))(redis@6.3.0(@opentelemetry/api@1.9.1))
+        specifier: 0.29.0-canary.54f8bcd443b4
+        version: 0.29.0-canary.54f8bcd443b4(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))(redis@6.3.0(@opentelemetry/api@1.9.1))
       '@lingui/cli':
         specifier: 'catalog:'
         version: 6.12.0(esbuild@0.28.2)(rolldown@1.2.14)(supports-color@7.2.0)
@@ -659,9 +659,6 @@ importers:
       '@pleat/core':
         specifier: workspace:^
         version: link:../core
-      foldkit:
-        specifier: file:../../../foldkit/packages/foldkit
-        version: file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
     devDependencies:
       '@effect/platform-browser':
         specifier: ^4.1.2
@@ -669,6 +666,9 @@ importers:
       effect:
         specifier: ^4.1.2
         version: 4.1.2
+      foldkit:
+        specifier: 0.170.0-canary.54f8bcd443b4
+        version: 0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
       vitest:
         specifier: 5.0.3
         version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.3)(happy-dom@20.14.6)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -1064,40 +1064,40 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@foldkit/devtools-mcp@file:repos/foldkit/packages/devtools-mcp':
-    resolution: {directory: repos/foldkit/packages/devtools-mcp, type: directory}
+  '@foldkit/devtools-mcp@0.26.0-canary.54f8bcd443b4':
+    resolution: {integrity: sha512-cUttYATjr66H/vSGZRkdMr5pxDqwIvli7xtkC5BaPBTPcgSK/8KovwZTFk6I1jcE095ef6U7e2LMufWRYYIb9Q==}
     engines: {node: '>=22.19.0'}
     hasBin: true
     peerDependencies:
       effect: ^4.1.2
-      foldkit: '>=0.169.0'
+      foldkit: 0.170.0-canary.54f8bcd443b4
 
-  '@foldkit/devtools@file:repos/foldkit/packages/devtools':
-    resolution: {directory: repos/foldkit/packages/devtools, type: directory}
+  '@foldkit/devtools@0.170.0-canary.54f8bcd443b4':
+    resolution: {integrity: sha512-7OMKB7L/P2JfSjmWEgKDlW4iWHtl1+ag3wlrS8bmYtDdnKr+n8m6qWHP+8BHPA3g5X8jzR8TOhkdHh2L5UwgQQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@effect/platform-browser': ^4.1.2
-      '@foldkit/ui': '>=0.171.0'
+      '@foldkit/ui': 0.170.0-canary.54f8bcd443b4
       effect: ^4.1.2
-      foldkit: '>=0.171.0'
+      foldkit: 0.170.0-canary.54f8bcd443b4
 
-  '@foldkit/oxlint-plugin@file:repos/foldkit/packages/oxlint-plugin-foldkit':
-    resolution: {directory: repos/foldkit/packages/oxlint-plugin-foldkit, type: directory}
+  '@foldkit/oxlint-plugin@0.15.4-canary.54f8bcd443b4':
+    resolution: {integrity: sha512-mykNb5JJzlWC6tk+kwDlC1DDnp/NWTK1jItxiuzPBouTan4T0rUOnp9dympVXgXJ9JLe1NXrq9yA4ficbSpUxw==}
     engines: {node: '>=20.19.0 || >=22.12.0'}
 
-  '@foldkit/ui@file:repos/foldkit/packages/ui':
-    resolution: {directory: repos/foldkit/packages/ui, type: directory}
+  '@foldkit/ui@0.170.0-canary.54f8bcd443b4':
+    resolution: {integrity: sha512-ayoeG42RpULOUoJX0hkC7kifZsgiLam6w4p2Nult7UreGToaBxZJoKl8mEYaBbU/I6nNZyYWqVEstUvfpzI0Ew==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       effect: ^4.1.2
-      foldkit: '>=0.171.0'
+      foldkit: 0.170.0-canary.54f8bcd443b4
 
-  '@foldkit/vite-plugin@file:repos/foldkit/packages/vite-plugin-foldkit':
-    resolution: {directory: repos/foldkit/packages/vite-plugin-foldkit, type: directory}
+  '@foldkit/vite-plugin@0.29.0-canary.54f8bcd443b4':
+    resolution: {integrity: sha512-6A/uJIPuUtflkgdBsZmDlmh2QpxxI9e73xaMCezNn61hqVobwHHyQFpx9vbbyCEfyFp9MdpdgE1vACgaKNCTiQ==}
     engines: {node: '>=22.19.0'}
     peerDependencies:
       effect: ^4.1.2
-      foldkit: '>=0.167.0'
+      foldkit: 0.170.0-canary.54f8bcd443b4
       vite: ^8.0.0
 
   '@fontsource-variable/alan-sans@5.3.1':
@@ -3408,8 +3408,8 @@ packages:
     resolution: {integrity: sha512-S8KoZgRZN+a5rNwqTxlZZePjT/4cnm0ROV70LedRHZ0p8u9fRID0hJUZQpkKLzro8LfmC8sx23bY6tVNxv8pQA==}
     engines: {node: '>= 18.0.0'}
 
-  foldkit@file:repos/foldkit/packages/foldkit:
-    resolution: {directory: repos/foldkit/packages/foldkit, type: directory}
+  foldkit@0.170.0-canary.54f8bcd443b4:
+    resolution: {integrity: sha512-mh+4897ZpElRA3XV6z+awXdcSqAWHDJfS3c/grXd+WcOebAyXa4sxBsXLPy6KHssR1T6yLYTv4u7jYBv1cMZPg==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
       '@effect/platform-browser': ^4.1.2
@@ -4971,11 +4971,11 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@foldkit/devtools-mcp@file:repos/foldkit/packages/devtools-mcp(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))(supports-color@7.2.0)(zod@4.6.7)':
+  '@foldkit/devtools-mcp@0.26.0-canary.54f8bcd443b4(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))(supports-color@7.2.0)(zod@4.6.7)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.32.0(supports-color@7.2.0)(zod@4.6.7)
       effect: 4.1.2
-      foldkit: file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
+      foldkit: 0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
       ws: 8.22.1
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -4984,33 +4984,33 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@foldkit/devtools@file:repos/foldkit/packages/devtools(@effect/platform-browser@4.1.2(effect@4.1.2))(@foldkit/ui@file:repos/foldkit/packages/ui(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)))(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))':
+  '@foldkit/devtools@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(@foldkit/ui@0.170.0-canary.54f8bcd443b4(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)))(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))':
     dependencies:
       '@effect/platform-browser': 4.1.2(effect@4.1.2)
-      '@foldkit/ui': file:repos/foldkit/packages/ui(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
+      '@foldkit/ui': 0.170.0-canary.54f8bcd443b4(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
       clsx: 2.1.1
       effect: 4.1.2
-      foldkit: file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
+      foldkit: 0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
 
-  '@foldkit/oxlint-plugin@file:repos/foldkit/packages/oxlint-plugin-foldkit(effect@4.1.2)':
+  '@foldkit/oxlint-plugin@0.15.4-canary.54f8bcd443b4(effect@4.1.2)':
     dependencies:
       effect-oxlint: 0.4.0(effect@4.1.2)
       oxc-parser: 0.150.0
     transitivePeerDependencies:
       - effect
 
-  '@foldkit/ui@file:repos/foldkit/packages/ui(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))':
+  '@foldkit/ui@0.170.0-canary.54f8bcd443b4(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))':
     dependencies:
       '@floating-ui/dom': 1.8.0
       effect: 4.1.2
-      foldkit: file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
+      foldkit: 0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
 
-  '@foldkit/vite-plugin@file:repos/foldkit/packages/vite-plugin-foldkit(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))(effect@4.1.2)(foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))(redis@6.3.0(@opentelemetry/api@1.9.1))':
+  '@foldkit/vite-plugin@0.29.0-canary.54f8bcd443b4(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))(effect@4.1.2)(foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))(redis@6.3.0(@opentelemetry/api@1.9.1))':
     dependencies:
       '@effect/platform-node': 4.1.2(effect@4.1.2)(redis@6.3.0(@opentelemetry/api@1.9.1))
       '@effect/platform-node-shared': 4.1.2(effect@4.1.2)
       effect: 4.1.2
-      foldkit: file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
+      foldkit: 0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2)
       magic-string: 1.4.3
       vite: '@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1)'
       vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1))
@@ -6850,7 +6850,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  foldkit@file:repos/foldkit/packages/foldkit(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2):
+  foldkit@0.170.0-canary.54f8bcd443b4(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2):
     dependencies:
       '@effect/platform-browser': 4.1.2(effect@4.1.2)
       effect: 4.1.2

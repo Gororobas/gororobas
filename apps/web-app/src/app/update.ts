@@ -22,7 +22,7 @@ export const update = ApplicationComposition.makeUpdate({
         const rememberSearch =
           ApplicationRoute.guards.Search(route) &&
           !ApplicationRoute.guards.Search(urlToLocatedRoute(url).route)
-            ? [SearchBinding.informOpenedResult({ query: route.query })]
+            ? [SearchBinding.informOfOpenedResult({ query: route.query })]
             : []
 
         return Update.combineSteps([navigate, ...rememberSearch])(model)

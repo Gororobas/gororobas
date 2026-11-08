@@ -6,7 +6,7 @@ import { Message } from "./message"
 
 export const subscriptions = ProfileSettingsEditorBlock.makeSubscriptions((entry) => ({
   profile: entry(
-    "LoadMyProfile",
+    "LoadMyProfileSettings",
     { reloadCount: Schema.Int },
     {
       messages: [Message.SucceededLoadProfile, Message.FailedLoadProfile],

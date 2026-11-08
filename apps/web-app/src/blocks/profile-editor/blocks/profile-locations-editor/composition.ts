@@ -16,10 +16,13 @@ export const entryMenuButtonId = (id: string) => `profile-locations-editor-menu-
 export const placeFieldId = (mode: FormMode) =>
   mode === "Place" ? inputId(PLACE_COMBOBOX_ID) : FREE_TEXT_INPUT_ID
 
-export const PlaceComboboxBinding = ProfileLocationsEditorBlock.makeBinding(PlaceCombobox, {
-  field: "placeCombobox",
-  init: { contextToArgs: () => [{ id: PLACE_COMBOBOX_ID, nullable: true }] },
-}).withOutMessagePolicy({
+export const PlaceComboboxBinding = ProfileLocationsEditorBlock.makeRequiredFieldBinding(
+  PlaceCombobox,
+  {
+    field: "placeCombobox",
+    init: { contextToArgs: () => [{ id: PLACE_COMBOBOX_ID, nullable: true }] },
+  },
+).withOutMessagePolicy({
   fold: ProfileLocationsEditorBlock.makeOutMessageFold(PlaceCombobox, {
     Selected: ({ value }) => selectPlaceStep(value),
     ClearedSelection: () => clearPlaceStep,

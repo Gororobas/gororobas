@@ -2,7 +2,7 @@ import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { PROFILE_COLLECTION_PAGE_SIZE } from "@gororobas/domain/profiles/profile-page"
 import { Array as EffectArray, Match, Option } from "effect"
 import { AsyncData, Update } from "foldkit"
-import { initAndAppend } from "foldkit/bindingInit"
+import { initAndAppend } from "foldkit/binding"
 import { modifyFields } from "foldkit/struct"
 
 import type { ClientFailure } from "../../lib/client-failure"

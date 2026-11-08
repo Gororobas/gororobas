@@ -12,7 +12,7 @@ export const ProfileEditorKey = Symbol("ProfileEditor")
 /** The signed-in person's account: how they present themself, where they are, their settings. */
 export const ProfileEditorBlock = Block.make("ProfileEditor", {
   key: ProfileEditorKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
   /** What its sections' effects need. */
   effects: { services: [GororobasApiClient, SessionAccess] },

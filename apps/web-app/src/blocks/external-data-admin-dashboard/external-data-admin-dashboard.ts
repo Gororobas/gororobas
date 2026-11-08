@@ -79,7 +79,7 @@ export const ExternalDataAdminDashboardKey = Symbol("ExternalDataAdminDashboard"
 
 export const ExternalDataAdminDashboardBlock = Block.make("ExternalDataAdminDashboard", {
   key: ExternalDataAdminDashboardKey,
-  Init: Schema.Tuple([ObservationLogQuery]),
+  InitArgs: Schema.Tuple([ObservationLogQuery]),
   view: { kind: "Element", Inputs: Block.makeInputContract<LanguageInputs>() },
   effects: { services: [GororobasApiClient] },
   Model,
@@ -823,14 +823,9 @@ const view = ExternalDataAdminDashboardComposition.makeView.withInputs<LanguageI
   },
 )
 
-export const layer = ExternalDataAdminDashboardBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-      EffectsLayer: Layer.mergeAll(LoadLog.layer, LoadObservation.layer),
-    }
-  }),
-)
+export const layer = ExternalDataAdminDashboardBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer: Layer.mergeAll(LoadLog.layer, LoadObservation.layer),
+})

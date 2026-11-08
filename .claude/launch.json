@@ -8,15 +8,6 @@
       "port": 8025
     },
     {
-      "name": "api",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@gororobas/server", "start"],
-      "env": {
-        "AUTH_ORIGIN": "http://localhost:4443"
-      },
-      "port": 4000
-    },
-    {
       "name": "api-seeded",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@gororobas/server", "start"],
@@ -29,12 +20,6 @@
         "SEED_SCALE": "small"
       },
       "port": 4100
-    },
-    {
-      "name": "web",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@gororobas/web-app", "dev"],
-      "port": 4443
     },
     {
       "name": "web-seeded",

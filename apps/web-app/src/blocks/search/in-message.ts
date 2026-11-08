@@ -1,9 +1,9 @@
-import { defineMessageUnion } from "foldkit/message"
+import { defineInMessageUnion } from "foldkit/message"
 
 import { AnsweredSearch, SearchQuery } from "../../app/search-query"
 
-/** What the app tells search, through its Binding's `informQueryChange` and `informOpenedResult`. */
-export const InMessage = defineMessageUnion({
+/** What the app tells search, through its Binding's `informOfQueryChange` and `informOfOpenedResult`. */
+export const InMessage = defineInMessageUnion({
   InformedOfQueryChange: { search: AnsweredSearch },
   /** The app reports leaving search through one of its results. */
   InformedOfOpenedResult: { query: SearchQuery },

@@ -8,7 +8,7 @@ import { ObserveCollectionEnd } from "./mount"
 export const photoCreditId = (mediaAssetId: string) => `profile-photo-credit-${mediaAssetId}`
 
 /** One per photo shown, created as each page of photos loads. */
-export const PhotoCreditsBinding = ProfileBlock.makeBinding(PopoverDrawerBlock, {
+export const PhotoCreditsBinding = ProfileBlock.makeKeyedArrayBinding(PopoverDrawerBlock, {
   field: "photoCredits",
   key: "id",
   init: { instances: () => [], toItem: (_occurrence, credit) => credit },

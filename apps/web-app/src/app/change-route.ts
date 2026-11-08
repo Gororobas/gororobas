@@ -148,7 +148,7 @@ export const enterRouteStep = (route: ApplicationRoute) =>
       Update.combineSteps([
         clearPagesStep,
         makeStep((model) =>
-          SearchBinding.informQueryChange({ search: { query, language: model.language } }),
+          SearchBinding.informOfQueryChange({ search: { query, language: model.language } }),
         ),
       ]),
     WikiArticle: ({ kind, handle }) => showWikiArticleStep({ kind, handle }),

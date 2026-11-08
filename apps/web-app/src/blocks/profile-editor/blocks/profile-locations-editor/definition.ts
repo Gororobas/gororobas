@@ -13,7 +13,7 @@ export const ProfileLocationsEditorKey = Symbol("ProfileLocationsEditor")
 /** The signed-in person's location timeline: add, edit and remove where they are and have been. */
 export const ProfileLocationsEditorBlock = Block.make("ProfileLocationsEditor", {
   key: ProfileLocationsEditorKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   /** The device's location is the profile editor's: this editor reads it while handling Messages. */
   Context: Schema.Tuple([DeviceLocation]),
   InMessageContext: Schema.Tuple([DeviceLocation]),
