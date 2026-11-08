@@ -159,7 +159,7 @@ const completesOnboarding = () =>
     handler: (context: AuthenticationContext, { name }) =>
       Effect.gen(function* () {
         const client = yield* context.api.clientWith(required(context.browser, "browser"))
-        yield* client.people.completeOnboarding({ payload: { name } })
+        yield* client.people.completeOnboarding({ payload: { name, preferredLanguage: "pt" } })
         return context
       }),
   })

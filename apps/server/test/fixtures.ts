@@ -2,6 +2,7 @@ import {
   ContentLanguage,
   Handle,
   IdGen,
+  MediaAssetId,
   OrganizationId,
   OrganizationMembershipRow,
   OrganizationProfileRow,
@@ -27,6 +28,8 @@ import { DateTime, Effect, Schema } from "effect"
  */
 import * as Arbitrary from "effect/Arbitrary"
 import { SchemaError } from "effect/Schema"
+
+import { insertMediaAsset } from "../src/media-assets/mutations.js"
 
 /**
  * Generate arbitraries from schemas using Arbitrary.schema().
@@ -112,6 +115,7 @@ export const makePersonFixture = (overrides?: Partial<PersonRow>) =>
       accessLevel: "COMMUNITY" satisfies PlatformAccessLevel,
       accessSetAt: now,
       accessSetById: null,
+      preferredLanguage: "pt",
     }
 
     return { ...base, ...overrides }
@@ -295,3 +299,29 @@ export const makePostPublicationInput = (input: {
     metadata: { kind: "POST" },
   }),
 })
+
+/** An approved image uploaded by `ownerProfileId`. */
+export const insertImage = (
+  ownerProfileId: Parameters<typeof insertMediaAsset>[0]["ownerProfileId"],
+  id: string,
+) =>
+  Effect.gen(function* () {
+    const mediaAssetId = yield* Schema.decodeEffect(MediaAssetId)(id)
+    const now = yield* DateTime.now
+
+    yield* insertMediaAsset({
+      id: mediaAssetId,
+      format: "IMAGE",
+      metadata: { format: "IMAGE", originalWidth: 80, originalHeight: 40 },
+      contentType: "image/png",
+      byteSize: 1,
+      category: null,
+      descriptions: {},
+      moderationStatus: "APPROVED_BY_DEFAULT",
+      ownerProfileId,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    return mediaAssetId
+  })

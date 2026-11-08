@@ -1,11 +1,11 @@
 /**
  * Person domain entity - represents a user account.
  */
-import { Schema } from "effect"
+import { Schema, Struct } from "effect"
 
-import { PlatformAccessLevel } from "../common/enums.js"
+import { PlatformAccessLevel, SupportedLanguage } from "../common/enums.js"
 import { OrganizationId, PersonId } from "../common/ids.js"
-import { TimestampColumn } from "../common/primitives.js"
+import { Email, TimestampColumn } from "../common/primitives.js"
 import { ProfileContentCounts } from "../profiles/domain.js"
 
 export const PersonRow = Schema.Struct({
@@ -13,16 +13,40 @@ export const PersonRow = Schema.Struct({
   accessSetAt: Schema.NullOr(TimestampColumn),
   accessSetById: Schema.NullOr(PersonId),
   id: PersonId,
+  /** The language Gororobas speaks to them in, on every device and in emails. */
+  preferredLanguage: SupportedLanguage,
 })
 
 export type PersonRow = typeof PersonRow.Type
+
+export const PersonRowUpdate = PersonRow.mapFields(({ id, ...fields }) => ({
+  id,
+  ...Struct.map(fields, Schema.optional),
+}))
+export type PersonRowUpdate = typeof PersonRowUpdate.Type
 
 /** What a newly signed-in person tells us before they get a profile. */
 export const OnboardingInput = Schema.Struct({
   // @todo perhaps add location & profile picture to the onboarding input?
   name: Schema.Trimmed.check(Schema.isMinLength(1), Schema.isMaxLength(128)),
+  /** The language they signed up in. */
+  preferredLanguage: SupportedLanguage,
 })
+
 export type OnboardingInput = typeof OnboardingInput.Type
+
+/** What only the signed-in person sees about their own account. */
+export const MyAccount = Schema.Struct({
+  email: Email,
+  preferredLanguage: SupportedLanguage,
+})
+export type MyAccount = typeof MyAccount.Type
+
+export const MyAccountUpdate = Schema.Struct({ preferredLanguage: SupportedLanguage })
+export type MyAccountUpdate = typeof MyAccountUpdate.Type
+
+export const HandleAvailability = Schema.Struct({ isAvailable: Schema.Boolean })
+export type HandleAvailability = typeof HandleAvailability.Type
 
 export const AccountDeletionConfirmation = Schema.Struct({
   shouldDeleteOrgs: Schema.Boolean,

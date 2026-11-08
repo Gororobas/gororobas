@@ -11,7 +11,7 @@ import {
   AuthenticationBinding,
   ExternalDataAdminDashboardBinding,
   ProfileBinding,
-  ProfileLocationsEditorBinding,
+  ProfileEditorBinding,
   SearchBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
@@ -32,7 +32,7 @@ const clearPagesStep = makeFieldsStep(() => ({
   maybeWikiArticle: () => Option.none(),
   maybeWikiArticleDebug: () => Option.none(),
   maybeProfile: () => Option.none(),
-  maybeProfileLocationsEditor: () => Option.none(),
+  maybeProfileEditor: () => Option.none(),
   maybeExternalDataAdminDashboard: () => Option.none(),
 }))
 
@@ -51,25 +51,31 @@ const showExternalDataAdminDashboardStep = (query: ObservationLogQuery) => {
               maybeWikiArticle: () => Option.none(),
               maybeWikiArticleDebug: () => Option.none(),
               maybeProfile: () => Option.none(),
-              maybeProfileLocationsEditor: () => Option.none(),
+              maybeProfileEditor: () => Option.none(),
               maybeExternalDataAdminDashboard: () => Option.some({ queryKey, model: child }),
             }),
         }),
   )
 }
 
-/** The timeline reloads every time the page opens, so changes made elsewhere show up. */
-const showProfileLocationsEditorStep = makeStep((model) =>
-  ProfileLocationsEditorBinding.init({
-    args: [],
-    toParentModel: (child) =>
-      modifyFields(model, {
-        maybeWikiArticle: () => Option.none(),
-        maybeWikiArticleDebug: () => Option.none(),
-        maybeProfile: () => Option.none(),
-        maybeProfileLocationsEditor: () => Option.some(child),
+/**
+ * Switching sections keeps the editor, and unsaved edits in other sections; coming back from
+ * another page loads it afresh, so changes made elsewhere show up.
+ */
+const showProfileEditorStep = makeStep((model) =>
+  Option.isSome(model.maybeProfileEditor)
+    ? { model }
+    : ProfileEditorBinding.init({
+        args: [],
+        toParentModel: (child) =>
+          modifyFields(model, {
+            maybeWikiArticle: () => Option.none(),
+            maybeWikiArticleDebug: () => Option.none(),
+            maybeProfile: () => Option.none(),
+            maybeExternalDataAdminDashboard: () => Option.none(),
+            maybeProfileEditor: () => Option.some(child),
+          }),
       }),
-  }),
 )
 
 const showWikiArticleStep = (lookup: Readonly<{ kind: WikiArticleKind; handle: Handle }>) =>
@@ -86,6 +92,7 @@ const showWikiArticleStep = (lookup: Readonly<{ kind: WikiArticleKind; handle: H
               maybeWikiArticle: () => Option.some({ articleKey, model: child }),
               maybeWikiArticleDebug: () => Option.none(),
               maybeProfile: () => Option.none(),
+              maybeProfileEditor: () => Option.none(),
             }),
         })
   })
@@ -104,6 +111,7 @@ const showProfileStep = (handle: Handle) =>
               maybeWikiArticle: () => Option.none(),
               maybeWikiArticleDebug: () => Option.none(),
               maybeProfile: () => Option.some({ profileKey: key, model: child }),
+              maybeProfileEditor: () => Option.none(),
             }),
         })
   })
@@ -122,6 +130,7 @@ const showWikiArticleDebugStep = (
               maybeWikiArticle: () => Option.none(),
               maybeWikiArticleDebug: () => Option.some({ wikiArticleId, model: child }),
               maybeProfile: () => Option.none(),
+              maybeProfileEditor: () => Option.none(),
             }),
         }),
   )
@@ -144,7 +153,7 @@ export const enterRouteStep = (route: ApplicationRoute) =>
       ]),
     WikiArticle: ({ kind, handle }) => showWikiArticleStep({ kind, handle }),
     Profile: ({ handle }) => showProfileStep(handle),
-    MyPlaces: () => showProfileLocationsEditorStep,
+    ProfileEditor: () => showProfileEditorStep,
     ExternalDataAdminDashboard: (route) =>
       showExternalDataAdminDashboardStep(observationLogQueryOf(route)),
     NotFound: () => clearPagesStep,

@@ -1,7 +1,6 @@
 import { Option } from "effect"
 import type { Url } from "foldkit/url"
 
-import { DeviceLocation } from "../lib/device-location"
 import { enterRouteStep } from "./change-route"
 import { ReadToday, ReplaceUrl, SaveLanguagePreference } from "./command"
 import { ApplicationComposition } from "./composition"
@@ -19,11 +18,10 @@ export const init = ApplicationComposition.makeInit((flags: typeof Flags.Type, u
       maybeUnavailableLanguage: flags.maybeUnavailableLanguage,
       languageRequestCount: 0,
       maybeToday: Option.none(),
-      deviceLocation: DeviceLocation.Unrequested(),
       maybeWikiArticle: Option.none(),
       maybeWikiArticleDebug: Option.none(),
       maybeProfile: Option.none(),
-      maybeProfileLocationsEditor: Option.none(),
+      maybeProfileEditor: Option.none(),
       maybeExternalDataAdminDashboard: Option.none(),
       isSearchFieldFocusPending: false,
     },

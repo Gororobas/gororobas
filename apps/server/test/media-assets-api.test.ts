@@ -34,7 +34,7 @@ const insertPerson = (input: { id: string; email: string; handle: string; access
         sql`INSERT INTO profiles (id, type, handle, name, searchable_text, visibility, bookmarks_visibility, created_at, updated_at) VALUES (${input.id}, 'PERSON', ${input.handle}, ${input.handle}, ${input.handle}, 'PUBLIC', 'PUBLIC', ${timestamp}, ${timestamp})`,
       ),
       Effect.andThen(
-        sql`INSERT INTO people (id, access_level) VALUES (${input.id}, ${input.accessLevel})`,
+        sql`INSERT INTO people (id, access_level, preferred_language) VALUES (${input.id}, ${input.accessLevel}, 'pt')`,
       ),
     ),
   )

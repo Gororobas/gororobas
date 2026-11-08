@@ -15,36 +15,35 @@ import * as Length from "effect-units/Length"
 import { AsyncData } from "foldkit"
 import { childAttributes, type Html, type MessageOf } from "foldkit/html"
 
-import { loginUrl, wikiArticleUrl } from "../../app/route"
-import { type LanguageInputs, intlTags } from "../../lib/language"
-import { formatPartialDate } from "../../lib/partial-dates"
-import { type Translator, translatorFor } from "../../lib/translations"
-import { informationVisibilityLabels } from "../../lib/vocabulary"
-import { AppButton } from "../../ui/app-button"
-import { AppField } from "../../ui/app-field"
-import { AppInput } from "../../ui/app-input"
-import { textControlStyle } from "../../ui/app-input/view"
-import { AppText } from "../../ui/app-text"
-import { chipStyle } from "../../ui/chip/view"
-import * as Icons from "../../ui/icons"
-import type { IconConfig } from "../../ui/icons"
-import * as PlaceOutline from "../../ui/place-outline/view"
-import { styledAttributes, styledClassName } from "../../ui/pleat-attributes"
-import { SectionCard } from "../../ui/section-card"
-import { focusRingDeclarations } from "../../ui/styles/focus-ring"
+import { wikiArticleUrl } from "../../../../app/route"
+import { type LanguageInputs, intlTags } from "../../../../lib/language"
+import { formatPartialDate } from "../../../../lib/partial-dates"
+import { type Translator, translatorFor } from "../../../../lib/translations"
+import { informationVisibilityLabels } from "../../../../lib/vocabulary"
+import { AppButton } from "../../../../ui/app-button"
+import { AppField } from "../../../../ui/app-field"
+import { AppInput } from "../../../../ui/app-input"
+import { textControlStyle } from "../../../../ui/app-input/view"
+import { AppText } from "../../../../ui/app-text"
+import { chipStyle } from "../../../../ui/chip/view"
+import * as Icons from "../../../../ui/icons"
+import type { IconConfig } from "../../../../ui/icons"
+import { OptionCards } from "../../../../ui/option-cards"
+import * as PlaceOutline from "../../../../ui/place-outline/view"
+import { styledAttributes, styledClassName } from "../../../../ui/pleat-attributes"
+import { SectionCard } from "../../../../ui/section-card"
+import { focusRingDeclarations } from "../../../../ui/styles/focus-ring"
 import {
   borderWidth,
   breakpoint,
   duration,
   fontSize,
   layer,
-  measure,
   radius,
   space,
   toneColors,
   tones,
-} from "../../ui/theme"
-import { visuallyHiddenStyle } from "../../ui/visually-hidden"
+} from "../../../../ui/theme"
 import {
   CONFIRM_DELETE_BUTTON_ID,
   entryMenuButtonId,
@@ -106,14 +105,6 @@ const formErrorMessages: Readonly<Record<FormError, MessageDescriptor>> = {
 }
 
 // LAYOUT
-
-const pageStyle = Style.make({
-  marginInline: "auto",
-  inlineSize: "100%",
-  maxInlineSize: measure.prose,
-  paddingBlock: space[8],
-  paddingInline: space[4],
-})
 
 const stackStyle = Style.make({ display: "grid", rowGap: space[3] })
 const tightStackStyle = Style.make({ display: "grid", rowGap: space[1] })
@@ -998,89 +989,22 @@ const datesFieldset = (
 
 // VISIBILITY
 
-const visibilityOptionsStyle = Style.make({
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-  gap: space[2],
-})
-
-const visibilityOptionStyle = Style.make({
-  display: "grid",
-  gridTemplateColumns: "auto minmax(0, 1fr)",
-  alignItems: "start",
-  columnGap: space[2],
-  rowGap: space[1],
-  padding: space[3],
-  borderRadius: radius.md,
-  border: `${borderWidth.strong} solid ${tones.neutral.shade[200]}`,
-  backgroundColor: toneColors.backgroundCard,
-  cursor: "pointer",
-  transitionProperty: "border-color, background-color",
-  transitionDuration: duration.control,
-}).pipe(
-  Style.when(When.hover, { borderColor: tones.neutral.shade[400] }),
-  Style.when(When.has(When.focusVisible), focusRingDeclarations),
-)
-
-const selectedVisibilityOptionStyle = Style.make({
-  borderColor: tones.primary.shade[600],
-  backgroundColor: tones.primary.shade[100],
-}).pipe(Style.when(When.hover, { borderColor: tones.primary.shade[600] }))
-
 const visibilityFieldset = ({ form, i18n }: FormInputs, h: ProfileLocationsEditorViewBuilder) =>
   h.fieldset(styledAttributes([], fieldsetStyle), [
     legend(i18n._(msg`Who can see it`), h),
-    h.div(
-      styledAttributes([], visibilityOptionsStyle),
-      InformationVisibility.literals.map((visibility) => {
-        const isSelected = form.visibility === visibility
-
-        return AppText.view(
-          {
-            element: "label",
-            styles: [visibilityOptionStyle, ...(isSelected ? [selectedVisibilityOptionStyle] : [])],
-            children: [
-              h.input(
-                styledAttributes(
-                  [
-                    h.Type("radio"),
-                    h.Name("profile-locations-editor-visibility"),
-                    h.Value(visibility),
-                    h.Checked(isSelected),
-                    h.OnChange(() => Message.ChoseVisibility({ visibility })),
-                  ],
-                  visuallyHiddenStyle,
-                ),
-              ),
-              visibilityIcons[visibility]({
-                size: "sm",
-                tone: isSelected ? "primary" : "inherit",
-              }),
-              AppText.view(
-                {
-                  element: "span",
-                  appearance: "footnote",
-                  weight: "semibold",
-                  children: [i18n._(informationVisibilityLabels[visibility])],
-                },
-                h,
-              ),
-              AppText.view(
-                {
-                  element: "span",
-                  appearance: "caption",
-                  isMuted: true,
-                  lineHeight: "normal",
-                  styles: [Style.make({ gridColumn: "2" })],
-                  children: [i18n._(visibilityDescriptions[visibility])],
-                },
-                h,
-              ),
-            ],
-          },
-          h,
-        )
-      }),
+    OptionCards.view(
+      {
+        name: "profile-locations-editor-visibility",
+        options: InformationVisibility.literals.map((visibility) => ({
+          value: visibility,
+          label: i18n._(informationVisibilityLabels[visibility]),
+          description: i18n._(visibilityDescriptions[visibility]),
+          icon: visibilityIcons[visibility],
+          isSelected: form.visibility === visibility,
+          onSelect: Message.ChoseVisibility({ visibility }),
+        })),
+      },
+      h,
     ),
   ])
 
@@ -1425,7 +1349,7 @@ const formView = (
   )
 }
 
-export type ViewInputs = LanguageInputs & Readonly<{ isSignedIn: boolean }>
+export type ViewInputs = LanguageInputs
 
 const intro = ({ i18n }: Readonly<{ i18n: Translator }>, h: ProfileLocationsEditorViewBuilder) =>
   AppText.view(
@@ -1444,63 +1368,40 @@ const intro = ({ i18n }: Readonly<{ i18n: Translator }>, h: ProfileLocationsEdit
 
 export const view = ProfileLocationsEditorComposition.makeView.withInputs<ViewInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
-  (model, { language, isSignedIn }, h) => {
+  (model, { language }, h) => {
     const isAdding = Option.exists(model.maybeForm, (form) => Option.isNone(form.maybeEditingId))
     const i18n = translatorFor(language)
 
-    return h.div(styledAttributes([], pageStyle), [
-      SectionCard.view(
-        {
-          title: i18n._(msg`My geographic itinerary`),
-          icon: Icons.route,
-          headingElement: "h1",
-          tone: "neutral",
-          ...(isSignedIn
-            ? {
-                actions: [
-                  AppButton.view(
-                    {
-                      tone: "primary",
-                      size: "sm",
-                      isDisabled: isAdding,
-                      onClick: Message.ClickedAddLocation(),
-                      children: [Icons.addCircle({ size: "sm" }), i18n._(msg`Add place`)],
-                    },
-                    h,
-                  ),
-                ],
-              }
-            : {}),
-          children: isSignedIn
-            ? [
-                intro({ i18n }, h),
-                ...EffectArray.fromOption(
-                  Option.map(
-                    Option.filter(model.maybeForm, (form) => Option.isNone(form.maybeEditingId)),
-                    (form) => formView({ model, form, language }, h),
-                  ),
-                ),
-                h.div(styledAttributes([], stackStyle), timeline({ model, language }, h)),
-              ]
-            : [
-                intro({ i18n }, h),
-                h.div(styledAttributes([], rowStyle), [
-                  AppText.view(
-                    {
-                      element: "p",
-                      children: [i18n._(msg`Sign in to your account to record your places.`)],
-                    },
-                    h,
-                  ),
-                  AppButton.view(
-                    { tone: "primary", href: loginUrl(language), children: [i18n._(msg`Sign in`)] },
-                    h,
-                  ),
-                ]),
-              ],
-        },
-        h,
-      ),
-    ])
+    return SectionCard.view(
+      {
+        title: i18n._(msg`My geographic itinerary`),
+        icon: Icons.route,
+        headingElement: "h2",
+        tone: "neutral",
+        actions: [
+          AppButton.view(
+            {
+              tone: "primary",
+              size: "sm",
+              isDisabled: isAdding,
+              onClick: Message.ClickedAddLocation(),
+              children: [Icons.addCircle({ size: "sm" }), i18n._(msg`Add place`)],
+            },
+            h,
+          ),
+        ],
+        children: [
+          intro({ i18n }, h),
+          ...EffectArray.fromOption(
+            Option.map(
+              Option.filter(model.maybeForm, (form) => Option.isNone(form.maybeEditingId)),
+              (form) => formView({ model, form, language }, h),
+            ),
+          ),
+          h.div(styledAttributes([], stackStyle), timeline({ model, language }, h)),
+        ],
+      },
+      h,
+    )
   },
 )

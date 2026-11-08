@@ -1,4 +1,4 @@
-import { PersonId, PersonRow } from "@gororobas/domain"
+import { MyAccount, PersonId, PersonRow } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
@@ -19,6 +19,19 @@ export const countOtherAdministrators = SqlSchema.findOne({
     SqlClient.SqlClient.use(
       (sql) => sql`
     SELECT COUNT(*) AS count FROM people WHERE access_level = 'ADMIN' AND id != ${personId}
+  `,
+    ),
+})
+
+export const findAccount = SqlSchema.findOneOption({
+  Request: PersonId,
+  Result: MyAccount,
+  execute: (id) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`
+    SELECT a.email, p.preferred_language FROM people p
+    JOIN auth_subjects a ON a.id = p.id
+    WHERE p.id = ${id} AND a.active = 1
   `,
     ),
 })

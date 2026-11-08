@@ -63,6 +63,10 @@ export const ProfileTab = Schema.Literals([
 
 export type ProfileTab = typeof ProfileTab.Type
 
+/** The signed-in person's account, one section per child of the profile editor. */
+export const ProfileEditorSection = Schema.Literals(["About", "Places", "Settings"])
+export type ProfileEditorSection = typeof ProfileEditorSection.Type
+
 /** A language's fixed path segments. Handles are content and stay the same in every language. */
 type PathSlugs = Readonly<{
   wikiKinds: Readonly<Record<WikiArticleKind, string>>
@@ -70,7 +74,8 @@ type PathSlugs = Readonly<{
   profileTabs: Readonly<Record<ProfileTab, string>>
   profile: string
   search: string
-  myPlaces: string
+  profileEditor: string
+  profileEditorSections: Readonly<Record<ProfileEditorSection, string>>
   externalDataAdminDashboard: string
   searchTypes: Readonly<Record<SearchType, string>>
   searchKeys: SearchKeys
@@ -109,7 +114,8 @@ const pathSlugs: Readonly<Record<SupportedLanguage, PathSlugs>> = {
     },
     profile: "gente",
     search: "buscar",
-    myPlaces: "meus-lugares",
+    profileEditor: "minha-conta",
+    profileEditorSections: { About: "sobre-mim", Places: "lugares", Settings: "configuracoes" },
     externalDataAdminDashboard: "dados-externos",
     searchTypes: { wiki: "enciclopedia", publications: "publicacoes", people: "gente" },
     searchKeys: {
@@ -164,7 +170,8 @@ const pathSlugs: Readonly<Record<SupportedLanguage, PathSlugs>> = {
     },
     profile: "gente",
     search: "buscar",
-    myPlaces: "mis-lugares",
+    profileEditor: "mi-cuenta",
+    profileEditorSections: { About: "sobre-mi", Places: "lugares", Settings: "ajustes" },
     externalDataAdminDashboard: "datos-externos",
     searchTypes: { wiki: "enciclopedia", publications: "publicaciones", people: "gente" },
     searchKeys: {
@@ -219,7 +226,8 @@ const pathSlugs: Readonly<Record<SupportedLanguage, PathSlugs>> = {
     },
     profile: "people",
     search: "search",
-    myPlaces: "my-places",
+    profileEditor: "account",
+    profileEditorSections: { About: "about-me", Places: "places", Settings: "settings" },
     externalDataAdminDashboard: "external-data",
     searchTypes: { wiki: "encyclopedia", publications: "posts", people: "people" },
     searchKeys: {
@@ -544,7 +552,7 @@ export const ApplicationRoute = defineRouteUnion({
   WikiArticleDebug: { wikiArticleId: WikiArticleId },
   Profile: { handle: Handle, tab: ProfileTab },
   Login: {},
-  MyPlaces: {},
+  ProfileEditor: { section: ProfileEditorSection },
   ExternalDataAdminDashboard: ObservationLogQuery.fields,
   NotFound: { path: Schema.String },
 })
@@ -613,7 +621,20 @@ const makeRouters = (slugs: PathSlugs) => {
 
   const login = pipe(literal("login"), Route.mapTo(ApplicationRoute.Login))
 
-  const myPlaces = pipe(literal(slugs.myPlaces), Route.mapTo(ApplicationRoute.MyPlaces))
+  const ProfileEditorSectionFromSlug = slugCodec(slugs.profileEditorSections, ProfileEditorSection)
+
+  const profileEditorHome = pipe(
+    literal(slugs.profileEditor),
+    Route.mapTo({
+      make: () => ApplicationRoute.ProfileEditor({ section: "About" }),
+    }),
+  )
+
+  const profileEditorSection = pipe(
+    literal(slugs.profileEditor),
+    slash(schemaSegment("section", ProfileEditorSectionFromSlug)),
+    Route.mapTo(ApplicationRoute.ProfileEditor),
+  )
 
   const externalDataAdminDashboard = pipe(
     literal(slugs.externalDataAdminDashboard),
@@ -626,7 +647,8 @@ const makeRouters = (slugs: PathSlugs) => {
       home,
       search,
       login,
-      myPlaces,
+      profileEditorSection,
+      profileEditorHome,
       externalDataAdminDashboard,
       wikiArticleDebug,
       profileTab,
@@ -641,7 +663,8 @@ const makeRouters = (slugs: PathSlugs) => {
     parse,
     search,
     login,
-    myPlaces,
+    profileEditorHome,
+    profileEditorSection,
     externalDataAdminDashboard,
     wikiArticleDebug,
     wikiArticleAbout,
@@ -724,8 +747,17 @@ export const profileUrl = (
 export const loginUrl = (language: SupportedLanguage): string =>
   prefixed(language, routers[language].login())
 
-export const myPlacesUrl = (language: SupportedLanguage): string =>
-  prefixed(language, routers[language].myPlaces())
+/** The About section is the editor's bare path. */
+export const profileEditorUrl = (
+  language: SupportedLanguage,
+  section: ProfileEditorSection = "About",
+): string =>
+  prefixed(
+    language,
+    section === "About"
+      ? routers[language].profileEditorHome({ section })
+      : routers[language].profileEditorSection({ section }),
+  )
 
 export const observationLogUrl = (
   language: SupportedLanguage,
@@ -748,7 +780,7 @@ export const applicationRouteUrl = (language: SupportedLanguage, route: Applicat
     WikiArticleDebug: ({ wikiArticleId }) => wikiArticleDebugUrl(language, wikiArticleId),
     Profile: ({ handle, tab }) => profileUrl(language, { handle: handle, tab }),
     Login: () => loginUrl(language),
-    MyPlaces: () => myPlacesUrl(language),
+    ProfileEditor: ({ section }) => profileEditorUrl(language, section),
     ExternalDataAdminDashboard: (log) => observationLogUrl(language, observationLogQueryOf(log)),
     NotFound: () => searchUrl(language),
   })

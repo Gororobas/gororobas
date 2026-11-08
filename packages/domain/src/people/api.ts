@@ -8,9 +8,18 @@ import { UnauthorizedError } from "../authorization/session.js"
 import { PlatformAccessLevel } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { PersonId } from "../common/ids.js"
+import { Handle } from "../common/primitives.js"
+import { InvalidMediaAssetError } from "../media-assets/errors.js"
 import { PersonProfileRow, ProfileRowUpdate } from "../profiles/domain.js"
 import { ProfileNotFoundError } from "../profiles/errors.js"
-import { AccountDeletionConfirmation, AccountDeletionResult, OnboardingInput } from "./domain.js"
+import {
+  AccountDeletionConfirmation,
+  AccountDeletionResult,
+  HandleAvailability,
+  MyAccount,
+  MyAccountUpdate,
+  OnboardingInput,
+} from "./domain.js"
 import {
   AccountDeletionError,
   PersonNotFoundError,
@@ -51,7 +60,28 @@ export class PeopleApiGroup extends HttpApiGroup.make("people")
   .add(
     HttpApiEndpoint.patch("updateProfile", "/people/me/profile", {
       success: Schema.Void,
-      error: [ProfileNotFoundError, HandleTakenError, UnauthorizedError],
+      error: [ProfileNotFoundError, HandleTakenError, InvalidMediaAssetError, UnauthorizedError],
       payload: ProfileRowUpdate,
+    }),
+  )
+  .add(
+    /** Whether the signed-in person could take `handle`: their own current one counts as available. */
+    HttpApiEndpoint.get("getHandleAvailability", "/people/me/handle-availability", {
+      success: HandleAvailability,
+      error: UnauthorizedError,
+      query: Schema.Struct({ handle: Handle }),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("getMyAccount", "/people/me/account", {
+      success: MyAccount,
+      error: [PersonNotFoundError, UnauthorizedError],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.patch("updateMyAccount", "/people/me/account", {
+      success: Schema.Void,
+      error: UnauthorizedError,
+      payload: MyAccountUpdate,
     }),
   ) {}

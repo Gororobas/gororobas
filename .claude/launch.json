@@ -10,11 +10,7 @@
     {
       "name": "api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@gororobas/server",
-        "start"
-      ],
+      "runtimeArgs": ["--filter", "@gororobas/server", "start"],
       "env": {
         "AUTH_ORIGIN": "http://localhost:4443"
       },
@@ -23,11 +19,7 @@
     {
       "name": "api-seeded",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@gororobas/server",
-        "start"
-      ],
+      "runtimeArgs": ["--filter", "@gororobas/server", "start"],
       "env": {
         "API_PORT": "4100",
         "AUTH_ORIGIN": "http://localhost:4543",
@@ -41,21 +33,13 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@gororobas/web-app",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@gororobas/web-app", "dev"],
       "port": 4443
     },
     {
       "name": "web-seeded",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@gororobas/web-app",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@gororobas/web-app", "dev"],
       "env": {
         "WEB_PORT": "4543",
         "API_PORT": "4100"
@@ -65,11 +49,7 @@
     {
       "name": "api-migrated",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@gororobas/server",
-        "start"
-      ],
+      "runtimeArgs": ["--filter", "@gororobas/server", "start"],
       "env": {
         "API_PORT": "4200",
         "AUTH_ORIGIN": "http://localhost:4643",
@@ -82,11 +62,7 @@
     {
       "name": "web-migrated",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@gororobas/web-app",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@gororobas/web-app", "dev"],
       "env": {
         "WEB_PORT": "4643",
         "API_PORT": "4200"
@@ -96,12 +72,7 @@
     {
       "name": "live-draft-solid",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--dir",
-        "/Users/h/dev/live-draft-solid",
-        "--pm-on-fail=ignore",
-        "dev"
-      ],
+      "runtimeArgs": ["--dir", "/Users/h/dev/live-draft-solid", "--pm-on-fail=ignore", "dev"],
       "port": 3000
     }
   ]

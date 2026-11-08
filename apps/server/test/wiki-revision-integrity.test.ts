@@ -1,7 +1,6 @@
 import { expect, it } from "@effect/vitest"
 import {
   LoroDocUpdate,
-  MediaAssetId,
   snapshotToLoroDoc,
   WikiArticleCrdt,
   WikiArticleEditableData,
@@ -9,12 +8,12 @@ import {
 } from "@gororobas/domain"
 import { WikiPlantCultivarArticle } from "@gororobas/domain/wiki/kinds/plant-cultivar"
 import { WikiToolArticle } from "@gororobas/domain/wiki/kinds/tool"
-import { DateTime, Effect, Layer, Option, Schema } from "effect"
+import { Effect, Layer, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
-import { insertMediaAsset } from "../src/media-assets/mutations.js"
 import { WikiArticlesRepository } from "../src/wiki/repository.js"
+import { insertImage } from "./fixtures.js"
 import { seedPerson, TestLayer } from "./test-helpers.js"
 
 const plant = Schema.decodeSync(WikiArticleEditableData)({
@@ -22,28 +21,6 @@ const plant = Schema.decodeSync(WikiArticleEditableData)({
   attributes: {},
   translations: { pt: { commonNames: [{ id: "testname0001", name: "Milho" }] } },
 })
-
-const insertImage = (ownerProfileId: Parameters<typeof insertMediaAsset>[0]["ownerProfileId"]) =>
-  Effect.gen(function* () {
-    const id = yield* Schema.decodeEffect(MediaAssetId)("00000000-0000-7000-8000-0000000000a1")
-    const now = yield* DateTime.now
-
-    yield* insertMediaAsset({
-      id,
-      format: "IMAGE",
-      metadata: { format: "IMAGE", originalWidth: 80, originalHeight: 40 },
-      contentType: "image/png",
-      byteSize: 1,
-      category: null,
-      descriptions: {},
-      moderationStatus: "APPROVED_BY_DEFAULT",
-      ownerProfileId,
-      createdAt: now,
-      updatedAt: now,
-    })
-
-    return id
-  })
 
 const TestEnvironment = Layer.mergeAll(WorkflowEngine.layerMemory, TestLayer)
 
@@ -80,7 +57,7 @@ it.effect("makes an approved revision's media selection the article's media", ()
   Effect.gen(function* () {
     const { person } = yield* seedPerson("ADMIN")
     const repository = yield* WikiArticlesRepository.make
-    const mediaAssetId = yield* insertImage(person.id)
+    const mediaAssetId = yield* insertImage(person.id, "00000000-0000-7000-8000-0000000000a1")
 
     const wikiArticleId = yield* repository.createWikiArticle(
       {

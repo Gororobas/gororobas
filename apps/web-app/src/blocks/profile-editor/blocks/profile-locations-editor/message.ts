@@ -5,7 +5,7 @@ import { ProfileLocationData } from "@gororobas/domain/profiles/locations"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 
-import { ClientFailure } from "../../lib/client-failure"
+import { ClientFailure } from "../../../../lib/client-failure"
 import { FormError } from "./model"
 import { DeviceLookup, FormMode } from "./model"
 
@@ -50,6 +50,6 @@ export const Message = defineMessageUnion({
 })
 
 export const OutMessage = defineMessageUnion({
-  /** Using the device's position: the application reads it and informs the editor. */
+  /** Using the device's position: the profile editor reads it and informs this one. */
   RequestedDeviceLocation: {},
 })

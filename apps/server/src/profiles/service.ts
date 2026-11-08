@@ -14,12 +14,15 @@ import {
   ProfileNotFoundError,
   ProfileRowUpdate,
   type ProfileRow,
+  type MediaAssetId,
 } from "@gororobas/domain"
+import { InvalidMediaAssetError } from "@gororobas/domain/media-assets/errors"
 import { Array as EffectArray, DateTime, Effect, HashMap, Option, Context } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { claimHandle } from "../common/handle-allocation.js"
 import { withMediaCredits } from "../media-assets/credits.js"
+import { MediaAssetsRepository } from "../media-assets/repository.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
 import {
   findPageLocation,
@@ -34,6 +37,7 @@ import { ProfilesRepository } from "./repository.js"
 export class ProfileService extends Context.Service<ProfileService>()("ProfileService", {
   make: Effect.gen(function* () {
     const repo = yield* ProfilesRepository
+    const mediaAssets = yield* MediaAssetsRepository
     const wikiRepository = yield* WikiArticlesRepository
     const sql = yield* SqlClient.SqlClient
 
@@ -145,6 +149,34 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
         return yield* withMediaCredits(photos)
       })
 
+    /** A profile's photo must be an image it uploaded itself. */
+    const assertOwnImage = (profileId: ProfileId, photoId: MediaAssetId) =>
+      Effect.gen(function* () {
+        const asset = yield* mediaAssets.findMediaAssetById(photoId)
+
+        if (
+          Option.isNone(asset) ||
+          asset.value.ownerProfileId !== profileId ||
+          asset.value.format !== "IMAGE"
+        ) {
+          return yield* new InvalidMediaAssetError({
+            message: "A profile photo must be an image its profile uploaded",
+          })
+        }
+      })
+
+    /** Someone's own current handle is available to them. */
+    const isHandleAvailableTo = (profileId: ProfileId, handle: Handle) =>
+      Effect.gen(function* () {
+        const profile = yield* repo.findById(profileId)
+        if (Option.exists(profile, (current) => current.handle === handle)) return true
+        // The EXISTS query always returns a row.
+        const inUse = yield* repo
+          .isHandleInUse(handle)
+          .pipe(Effect.catchTag("NoSuchElementError", Effect.die))
+        return !inUse
+      })
+
     const updateProfile = (profileId: ProfileId, data: ProfileRowUpdate) =>
       Effect.gen(function* () {
         const profile = yield* repo.findById(profileId).pipe(
@@ -157,6 +189,10 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
         )
 
         yield* Policies.profiles.canEdit(profile)
+
+        if (data.photoId !== undefined && data.photoId !== null) {
+          yield* assertOwnImage(profileId, data.photoId)
+        }
 
         if (data.handle !== undefined) {
           yield* claimHandle({
@@ -184,6 +220,7 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
       listBookmarks,
       listWikiContributions,
       listPhotos,
+      isHandleAvailableTo,
       updateProfile,
     } as const
   }),

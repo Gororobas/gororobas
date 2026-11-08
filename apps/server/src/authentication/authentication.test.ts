@@ -236,8 +236,12 @@ test.live.each([authenticationTestOrigin, "http://localhost:4443"])(
     })
 
     const profile = yield* run(
-      completeOnboarding(PersonId.make(authSubjectId), { name: "Agroecology Person" }),
+      completeOnboarding(PersonId.make(authSubjectId), {
+        name: "Agroecology Person",
+        preferredLanguage: "pt",
+      }),
     )
+
     expect(profile.handle).toBe("agroecology-person")
     const afterOnboarding = yield* fetchRoute({ path: "/protected" })
     expect(yield* Effect.tryPromise(() => afterOnboarding.json())).toEqual({

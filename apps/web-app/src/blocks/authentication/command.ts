@@ -2,9 +2,11 @@ import {
   EmailCodeRequest,
   DEFAULT_AUTHENTICATION_RETURN_TARGET,
 } from "@gororobas/domain/authentication/auth-contract"
+import { SupportedLanguage } from "@gororobas/domain/common/enums"
 import { OnboardingInput } from "@gororobas/domain/people/domain"
 import { Operations, Proofs } from "@yielded/auth"
 import { Clock, Duration, Effect, Layer, Option, Schema } from "effect"
+import * as Dom from "foldkit/dom"
 
 import { GororobasApiClient } from "../../api-client"
 import { AuthenticationClient, SessionAccess, SessionStorageError } from "../../session-access"
@@ -71,7 +73,19 @@ const fetchProfileName = Effect.gen(function* () {
   return name
 })
 
-const requestCode = Effect.fn(function* (flowId: Operations.RequestBindingFlowId, email: string) {
+export const EMAIL_FIELD_ID = "authentication-email"
+export const CODE_FIELD_ID = "authentication-code"
+export const NAME_FIELD_ID = "authentication-name"
+
+const requestCode = Effect.fn(function* ({
+  flowId,
+  email,
+  language,
+}: Readonly<{
+  flowId: Operations.RequestBindingFlowId
+  email: string
+  language: SupportedLanguage
+}>) {
   const { auth } = yield* AuthenticationClient
 
   const receipt = yield* auth.requestEmailCode({
@@ -79,7 +93,7 @@ const requestCode = Effect.fn(function* (flowId: Operations.RequestBindingFlowId
     email,
     returnTarget: DEFAULT_AUTHENTICATION_RETURN_TARGET,
     requestId: Proofs.ProofRequestId.make(crypto.randomUUID()),
-    locale: navigator.language || "pt-BR",
+    locale: language,
   })
 
   const pending = PendingCode.make({
@@ -93,12 +107,12 @@ const requestCode = Effect.fn(function* (flowId: Operations.RequestBindingFlowId
   return pending
 })
 
-const startFlow = Effect.fn(function* (email: string) {
+const startFlow = Effect.fn(function* (email: string, language: SupportedLanguage) {
   const { auth } = yield* AuthenticationClient
   yield* (yield* SessionAccess).flushSignOut
   const flowId = Operations.RequestBindingFlowId.make(crypto.randomUUID())
   yield* auth.beginEmailSignIn({ flowId })
-  return yield* requestCode(flowId, email)
+  return yield* requestCode({ flowId, email, language })
 })
 
 const signInWithCode = Effect.fn(function* (pending: PendingCode, code: string) {
@@ -170,11 +184,11 @@ export const RestoreSession = AuthenticationBlock.makeCommand("RestoreSession", 
 })
 
 export const SendCode = AuthenticationBlock.makeCommand("SendCode", {
-  args: { email: Schema.String },
+  args: { email: Schema.String, language: SupportedLanguage },
   messages: [Message.SucceededSendCode, Message.FailedSendCode],
   handler: function* () {
-    return ({ email }) =>
-      startFlow(email.trim().toLowerCase()).pipe(
+    return ({ email, language }) =>
+      startFlow(email.trim().toLowerCase(), language).pipe(
         Effect.map((pending) => Message.SucceededSendCode({ pending })),
         Effect.orElseSucceed(() =>
           Message.FailedSendCode({
@@ -186,13 +200,13 @@ export const SendCode = AuthenticationBlock.makeCommand("SendCode", {
 })
 
 export const ResendCode = AuthenticationBlock.makeCommand("ResendCode", {
-  args: { pending: PendingCode },
+  args: { pending: PendingCode, language: SupportedLanguage },
   messages: [Message.SucceededResendCode, Message.FailedResendCode],
   handler: function* () {
-    return ({ pending }) =>
+    return ({ pending, language }) =>
       // Resending within the same flow keeps the request binding; once it expires, start over.
-      requestCode(pending.flowId, pending.email).pipe(
-        Effect.catch(() => startFlow(pending.email)),
+      requestCode({ flowId: pending.flowId, email: pending.email, language }).pipe(
+        Effect.catch(() => startFlow(pending.email, language)),
         Effect.map((next) => Message.SucceededResendCode({ pending: next })),
         Effect.orElseSucceed(() => Message.FailedResendCode({ error: genericError })),
       )
@@ -227,12 +241,15 @@ export const VerifyCode = AuthenticationBlock.makeCommand("VerifyCode", {
 })
 
 export const CompleteOnboarding = AuthenticationBlock.makeCommand("CompleteOnboarding", {
-  args: { name: Schema.String },
+  args: { name: Schema.String, language: SupportedLanguage },
   messages: [Message.SucceededCompleteOnboarding, Message.FailedCompleteOnboarding],
   handler: function* () {
-    return ({ name }) =>
+    return ({ name, language }) =>
       Effect.gen(function* () {
-        const payload = yield* Schema.decodeEffect(OnboardingInput)({ name })
+        const payload = yield* Schema.decodeEffect(OnboardingInput)({
+          name,
+          preferredLanguage: language,
+        })
         const client = yield* GororobasApiClient
         const profile = yield* client.people.completeOnboarding({ payload })
         yield* (yield* SessionAccess).setName(profile.name)
@@ -265,7 +282,22 @@ export const CheckConnection = AuthenticationBlock.makeCommand("CheckConnection"
   },
 })
 
+/** Moves focus to where the next step happens, such as the code field once the email is sent. */
+export const FocusField = AuthenticationBlock.makeCommand("FocusField", {
+  args: { id: Schema.String },
+  messages: [Message.CompletedFocusField],
+  handler: function* () {
+    return ({ id }) =>
+      // The field only exists while the sign-in page shows that step.
+      Dom.focus(`#${CSS.escape(id)}`).pipe(
+        Effect.catchTag("ElementNotFound", () => Effect.void),
+        Effect.as(Message.CompletedFocusField()),
+      )
+  },
+})
+
 export const CommandsLayer = Layer.mergeAll(
+  FocusField.layer,
   RestoreSession.layer,
   SendCode.layer,
   ResendCode.layer,

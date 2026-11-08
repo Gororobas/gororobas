@@ -5,11 +5,10 @@ import { Schema } from "effect"
 import { AuthenticationBlock } from "../blocks/authentication"
 import { ExternalDataAdminDashboardBlock } from "../blocks/external-data-admin-dashboard"
 import { ProfileBlock } from "../blocks/profile"
-import { ProfileLocationsEditorBlock } from "../blocks/profile-locations-editor"
+import { ProfileEditorBlock } from "../blocks/profile-editor"
 import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
-import { DeviceLocation } from "../lib/device-location"
 import { PopoverDrawerBlock } from "../ui/popover-drawer"
 import { ApplicationRoute } from "./route"
 
@@ -54,12 +53,10 @@ export const Model = Schema.Struct({
   search: SearchBlock.Model,
   /** Today's date, read once at startup, for relative dates such as "3 days ago". */
   maybeToday: Schema.Option(Schema.DateTimeUtc),
-  /** Read only when a page asks for it, such as to find the municipality someone is in. */
-  deviceLocation: DeviceLocation,
   maybeWikiArticle: Schema.Option(WikiArticleInstance),
   maybeWikiArticleDebug: Schema.Option(WikiArticleDebugInstance),
   maybeProfile: Schema.Option(ProfileInstance),
-  maybeProfileLocationsEditor: Schema.Option(ProfileLocationsEditorBlock.Model),
+  maybeProfileEditor: Schema.Option(ProfileEditorBlock.Model),
   maybeExternalDataAdminDashboard: Schema.Option(ExternalDataAdminDashboardInstance),
   /** Set by the app shell's search link, whose click arrives before the navigation it starts:
    *  the search page focuses its field once it renders. */

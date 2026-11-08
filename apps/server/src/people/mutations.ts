@@ -1,9 +1,9 @@
-import { PersonRow } from "@gororobas/domain"
+import { PersonRow, PersonRowUpdate } from "@gororobas/domain"
 import { Effect } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
 export const updateRow = SqlSchema.void({
-  Request: PersonRow,
+  Request: PersonRowUpdate,
   execute: ({ id, ...update }) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient

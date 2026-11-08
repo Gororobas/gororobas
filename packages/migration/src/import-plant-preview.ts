@@ -182,7 +182,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
       yield* Effect.gen(function* () {
         yield* sql`INSERT INTO auth_subjects ${sql.insert({ id: importerId, email: "migration-preview@example.invalid", isEmailVerified: 0, securityRevision: yield* IdGen.make(AuthSecurityRevision), claimedAt: timestamp, createdAt: timestamp, updatedAt: timestamp })}`
         yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", searchableText: profileSearchableText({ name: "Migration import", handle: "migration-import", publicLocationText: null }), visibility: "PUBLIC", bookmarksVisibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
-        yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
+        yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY", preferredLanguage: "pt" })}`
         yield* repository.createWikiArticle(
           { wikiArticle: latest.article, createdById: importerId, status: "PUBLISHED" },
           { id: plant.id },

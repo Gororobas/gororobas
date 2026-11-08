@@ -11,6 +11,7 @@ import {
   PlatformAccessLevel,
   InformationVisibility,
   ProfileVisibility,
+  SupportedLanguage,
   stringToHandle,
   type Handle,
 } from "@gororobas/domain"
@@ -132,6 +133,7 @@ const insertPerson = (input: {
       accessLevel: input.accessLevel,
       accessSetById: input.accessSetById,
       accessSetAt: input.accessSetById ? now : null,
+      preferredLanguage: yield* pickWeighted(SupportedLanguage.literals, { pt: 6, es: 2, en: 1 }),
     })
 
     return email

@@ -26,6 +26,26 @@ export const PeopleApiLive = HttpApiBuilder.group(GororobasApi, "people", (handl
         yield* (yield* ProfileService).updateProfile(session.personId, payload)
       }).pipe(withApiInfrastructureErrors({ endpoint: "updateProfile", group: "people" })),
     )
+    .handle("getHandleAvailability", ({ query }) =>
+      Effect.gen(function* () {
+        const session = yield* assertAuthenticated
+        const isAvailable = yield* (yield* ProfileService).isHandleAvailableTo(
+          session.personId,
+          query.handle,
+        )
+        return { isAvailable }
+      }).pipe(withApiInfrastructureErrors({ endpoint: "getHandleAvailability", group: "people" })),
+    )
+    .handle("getMyAccount", () =>
+      PeopleService.use((service) => service.getCurrentAccount).pipe(
+        withApiInfrastructureErrors({ endpoint: "getMyAccount", group: "people" }),
+      ),
+    )
+    .handle("updateMyAccount", ({ payload }) =>
+      PeopleService.use((service) => service.updateCurrentAccount(payload)).pipe(
+        withApiInfrastructureErrors({ endpoint: "updateMyAccount", group: "people" }),
+      ),
+    )
     .handle("getMyProfile", () =>
       Effect.gen(function* () {
         const id = yield* currentAuthSubjectPersonId

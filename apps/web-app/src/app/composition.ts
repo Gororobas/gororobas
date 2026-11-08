@@ -1,23 +1,31 @@
 import type { SupportedLanguage } from "@gororobas/domain/common/enums"
 import type { Block } from "foldkit"
-import { modifyFields } from "foldkit/struct"
+import { Update } from "foldkit"
 
 import { AuthenticationBlock } from "../blocks/authentication"
 import { ExternalDataAdminDashboardBlock } from "../blocks/external-data-admin-dashboard"
 import { ProfileBlock } from "../blocks/profile"
-import { ProfileLocationsEditorBlock } from "../blocks/profile-locations-editor"
+import { ProfileEditorBlock } from "../blocks/profile-editor"
 import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
-import { DeviceLocation } from "../lib/device-location"
 import { PopoverDrawerBlock } from "../ui/popover-drawer"
-import { LocateDevice } from "./command"
+import { NavigateInternal } from "./command"
 import { ApplicationBlock } from "./definition"
 import type { Model } from "./model"
-import { ApplicationRoute } from "./route"
+import { ApplicationRoute, applicationRouteUrl, profileEditorUrl, searchUrl } from "./route"
 
 export const AuthenticationBinding = ApplicationBlock.makeBinding(AuthenticationBlock, {
   field: "authentication",
+  delivery: { toUpdateContext: (model) => [model.language] },
+}).withOutMessagePolicy({
+  fold: ApplicationBlock.makeOutMessageFold(AuthenticationBlock, {
+    // New accounts go on to fill in the rest of their profile.
+    CompletedOnboarding: () =>
+      ApplicationBlock.makeCommandsStep((model) => [
+        NavigateInternal({ url: profileEditorUrl(model.language) }),
+      ]),
+  }),
 })
 
 /** The app bar's menu: a globe for visitors, their avatar for people signed in. */
@@ -88,23 +96,25 @@ export const ExternalDataAdminDashboardBinding = ApplicationBlock.makeBinding(
   },
 )
 
-export const ProfileLocationsEditorBinding = ApplicationBlock.makeBinding(
-  ProfileLocationsEditorBlock,
-  {
-    field: "maybeProfileLocationsEditor",
-    delivery: {
-      when: (model) => ApplicationRoute.guards.MyPlaces(model.route),
-      toUpdateContext: (model) => [model.deviceLocation],
-    },
-    subscriptions: { when: (model) => ApplicationRoute.guards.MyPlaces(model.route) },
-  },
-).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(ProfileLocationsEditorBlock, {
-    RequestedDeviceLocation: () =>
-      ApplicationBlock.makeStep((model) => ({
-        model: modifyFields(model, { deviceLocation: () => DeviceLocation.Locating() }),
-        commands: [LocateDevice()],
-      })),
+export const ProfileEditorBinding = ApplicationBlock.makeBinding(ProfileEditorBlock, {
+  field: "maybeProfileEditor",
+  delivery: { when: (model) => ApplicationRoute.guards.ProfileEditor(model.route) },
+  subscriptions: { when: (model) => ApplicationRoute.guards.ProfileEditor(model.route) },
+}).withOutMessagePolicy({
+  fold: ApplicationBlock.makeOutMessageFold(ProfileEditorBlock, {
+    RequestedSignOut: () => AuthenticationBinding.requestSignOut(),
+    // Their saved language becomes the one the app speaks, on the same page.
+    ChoseLanguage: ({ language }) =>
+      ApplicationBlock.makeCommandsStep((model) => [
+        NavigateInternal({ url: applicationRouteUrl(language, model.route) }),
+      ]),
+    DeletedAccount: () =>
+      Update.combineSteps([
+        AuthenticationBinding.requestSignOut(),
+        ApplicationBlock.makeCommandsStep((model) => [
+          NavigateInternal({ url: searchUrl(model.language) }),
+        ]),
+      ]),
   }),
 })
 
@@ -116,7 +126,7 @@ export const ApplicationComposition = ApplicationBlock.makeComposition({
     WikiArticleBinding,
     WikiArticleDebugBinding,
     ProfileBinding,
-    ProfileLocationsEditorBinding,
+    ProfileEditorBinding,
     ExternalDataAdminDashboardBinding,
   ],
 })

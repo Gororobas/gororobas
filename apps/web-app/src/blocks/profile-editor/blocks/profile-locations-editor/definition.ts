@@ -1,8 +1,8 @@
 import { Schema } from "effect"
 import { Block } from "foldkit"
 
-import { GororobasApiClient } from "../../api-client"
-import { DeviceLocation } from "../../lib/device-location"
+import { GororobasApiClient } from "../../../../api-client"
+import { DeviceLocation } from "../../../../lib/device-location"
 import { InMessage } from "./in-message"
 import { Message, OutMessage } from "./message"
 import { Model } from "./model"
@@ -14,7 +14,7 @@ export const ProfileLocationsEditorKey = Symbol("ProfileLocationsEditor")
 export const ProfileLocationsEditorBlock = Block.make("ProfileLocationsEditor", {
   key: ProfileLocationsEditorKey,
   Init: Schema.Tuple([]),
-  /** The device's location is the application's: the editor reads it while handling Messages. */
+  /** The device's location is the profile editor's: this editor reads it while handling Messages. */
   Context: Schema.Tuple([DeviceLocation]),
   InMessageContext: Schema.Tuple([DeviceLocation]),
   view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },

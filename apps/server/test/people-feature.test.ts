@@ -8,6 +8,7 @@ import {
   PlatformAccessLevel,
   ProfileVisibility,
   PublicationId,
+  SupportedLanguage,
   PublicationCommentId,
   WikiArticleCommonNameInCrdtList,
   WikiArticleId,
@@ -56,7 +57,7 @@ import {
   createPost,
   createOrganization,
 } from "./feature-test-helpers.js"
-import { makeMembershipFixture } from "./fixtures.js"
+import { insertImage, makeMembershipFixture } from "./fixtures.js"
 import { TestLayerWithServices, withSession } from "./test-helpers.js"
 
 const accessLevelForPerson = (personId: PersonId) =>
@@ -800,6 +801,110 @@ await Effect.runPromise(
           ),
       })
 
+      Scenario("Person checks whether a handle is free before taking it", {
+        layer: TestLayerWithServices,
+        steps: () =>
+          runSteps(
+            givenHandle(),
+            And("someone has the handle {string:handle}", {
+              params: Schema.Struct({ handle: Handle }),
+              handler: (context, { handle }) =>
+                Effect.gen(function* () {
+                  const otherPersonId = yield* provisionCommunityPerson(
+                    context.administratorId,
+                    "Another person",
+                  )
+                  yield* withSession(
+                    (yield* ProfileService).updateProfile(otherPersonId, { handle }),
+                    yield* resolveSessionFromAuthSubjectId(otherPersonId),
+                  )
+                  return context
+                }),
+            }),
+            Then("{string:name} can't take the handle {string:handle}", {
+              params: NamedHandle,
+              handler: (context, { name, handle }) =>
+                Effect.gen(function* () {
+                  const personId = personNamed(context.actors, name)
+                  const service = yield* ProfileService
+                  expect(yield* service.isHandleAvailableTo(personId, handle)).toBe(false)
+                  return context
+                }),
+            }),
+            And("{string:name} can take the handle {string:handle}", {
+              params: NamedHandle,
+              handler: (context, { name, handle }) =>
+                Effect.gen(function* () {
+                  const personId = personNamed(context.actors, name)
+                  const service = yield* ProfileService
+                  expect(yield* service.isHandleAvailableTo(personId, handle)).toBe(true)
+                  return context
+                }),
+            }),
+            And("{string:name} can keep the handle {string:handle}", {
+              params: NamedHandle,
+              handler: (context, { name, handle }) =>
+                Effect.gen(function* () {
+                  const personId = personNamed(context.actors, name)
+                  const service = yield* ProfileService
+                  expect(yield* service.isHandleAvailableTo(personId, handle)).toBe(true)
+                  return context
+                }),
+            }),
+          ),
+      })
+
+      Scenario("Profile photos are images the person uploaded", {
+        layer: TestLayerWithServices,
+        steps: () =>
+          runSteps(
+            Given("someone else uploaded an image", {
+              handler: () =>
+                Effect.gen(function* () {
+                  const context = yield* getBackgroundContext(PeopleBackground)
+                  const otherPersonId = yield* provisionCommunityPerson(
+                    context.administratorId,
+                    "Another person",
+                  )
+                  const imageId = yield* insertImage(
+                    otherPersonId,
+                    "00000000-0000-7000-8000-0000000000b1",
+                  )
+                  return { ...context, imageId }
+                }),
+            }),
+            When("{string:name} tries to use that image as their profile photo", {
+              params: Schema.Struct({ name: Schema.String }),
+              handler: (context, { name }) =>
+                Effect.gen(function* () {
+                  const personId = personNamed(context.actors, name)
+                  const service = yield* ProfileService
+                  const error = yield* withSession(
+                    service.updateProfile(personId, { photoId: context.imageId }),
+                    yield* resolveSessionFromAuthSubjectId(personId),
+                  ).pipe(Effect.flip)
+                  return { ...context, personId, error }
+                }),
+            }),
+            Then("the change fails because the photo isn't theirs", {
+              handler: (context) =>
+                Effect.gen(function* () {
+                  expect(context.error).toMatchObject({ _tag: "InvalidMediaAssetError" })
+
+                  const profile = Option.getOrThrow(
+                    yield* withSession(
+                      (yield* ProfileService).findById(context.personId),
+                      yield* resolveSessionFromAuthSubjectId(context.personId),
+                    ),
+                  )
+
+                  expect(profile.photoId).toBeNull()
+                  return context
+                }),
+            }),
+          ),
+      })
+
       Scenario("Person sets up their profile", {
         layer: TestLayerWithServices,
         steps: () =>
@@ -832,6 +937,76 @@ await Effect.runPromise(
                   )
 
                   expect(profile).toMatchObject(context.information)
+                  return context
+                }),
+            }),
+          ),
+      })
+    })
+
+    Rule("People choose the language Gororobas speaks to them in", ({ Background, Scenario }) => {
+      Background({
+        layer: TestLayerWithServices,
+        steps: () =>
+          runSteps(
+            Given("{string:name} has COMMUNITY access", {
+              params: Schema.Struct({ name: Schema.String }),
+              handler: (_, { name }) =>
+                Effect.gen(function* () {
+                  const administratorId = yield* provisionAdministrator
+                  const personId = yield* provisionCommunityPerson(administratorId, name)
+                  return { administratorId, actors: { [name]: personId } }
+                }),
+            }),
+          ),
+      })
+
+      Scenario("Person changes their language", {
+        layer: TestLayerWithServices,
+        steps: () =>
+          runSteps(
+            When("{string:name} chooses {string:language} as their language", {
+              params: Schema.Struct({ name: Schema.String, language: SupportedLanguage }),
+              handler: (_, { name, language }) =>
+                Effect.gen(function* () {
+                  const { actors } = yield* getBackgroundContext(PeopleBackground)
+                  const personId = personNamed(actors, name)
+                  yield* withSession(
+                    (yield* PeopleService).updateCurrentAccount({ preferredLanguage: language }),
+                    yield* resolveSessionFromAuthSubjectId(personId),
+                  )
+                  return { actors, personId }
+                }),
+            }),
+            Then("{string:name}'s account shows {string:language} as their language", {
+              params: Schema.Struct({ name: Schema.String, language: SupportedLanguage }),
+              handler: (context, { name, language }) =>
+                Effect.gen(function* () {
+                  const personId = personNamed(context.actors, name)
+                  const account = yield* withSession(
+                    (yield* PeopleService).getCurrentAccount,
+                    yield* resolveSessionFromAuthSubjectId(personId),
+                  )
+                  expect(account.preferredLanguage).toBe(language)
+                  return { ...context, account }
+                }),
+            }),
+            And("{string:name}'s account shows the email they sign in with", {
+              params: Schema.Struct({ name: Schema.String }),
+              handler: (context, { name }) =>
+                Effect.gen(function* () {
+                  const personId = personNamed(context.actors, name)
+
+                  const subject = yield* SqlSchema.findOne({
+                    Request: PersonId,
+                    Result: Schema.Struct({ email: Schema.String }),
+                    execute: (id) =>
+                      SqlClient.SqlClient.use(
+                        (sql) => sql`SELECT email FROM auth_subjects WHERE id = ${id}`,
+                      ),
+                  })(personId)
+
+                  expect(context.account.email).toBe(subject.email)
                   return context
                 }),
             }),

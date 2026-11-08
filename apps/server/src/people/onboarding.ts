@@ -83,6 +83,7 @@ export const completeOnboarding = Effect.fn("People.completeOnboarding")(functio
         accessLevel: "NEWCOMER",
         accessSetAt: null,
         accessSetById: null,
+        preferredLanguage: input.preferredLanguage,
       })
 
       return profile

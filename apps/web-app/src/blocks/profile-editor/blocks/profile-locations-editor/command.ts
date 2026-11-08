@@ -6,7 +6,7 @@ import { ProfileLocationPayload } from "@gororobas/domain/profiles/locations"
 import { Effect, Layer, Option, Predicate, Schema } from "effect"
 import * as Dom from "foldkit/dom"
 
-import { GororobasApiClient } from "../../api-client"
+import { GororobasApiClient } from "../../../../api-client"
 import { ProfileLocationsEditorBlock } from "./definition"
 import { Message } from "./message"
 

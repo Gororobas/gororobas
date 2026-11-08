@@ -90,7 +90,7 @@ export const provisionPerson = (name: string) =>
       updatedAt: now,
     })}`
 
-    yield* completeOnboarding(id, { name })
+    yield* completeOnboarding(id, { name, preferredLanguage: "pt" })
     return id
   })
 

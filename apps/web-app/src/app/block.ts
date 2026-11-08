@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect"
 import * as Authentication from "../blocks/authentication"
 import * as ExternalDataAdminDashboard from "../blocks/external-data-admin-dashboard"
 import * as Profile from "../blocks/profile"
-import * as ProfileLocationsEditor from "../blocks/profile-locations-editor"
+import * as ProfileEditor from "../blocks/profile-editor"
 import * as Search from "../blocks/search"
 import * as WikiArticle from "../blocks/wiki-article"
 import * as WikiArticleDebug from "../blocks/wiki-article-debug"
@@ -14,7 +14,7 @@ import {
   ExternalDataAdminDashboardBinding,
   SettingsMenuBinding,
   ProfileBinding,
-  ProfileLocationsEditorBinding,
+  ProfileEditorBinding,
   SearchBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
@@ -33,7 +33,7 @@ export const layer = ApplicationBlock.makeLayer(
     const wikiArticle = yield* WikiArticleBinding
     const wikiArticleDebug = yield* WikiArticleDebugBinding
     const profile = yield* ProfileBinding
-    const profileLocationsEditor = yield* ProfileLocationsEditorBinding
+    const profileEditor = yield* ProfileEditorBinding
     const externalDataAdminDashboard = yield* ExternalDataAdminDashboardBinding
 
     return {
@@ -44,7 +44,7 @@ export const layer = ApplicationBlock.makeLayer(
         wikiArticle,
         wikiArticleDebug,
         profile,
-        profileLocationsEditor,
+        profileEditor,
         externalDataAdminDashboard,
       ],
       init,
@@ -63,7 +63,7 @@ export const layer = ApplicationBlock.makeLayer(
       WikiArticle.layer,
       WikiArticleDebug.layer,
       Profile.layer,
-      ProfileLocationsEditor.layer,
+      ProfileEditor.layer,
       ExternalDataAdminDashboard.layer,
     ),
   ),

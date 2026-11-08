@@ -38,6 +38,29 @@ Feature: People
       Then the change fails because the handle is already in use
       And "Maria"'s handle remains "maria"
 
+    Scenario: Person checks whether a handle is free before taking it
+      Given "Maria" has handle "maria"
+      And someone has the handle "maria-brasilia"
+      Then "Maria" can't take the handle "maria-brasilia"
+      And "Maria" can take the handle "maria-da-terra"
+      And "Maria" can keep the handle "maria"
+
+    Scenario: Profile photos are images the person uploaded
+      Given someone else uploaded an image
+      When "Maria" tries to use that image as their profile photo
+      Then the change fails because the photo isn't theirs
+
+  Rule: People choose the language Gororobas speaks to them in
+    They sign up in the language they were reading, and can change it from their settings.
+
+    Background:
+      Given "Maria" has COMMUNITY access
+
+    Scenario: Person changes their language
+      When "Maria" chooses "es" as their language
+      Then "Maria"'s account shows "es" as their language
+      And "Maria"'s account shows the email they sign in with
+
   Rule: People can set their profile visibility
 
     Background:

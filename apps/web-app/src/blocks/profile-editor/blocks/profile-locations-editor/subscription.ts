@@ -1,6 +1,6 @@
 import { Duration, Effect, Option, Schema, Stream } from "effect"
 
-import { GororobasApiClient } from "../../api-client"
+import { GororobasApiClient } from "../../../../api-client"
 import { ProfileLocationsEditorBlock } from "./definition"
 import { Message } from "./message"
 

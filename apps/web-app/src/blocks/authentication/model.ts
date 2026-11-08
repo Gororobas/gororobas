@@ -15,6 +15,9 @@ export const PendingCode = Schema.Struct({
 
 export type PendingCode = typeof PendingCode.Type
 
+/** How many digits Yielded's email codes have. */
+export const CODE_LENGTH = 6
+
 /** What went wrong or happened, which the view says in the reader's language. */
 export const AuthenticationNotice = Schema.Literals([
   "LinkFailed",
@@ -35,7 +38,6 @@ export const Stage = defineTaggedUnion({
   },
   AwaitingCode: {
     pending: PendingCode,
-    isEnteringCode: Schema.Boolean,
     code: Schema.String,
     isBusy: Schema.Boolean,
     canResend: Schema.Boolean,
@@ -71,12 +73,14 @@ export const awaitingCode = (input: {
 }) =>
   Stage.AwaitingCode({
     pending: input.pending,
-    isEnteringCode: false,
     code: "",
     isBusy: false,
     canResend: input.canResend,
     notice: input.notice ?? null,
   })
+
+/** Whether a page can tell yet if someone is signed in, before it asks them to sign in. */
+export const isRestoringSession = (model: Model) => Predicate.isTagged(model.stage, "Restoring")
 
 /** `null` until onboarding gives the account a profile. */
 export const signedIn = (name: string | null, connection: SessionState["status"] = "Ready") =>

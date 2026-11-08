@@ -13,6 +13,7 @@ import {
   UnauthorizedError,
   Policies,
   type PlatformAccessLevel,
+  type MyAccountUpdate,
 } from "@gororobas/domain"
 import { Array as EffectArray, DateTime, Effect, Option, Context } from "effect"
 import { SqlClient } from "effect/sql"
@@ -157,9 +158,26 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
         }),
       )
 
+    const getCurrentAccount = Effect.gen(function* () {
+      const session = yield* Policies.common.assertAuthenticated
+      const account = yield* repo.findAccount(session.personId)
+      if (Option.isNone(account)) {
+        return yield* new PersonNotFoundError({ id: session.personId })
+      }
+      return account.value
+    })
+
+    const updateCurrentAccount = (update: MyAccountUpdate) =>
+      Effect.gen(function* () {
+        const session = yield* Policies.common.assertAuthenticated
+        yield* repo.updateRow({ id: session.personId, ...update })
+      })
+
     return {
       deleteCurrentPerson,
+      getCurrentAccount,
       setAccessLevel,
+      updateCurrentAccount,
     } as const
   }),
 }) {}

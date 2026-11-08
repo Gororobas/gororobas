@@ -352,9 +352,16 @@ const requests = ({
         },
       }),
     "people.completeOnboarding": () =>
-      client.people.completeOnboarding({ payload: { name: `Smoke ${persona}` } }),
+      client.people.completeOnboarding({
+        payload: { name: `Smoke ${persona}`, preferredLanguage: "pt" },
+      }),
     "people.updateProfile": () =>
       client.people.updateProfile({ payload: { name: `Smoke ${persona}` } }),
+    "people.getHandleAvailability": () =>
+      client.people.getHandleAvailability({ query: { handle } }),
+    "people.getMyAccount": () => client.people.getMyAccount(),
+    "people.updateMyAccount": () =>
+      client.people.updateMyAccount({ payload: { preferredLanguage: "es" } }),
     "mediaAssets.uploadMedia": () => {
       const form = new FormData()
       form.append("file", new Blob([PNG], { type: "image/png" }), "pixel.png")

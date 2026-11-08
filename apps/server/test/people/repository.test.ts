@@ -95,6 +95,7 @@ describe("PeopleRepository", () => {
           accessLevel: "COMMUNITY",
           accessSetAt: now,
           accessSetById: null,
+          preferredLanguage: "pt",
         })
 
         // Verify: Check database state
@@ -133,6 +134,7 @@ describe("PeopleRepository", () => {
                 accessLevel: "COMMUNITY",
                 accessSetAt: now,
                 accessSetById: null,
+                preferredLanguage: "pt",
               })
 
               const intermediate = yield* repo.findById(person.id)
@@ -174,6 +176,7 @@ describe("PeopleRepository", () => {
                 accessLevel: "COMMUNITY",
                 accessSetAt: now,
                 accessSetById: null,
+                preferredLanguage: "pt",
               })
 
               yield* repo.updateRow({
@@ -181,6 +184,7 @@ describe("PeopleRepository", () => {
                 accessLevel: "MODERATOR",
                 accessSetAt: now,
                 accessSetById: null,
+                preferredLanguage: "pt",
               })
             }),
         })
@@ -227,6 +231,7 @@ describe("PeopleRepository", () => {
                     accessLevel: "ADMIN",
                     accessSetAt: now,
                     accessSetById: null,
+                    preferredLanguage: "pt",
                   })
                 }),
               ),

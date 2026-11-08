@@ -20,10 +20,20 @@ msgstr "(temporary: it will be retried)"
 msgid "{0, plural, one {# article failed in its latest fetch} other {# articles failed in their latest fetch}}"
 msgstr "{0, plural, one {# article failed in its latest fetch} other {# articles failed in their latest fetch}}"
 
+#. placeholder {0}: counts.publicationComments
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "{0, plural, one {# comment} other {# comments}}"
+msgstr "{0, plural, one {# comment} other {# comments}}"
+
 #. placeholder {0}: contributor.revisionCount
 #: src/blocks/wiki-article/view/about.ts
 msgid "{0, plural, one {# edit} other {# edits}}"
 msgstr "{0, plural, one {# edit} other {# edits}}"
+
+#. placeholder {0}: counts.events
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "{0, plural, one {# event} other {# events}}"
+msgstr "{0, plural, one {# event} other {# events}}"
 
 #. placeholder {0}: tally.failures
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
@@ -34,6 +44,21 @@ msgstr "{0, plural, one {# failure} other {# failures}}"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "{0, plural, one {# observation} other {# observations}}"
 msgstr "{0, plural, one {# observation} other {# observations}}"
+
+#. placeholder {0}: counts.images
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "{0, plural, one {# photo} other {# photos}}"
+msgstr "{0, plural, one {# photo} other {# photos}}"
+
+#. placeholder {0}: counts.posts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "{0, plural, one {# post} other {# posts}}"
+msgstr "{0, plural, one {# post} other {# posts}}"
+
+#. placeholder {0}: counts.wikiArticleBookmarks
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "{0, plural, one {# saved item} other {# saved items}}"
+msgstr "{0, plural, one {# saved item} other {# saved items}}"
 
 #. placeholder {0}: tally.successes
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
@@ -66,7 +91,7 @@ msgid "{0, select, other {Height when fully grown}}"
 msgstr "{0, select, other {Height when fully grown}}"
 
 #. placeholder {0}: formatElevation(elevation, language)
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "{0} of altitude, from the device. Only you see it."
 msgstr "{0} of altitude, from the device. Only you see it."
 
@@ -184,6 +209,10 @@ msgstr "{totalCount, plural, one {Showing {shownCount} of # place} other {Showin
 msgid "{unavailableName} couldn't load, so Gororobas is in {currentName} for now."
 msgstr "{unavailableName} couldn't load, so Gororobas is in {currentName} for now."
 
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "A square photo of you or your garden works best."
+msgstr "A square photo of you or your garden works best."
+
 #: src/lib/vocabulary.ts
 msgid "A technique that joins parts of two different plants to combine desirable traits. One part (the scion) is inserted into another plant (the rootstock) so they grow together. Much of the commercial production of many fruit trees is done this way (cacao, citrus, mulberries, etc.)."
 msgstr "A technique that joins parts of two different plants to combine desirable traits. One part (the scion) is inserted into another plant (the rootstock) so they grow together. Much of the commercial production of many fruit trees is done this way (cacao, citrus, mulberries, etc.)."
@@ -198,11 +227,28 @@ msgctxt "wiki article tab"
 msgid "About"
 msgstr "About"
 
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+#: src/blocks/profile-editor/view.ts
+msgid "About me"
+msgstr "About me"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "About you"
+msgstr "About you"
+
 #: src/lib/vocabulary.ts
 msgid "Academic work"
 msgstr "Academic work"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Account"
+msgstr "Account"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Add a photo and a few words about yourself, so people know who they're talking to."
+msgstr "Add a photo and a few words about yourself, so people know who they're talking to."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Add place"
 msgstr "Add place"
 
@@ -279,7 +325,15 @@ msgstr "Animals"
 msgid "Annual"
 msgstr "Annual"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Anyone who can see your profile."
+msgstr "Anyone who can see your profile."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Anyone, even without an account."
+msgstr "Anyone, even without an account."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Anyone. If it's the most recent, it shows on your profile."
 msgstr "Anyone. If it's the most recent, it shows on your profile."
 
@@ -314,6 +368,10 @@ msgstr "Articles {name} helped write, with approved edits."
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Authors"
 msgstr "Authors"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Available. Your profile would move to {url}"
+msgstr "Available. Your profile would move to {url}"
 
 #: src/lib/vocabulary.ts
 msgid "Bark"
@@ -359,7 +417,7 @@ msgstr "Bulbs are short underground stems wrapped in fleshy leaves, like onions 
 msgid "Business"
 msgstr "Business"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -367,23 +425,36 @@ msgstr "Cancel"
 msgid "Category"
 msgstr "Category"
 
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Change photo"
+msgstr "Change photo"
+
 #: src/blocks/authentication/view.ts
 msgid "Check your email"
 msgstr "Check your email"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Checking if it's free…"
+msgstr "Checking if it's free…"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Checking what deleting would remove…"
+msgstr "Checking what deleting would remove…"
 
 #: src/blocks/authentication/view.ts
 msgid "Checking your session before online actions…"
 msgstr "Checking your session before online actions…"
 
 #: src/blocks/authentication/view.ts
+#: src/blocks/profile-editor/view.ts
 msgid "Checking your session…"
 msgstr "Checking your session…"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Choose a municipality, state or country"
 msgstr "Choose a municipality, state or country"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Choose a place from the list or use the device's location."
 msgstr "Choose a place from the list or use the device's location."
 
@@ -408,13 +479,17 @@ msgstr "Clear filters"
 msgid "Clear search"
 msgstr "Clear search"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Close"
 msgstr "Close"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Close without saving"
 msgstr "Close without saving"
+
+#: src/blocks/authentication/view.ts
+msgid "Code"
+msgstr "Code"
 
 #: src/lib/vocabulary.ts
 msgid "Collective"
@@ -467,6 +542,14 @@ msgstr "Cooperative"
 msgid "Cosmetic"
 msgstr "Cosmetic"
 
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Couldn't check it right now. Saving will tell."
+msgstr "Couldn't check it right now. Saving will tell."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Couldn't delete your account right now. Try again in a moment."
+msgstr "Couldn't delete your account right now. Try again in a moment."
+
 #: src/blocks/profile/view/shared.ts
 msgid "Couldn't load more. Try again"
 msgstr "Couldn't load more. Try again"
@@ -492,25 +575,41 @@ msgstr "Couldn't load the profile right now"
 msgid "Couldn't load the response."
 msgstr "Couldn't load the response."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Couldn't load this place. Try again."
 msgstr "Couldn't load this place. Try again."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Couldn't load your places. Try again in a moment."
 msgstr "Couldn't load your places. Try again in a moment."
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Couldn't load your profile. Try again in a moment."
+msgstr "Couldn't load your profile. Try again in a moment."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Couldn't load your settings. Try again in a moment."
+msgstr "Couldn't load your settings. Try again in a moment."
 
 #: src/blocks/wiki-article-debug/wiki-article-debug.ts
 msgid "Couldn't load: {error}"
 msgstr "Couldn't load: {error}"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Couldn't remove it. Try again."
 msgstr "Couldn't remove it. Try again."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Couldn't save the place. Try again."
 msgstr "Couldn't save the place. Try again."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Couldn't save this. Try again in a moment."
+msgstr "Couldn't save this. Try again in a moment."
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Couldn't save your changes. Try again in a moment."
+msgstr "Couldn't save your changes. Try again in a moment."
 
 #: src/blocks/wiki-article/view/bookmark-picker.ts
 msgid "Couldn't save. Try again."
@@ -519,6 +618,10 @@ msgstr "Couldn't save. Try again."
 #: src/blocks/search/view.ts
 msgid "Couldn't search right now"
 msgstr "Couldn't search right now"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Couldn't upload this image. Try another one."
+msgstr "Couldn't upload this image. Try another one."
 
 #: src/blocks/wiki-article/view/overview/index.ts
 #: src/lib/vocabulary.ts
@@ -546,7 +649,7 @@ msgstr "Data from {name}"
 msgid "Dataset"
 msgstr "Dataset"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Dates are optional, and the year is enough."
 msgstr "Dates are optional, and the year is enough."
 
@@ -563,17 +666,45 @@ msgstr "Debug article"
 msgid "Debugging | Gororobas"
 msgstr "Debugging | Gororobas"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Delete account"
+msgstr "Delete account"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Delete my account forever"
+msgstr "Delete my account forever"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Delete my account…"
+msgstr "Delete my account…"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Delete them too"
+msgstr "Delete them too"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Deletes your profile and everything you've shared. Your edits to the encyclopedia stay, without your name. We'll show you what goes before anything is deleted."
+msgstr "Deletes your profile and everything you've shared. Your edits to the encyclopedia stay, without your name. We'll show you what goes before anything is deleted."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Deleting your account…"
+msgstr "Deleting your account…"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Describe it in my own words"
 msgstr "Describe it in my own words"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Describe where you are."
 msgstr "Describe where you are."
 
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Directed by"
 msgstr "Directed by"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Discard"
+msgstr "Discard"
 
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Dissolved"
@@ -588,7 +719,7 @@ msgctxt "taxonomic rank"
 msgid "Domain"
 msgstr "Domain"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Don't keep it"
 msgstr "Don't keep it"
 
@@ -597,11 +728,11 @@ msgstr "Don't keep it"
 msgid "Draft"
 msgstr "Draft"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "E.g.: farm on the road to Sáchica"
 msgstr "E.g.: farm on the road to Sáchica"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "E.g.: Online, Traveling around, Somewhere in Argentina"
 msgstr "E.g.: Online, Traveling around, Somewhere in Argentina"
 
@@ -622,17 +753,21 @@ msgstr "Ecosystem service"
 msgid "Edible parts"
 msgstr "Edible parts"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Edit"
 msgstr "Edit"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Edit {title}"
 msgstr "Edit {title}"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Edit place"
 msgstr "Edit place"
+
+#: src/blocks/authentication/view.ts
+msgid "Edit your profile"
+msgstr "Edit your profile"
 
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Edition"
@@ -664,15 +799,11 @@ msgstr "Encyclopedia | Gororobas"
 msgid "Encyclopedia contributions"
 msgstr "Encyclopedia contributions"
 
-#: src/blocks/authentication/view.ts
-msgid "Enter code"
-msgstr "Enter code"
-
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Enter the end year."
 msgstr "Enter the end year."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Enter the start year."
 msgstr "Enter the start year."
 
@@ -747,6 +878,10 @@ msgstr "Filter by kind"
 #: src/blocks/wiki-article/view/about.ts
 msgid "Filter by status"
 msgstr "Filter by status"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Fix your handle before saving."
+msgstr "Fix your handle before saving."
 
 #: src/lib/vocabulary.ts
 msgid "Flower"
@@ -823,6 +958,10 @@ msgstr "Gymnosperms"
 msgid "Hand tool"
 msgstr "Hand tool"
 
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Handle"
+msgstr "Handle"
+
 #: src/lib/vocabulary.ts
 msgid "Harvest"
 msgstr "Harvest"
@@ -885,6 +1024,10 @@ msgstr "How about being the first person to suggest an edit?"
 msgid "How long until we start harvesting"
 msgstr "How long until we start harvesting"
 
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "How people see you across Gororobas."
+msgstr "How people see you across Gororobas."
+
 #: src/lib/vocabulary.ts
 msgid "Human food"
 msgstr "Human food"
@@ -941,7 +1084,7 @@ msgstr "I'm raising them"
 msgid "I'm reading it"
 msgstr "I'm reading it"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "I'm still in this place"
 msgstr "I'm still in this place"
 
@@ -997,6 +1140,10 @@ msgstr "Ideal temperature"
 msgid "Identifier"
 msgstr "Identifier"
 
+#: src/blocks/authentication/view.ts
+msgid "Improve the encyclopedia with what you know"
+msgstr "Improve the encyclopedia with what you know"
+
 #: src/blocks/wiki-article/view/about.ts
 msgid "in {month}"
 msgstr "in {month}"
@@ -1027,7 +1174,7 @@ msgid "In the encyclopedia"
 msgstr "In the encyclopedia"
 
 #. placeholder {0}: place.matchedName
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "includes {0}"
 msgstr "includes {0}"
 
@@ -1063,9 +1210,13 @@ msgstr "It may have been renamed. Try finding it through search."
 msgid "It may have moved to another address, or not be visible to you."
 msgstr "It may have moved to another address, or not be visible to you."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Keep"
 msgstr "Keep"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Keep my account"
+msgstr "Keep my account"
 
 #: src/blocks/wiki-article/view/bookmark-picker.ts
 msgid "Keep track of what you want to get to know, and what you already live with"
@@ -1093,6 +1244,7 @@ msgid "Landform"
 msgstr "Landform"
 
 #: src/app/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
 #: src/blocks/wiki-article/view/external-data.ts
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Language"
@@ -1192,9 +1344,17 @@ msgstr "Loading the article's data…"
 msgid "Loading who follows it"
 msgstr "Loading who follows it"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Loading your places…"
 msgstr "Loading your places…"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Loading your profile…"
+msgstr "Loading your profile…"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Loading your settings…"
+msgstr "Loading your settings…"
 
 #: src/blocks/wiki-article/view/child-places.ts
 msgid "Loading…"
@@ -1204,11 +1364,11 @@ msgstr "Loading…"
 msgid "Locality"
 msgstr "Locality"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Locating…"
 msgstr "Locating…"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Looking for the municipality you're in…"
 msgstr "Looking for the municipality you're in…"
 
@@ -1251,15 +1411,15 @@ msgid "Meet people near you who share the same interests"
 msgstr "Meet people near you who share the same interests"
 
 #. placeholder {0}: config.label
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Month ({0})"
 msgstr "Month ({0})"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Month (optional)"
 msgstr "Month (optional)"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "More actions for {title}"
 msgstr "More actions for {title}"
 
@@ -1267,27 +1427,23 @@ msgstr "More actions for {title}"
 msgid "Municipality"
 msgstr "Municipality"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Municipality, state or country"
 msgstr "Municipality, state or country"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "My geographic itinerary"
 msgstr "My geographic itinerary"
 
-#: src/blocks/authentication/view.ts
-msgid "My places"
-msgstr "My places"
-
-#: src/app/view.ts
-msgid "My places | Gororobas"
-msgstr "My places | Gororobas"
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Name"
+msgstr "Name"
 
 #: src/lib/vocabulary.ts
 msgid "Network"
 msgstr "Network"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "New place in the itinerary"
 msgstr "New place in the itinerary"
 
@@ -1327,6 +1483,14 @@ msgstr "No interest"
 msgid "No observations with these filters."
 msgstr "No observations with these filters."
 
+#: src/blocks/authentication/view.ts
+msgid "No password needed: we'll email you a code to sign in."
+msgstr "No password needed: we'll email you a code to sign in."
+
+#: src/blocks/authentication/view.ts
+msgid "No passwords. Your email is only used to sign you in and to send you what you ask for. It never shows on your profile, and we never share or sell it."
+msgstr "No passwords. Your email is only used to sign you in and to send you what you ask for. It never shows on your profile, and we never share or sell it."
+
 #: src/blocks/profile/view/collections.ts
 #: src/blocks/wiki-article/view/tabs.ts
 msgid "No photos here yet"
@@ -1351,6 +1515,10 @@ msgstr "No public contributions yet"
 #: src/blocks/search/view.ts
 msgid "No publications found"
 msgstr "No publications found"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Nobody else sees it."
+msgstr "Nobody else sees it."
 
 #: src/blocks/search/view.ts
 msgid "Nobody found"
@@ -1384,7 +1552,7 @@ msgstr "Observation"
 msgid "Older"
 msgstr "Older"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "On your profile"
 msgstr "On your profile"
 
@@ -1392,7 +1560,8 @@ msgstr "On your profile"
 msgid "Only moderators and administrators can see this log."
 msgstr "Only moderators and administrators can see this log."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
 msgid "Only people in the Gororobas community."
 msgstr "Only people in the Gororobas community."
 
@@ -1400,7 +1569,11 @@ msgstr "Only people in the Gororobas community."
 msgid "Only this article"
 msgstr "Only this article"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Only you."
+msgstr "Only you."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Only you. It helps Gororobas show you what's relevant."
 msgstr "Only you. It helps Gororobas show you what's relevant."
 
@@ -1547,6 +1720,7 @@ msgstr "Phylum"
 msgid "Place"
 msgstr "Place"
 
+#: src/blocks/profile-editor/view.ts
 #: src/lib/vocabulary.ts
 msgid "Places"
 msgstr "Places"
@@ -1690,6 +1864,10 @@ msgstr "Publications by {name}"
 msgid "Publications, photos and saved articles show up here as soon as they're shared."
 msgstr "Publications, photos and saved articles show up here as soon as they're shared."
 
+#: src/blocks/authentication/view.ts
+msgid "Publish and talk with people who practice agroecology"
+msgstr "Publish and talk with people who practice agroecology"
+
 #: src/blocks/wiki-article/view/external-data.ts
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Published"
@@ -1728,7 +1906,8 @@ msgstr "Released"
 msgid "Reload"
 msgstr "Reload"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Remove"
 msgstr "Remove"
 
@@ -1746,15 +1925,15 @@ msgstr "Remove filter {0}"
 msgid "Remove from my list"
 msgstr "Remove from my list"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Remove from the itinerary"
 msgstr "Remove from the itinerary"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Remove this place from your itinerary?"
 msgstr "Remove this place from your itinerary?"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Removing…"
 msgstr "Removing…"
 
@@ -1769,6 +1948,10 @@ msgstr "Research"
 #: src/blocks/authentication/view.ts
 msgid "Resend email"
 msgstr "Resend email"
+
+#: src/blocks/authentication/view.ts
+msgid "Resend email in a few seconds"
+msgstr "Resend email in a few seconds"
 
 #: src/lib/vocabulary.ts
 msgid "Resource"
@@ -1806,9 +1989,14 @@ msgstr "Roles in the agroecosystem"
 msgid "Root"
 msgstr "Root"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Save changes"
 msgstr "Save changes"
+
+#: src/blocks/authentication/view.ts
+msgid "Save plants, books and ideas to come back to"
+msgstr "Save plants, books and ideas to come back to"
 
 #: src/blocks/wiki-article/view/about.ts
 msgid "Save this article to show up here and find people interested in it too."
@@ -1828,8 +2016,15 @@ msgstr "Saved"
 msgid "Saved by {name}"
 msgstr "Saved by {name}"
 
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Saved."
+msgstr "Saved."
+
 #: src/blocks/authentication/view.ts
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
 msgid "Saving…"
 msgstr "Saving…"
 
@@ -1846,7 +2041,7 @@ msgstr "Search"
 msgid "Search | Gororobas"
 msgstr "Search | Gororobas"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Search by name: Villa de Leyva, Viçosa, Boyacá…"
 msgstr "Search by name: Villa de Leyva, Viçosa, Boyacá…"
 
@@ -1873,6 +2068,10 @@ msgstr "Searching"
 #: src/blocks/profile/view/view.ts
 msgid "Sections of {name}'s profile"
 msgstr "Sections of {name}'s profile"
+
+#: src/blocks/profile-editor/view.ts
+msgid "Sections of your account"
+msgstr "Sections of your account"
 
 #: src/blocks/search/view.ts
 msgid "See all"
@@ -1916,13 +2115,17 @@ msgstr "See stored response"
 msgid "See the original post"
 msgstr "See the original post"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "See the place's page"
 msgstr "See the place's page"
 
 #: src/blocks/wiki-article/view/view.ts
 msgid "See this article's stored data"
 msgstr "See this article's stored data"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "See your public profile"
+msgstr "See your public profile"
 
 #: src/lib/vocabulary.ts
 msgid "Seed"
@@ -1944,6 +2147,15 @@ msgstr "Semiannual"
 msgid "Sending…"
 msgstr "Sending…"
 
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+#: src/blocks/profile-editor/view.ts
+msgid "Settings"
+msgstr "Settings"
+
+#: src/blocks/authentication/view.ts
+msgid "Share where you grow, and see who grows nearby"
+msgstr "Share where you grow, and see who grows nearby"
+
 #: src/blocks/wiki-article/view/bookmark-picker.ts
 msgid "Share your journey on your profile, if you choose to"
 msgstr "Share your journey on your profile, if you choose to"
@@ -1952,12 +2164,13 @@ msgstr "Share your journey on your profile, if you choose to"
 msgid "Show more places"
 msgstr "Show more places"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Shows next to the place's name, for those who can see it."
 msgstr "Shows next to the place's name, for those who can see it."
 
 #: src/app/view.ts
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/authentication/view.ts
+#: src/blocks/profile-editor/view.ts
 msgid "Sign in"
 msgstr "Sign in"
 
@@ -1973,19 +2186,20 @@ msgstr "Sign in or create an account"
 msgid "Sign in or create your account"
 msgstr "Sign in or create your account"
 
-#: src/blocks/profile-locations-editor/view.ts
-msgid "Sign in to your account to record your places."
-msgstr "Sign in to your account to record your places."
+#: src/blocks/profile-editor/view.ts
+msgid "Sign in to edit your profile, record your places and choose your settings."
+msgstr "Sign in to edit your profile, record your places and choose your settings."
 
 #: src/blocks/authentication/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
 msgid "Sign out"
 msgstr "Sign out"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Since"
 msgstr "Since"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Since {start}"
 msgstr "Since {start}"
 
@@ -2000,6 +2214,10 @@ msgstr "Social movement"
 #: src/lib/vocabulary.ts
 msgid "Soil preparation"
 msgstr "Soil preparation"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Someone already uses this handle. Try another one."
+msgstr "Someone already uses this handle. Try another one."
 
 #: src/blocks/authentication/view.ts
 msgid "Something went wrong. Try again."
@@ -2074,7 +2292,7 @@ msgstr "Suggested kind"
 msgid "Take part"
 msgstr "Take part"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Tell where you grow, where you've lived or where you're passing through."
 msgstr "Tell where you grow, where you've lived or where you're passing through."
 
@@ -2082,15 +2300,23 @@ msgstr "Tell where you grow, where you've lived or where you're passing through.
 msgid "Territory"
 msgstr "Territory"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/authentication/view.ts
+msgid "The code expires in 5 minutes. Can't find the email? Check your spam folder."
+msgstr "The code expires in 5 minutes. Can't find the email? Check your spam folder."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "The end can't come before the start."
 msgstr "The end can't come before the start."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "The end year needs four digits, like 2024."
 msgstr "The end year needs four digits, like 2024."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "The plants, books and ideas you bookmark, and how you relate to them."
+msgstr "The plants, books and ideas you bookmark, and how you relate to them."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "The start year needs four digits, like 2024."
 msgstr "The start year needs four digits, like 2024."
 
@@ -2102,6 +2328,10 @@ msgstr "Themes"
 msgid "There is nothing at {path}."
 msgstr "There is nothing at {path}."
 
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "This can't be undone."
+msgstr "This can't be undone."
+
 #: src/blocks/authentication/view.ts
 msgid "This code didn't work. Check it, or resend the email to get another one."
 msgstr "This code didn't work. Check it, or resend the email to get another one."
@@ -2110,13 +2340,21 @@ msgstr "This code didn't work. Check it, or resend the email to get another one.
 msgid "This link didn't work. It may have expired or been opened in another browser. Enter your email to get a new one."
 msgstr "This link didn't work. It may have expired or been opened in another browser. Enter your email to get a new one."
 
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "This permanently deletes your profile, and with it:"
+msgstr "This permanently deletes your profile, and with it:"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "This permanently deletes your profile."
+msgstr "This permanently deletes your profile."
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "This photo can't be used. Upload another image."
+msgstr "This photo can't be used. Upload another image."
+
 #: src/blocks/wiki-article/view/overview/plant.ts
 msgid "Time to harvest"
 msgstr "Time to harvest"
-
-#: src/blocks/authentication/view.ts
-msgid "To continue, click the link sent to"
-msgstr "To continue, click the link sent to"
 
 #: src/lib/vocabulary.ts
 msgid "Tool"
@@ -2162,11 +2400,15 @@ msgstr "Tubers are thickened underground stems that store nutrients and have bud
 msgid "Type at least {MINIMUM_WORD_LENGTH} letters to search."
 msgstr "Type at least {MINIMUM_WORD_LENGTH} letters to search."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/authentication/view.ts
+msgid "Type it below, or open the link in the email on this device."
+msgstr "Type it below, or open the link in the email on this device."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Until"
 msgstr "Until"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Until {end}"
 msgstr "Until {end}"
 
@@ -2178,11 +2420,23 @@ msgstr "Until someone classifies this article"
 msgid "Updated on"
 msgstr "Updated on"
 
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Upload a photo"
+msgstr "Upload a photo"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Uploading…"
+msgstr "Uploading…"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Use 3 to 90 lowercase letters, numbers and hyphens."
+msgstr "Use 3 to 90 lowercase letters, numbers and hyphens."
+
 #: src/blocks/authentication/view.ts
 msgid "Use another email"
 msgstr "Use another email"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Use my location"
 msgstr "Use my location"
 
@@ -2202,14 +2456,6 @@ msgstr "Varieties"
 #: src/lib/vocabulary.ts
 msgid "Variety"
 msgstr "Variety"
-
-#: src/blocks/authentication/view.ts
-msgid "Verification code"
-msgstr "Verification code"
-
-#: src/blocks/authentication/view.ts
-msgid "Verify"
-msgstr "Verify"
 
 #: src/blocks/authentication/view.ts
 msgid "Verifying…"
@@ -2268,7 +2514,7 @@ msgstr "We couldn't find this article in the encyclopedia"
 msgid "We couldn't find this profile"
 msgstr "We couldn't find this profile"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "We couldn't get the device's location. Check that the browser has permission, or search for the place by name."
 msgstr "We couldn't get the device's location. Check that the browser has permission, or search for the place by name."
 
@@ -2276,13 +2522,17 @@ msgstr "We couldn't get the device's location. Check that the browser has permis
 msgid "We couldn't send the email. Check the address and try again."
 msgstr "We couldn't send the email. Check the address and try again."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "We don't have a map of this region yet. Search for the place by name or describe where you are."
 msgstr "We don't have a map of this region yet. Search for the place by name or describe where you are."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "We only keep this whole place, never your coordinates."
 msgstr "We only keep this whole place, never your coordinates."
+
+#: src/blocks/authentication/view.ts
+msgid "We sent a code to"
+msgstr "We sent a code to"
 
 #: src/blocks/authentication/view.ts
 msgid "We sent a new email. Earlier codes no longer work."
@@ -2300,15 +2550,19 @@ msgstr "Welcome to Gororobas!"
 msgid "What {name} follows"
 msgstr "What {name} follows"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "What do you call this place? (optional)"
 msgstr "What do you call this place? (optional)"
 
-#: src/blocks/authentication/view.ts
-msgid "What should we call you?"
-msgstr "What should we call you?"
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "What Gororobas and its emails speak to you in, on every device."
+msgstr "What Gororobas and its emails speak to you in, on every device."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "What you grow, what you're learning, what you can share. Leave a blank line between paragraphs."
+msgstr "What you grow, what you're learning, what you can share. Leave a blank line between paragraphs."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "When"
 msgstr "When"
 
@@ -2316,7 +2570,7 @@ msgstr "When"
 msgid "When someone shares an experience, it shows up here."
 msgstr "When someone shares an experience, it shows up here."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Where"
 msgstr "Where"
 
@@ -2336,17 +2590,29 @@ msgstr "Where to find it"
 msgid "Where to watch it"
 msgstr "Where to watch it"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Where you are, in your own words"
 msgstr "Where you are, in your own words"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Where you grow, where you've lived, where you're passing through. Each place only shows to whoever you choose, and we only keep the municipality, never your coordinates."
 msgstr "Where you grow, where you've lived, where you're passing through. Each place only shows to whoever you choose, and we only keep the municipality, never your coordinates."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Who can see it"
 msgstr "Who can see it"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Who can see what you save"
+msgstr "Who can see what you save"
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Who can see your profile"
+msgstr "Who can see your profile"
+
+#: src/blocks/authentication/view.ts
+msgid "Why create an account"
+msgstr "Why create an account"
 
 #: src/blocks/wiki-article/view/attribution.ts
 msgid "Wikimedia's free and collaborative knowledge base. Its data is in the public domain (CC0)."
@@ -2356,28 +2622,69 @@ msgstr "Wikimedia's free and collaborative knowledge base. Its data is in the pu
 msgid "Wikipedia"
 msgstr "Wikipedia"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/authentication/view.ts
+msgid "With an account, you can"
+msgstr "With an account, you can"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Year"
 msgstr "Year"
 
 #. placeholder {0}: config.label
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Year ({0})"
 msgstr "Year ({0})"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "You have unsaved changes."
+msgstr "You have unsaved changes."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "You sign in with"
+msgstr "You sign in with"
 
 #: src/blocks/authentication/view.ts
 msgid "You're offline or the server is unavailable. Your account stays available on this device; online actions wait for the session to be verified."
 msgstr "You're offline or the server is unavailable. Your account stays available on this device; online actions wait for the session to be verified."
+
+#: src/blocks/authentication/view.ts
+msgid "You're signed in."
+msgstr "You're signed in."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "You're the last administrator. Make someone else an administrator before deleting your account."
+msgstr "You're the last administrator. Make someone else an administrator before deleting your account."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "You're the only manager of an organization that has other members. Make someone else a manager before deleting your account."
+msgstr "You're the only manager of an organization that has other members. Make someone else a manager before deleting your account."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "You're the only member of {organizationCount, plural, one {# organization} other {# organizations}}. Deleting your account deletes them and what they've shared, too."
+msgstr "You're the only member of {organizationCount, plural, one {# organization} other {# organizations}}. Deleting your account deletes them and what they've shared, too."
+
+#: src/blocks/authentication/view.ts
+msgid "you@example.com"
+msgstr "you@example.com"
 
 #: src/lib/vocabulary.ts
 msgid "Young, already rooted plants that we transplant to where they will grow"
 msgstr "Young, already rooted plants that we transplant to where they will grow"
 
 #: src/app/view.ts
+#: src/blocks/profile-editor/view.ts
 msgid "Your account"
 msgstr "Your account"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/app/view.ts
+msgid "Your account | Gororobas"
+msgstr "Your account | Gororobas"
+
+#: src/blocks/authentication/view.ts
+msgid "Your account is ready. Tell us what to call you: it's the name people see on your profile and contributions. A photo, a bio and your places come next."
+msgstr "Your account is ready. Tell us what to call you: it's the name people see on your profile and contributions. A photo, a bio and your places come next."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Your itinerary is still empty."
 msgstr "Your itinerary is still empty."
 
@@ -2385,13 +2692,29 @@ msgstr "Your itinerary is still empty."
 msgid "Your list lives in your Gororobas account, so it follows you anywhere."
 msgstr "Your list lives in your Gororobas account, so it follows you anywhere."
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/authentication/view.ts
+msgid "Your name"
+msgstr "Your name"
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Your name can't be empty."
+msgstr "Your name can't be empty."
+
+#: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
+msgid "Your name, photo, bio and what you publish publicly."
+msgstr "Your name, photo, bio and what you publish publicly."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Your places, from oldest to most recent"
 msgstr "Your places, from oldest to most recent"
 
-#: src/blocks/profile-locations-editor/view.ts
+#: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Your profile doesn't show a place right now, because the most recent one isn't public."
 msgstr "Your profile doesn't show a place right now, because the most recent one isn't public."
+
+#: src/blocks/profile-editor/blocks/profile-about-editor/view.ts
+msgid "Your profile lives at {url}"
+msgstr "Your profile lives at {url}"
 
 #: src/blocks/wiki-article/view/bookmark-picker.ts
 msgid "Your relationship to this article"

@@ -6,12 +6,7 @@ import { toString as urlToString } from "foldkit/url"
 
 import { changeRouteStep, settleLanguageRequestStep } from "./change-route"
 import { FocusSearchField, LoadExternal, NavigateInternal } from "./command"
-import {
-  ApplicationComposition,
-  ProfileLocationsEditorBinding,
-  SearchBinding,
-  SettingsMenuBinding,
-} from "./composition"
+import { ApplicationComposition, SearchBinding, SettingsMenuBinding } from "./composition"
 import { makeCommandsStep, makeFieldsStep, makeNoopStep } from "./definition"
 import { ApplicationRoute, searchUrl, urlToLocatedRoute } from "./route"
 
@@ -59,9 +54,4 @@ export const update = ApplicationComposition.makeUpdate({
     settleLanguageRequestStep({ requestNumber, maybeLoadedLanguage: Option.some(language) })(model),
   FailedLoadTranslations: (model, { requestNumber }) =>
     settleLanguageRequestStep({ requestNumber, maybeLoadedLanguage: Option.none() })(model),
-  CompletedLocateDevice: (model, { deviceLocation }) =>
-    Update.combineSteps([
-      makeFieldsStep(() => ({ deviceLocation: () => deviceLocation })),
-      ProfileLocationsEditorBinding.informDeviceLocation(deviceLocation),
-    ])(model),
 })

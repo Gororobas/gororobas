@@ -7,7 +7,7 @@ import { ElevationInMeters, ProfileLocationData } from "@gororobas/domain/profil
 import { Schema } from "effect"
 import { AsyncData } from "foldkit"
 
-import { ClientFailure } from "../../lib/client-failure"
+import { ClientFailure } from "../../../../lib/client-failure"
 
 export const PlaceCombobox = Combobox.makeBlock(WhosOnFirstId)
 

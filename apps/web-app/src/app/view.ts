@@ -4,7 +4,7 @@ import { Style } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
 import type { Document, Html } from "foldkit/html"
 
-import { isSignedIn, viewerName } from "../blocks/authentication"
+import { isRestoringSession, isSignedIn, viewerName } from "../blocks/authentication"
 import { intlTags, languageNames } from "../lib/language"
 import { type Translator, translatorFor } from "../lib/translations"
 import * as AppShell from "../ui/app-shell"
@@ -19,7 +19,7 @@ import {
   AuthenticationBinding,
   ExternalDataAdminDashboardBinding,
   ProfileBinding,
-  ProfileLocationsEditorBinding,
+  ProfileEditorBinding,
   SearchBinding,
   SettingsMenuBinding,
   WikiArticleBinding,
@@ -29,7 +29,13 @@ import {
 } from "./composition"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { ApplicationRoute, applicationRouteUrl, loginUrl, searchUrl } from "./route"
+import {
+  ApplicationRoute,
+  applicationRouteUrl,
+  loginUrl,
+  profileEditorUrl,
+  searchUrl,
+} from "./route"
 import {
   type SearchType,
   peopleScope,
@@ -136,7 +142,7 @@ const settingsMenu = (
               {
                 maybeAccount: Option.map(maybeName, () => ({
                   label: i18n._(msg`Your account`),
-                  href: loginUrl(model.language),
+                  href: profileEditorUrl(model.language),
                 })),
                 languagesLabel,
                 languages: languageLinks(model),
@@ -310,25 +316,30 @@ const page = (
         h,
       ),
     Login: () =>
-      prose(
-        h.block(
-          AuthenticationBinding.embedView({
-            slotId: "authentication",
-            model: model.authentication,
-            viewInputs: { language },
-          }),
-        ),
-        h,
+      h.block(
+        AuthenticationBinding.embedView({
+          slotId: "authentication",
+          model: model.authentication,
+          viewInputs: { language },
+        }),
       ),
-    MyPlaces: () =>
-      Option.match(model.maybeProfileLocationsEditor, {
+    ProfileEditor: ({ section }) =>
+      Option.match(model.maybeProfileEditor, {
         onNone: () => h.empty,
         onSome: (editor) =>
           h.block(
-            ProfileLocationsEditorBinding.embedView({
-              slotId: "profile-locations-editor",
+            ProfileEditorBinding.embedView({
+              slotId: "profile-editor",
               model: editor,
-              viewInputs: { language, isSignedIn: isSignedIn(model.authentication) },
+              viewInputs: {
+                language,
+                section,
+                sessionPhase: isRestoringSession(model.authentication)
+                  ? "Restoring"
+                  : isSignedIn(model.authentication)
+                    ? "SignedIn"
+                    : "SignedOut",
+              },
             }),
           ),
       }),
@@ -356,7 +367,7 @@ const title = (route: ApplicationRoute, i18n: Translator): string =>
     WikiArticleDebug: () => i18n._(msg`Debugging | Gororobas`),
     Profile: () => i18n._(msg`People | Gororobas`),
     Login: () => i18n._(msg`Sign in | Gororobas`),
-    MyPlaces: () => i18n._(msg`My places | Gororobas`),
+    ProfileEditor: () => i18n._(msg`Your account | Gororobas`),
     ExternalDataAdminDashboard: () => i18n._(msg`External data | Gororobas`),
     NotFound: () => i18n._(msg`Page not found | Gororobas`),
   })

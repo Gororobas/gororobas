@@ -1,2 +1,3 @@
 export { AuthenticationBlock, layer } from "./block"
-export { isSignedIn, viewerName } from "./model"
+export { isRestoringSession, isSignedIn, viewerName } from "./model"
+export { EMAIL_FIELD_ID } from "./command"

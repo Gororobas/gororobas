@@ -16,7 +16,6 @@ export const RestoredSession = defineTaggedUnion({
 export const Message = defineMessageUnion({
   UpdatedEmail: { value: Schema.String },
   SubmittedEmail: {},
-  ClickedEnterCode: {},
   UpdatedCode: { value: Schema.String },
   SubmittedCode: {},
   ClickedResend: {},
@@ -38,4 +37,10 @@ export const Message = defineMessageUnion({
   FailedCompleteOnboarding: { error: AuthenticationNotice },
   SucceededSignOut: {},
   FailedSignOut: {},
+  CompletedFocusField: {},
+})
+
+export const OutMessage = defineMessageUnion({
+  /** A new account got its profile: the app takes them to fill in the rest. */
+  CompletedOnboarding: {},
 })

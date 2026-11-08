@@ -7,9 +7,11 @@ import { fromString } from "foldkit/url"
 
 import {
   ApplicationRoute,
+  ProfileEditorSection,
   ProfileTab,
   WikiArticleTab,
   languageRedirectUrl,
+  profileEditorUrl,
   profileUrl,
   searchUrl,
   urlToLocatedRoute,
@@ -167,6 +169,18 @@ describe("profile URLs", () => {
     ([language, handle, tab]) => {
       expect(parse(profileUrl(language, { handle: handle, tab }))).toEqual(
         located(language, ApplicationRoute.Profile({ handle, tab })),
+      )
+    },
+  )
+})
+
+describe("profile editor URLs", () => {
+  it.prop(
+    "a profile editor section survives its localized URL",
+    [SupportedLanguage, ProfileEditorSection],
+    ([language, section]) => {
+      expect(parse(profileEditorUrl(language, section))).toEqual(
+        located(language, ApplicationRoute.ProfileEditor({ section })),
       )
     },
   )

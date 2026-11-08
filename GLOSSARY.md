@@ -12,6 +12,8 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Interface language**: the `SupportedLanguage` a person reads the web app in, the first segment of every path (`/pt/gente`, `/en/people`). It's a language, never a locale: there is no geographic localization, and Intl gets regional tags (`pt-BR`, `es-419`, `en-US`) from `intlTags`. Paths without one redirect to the detected language: the saved preference, then the browser's, then the default, the first `SupportedLanguage` (English). Content loads in the interface language, falling back through `languageFallbackOrder` when it has no translation.
 
+**Preferred language**: the `SupportedLanguage` a person chose for Gororobas to speak to them in, stored on their account (`people.preferred_language`) and shown in their settings. It starts as the interface language they signed up in, and choosing another one in settings also switches the interface language. Emails a person asked for, such as sign-in codes, use the interface language of the device that asked.
+
 **Search scope**: what a search covers (`SearchScope` in `apps/web-app/src/app/search-query.ts`): everything, or one type of result with only the filters that type offers. A wiki scope may name an article kind, which carries that kind's filters, so a plant's planting methods can't be set on a book search. URLs keep it as flat, localized parameters (`?secao=enciclopedia&tipo=vegetais`), and parameters the scope doesn't offer read as absent.
 
 **Evaluation**: a moderator's verdict on a pending wiki revision: `PENDING`, `APPROVED` or `REJECTED` (`RevisionEvaluation`). The API payload, the TypeScript input and the `evaluation` column all use this name.
@@ -48,4 +50,4 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 ## Handles
 
-**Handle**: the readable, URL-safe name of a profile, publication or wiki article (`Handle`). `apps/server/src/common/handle-allocation.ts` gives every entity its handles: `claimHandle` takes one someone chose or fails with `HandleTakenError`, and `allocateHandle` derives one from names, adding a random six-character suffix when they're taken. A wiki article gets a handle per language the first time it has a translation in that language, and keeps it after renames, so old links keep working.
+**Handle**: the readable, URL-safe name of a profile, publication or wiki article (`Handle`). `apps/server/src/common/handle-allocation.ts` gives every entity its handles: `claimHandle` takes one someone chose or fails with `HandleTakenError`, and `allocateHandle` derives one from names, adding a random six-character suffix when they're taken. People check whether a handle is free before taking one through `getHandleAvailability`, which counts their own current handle as free. A wiki article gets a handle per language the first time it has a translation in that language, and keeps it after renames, so old links keep working.

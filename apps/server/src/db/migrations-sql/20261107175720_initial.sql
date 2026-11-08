@@ -152,6 +152,7 @@ CREATE TABLE `people` (
   `access_level` text NOT NULL,
   `access_set_by_id` text NULL,
   `access_set_at` text NULL,
+  `preferred_language` text NOT NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`access_set_by_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
   CONSTRAINT `1` FOREIGN KEY (`id`) REFERENCES `auth_subjects` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,

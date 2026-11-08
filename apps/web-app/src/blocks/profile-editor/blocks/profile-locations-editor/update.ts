@@ -8,7 +8,7 @@ import { DateTime, Array as EffectArray, Option, Order, Result } from "effect"
 import { AsyncData, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
-import { DeviceLocation, elevationWithin } from "../../lib/device-location"
+import { DeviceLocation, elevationWithin } from "../../../../lib/device-location"
 import {
   type DateParts,
   DeleteLocation,

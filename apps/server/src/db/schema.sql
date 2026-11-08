@@ -144,6 +144,7 @@ CREATE TABLE people (
   access_level text NOT NULL, -- PlatformAccessLevel
   access_set_by_id text,
   access_set_at text,
+  preferred_language text NOT NULL, -- SupportedLanguage
   FOREIGN KEY (id) REFERENCES profiles (id) ON DELETE CASCADE,
   FOREIGN KEY (id) REFERENCES auth_subjects (id) ON DELETE CASCADE,
   FOREIGN KEY (access_set_by_id) REFERENCES profiles (id) ON DELETE SET NULL
