@@ -70,7 +70,7 @@ const LocalSave = ParentDefinition.makeCommand('LocalSave', {
     return () => Effect.succeed(ParentMessage.CompletedLocalSave())
   },
 })
-const ChildBinding = ParentDefinition.makeBinding(ChildBlock, {
+const ChildBinding = ParentDefinition.makeRequiredFieldBinding(ChildBlock, {
   field: 'child',
 })
 const ParentComposition = ParentDefinition.makeComposition({
@@ -181,7 +181,7 @@ export const KeyedDefinition = Block.makeDefinition('CallbackGuardKeyed', {
   Model: KeyedModel,
   Message: ParentMessage,
 })
-export const KeyedBinding = KeyedDefinition.makeBinding(ChildBlock, {
+export const KeyedBinding = KeyedDefinition.makeKeyedArrayBinding(ChildBlock, {
   field: 'children',
   key: 'id',
   childField: 'counter',
@@ -203,13 +203,17 @@ export type KeyedRegistration = Expect<
     Block.RequirementOfBinding<typeof KeyedBinding>
   >
 >
-export const makeGenericOwner = <Value>(Value: Schema.Schema<Value>) => {
+export const makeGenericOwner = <Value, Encoded>(
+  Value: Schema.Codec<Value, Encoded, never, never>,
+) => {
   const Model = Schema.Struct({ child: ChildModel, value: Value })
   const Definition = Block.makeDefinition('CallbackGuardGeneric', {
     Model,
     Message: ParentMessage,
   })
-  const Binding = Definition.makeBinding(ChildBlock, { field: 'child' })
+  const Binding = Definition.makeRequiredFieldBinding(ChildBlock, {
+    field: 'child',
+  })
   const Composition = Definition.makeComposition({ bindings: [Binding] })
   const keep = Definition.makeNoopStep()
   return Composition.makeUpdate({

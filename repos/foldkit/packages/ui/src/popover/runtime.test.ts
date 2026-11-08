@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block, Program, Runtime } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -23,7 +23,7 @@ type Message = typeof Message.Type
 const PopoverSiblingRuntimeTestKey = Symbol('PopoverSiblingRuntimeTest')
 const PopoverSiblingRuntimeTestBlock = Block.make('PopoverSiblingRuntimeTest', {
   key: PopoverSiblingRuntimeTestKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
@@ -37,7 +37,7 @@ const foldPopoverOutMessage = PopoverSiblingRuntimeTestBlock.makeOutMessageFold(
   },
 )
 
-const PopoverBinding = PopoverSiblingRuntimeTestBlock.makeBinding(
+const PopoverBinding = PopoverSiblingRuntimeTestBlock.makeRequiredFieldBinding(
   PopoverBlock,
   {
     field: 'popover',
@@ -90,23 +90,16 @@ const view = PopoverSiblingRuntimeTestComposition.makeView((model, h) =>
 
 const ApplicationBlock = {
   block: PopoverSiblingRuntimeTestBlock,
-  layer: PopoverSiblingRuntimeTestBlock.makeLayer(
-    Effect.gen(function* () {
-      const popover = yield* PopoverBinding
-
-      return {
-        children: [popover],
-        init: PopoverSiblingRuntimeTestComposition.makeInit(() =>
-          PopoverBinding.init({
-            args: [{ id: popoverId }],
-            toParentModel: popover => ({ popover, isBadgeShown: false }),
-          }),
-        ),
-        update,
-        view,
-      }
-    }),
-  ).pipe(Layer.provide(layer)),
+  layer: PopoverSiblingRuntimeTestBlock.makeLayer({
+    init: PopoverSiblingRuntimeTestComposition.makeInit(() =>
+      PopoverBinding.init({
+        args: [{ id: popoverId }],
+        toParentModel: popover => ({ popover, isBadgeShown: false }),
+      }),
+    ),
+    update,
+    view,
+  }).pipe(Layer.provide(layer)),
 }
 
 describe('Popover with a portaled panel', () => {

@@ -1,25 +1,25 @@
-import { Effect, Layer } from 'effect'
+import { Layer } from 'effect'
 
 // composition.ts
-import { DialogBlock, layer as DialogLayer } from '@foldkit/ui/dialog'
+import { Dialog, Menu } from '@foldkit/ui'
+
 import {
-  layer as MenuLayer,
-  makeBlock as makeMenuBlock,
-} from '@foldkit/ui/menu'
+  ApplicationBlock,
+  makeRequiredFieldBinding,
+  makeComposition,
+} from './block'
 
-import { ApplicationBlock } from './definition'
-
-export const DialogBinding = ApplicationBlock.makeBinding(DialogBlock, {
+export const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
   field: 'dialog',
 }).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
-export const ApplicationMenu = makeMenuBlock<string>()
+export const ApplicationMenu = Menu.makeBlock<string>()
 
-export const MenuBinding = ApplicationBlock.makeBinding(ApplicationMenu, {
+export const MenuBinding = makeRequiredFieldBinding(ApplicationMenu, {
   field: 'menu',
 }).withOutMessagePolicy({ fold: foldMenuOutMessage })
 
-export const ApplicationComposition = ApplicationBlock.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [DialogBinding, MenuBinding],
 })
 
@@ -57,7 +57,7 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-// block.ts
+// layer.ts
 import { Block, Program, Runtime } from 'foldkit'
 
 import { init } from './init'
@@ -65,19 +65,11 @@ import type { Model } from './model'
 import { update } from './update'
 import { view } from './view'
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    const dialog = yield* DialogBinding
-    const menu = yield* MenuBinding
-
-    return {
-      children: [dialog, menu],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(Layer.mergeAll(DialogLayer, MenuLayer)))
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Layer.mergeAll(Dialog.layer, Menu.layer)))
 
 // entry.ts
 
@@ -92,4 +84,4 @@ const program = Program.make({
 
 Runtime.run(program)
 
-export { ApplicationBlock } from './definition'
+export { ApplicationBlock } from './block'

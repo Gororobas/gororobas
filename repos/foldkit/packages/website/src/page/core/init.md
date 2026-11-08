@@ -62,7 +62,7 @@ For an exact unkeyed `Option` field, omitting `init` leaves presence with the pa
 
 An exact keyed Option wrapper also leaves presence with the parent. Create it through `initAndSet` or the registered `Binding.init({ key, args, toParentModel })` operation described below. Automatic `init.instances` is available only for keyed arrays. Accessor Bindings likewise remain parent-owned unless the parent initializes them explicitly.
 
-The final parent Model determines which initialized occurrences are active. Init Commands for absent or `presentWhen`-inactive children are omitted. A `subscriptions.when` policy only gates Subscription Streams; it does not suppress child init Commands. Initial Steps may change the child Model without discarding its init Commands.
+The final parent Model determines which initialized occurrences are active. Init Commands for absent or `activeWhen`-inactive children are omitted. A `subscriptions.when` policy only gates Subscription Streams; it does not suppress child init Commands. Initial Steps may change the child Model without discarding its init Commands.
 
 For custom storage or deliberate replacement, call the registered Binding's explicit `init` operation. Pass `{ args, toParentModel }`, plus `key` for a keyed Binding and optional parent `commands`. `args` is the exact child init tuple. `toParentModel` receives the initialized child Model and constructs the complete parent Model. `Binding.init` returns a passive initialization recipe. The recipe has no `.model` or `.commands` fields to project. Standard Instance arrays can instead use the field-Step creation path below.
 
@@ -80,7 +80,7 @@ The following application reuses `addCounter` during startup and later additions
 
 When the acquired graph executes the field Step, Foldkit checks the complete creation batch, initializes the requested children, and replaces the requests with ready `{ key, model }` values. It retains child init Commands and the exact requirements and Binding registration evidence. The next Step sees the initialized Model synchronously. The Runtime performs the Commands later through their existing handlers.
 
-Calling `create` does not acquire a child implementation, run init, construct handlers, or start a lifecycle. The constructor still yields the explicit Binding and receives the child's implementation through its Layer. Creation-bearing field results are opaque connected recipes until checked execution; keep them intact through the registered Composition. Field Steps with ordinary changes still return only a Model.
+Calling `create` does not acquire a child implementation, run init, construct handlers, or start a lifecycle. The implementation Layer acquires the registered Binding and receives the child's implementation through its provided Layer. Creation-bearing field results are opaque connected recipes until checked execution; keep them intact through the registered Composition. Field Steps with ordinary changes still return only a Model.
 
 Requests cannot substitute for ready Instances in ordinary Model construction. Use `ChildBlock.Instance.make` to seed a fixture from an already constructed child Model. Restoring a ready snapshot through the Schema does not rerun child init or recreate its Commands.
 
@@ -90,14 +90,14 @@ This path covers required top-level arrays with standard string-keyed Instance s
 
 ### Dynamic storage helpers
 
-The optional `foldkit/bindingInit` module reuses declared storage when dynamic initialization only places a child:
+The optional `foldkit/binding` module reuses declared storage when dynamic initialization only places a child:
 
-| Storage                                                      | Helper          | Existing child         |
-| ------------------------------------------------------------ | --------------- | ---------------------- |
-| Required or optional direct field                            | `initAndSet`    | Replaced               |
-| Option wrapper containing only the key and child fields      | `initAndSet`    | Replaced               |
-| Keyed array with existing `init.instances` and `init.toItem` | `initAndAppend` | Duplicate key rejected |
-| Record or HashMap containing child Models directly           | `initAndInsert` | Duplicate key rejected |
+| Storage                                                 | Helper          | Existing child         |
+| ------------------------------------------------------- | --------------- | ---------------------- |
+| Required or optional direct field                       | `initAndSet`    | Replaced               |
+| Option wrapper containing only the key and child fields | `initAndSet`    | Replaced               |
+| Keyed array with an existing `init.instances` policy    | `initAndAppend` | Duplicate key rejected |
+| Record or HashMap containing child Models directly      | `initAndInsert` | Duplicate key rejected |
 
 Pass the Binding, the current complete parent Model, and the child `args`; keyed storage also takes `key`. Each helper returns the same passive recipe as `Binding.init`, preserving child init Commands and registration requirements. Ordinary folds and operations never create absent children.
 
@@ -107,15 +107,23 @@ For example, assume `MaybeRoomInstanceBinding` declares `field: 'maybeRoomInstan
 
 Direct fields need no startup policy for `initAndSet`. A custom unkeyed accessor may reuse an existing `init.toParentFields` projection. Keep explicit `Binding.init` when creating additional wrapper metadata, changing sibling fields, selecting a different accessor target, adding parent Commands, or replacing an entire tagged parent variant. Do not add a startup policy solely to enable a helper.
 
-For a direct-value map created with `ParentBlock.makeMapBinding`, insertion keeps every other entry and rejects an occupied key before child init. Assume `EditorsBinding` stores Issue editor Models by Issue ID:
+For direct-value storage created with `makeRecordBinding` or `makeHashMapBinding`, insertion keeps every other entry and rejects an occupied key before child init. Assume `EditorsBinding` stores Issue editor Models by Issue ID:
 
 ::Snippet{name="initInsertMappedChild" label="Inserting a mapped child"}
 
-When an existing child should be retained, use `makeInitIfMissingStep(Binding, { key, args })`. It returns a connected Step and derives the map field from the Binding. Construction captures the key and arguments; applying the Step checks the current Model. An existing key preserves the exact parent Model and emits no Commands. An absent key initializes and inserts the child with its init Commands. Both paths require the registered Binding.
+When an existing child should be retained, use `makeInitIfMissingStep`. It returns a connected Step and derives the map field from the Binding. The static form snapshots its key and arguments at construction:
 
 ::Snippet{name="initMappedChildIfMissing" label="Retaining a mapped child"}
 
-Pass the Step directly to `Update.combineSteps` or a compatible update handler. Use the owning Block's `makeStep` when a producer selects or combines Steps. Keep entity lookup and handling of unknown URL IDs in the application.
+When the selection depends on the current Model, pass a producer that returns `Option.some({ key, args })` or `Option.none()`. The Binding contextually supplies the exact parent Model, key, and init argument types. Construction remains passive. The registered graph evaluates the producer exactly once when it interprets the Step, using the current Step Model after any preceding Steps:
+
+::Snippet{name="initMappedChildFromCurrentModel" label="Selecting a mapped child from the current Model"}
+
+`Option.none()` preserves the exact Model, emits no Commands, and does not run child init. `Option.some` has the same identity result when the key already exists; when it is absent, the Step initializes and inserts the child with its init Commands. Every branch, including `None`, requires the original Binding to be registered.
+
+Keep the producer pure. The complete `makeInitIfMissingStep(...)` expression retains its contextual typing when moved into a named value or another module. A producer extracted independently needs a precise parent Model and initializer-tuple return contract, or can be an existing compatible function. Prefer ordinary array literals when the helper provides tuple context. Pass the Step directly to `Update.combineSteps` or a compatible update handler. Use the owning Block's `makeStep` when selecting or combining Steps.
+
+Both forms support only direct-value Record and HashMap storage. Keep entity lookup and handling of unknown URL IDs in the application. Use explicit `Binding.init` for wrappers, custom metadata, or parent Commands.
 
 Wrapped maps keep explicit construction so the parent supplies their metadata. Keyed identity identifies an occurrence; it does not require storing multiple children. Same-key reinitialization does not create a fresh generation or cancel pending work. Replacing a keyed Option with a different key follows ordinary occurrence removal and creation.
 
@@ -135,7 +143,7 @@ Return the initialization recipe intact. Composition retains and lifts every chi
 
 ### Keyed Initial Instances
 
-A keyed-array Binding can declare `init.instances` and `init.toItem`. The first callback selects the ordered keys and exact child init argument tuples. The second builds each stored item from its occurrence and initialized child Model. For a direct child array, it returns that exact child Model with the planned key. For a wrapped array, it returns the parent-owned wrapper containing that exact child Model and key. The parent keeps occurrence IDs and any wrapper metadata outside the child Model.
+A keyed-array Binding declares `init.instances` to select ordered keys and exact child init argument tuples. When the array stores the exact child Models directly, omit `init.toItem`; initialization stores each returned Model and validates its planned key. A wrapped array still requires `init.toItem` to build the parent-owned wrapper containing that exact child Model and key. Keep parent metadata in the explicit adapter.
 
 Return each wrapper as a plain record so its child field keeps the exact initialized object. A wrapper Schema constructor may reconstruct that child and fail the identity check. Composition constructs the full parent Model through its Schema after collecting these records.
 
@@ -147,7 +155,7 @@ The assembler validates the entire occurrence plan before calling child init. Du
 
 This startup adapter applies to exact `field` / `key` keyed arrays, with or without `childField`. General keyed accessors keep explicit initialization so their custom storage and write policy remain visible.
 
-When an array already declares that startup policy, `initAndAppend` from `foldkit/bindingInit` reuses its `init.toItem` for dynamic creation. Pass the Binding, current parent Model, and `{ key, args }`. It returns a passive recipe that initializes and appends one child when the registered Composition interprets it, retaining the child's Commands and preserving the other items and their order. An existing key is rejected. Keep a presence check in an application transition named `init...IfMissing` when an existing occurrence should be retained.
+When an array already declares that startup policy, `initAndAppend` from `foldkit/binding` reuses its direct-storage default or explicit `init.toItem` for dynamic creation. Pass the Binding, current parent Model, and `{ key, args }`. It returns a passive recipe that initializes and appends one child when the registered Composition interprets it, retaining the child's Commands and preserving the other items and their order. An existing key is rejected. Keep a presence check in an application transition named `init...IfMissing` when an existing occurrence should be retained.
 
 Assume `ProjectSettingsBinding` stores `{ projectId, model }` wrappers in `projectSettingsInstances` and already declares `init.toItem`. This Step keeps an existing project editor and initializes an absent one:
 
@@ -204,6 +212,8 @@ The Flags Effect leaves `KeyValueStore` in its requirements, and the Program sup
 #### Server-Supplied Flags
 
 Server rendering provides Flags from the request or build instead of running a client Flags Effect. `Server.renderToString({ block: ApplicationBlock, layer }, { Flags }, { flags })` acquires the selected executable and calls init with those Flags. It encodes the startup data through the Schema and embeds it in the HTML. `Runtime.hydrate` acquires the browser graph, decodes the same startup data and calls the same init, so the client reconstructs the Model that produced the server HTML.
+
+That handoff transfers Flags, not the server Model or Messages. Its Schema encoding and decoding must complete synchronously without Effect Services. This is separate from a fresh client's Flags Effect, which may use Services while obtaining an already decoded Flags value. A static render with `isHydratable: false` emits no Flags handoff and does not run the serialization Codec.
 
 #### Handoff Validation
 

@@ -1,73 +1,76 @@
-import { Schema } from 'effect'
 import type { Block } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { DialogBlock } from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
-import { IssuePriority, IssueStatus } from '../../domain'
 import {
   PriorityListboxBlock,
   StatusListboxBlock,
-  WorkspaceListboxBlock,
+  StringListboxBlock,
 } from '../../listbox'
 import {
-  makeBinding,
   makeComposition,
   makeNoopStep,
   makeOutMessageFold,
-} from './definition'
-import { editDraft } from './draft'
+  makeRequiredFieldBinding,
+} from './block'
+import { editIssueForm } from './draft'
 
-export const DialogBinding = makeBinding(DialogBlock, {
+export const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
   field: 'dialog',
   init: {
     contextToArgs: () => [{ id: 'workspace-create-issue-dialog' }],
   },
 }).withOutMessagePolicy({
-  fold: makeOutMessageFold(DialogBlock, {
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
     CompletedClose: makeNoopStep,
   }),
 })
 
-export const ProjectListboxBinding = makeBinding(WorkspaceListboxBlock, {
-  field: 'projectListbox',
-  init: {
-    contextToArgs: () => [{ id: 'create-issue-project' }],
+export const ProjectListboxBinding = makeRequiredFieldBinding(
+  StringListboxBlock,
+  {
+    field: 'projectListbox',
+    init: {
+      contextToArgs: () => [{ id: 'create-issue-project' }],
+    },
   },
-}).withOutMessagePolicy({
-  fold: makeOutMessageFold(WorkspaceListboxBlock, {
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(StringListboxBlock, {
     Selected: ({ value }) =>
-      editDraft(model => modifyFields(model, { projectId: () => value })),
+      editIssueForm(model => modifyFields(model, { projectId: () => value })),
   }),
 })
 
-export const StatusListboxBinding = makeBinding(StatusListboxBlock, {
-  field: 'statusListbox',
-  init: {
-    contextToArgs: () => [{ id: 'create-issue-status' }],
+export const StatusListboxBinding = makeRequiredFieldBinding(
+  StatusListboxBlock,
+  {
+    field: 'statusListbox',
+    init: {
+      contextToArgs: () => [{ id: 'create-issue-status' }],
+    },
   },
-}).withOutMessagePolicy({
+).withOutMessagePolicy({
   fold: makeOutMessageFold(StatusListboxBlock, {
     Selected: ({ value }) =>
-      Schema.is(IssueStatus)(value)
-        ? editDraft(model => modifyFields(model, { status: () => value }))
-        : makeNoopStep(),
+      editIssueForm(model => modifyFields(model, { status: () => value })),
   }),
 })
 
-export const PriorityListboxBinding = makeBinding(PriorityListboxBlock, {
-  field: 'priorityListbox',
-  init: {
-    contextToArgs: () => [{ id: 'create-issue-priority' }],
+export const PriorityListboxBinding = makeRequiredFieldBinding(
+  PriorityListboxBlock,
+  {
+    field: 'priorityListbox',
+    init: {
+      contextToArgs: () => [{ id: 'create-issue-priority' }],
+    },
   },
-}).withOutMessagePolicy({
+).withOutMessagePolicy({
   fold: makeOutMessageFold(PriorityListboxBlock, {
     Selected: ({ value }) =>
-      Schema.is(IssuePriority)(value)
-        ? editDraft(model => modifyFields(model, { priority: () => value }))
-        : makeNoopStep(),
+      editIssueForm(model => modifyFields(model, { priority: () => value })),
   }),
 })
 

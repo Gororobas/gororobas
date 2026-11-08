@@ -7,14 +7,13 @@ import { Message, OutMessage } from './settings/message'
 import { Model } from './settings/model'
 
 export const SettingsKey = Symbol('Settings')
-
 export const SettingsBlock = Block.make('Settings', {
   key: SettingsKey,
   Model,
   Message,
   InMessage,
   OutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   inMessageOutputs: {
     RequestedThemeChange: { outMessage: OutMessage.ChangedTheme },
   },

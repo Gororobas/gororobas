@@ -185,7 +185,9 @@ export const modelAwareContextualConnectedUpdate =
 export const modelAwareContextualChildReport =
   modelAwareContextualConnectedUpdate(ParentMessage.RequestedReport())
 
-export const makeGenericCounter = <Value>(Value: Schema.Schema<Value>) => {
+export const makeGenericCounter = <Value, Encoded>(
+  Value: Schema.Codec<Value, Encoded, never, never>,
+) => {
   const Model = Schema.Struct({ value: Value })
   const Message = defineMessageUnion({ RequestedSet: { value: Value } })
   const Definition = Block.makeDefinition('MessageOnlyGeneric', {
@@ -202,7 +204,9 @@ export const makeGenericCounter = <Value>(Value: Schema.Schema<Value>) => {
 }
 export const setString = makeGenericCounter(Schema.String)
 
-export const makeModelAwareCounter = <Value>(Value: Schema.Schema<Value>) => {
+export const makeModelAwareCounter = <Value, Encoded>(
+  Value: Schema.Codec<Value, Encoded, never, never>,
+) => {
   const Model = Schema.Struct({ value: Value })
   const Message = defineMessageUnion({ RequestedSet: { value: Value } })
   const Definition = Block.makeDefinition('ModelAwareGeneric', {
@@ -300,6 +304,7 @@ export type ExactContextualOutMessage = Expect<
     typeof OutMessage.Type
   >
 >
+
 export type ExactContextualSilentRequirements = Expect<
   Equal<
     Update.RequirementsOf<
@@ -315,4 +320,23 @@ export type ExactContextualRegistration = Expect<
     >,
     Block.RequirementOfBinding<typeof ChildBinding>
   >
+>
+
+export const MessageFreeModel = Schema.Struct({ count: Schema.Number })
+export type MessageFreeModel = typeof MessageFreeModel.Type
+const MessageFreeMessage = defineMessageUnion({})
+export const MessageFreeFieldsKey = Symbol('MessageFreeFields')
+export const MessageFreeFieldsBlock = Block.make('MessageFreeFields', {
+  key: MessageFreeFieldsKey,
+  Model: MessageFreeModel,
+  Message: MessageFreeMessage,
+  InitArgs: Schema.Tuple([]),
+})
+export const { makeFieldsStep: makeMessageFreeFieldsStep } =
+  MessageFreeFieldsBlock
+export const incrementWithoutMessages = makeMessageFreeFieldsStep(() => ({
+  count: Number.increment,
+}))
+export type ExactMessageFreeRequirements = Expect<
+  Equal<Update.RequirementsOf<typeof incrementWithoutMessages>, never>
 >

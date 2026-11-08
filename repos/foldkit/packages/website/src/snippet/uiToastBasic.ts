@@ -1,11 +1,8 @@
-import { Effect, Layer, Option, Schema } from 'effect'
+import { Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  layer as ToastLayer,
-  makeBlock as makeToastBlock,
-} from '@foldkit/ui/toast'
+import { Toast as UiToast } from '@foldkit/ui'
 
 // Define the payload shape for your toast. Toast owns the entry lifecycle,
 // accessibility role, optional dismiss timer, hover state, and swipe state.
@@ -18,7 +15,7 @@ const ToastPayload = Schema.Struct({
 })
 type ToastPayload = typeof ToastPayload.Type
 // The payload Schema refines Toast's Model, OutMessage, and public operations.
-export const Toast = makeToastBlock(ToastPayload)
+export const Toast = UiToast.makeBlock(ToastPayload)
 
 // Add Toast.Model to your app Model. Track anything you want to lift from
 // a toast's lifecycle alongside it. Here, the last dismissed bodyText so
@@ -37,37 +34,41 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const NotificationsKey = Symbol('Notifications')
-
 export const NotificationsBlock = Block.make('Notifications', {
   key: NotificationsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = NotificationsBlock
+const {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = NotificationsBlock
 
 // At module scope, fold the OutMessage into your own Model, lifting the
 // DismissedToast event into domain state. The arm returns an Update.Step over
 // the parent Model, which already has the next Toast Model written back. The
 // parent Block infers the factory-refined payload from the whole Block:
-const foldToastOutMessage = NotificationsBlock.makeOutMessageFold(Toast, {
-  DismissedToast: ({ payload }) =>
-    makeFieldsStep(() => ({
-      maybeLastDismissedBody: () => Option.some(payload.bodyText),
-    })),
-})
-
 // The Binding retains the child contract; construction supplies its implementation.
-const ToastBinding = NotificationsBlock.makeBinding(Toast, {
+const ToastBinding = makeRequiredFieldBinding(Toast, {
   field: 'toast',
   init: {
     contextToArgs: () => [{ id: 'app-toast', swipeToDismiss: {} }],
   },
-}).withOutMessagePolicy({ fold: foldToastOutMessage })
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Toast, {
+    DismissedToast: ({ payload }) =>
+      makeFieldsStep(() => ({
+        maybeLastDismissedBody: () => Option.some(payload.bodyText),
+      })),
+  }),
+})
 
-const NotificationsComposition = NotificationsBlock.makeComposition({
+const NotificationsComposition = makeComposition({
   bindings: [ToastBinding],
 })
 
@@ -146,15 +147,8 @@ const view = NotificationsComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = NotificationsBlock.makeLayer(
-  Effect.gen(function* () {
-    const toast = yield* ToastBinding
-
-    return {
-      children: [toast],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(ToastLayer))
+export const layer = NotificationsBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(UiToast.layer))

@@ -1,10 +1,15 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { DragAndDropBlock, maybeDraggedItemId } from '@foldkit/ui/dragAndDrop'
+import { DragAndDrop } from '@foldkit/ui'
 
+import {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from '../block'
 import { SaveBoard } from '../command'
-import { ApplicationBlock, makeFieldsStep, makeStep } from '../definition'
 import { Column } from '../domain'
 
 const findCardTitle = (
@@ -34,8 +39,8 @@ const findColumnName = (
     }),
   )
 
-const foldDragAndDropOutMessage = ApplicationBlock.makeOutMessageFold(
-  DragAndDropBlock,
+const foldDragAndDropOutMessage = makeOutMessageFold(
+  DragAndDrop.DragAndDropBlock,
   {
     StartedKeyboardDrag: ({ itemId }) =>
       makeFieldsStep(model => ({
@@ -73,17 +78,20 @@ const foldDragAndDropOutMessage = ApplicationBlock.makeOutMessageFold(
     Cancelled: (_outMessage, { modelBeforeUpdate }) =>
       makeFieldsStep(() => ({
         announcement: () =>
-          Option.match(maybeDraggedItemId(modelBeforeUpdate.dragAndDrop), {
-            onNone: () => 'Drag cancelled.',
-            onSome: id =>
-              `Drag cancelled, ${findCardTitle(modelBeforeUpdate.columns, id)} returned to original position.`,
-          }),
+          Option.match(
+            DragAndDrop.maybeDraggedItemId(modelBeforeUpdate.dragAndDrop),
+            {
+              onNone: () => 'Drag cancelled.',
+              onSome: id =>
+                `Drag cancelled, ${findCardTitle(modelBeforeUpdate.columns, id)} returned to original position.`,
+            },
+          ),
       })),
   },
 )
 
-export const DragAndDropBinding = ApplicationBlock.makeBinding(
-  DragAndDropBlock,
+export const DragAndDropBinding = makeRequiredFieldBinding(
+  DragAndDrop.DragAndDropBlock,
   {
     field: 'dragAndDrop',
     init: { contextToArgs: () => [{ id: 'kanban' }] },

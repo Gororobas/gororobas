@@ -52,13 +52,13 @@ export const EncodedItem = Schema.Number.pipe(
 )
 export const EncodedPicker = Combobox.makeBlock(EncodedItem)
 export const MultiPicker = Combobox.Multi.makeBlock(Item)
-export const ListPicker = Listbox.makeBlock<'Apple' | 'Pear'>()
-export const MultiListPicker = Listbox.Multi.makeBlock<'Apple' | 'Pear'>()
+export const ListPicker = Listbox.makeBlock(Item)
+export const MultiListPicker = Listbox.Multi.makeBlock(Item)
 export const MenuPicker = Menu.makeBlock<'Apple' | 'Pear'>()
 const MenuFoldModel = Schema.Struct({ selected: Item })
 export const MenuFoldFixtureBlock = Block.make('MenuFoldFixture', {
   key: MenuFoldFixtureKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: MenuFoldModel,
   Message: Schema.Never,
 })
@@ -122,11 +122,11 @@ const ToastFixtureModel = Schema.Struct({
 })
 const ToastFixtureBlock = Block.make('ToastFixture', {
   key: ToastFixtureKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: ToastFixtureModel,
   Message: Schema.Never,
 })
-export const ToastBinding = ToastFixtureBlock.makeBinding(ToastBlock, {
+export const ToastBinding = ToastFixtureBlock.makeCustomBinding(ToastBlock, {
   placement: 'Toast',
   read: model => Option.some(model.toast),
   write: (model, toast) => Struct.modifyFields(model, { toast: () => toast }),
@@ -135,7 +135,7 @@ export const ToastBinding = ToastFixtureBlock.makeBinding(ToastBlock, {
     DismissedToast: () => ToastFixtureBlock.makeNoopStep(),
   }),
 })
-export const OtherToastBinding = ToastFixtureBlock.makeBinding(
+export const OtherToastBinding = ToastFixtureBlock.makeCustomBinding(
   OtherToastBlock,
   {
     placement: 'OtherToast',
@@ -158,7 +158,7 @@ const ToastInstance = Schema.Struct({
 })
 const KeyedToastFixtureBlock = Block.make('KeyedToastFixture', {
   key: KeyedToastFixtureKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: Schema.Struct({ toasts: Schema.Array(ToastInstance) }),
   Message: Schema.Never,
 })
@@ -168,7 +168,7 @@ const foldKeyedToastOutMessage = KeyedToastFixtureBlock.makeOutMessageFold(
     DismissedToast: () => KeyedToastFixtureBlock.makeNoopStep(),
   },
 )
-export const KeyedToastBinding = KeyedToastFixtureBlock.makeBinding(
+export const KeyedToastBinding = KeyedToastFixtureBlock.makeKeyedArrayBinding(
   ToastBlock,
   {
     field: 'toasts',
@@ -188,7 +188,7 @@ const DragAndDropFixtureModel = Schema.Struct({
 })
 const DragAndDropFixtureBlock = Block.make('DragAndDropFixture', {
   key: DragAndDropFixtureKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: DragAndDropFixtureModel,
   Message: Schema.Never,
 })
@@ -201,7 +201,7 @@ const foldDragAndDropOutMessage = DragAndDropFixtureBlock.makeOutMessageFold(
     Cancelled: () => DragAndDropFixtureBlock.makeNoopStep(),
   },
 )
-export const DragAndDropBinding = DragAndDropFixtureBlock.makeBinding(
+export const DragAndDropBinding = DragAndDropFixtureBlock.makeCustomBinding(
   DragAndDrop.DragAndDropBlock,
   {
     placement: 'DragAndDrop',
@@ -228,7 +228,7 @@ const DragAndDropInstance = Schema.Struct({
 })
 const KeyedDragAndDropFixtureBlock = Block.make('KeyedDragAndDropFixture', {
   key: KeyedDragAndDropFixtureKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: Schema.Struct({
     dragAndDrops: Schema.Array(DragAndDropInstance),
   }),
@@ -244,26 +244,27 @@ const foldKeyedDragAndDropOutMessage =
       Cancelled: () => KeyedDragAndDropFixtureBlock.makeNoopStep(),
     },
   )
-export const KeyedDragAndDropBinding = KeyedDragAndDropFixtureBlock.makeBinding(
-  DragAndDrop.DragAndDropBlock,
-  {
-    placement: 'DragAndDrops',
-    keySchema: Schema.Literal('Primary'),
-    readAll: model => model.dragAndDrops,
-    key: instance => instance.id,
-    read: instance => instance.model,
-    writeAt: (model, key, nextDragAndDrop) =>
-      Struct.modifyFields(model, {
-        dragAndDrops: Array.map(instance =>
-          instance.id === key
-            ? DragAndDropInstance.make({ id: key, model: nextDragAndDrop })
-            : instance,
-        ),
-      }),
-  },
-).withOutMessagePolicy({
-  fold: (_key, outMessage) => foldKeyedDragAndDropOutMessage(outMessage),
-})
+export const KeyedDragAndDropBinding =
+  KeyedDragAndDropFixtureBlock.makeCustomKeyedBinding(
+    DragAndDrop.DragAndDropBlock,
+    {
+      placement: 'DragAndDrops',
+      keySchema: Schema.Literal('Primary'),
+      readAll: model => model.dragAndDrops,
+      key: instance => instance.id,
+      read: instance => instance.model,
+      writeAt: (model, key, nextDragAndDrop) =>
+        Struct.modifyFields(model, {
+          dragAndDrops: Array.map(instance =>
+            instance.id === key
+              ? DragAndDropInstance.make({ id: key, model: nextDragAndDrop })
+              : instance,
+          ),
+        }),
+    },
+  ).withOutMessagePolicy({
+    fold: (_key, outMessage) => foldKeyedDragAndDropOutMessage(outMessage),
+  })
 export const settleKeyedDragAndDropFocus = DragAndDrop.test.settleFocus({
   binding: KeyedDragAndDropBinding,
   key: 'Primary',
@@ -285,18 +286,16 @@ const AnimationInstance = Schema.Struct({
 })
 const KeyedAnimationFixtureBlock = Block.make('KeyedAnimationFixture', {
   key: KeyedAnimationFixtureKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model: Schema.Struct({ animations: Schema.Array(AnimationInstance) }),
   Message: Schema.Never,
 })
-export const KeyedAnimationBinding = KeyedAnimationFixtureBlock.makeBinding(
-  Animation.AnimationBlock,
-  {
+export const KeyedAnimationBinding =
+  KeyedAnimationFixtureBlock.makeKeyedArrayBinding(Animation.AnimationBlock, {
     field: 'animations',
     key: 'id',
     childField: 'model',
-  },
-)
+  })
 const makeKeyedAnimationOutMessageFold = (key: 'Primary') =>
   KeyedAnimationFixtureBlock.makeOutMessageFold(Animation.AnimationBlock, {
     StartedLeaveAnimating: () =>
@@ -326,13 +325,13 @@ export const ParentMessage = Message.defineMessageUnion({
 })
 export const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message: ParentMessage,
 })
 
-export const AnimationBinding = ApplicationBlock.makeBinding(
+export const AnimationBinding = ApplicationBlock.makeRequiredFieldBinding(
   Animation.AnimationBlock,
   {
     field: 'animation',
@@ -350,10 +349,13 @@ const foldAnimationOutMessage = ApplicationBlock.makeOutMessageFold(
 export const AnimationBindingWithOutMessagePolicy =
   AnimationBinding.withOutMessagePolicy({ fold: foldAnimationOutMessage })
 
-export const DialogBinding = ApplicationBlock.makeBinding(Dialog.DialogBlock, {
-  field: 'dialog',
-  init: { contextToArgs: () => [{ id: 'details' }] },
-}).withOutMessagePolicy({
+export const DialogBinding = ApplicationBlock.makeRequiredFieldBinding(
+  Dialog.DialogBlock,
+  {
+    field: 'dialog',
+    init: { contextToArgs: () => [{ id: 'details' }] },
+  },
+).withOutMessagePolicy({
   fold: ApplicationBlock.makeOutMessageFold(Dialog.DialogBlock, {
     Opened: () => ApplicationBlock.makeNoopStep(),
     Closed: () => ApplicationBlock.makeNoopStep(),
@@ -361,7 +363,7 @@ export const DialogBinding = ApplicationBlock.makeBinding(Dialog.DialogBlock, {
   }),
 })
 
-export const PickerBinding = ApplicationBlock.makeBinding(Picker, {
+export const PickerBinding = ApplicationBlock.makeRequiredFieldBinding(Picker, {
   field: 'picker',
   init: { contextToArgs: () => [{ id: 'fruit' }] },
 }).withOutMessagePolicy({
@@ -381,7 +383,7 @@ export const PickerBinding = ApplicationBlock.makeBinding(Picker, {
   }),
 })
 
-export const PopoverBinding = ApplicationBlock.makeBinding(
+export const PopoverBinding = ApplicationBlock.makeRequiredFieldBinding(
   Popover.PopoverBlock,
   {
     field: 'popover',
@@ -600,7 +602,7 @@ export type GenericAssertions = [
   >,
   Expect<
     Equal<
-      Parameters<SliderExecutable['operations']['informRangeChange']>,
+      Parameters<SliderExecutable['operations']['informOfRangeChange']>,
       [
         model: typeof Slider.SliderBlock.Model.Type,
         payload: Block.OperationPayload<
@@ -611,13 +613,13 @@ export type GenericAssertions = [
   >,
   Expect<
     Equal<
-      Parameters<RootSliderExecutable['operations']['informRangeChange']>,
-      Parameters<SliderExecutable['operations']['informRangeChange']>
+      Parameters<RootSliderExecutable['operations']['informOfRangeChange']>,
+      Parameters<SliderExecutable['operations']['informOfRangeChange']>
     >
   >,
   Expect<
     Equal<
-      Parameters<TooltipExecutable['operations']['informShowDelayChanged']>,
+      Parameters<TooltipExecutable['operations']['informOfShowDelayChanged']>,
       [model: typeof Tooltip.TooltipBlock.Model.Type, showDelay: Duration.Input]
     >
   >,
@@ -633,13 +635,13 @@ export type GenericAssertions = [
 ]
 
 export const sliderRangeChange = Story.withBlock(Slider.SliderBlock, slider =>
-  slider.operations.informRangeChange(
+  slider.operations.informOfRangeChange(
     slider.init({ id: 'volume', min: 0, max: 100, step: 1 }).model,
     { min: 10, max: 90 },
   ),
 ).pipe(Effect.provide(Slider.layer))
 export const rootSliderRangeChange = Story.withBlock(RootSlider, slider =>
-  slider.operations.informRangeChange(
+  slider.operations.informOfRangeChange(
     slider.init({ id: 'root-volume', min: 0, max: 100, step: 1 }).model,
     { min: 20, max: 80 },
   ),
@@ -647,7 +649,7 @@ export const rootSliderRangeChange = Story.withBlock(RootSlider, slider =>
 export const tooltipDelayFromString = Story.withBlock(
   Tooltip.TooltipBlock,
   tooltip =>
-    tooltip.operations.informShowDelayChanged(
+    tooltip.operations.informOfShowDelayChanged(
       tooltip.init({ id: 'help' }).model,
       '250 millis',
     ),
@@ -655,7 +657,7 @@ export const tooltipDelayFromString = Story.withBlock(
 export const tooltipDelayFromNumber = Story.withBlock(
   Tooltip.TooltipBlock,
   tooltip =>
-    tooltip.operations.informShowDelayChanged(
+    tooltip.operations.informOfShowDelayChanged(
       tooltip.init({ id: 'details' }).model,
       300,
     ),
@@ -663,7 +665,7 @@ export const tooltipDelayFromNumber = Story.withBlock(
 export const tooltipDelayFromDuration = Story.withBlock(
   Tooltip.TooltipBlock,
   tooltip =>
-    tooltip.operations.informShowDelayChanged(
+    tooltip.operations.informOfShowDelayChanged(
       tooltip.init({ id: 'settings' }).model,
       Duration.millis(350),
     ),
@@ -698,7 +700,7 @@ const WithViewAndOutMessageBlock = Block.make('WithViewAndOutMessage', {
   Model: ShapeModel,
   Message: ShapeMessage,
   OutMessage: ShapeOutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: {
     kind: 'Element',
     Inputs: Block.makeInputContract<ShapeViewInputs>(),
@@ -729,7 +731,7 @@ const WithOutMessageOnlyBlock = Block.make('WithOutMessageOnly', {
   Model: ShapeModel,
   Message: ShapeMessage,
   OutMessage: ShapeOutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const WithOutMessageOnlyComposition = WithOutMessageOnlyBlock.makeComposition()
 export const WithOutMessageOnly = WithOutMessageOnlyBlock
@@ -751,7 +753,7 @@ const WithViewOnlyBlock = Block.make('WithViewOnly', {
   key: WithViewOnlyKey,
   Model: ShapeModel,
   Message: ShapeMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element', Inputs: Block.makeInputContract<ShapeViewInputs>() },
 })
 const WithViewOnlyComposition = WithViewOnlyBlock.makeComposition()
@@ -777,7 +779,7 @@ const WithoutViewOrOutMessageBlock = Block.make('WithoutViewOrOutMessage', {
   key: WithoutViewOrOutMessageKey,
   Model: ShapeModel,
   Message: ShapeMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const WithoutViewOrOutMessageComposition =
   WithoutViewOrOutMessageBlock.makeComposition()
@@ -933,7 +935,7 @@ export type ExactSliderRangeOutMessage = Expect<
   Equal<
     Exclude<
       ReturnType<
-        SliderExecutable['operations']['informRangeChange']
+        SliderExecutable['operations']['informOfRangeChange']
       >['outMessage'],
       undefined
     >,
@@ -944,7 +946,7 @@ export type ExactRootSliderRangeOutMessage = Expect<
   Equal<
     Exclude<
       ReturnType<
-        RootSliderExecutable['operations']['informRangeChange']
+        RootSliderExecutable['operations']['informOfRangeChange']
       >['outMessage'],
       undefined
     >,

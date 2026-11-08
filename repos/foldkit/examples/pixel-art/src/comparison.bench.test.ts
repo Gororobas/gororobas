@@ -4,7 +4,7 @@
  * Run: pnpm --filter pixel-art-example exec vitest run src/comparison.bench.ts
  */
 import { Option } from 'effect'
-import * as Story from 'foldkit/story'
+import { Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { it } from '@effect/vitest'
@@ -12,8 +12,8 @@ import { it } from '@effect/vitest'
 import { createEmptyGrid as createReactGrid } from '../../../comparisons/pixel-art-react/src/grid'
 import { reducer } from '../../../comparisons/pixel-art-react/src/reducer'
 import type { State } from '../../../comparisons/pixel-art-react/src/types'
-import { ApplicationBlock, layer } from './block'
 import { createEmptyGrid as createFoldkitGrid } from './grid'
+import { ApplicationBlock, layer } from './index'
 import { Message } from './message'
 import type { Model } from './model'
 

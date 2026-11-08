@@ -87,10 +87,10 @@ A Binding fold or named operation returns a connected Step whose Model input req
 
 When the OutMessage is already known while constructing a new result, include it directly. Use `Update.withOutMessage` when attaching an OutMessage to an existing plain return or when the value has the type `OutMessage | undefined`. Pipe an existing return into the helper, and pass a new result literal first. Flag local attachment helpers and conditional object spreads that duplicate it.
 
-A child with OutMessages needs an explicit `withOutMessagePolicy` selection. Flag a missing policy, an old `outMessage` field inside `makeBinding` config, and a policy-selected value omitted from Composition registration. A local fold may handle variants that also continue upward; its derived OutMessage takes precedence for that dispatch.
+A child with OutMessages needs an explicit `withOutMessagePolicy` selection. Flag a missing policy, an old `outMessage` field inside a Binding configuration, and a policy-selected value omitted from Composition registration. A local fold may handle variants that also continue upward; its derived OutMessage takes precedence for that dispatch.
 
-Inline an ordinary unkeyed policy as
-`makeBinding(WholeChildBlock, ...).withOutMessagePolicy({ fold: FeatureBlock.makeOutMessageFold(WholeChildBlock, handlers) })`.
+For a required-field child, inline an ordinary policy as
+`FeatureBlock.makeRequiredFieldBinding(WholeChildBlock, ...).withOutMessagePolicy({ fold: FeatureBlock.makeOutMessageFold(WholeChildBlock, handlers) })`.
 Flag a raw child matcher, repeated Step or refined payload generics, and a
 wrapper that data-first matches inside the fold. Every fold passes the whole
 passive child contract explicitly, whether inline, extracted, adapted for keyed policy,
@@ -110,7 +110,7 @@ annotations, generic argument lists, or a raw matcher as a recursion workaround.
 
 Use `FeatureBlock.makeFieldsStep(producer)` for owning field transformations, `FeatureBlock.makeCommandsStep(producer)` for Commands with an unchanged Model, and `FeatureBlock.makeOutMessageStep(producer)` for one declared OutMessage with an unchanged Model.
 
-In a split feature, export the Step helpers used by the implementation from `definition.ts` and named-import them in implementation modules. In a colocated feature, destructure those helpers beside the Block declaration in the scope that uses them. Keep Block-qualified calls when several Blocks in one module need visible ownership. Feature barrels keep authoring helpers private and export the passive Block contract and construction `layer`.
+In a split feature, export the Step helpers used by the implementation from `block.ts` and named-import them in implementation modules. In a colocated feature, destructure those helpers beside the Block declaration in the scope that uses them. Keep Block-qualified calls when several Blocks in one module need visible ownership. Feature barrels keep authoring helpers private and export the passive Block contract and construction `layer`.
 
 Put reusable parent Steps shared by update, inMessageUpdate, composition, or init in the owning Block's `steps.ts`, or in responsibility modules such as `steps/search.ts` with an explicit `steps/index.ts` barrel. Ownership follows the Model being transformed. Keep Message routing in update and Binding registration and child OutMessage policy in composition; colocate Steps used by only one responsibility. Name shared transitions for their operation, without a `make` prefix or `Step` suffix, and defer cyclic Binding access until the producer is applied.
 
@@ -148,7 +148,11 @@ A Message named `Incremented` describes the resulting state change, not the user
 
 ### `view-named-after-namespace`
 
-Name the feature's primary implementation `view`, rather than repeating its feature name as `counter`, `home`, or `room`. Pass that implementation from the Block constructor. Parents render through a Binding declared from the passive child contract with `ChildBinding.embedView`; do not export a parallel loose view solely for parent embedding.
+Name the feature's primary implementation `view`, rather than repeating its feature name as `counter`, `home`, or `room`. Pass that implementation in the Block implementation record. Parents render through a Binding declared from the passive child contract with `ChildBinding.embedView`; do not export a parallel loose view solely for parent embedding.
+
+### `whole-model-render-helper`
+
+An extracted renderer accepts the whole Model but reads one field or calls a selector only to obtain one derived value. Pass the field, derived value, or child Model that the helper renders. Keep the whole Model at the primary Block view or a cohesive composer that coordinates most of the same state. Do not replace the broad parameter with a ViewModel that merely bundles the same slices.
 
 ### `schema-type-aliases`
 
@@ -156,7 +160,7 @@ Declare a Schema's same-named decoded type immediately below it, with no blank l
 
 Inside a feature, use its local aliases. Across a child boundary, derive a named alias from the passive contract, such as `type ChildModel = typeof ChildBlock.Model.Type`. Parent Schemas use `ChildBlock.Model` without importing the implementation. `ChildBlock = Block.make(...)` establishes this boundary before implementation inference; a decoded alias does not replace it. The passive contract's Message contains local constructors. The acquired executable's Message Codec includes generated child envelopes for its selected graph.
 
-For ordinary source features, complete the implementation with `ChildBlock.makeLayer(Effect.gen(...))`, yield its registered Bindings, and return the acquired connections under `children` with the portable builders and local effects. Feature barrels export the passive `ChildBlock` and construction `layer`; only completion imports child implementation Layers. Program and Server receive `{ block: ApplicationBlock, layer }`. Do not require a preparation producer or assembly annotation. Preserve meaningful named generic library contracts and independently public domain Schemas. Flag casts, broad annotations, `satisfies`-only boundaries, another Definition, or a repeated generic factory call used to obtain a child Model.
+For ordinary source features, complete the implementation with `ChildBlock.makeLayer({ init, update, view, ... })`; init selects the Composition's registered Binding inventory and Foldkit acquires it automatically. Feature barrels export the passive `ChildBlock` and construction `layer`; only completion imports child implementation Layers. Reserve the explicit Effect constructor and `children` result for genuine graph-construction dependencies, scoped resources, or code that uses acquired handles. Program and Server receive `{ block: ApplicationBlock, layer }`. Do not require a preparation producer or assembly annotation. Preserve meaningful named generic library contracts and independently public domain Schemas. Flag casts, broad annotations, `satisfies`-only boundaries, another Definition, or a repeated generic factory call used to obtain a child Model.
 
 ## Effect and Foldkit idiom
 
@@ -204,7 +208,7 @@ A `keyed(...)` whose key is built from displayed data (concatenated booleans, a 
 
 ### `authored-child-delivery-message`
 
-Flattening a child's Message variants into the parent's `defineMessageUnion()` record makes every parent handler know the child's tag names, and an authored `GotChildMessage` wrapper duplicates routing metadata that the Binding already owns. The canonical Block pattern keeps the authored parent Message local and lets `makeBinding` derive a generated envelope from the passive child contract. The acquired executable's complete Message Codec includes that envelope and routes it to the exact placement, key, and live generation. Use `delivery.when`, `delivery.toUpdateContext`, and `keySchema` for parent policy instead of adding child variants or mappers to the authored union.
+Flattening a child's Message variants into the parent's `defineMessageUnion()` record makes every parent handler know the child's tag names, and an authored `GotChildMessage` wrapper duplicates routing metadata that the Binding already owns. The canonical Block pattern keeps the authored parent Message local and lets the Binding derive a generated envelope from the passive child contract. The acquired executable's complete Message Codec includes that envelope and routes it to the exact placement, key, and live generation. Use `delivery.when`, `delivery.toUpdateContext`, and a custom keyed Binding's `keySchema` for parent policy instead of adding child variants or mappers to the authored union. A Message-free child has no delivery envelope and omits those delivery fields.
 
 ## Accessibility
 
@@ -230,4 +234,8 @@ Present but with no `expect(...)` and no interactive resolution in a block is th
 
 ## Construction and test ownership
 
-Do not run init while constructing an implementation graph or evaluate `contextToArgs` before parent startup. The constructor yields static Bindings and returns acquired `children`; the Model still owns child presence and keyed membership. Keep request Services in their attached handler constructors. A pure Story or Scene acquires the graph without running handlers, so it should not need an HTTP/socket mock unless construction itself requests that Service. Use the scoped Block-aware runner or `withBlock` for an advanced fixture; never retain a globally acquired executable across tests. A passive contract's local Message constructors are not the acquired graph's complete serialization Codec.
+Do not run init while constructing an implementation graph or evaluate `contextToArgs` before parent startup. Ordinary completion acquires init's static Binding inventory; the Model still owns child presence and keyed membership. Keep request Services in their attached handler constructors. A pure Story or Scene acquires the graph without running handlers, so it should not need an HTTP/socket mock unless custom graph construction itself requests that Service. Use the scoped Block-aware runner or `withBlock` for an advanced fixture; never retain a globally acquired executable across tests. A passive contract's local Message constructors are not the acquired graph's complete serialization Codec. Codec checks inspect the graph statically and run transformations only when a real serialization boundary receives a real value.
+
+## Block file and authoring boundaries
+
+Do not confuse the passive Block declaration in `block.ts`, implementation construction in `layer.ts`, and the local handler bundle in `effectsLayer.ts`. Named-import needed authoring helpers from `block.ts`. Declare ordinary InMessage unions with `defineInMessageUnion`; keep local Messages and OutMessages on `defineMessageUnion`. A generated InMessage method already returns a connected Step; do not recreate it with an operation alias or wrapper. Extracted Step callbacks can need a precise Message-parameter annotation; a single explicit Message type argument is not a supported inference shortcut. Application behavior still belongs in Story/Scene DSL steps, including when an acquired fixture is needed.

@@ -4,12 +4,14 @@ import { expect } from 'vitest'
 import { it } from '@effect/vitest'
 
 import * as Block from '../../block/public.js'
-import { defineMessageUnion } from '../../message/index.js'
+import { defineInMessageUnion } from '../../message/index.js'
 import { withBlock } from '../layered/testing/withBlock.js'
 
 const Model = Schema.Struct({ value: Schema.Number })
-const InMessage = defineMessageUnion({ RequestedSet: { value: Schema.Number } })
-const OtherInMessage = defineMessageUnion({ RequestedOther: {} })
+const InMessage = defineInMessageUnion({
+  RequestedSet: { value: Schema.Number },
+})
+const OtherInMessage = defineInMessageUnion({ RequestedOther: {} })
 const FamilyInputKey = Symbol('FamilyInputReview')
 const Definition = Block.makeFamilyDefinition('FamilyInputReview', {
   key: FamilyInputKey,
@@ -17,7 +19,7 @@ const Definition = Block.makeFamilyDefinition('FamilyInputReview', {
   Message: Schema.Never,
   InMessage,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const Composition = Definition.makeComposition()
 const recipe = Definition.makeBlock(

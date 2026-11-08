@@ -1,25 +1,14 @@
 import {} from 'effect'
-import {
-  Command,
-  expectNoOutMessage,
-  expectOutMessage,
-  given,
-  inMessage,
-  init,
-  message,
-  model,
-  story,
-  withBlock,
-} from 'foldkit/story'
+import { Story } from 'foldkit'
 import { describe, expect } from 'vitest'
 
 import { it } from '@effect/vitest'
-import { DialogBlock, test as DialogTest } from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
-import { layer } from './block'
+import { CommandPaletteBlock } from './block'
 import { ScrollActiveResult } from './command'
-import { CommandPaletteBlock } from './definition'
 import { InMessage } from './inMessage'
+import { layer } from './layer'
 import { Message } from './message'
 import { OutMessage } from './outMessage'
 import { ResultTarget } from './resultTarget'
@@ -28,38 +17,38 @@ describe('CommandPaletteBlock', () => {
   it.effect(
     'initializes closed and resets its search when the user closes it',
     () => {
-      return story(
+      return Story.story(
         { block: CommandPaletteBlock, layer },
-        init(),
-        model(model => {
+        Story.init(),
+        Story.model(model => {
           expect(model.dialog.isOpen).toBe(false)
         }),
-        inMessage(InMessage.RequestedOpen()),
-        Command.resolve(
-          DialogTest.ShowDialog,
-          DialogBlock.Message.SucceededShowDialog(),
+        Story.inMessage(InMessage.RequestedOpen()),
+        Story.Command.resolve(
+          Dialog.test.ShowDialog,
+          Dialog.DialogBlock.Message.SucceededShowDialog(),
         ),
-        message(Message.UpdatedQuery({ value: 'workspace' })),
-        Command.resolve(
+        Story.message(Message.UpdatedQuery({ value: 'workspace' })),
+        Story.Command.resolve(
           ScrollActiveResult({ index: 0 }),
           Message.CompletedScrollActiveResult(),
         ),
-        message(Message.PressedNextResult({ resultCount: 3 })),
-        Command.resolve(
+        Story.message(Message.PressedNextResult({ resultCount: 3 })),
+        Story.Command.resolve(
           ScrollActiveResult({ index: 1 }),
           Message.CompletedScrollActiveResult(),
         ),
-        inMessage(InMessage.RequestedClose()),
-        Command.resolve(
-          DialogTest.CloseDialog,
-          DialogBlock.Message.CompletedCloseDialog(),
+        Story.inMessage(InMessage.RequestedClose()),
+        Story.Command.resolve(
+          Dialog.test.CloseDialog,
+          Dialog.DialogBlock.Message.CompletedCloseDialog(),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.dialog.isOpen).toBe(false)
           expect(model.query).toBe('')
           expect(model.activeResultIndex).toBe(0)
         }),
-        expectNoOutMessage(),
+        Story.expectNoOutMessage(),
       )
     },
   )
@@ -67,37 +56,41 @@ describe('CommandPaletteBlock', () => {
   it.effect(
     'declares public open and close operations and selects an issue',
     () => {
-      return withBlock({ block: CommandPaletteBlock, layer }, executable => {
-        const paletteInit = executable.init()
-
-        const paletteOpen = executable.operations.requestOpen(paletteInit.model)
-
-        const paletteClose = executable.operations.requestClose(
-          paletteOpen.model,
-        )
-
-        expect(paletteOpen.model.dialog.isOpen).toBe(true)
-
-        expect(paletteClose.model.dialog.isOpen).toBe(false)
-        return story(
-          { block: CommandPaletteBlock, layer },
-          given(paletteOpen.model),
-          message(
-            Message.ClickedResult({
-              target: ResultTarget.Issue({ issueId: 'issue-101' }),
-            }),
-          ),
-          expectOutMessage(OutMessage.SelectedIssue({ issueId: 'issue-101' })),
-          Command.resolve(
-            DialogTest.CloseDialog,
-            DialogBlock.Message.CompletedCloseDialog(),
-          ),
-          model(model => {
-            expect(model.dialog.isOpen).toBe(false)
+      return Story.story(
+        { block: CommandPaletteBlock, layer },
+        Story.init(),
+        Story.inMessage(InMessage.RequestedOpen()),
+        Story.model(model => expect(model.dialog.isOpen).toBe(true)),
+        Story.Command.resolve(
+          Dialog.test.ShowDialog,
+          Dialog.DialogBlock.Message.SucceededShowDialog(),
+        ),
+        Story.inMessage(InMessage.RequestedClose()),
+        Story.model(model => expect(model.dialog.isOpen).toBe(false)),
+        Story.Command.resolve(
+          Dialog.test.CloseDialog,
+          Dialog.DialogBlock.Message.CompletedCloseDialog(),
+        ),
+        Story.inMessage(InMessage.RequestedOpen()),
+        Story.Command.resolve(
+          Dialog.test.ShowDialog,
+          Dialog.DialogBlock.Message.SucceededShowDialog(),
+        ),
+        Story.message(
+          Message.ClickedResult({
+            target: ResultTarget.Issue({ issueId: 'issue-101' }),
           }),
-          Command.expectNone(),
-        )
-      })
+        ),
+        Story.expectOutMessage(
+          OutMessage.SelectedIssue({ issueId: 'issue-101' }),
+        ),
+        Story.Command.resolve(
+          Dialog.test.CloseDialog,
+          Dialog.DialogBlock.Message.CompletedCloseDialog(),
+        ),
+        Story.model(model => expect(model.dialog.isOpen).toBe(false)),
+        Story.Command.expectNone(),
+      )
     },
   )
 })

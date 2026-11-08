@@ -1,16 +1,12 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  DialogBlock,
-  layer as DialogLayer,
-  type RenderInfo as DialogRenderInfo,
-} from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
 // Add a field to your Model for the Dialog Block:
 const Model = Schema.Struct({
-  dialog: DialogBlock.Model,
+  dialog: Dialog.DialogBlock.Model,
   // ...your other fields
 })
 type Model = typeof Model.Type
@@ -22,34 +18,35 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const DialogExampleKey = Symbol('DialogExample')
-
 export const DialogExampleBlock = Block.make('DialogExample', {
   key: DialogExampleKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = DialogExampleBlock
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = DialogExampleBlock
 
 // One boundary handles Dialog Messages, Commands, and OutMessages. Replace
 // either no-op arm with the parent transition that should follow that event.
-const foldDialogOutMessage = DialogExampleBlock.makeOutMessageFold(
-  DialogBlock,
-  {
+const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
+  field: 'dialog',
+  init: { contextToArgs: () => [{ id: 'confirm' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
     CompletedClose: makeNoopStep,
-  },
-)
+  }),
+})
 
-const DialogBinding = DialogExampleBlock.makeBinding(DialogBlock, {
-  field: 'dialog',
-  init: { contextToArgs: () => [{ id: 'confirm' }] },
-}).withOutMessagePolicy({ fold: foldDialogOutMessage })
-
-const DialogExampleComposition = DialogExampleBlock.makeComposition({
+const DialogExampleComposition = makeComposition({
   bindings: [DialogBinding],
 })
 
@@ -75,7 +72,7 @@ const view = DialogExampleComposition.makeView((model, h) => {
     description,
     closeButton,
     isVisible,
-  }: DialogRenderInfo) =>
+  }: Dialog.RenderInfo) =>
     h.dialog(
       [...dialog],
       isVisible
@@ -114,15 +111,8 @@ const view = DialogExampleComposition.makeView((model, h) => {
   )
 })
 
-export const layer = DialogExampleBlock.makeLayer(
-  Effect.gen(function* () {
-    const dialog = yield* DialogBinding
-
-    return {
-      children: [dialog],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(DialogLayer))
+export const layer = DialogExampleBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Dialog.layer))

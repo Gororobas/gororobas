@@ -6,15 +6,16 @@ import { Model } from './model'
 import { Row } from './row'
 
 export const TableKey = Symbol('Table')
-
 const TableBlock = Block.make('Table', {
   key: TableKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-export const RowsBinding = TableBlock.makeBinding(Row.RowBlock, {
+const { makeKeyedArrayBinding } = TableBlock
+
+export const RowsBinding = makeKeyedArrayBinding(Row.RowBlock, {
   field: 'rows',
   key: 'id',
 })

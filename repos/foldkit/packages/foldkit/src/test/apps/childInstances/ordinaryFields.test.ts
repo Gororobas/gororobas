@@ -28,15 +28,18 @@ const ApplicationDefinition = makeDefinition('OccurrenceDataBoundary', {
   key: ApplicationKey,
   Model,
   Message,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [CounterSource] },
 })
 const { makeFieldsStep } = ApplicationDefinition
-const MixedCountersBinding = ApplicationDefinition.makeBinding(CounterBlock, {
-  field: 'counters',
-  key: 'key',
-  childField: 'model',
-}).withOutMessagePolicy({ fold: () => ApplicationDefinition.makeNoopStep() })
+const MixedCountersBinding = ApplicationDefinition.makeKeyedArrayBinding(
+  CounterBlock,
+  {
+    field: 'counters',
+    key: 'key',
+    childField: 'model',
+  },
+).withOutMessagePolicy({ fold: () => ApplicationDefinition.makeNoopStep() })
 const ApplicationComposition = ApplicationDefinition.makeComposition({
   bindings: [MixedCountersBinding],
 })

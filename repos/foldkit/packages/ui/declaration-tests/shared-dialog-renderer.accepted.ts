@@ -14,15 +14,15 @@ export const DeleteIssueMessage = defineMessageUnion({
   ClickedOpenDialog: {},
   ClickedDeleteIssue: { issueId: Schema.String },
 })
-export const DeleteIssueKey = Symbol('SharedDialogDeleteIssue')
+export const DeleteIssueKey = Symbol('DeleteIssue')
 export const DeleteIssueBlock = Block.make('DeleteIssue', {
   key: DeleteIssueKey,
   Model: DeleteIssueModel,
   Message: DeleteIssueMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-export const DeleteDialogBinding = DeleteIssueBlock.makeBinding(
+export const DeleteDialogBinding = DeleteIssueBlock.makeRequiredFieldBinding(
   Dialog.DialogBlock,
   {
     field: 'dialog',
@@ -99,15 +99,15 @@ export const InviteMemberMessage = defineMessageUnion({
   ClickedOpenDialog: {},
   ClickedSendInvite: { email: Schema.String },
 })
-export const InviteMemberKey = Symbol('SharedDialogInviteMember')
+export const InviteMemberKey = Symbol('InviteMember')
 export const InviteMemberBlock = Block.make('InviteMember', {
   key: InviteMemberKey,
   Model: InviteMemberModel,
   Message: InviteMemberMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-export const InviteDialogBinding = InviteMemberBlock.makeBinding(
+export const InviteDialogBinding = InviteMemberBlock.makeRequiredFieldBinding(
   Dialog.DialogBlock,
   {
     field: 'dialog',

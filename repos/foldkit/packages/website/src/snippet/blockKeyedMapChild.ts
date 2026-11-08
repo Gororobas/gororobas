@@ -1,21 +1,20 @@
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const Model = Schema.Struct({ title: Schema.String })
 type Model = typeof Model.Type
 
-const InMessage = defineMessageUnion({
+const InMessage = defineInMessageUnion({
   RequestedRename: { title: Schema.String },
 })
 type InMessage = typeof InMessage.Type
 
 export const EntryKey = Symbol('Entry')
-
 export const EntryBlock = Block.make('Entry', {
   key: EntryKey,
-  Init: Schema.Tuple([Schema.String]),
+  InitArgs: Schema.Tuple([Schema.String]),
   InMessage,
   isMessageFree: true,
 
@@ -23,21 +22,18 @@ export const EntryBlock = Block.make('Entry', {
   Message: Schema.Never,
 })
 
-const EntryComposition = EntryBlock.makeComposition()
+const { makeComposition } = EntryBlock
 
-export const layer = EntryBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init: EntryComposition.makeInit((title: string) => ({
-        model: { title },
-      })),
-      update: EntryComposition.makeUpdate({}),
-      inMessageUpdate: EntryComposition.makeInMessageUpdate({
-        RequestedRename: (model, { title }) => ({
-          model: modifyFields(model, { title: () => title }),
-        }),
-      }),
-    }
+const EntryComposition = makeComposition()
+
+export const layer = EntryBlock.makeLayer({
+  init: EntryComposition.makeInit((title: string) => ({
+    model: { title },
+  })),
+  update: EntryComposition.makeUpdate({}),
+  inMessageUpdate: EntryComposition.makeInMessageUpdate({
+    RequestedRename: (model, { title }) => ({
+      model: modifyFields(model, { title: () => title }),
+    }),
   }),
-)
+})

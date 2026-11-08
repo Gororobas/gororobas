@@ -19,17 +19,16 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const ApplicationKey = Symbol('Application')
-
 const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeFieldsStep } = ApplicationBlock
+const { makeFieldsStep, makeComposition } = ApplicationBlock
 
-const ApplicationComposition = ApplicationBlock.makeComposition()
+const ApplicationComposition = makeComposition()
 
 export const update = ApplicationComposition.makeUpdate({
   AddedTodo: makeFieldsStep(() => ({

@@ -134,7 +134,7 @@ export const makeRuntime = <A, I>(payloadSchema: Schema.Codec<A, I>) => {
 
   const ToastDefinition = BlockFamily.makeFamilyDeclaration('Toast', {
     key: ToastKey,
-    Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+    InitArgs: Block.makeInputContract<readonly [config: InitConfig]>(),
     view: {
       kind: 'Element',
       Inputs: Block.makeInputContract<ViewInputs<A, I>>(),
@@ -290,7 +290,7 @@ export const makeRuntime = <A, I>(payloadSchema: Schema.Codec<A, I>) => {
       }
     })
 
-  const EntriesAnimationBinding = ToastDefinition.makeBinding(
+  const EntriesAnimationBinding = ToastDefinition.makeKeyedArrayBinding(
     Animation.AnimationBlock,
     {
       field: 'entries',
@@ -298,8 +298,7 @@ export const makeRuntime = <A, I>(payloadSchema: Schema.Codec<A, I>) => {
       childField: 'animation',
     },
   ).withOutMessagePolicy({
-    fold: (entryId, outMessage) =>
-      makeEntryAnimationOutMessageFold(entryId)(outMessage),
+    fold: entryId => makeEntryAnimationOutMessageFold(entryId),
   })
 
   const makeEntryAnimationOutMessageFold = (entryId: string) =>

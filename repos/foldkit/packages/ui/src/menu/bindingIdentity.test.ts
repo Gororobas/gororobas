@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import * as Block from 'foldkit/block'
 import { defineMessageUnion } from 'foldkit/message'
 import * as Story from 'foldkit/story'
@@ -32,15 +32,18 @@ const GenericMenuBindingIdentityBlock = Block.make(
     Model,
     Message,
     OutMessage,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
     ChildInitContext: Menu.InitConfig,
   },
 )
 
-const MenuBinding = GenericMenuBindingIdentityBlock.makeBinding(RefinedMenu, {
-  field: 'menu',
-  init: { contextToArgs: config => [config] },
-}).withOutMessagePolicy({
+const MenuBinding = GenericMenuBindingIdentityBlock.makeRequiredFieldBinding(
+  RefinedMenu,
+  {
+    field: 'menu',
+    init: { contextToArgs: config => [config] },
+  },
+).withOutMessagePolicy({
   fold: GenericMenuBindingIdentityBlock.makeOutMessageFold(RefinedMenu, {
     Selected: ({ value }) =>
       GenericMenuBindingIdentityBlock.makeStep(model => ({
@@ -65,17 +68,10 @@ const update = GenericMenuBindingIdentityComposition.makeUpdate({
 })
 const block = {
   block: GenericMenuBindingIdentityBlock,
-  layer: GenericMenuBindingIdentityBlock.makeLayer(
-    Effect.gen(function* () {
-      const menu = yield* MenuBinding
-
-      return {
-        children: [menu],
-        init,
-        update,
-      }
-    }),
-  ).pipe(Layer.provide(Menu.layer)),
+  layer: GenericMenuBindingIdentityBlock.makeLayer({
+    init,
+    update,
+  }).pipe(Layer.provide(Menu.layer)),
 }
 
 it.effect(
@@ -110,7 +106,7 @@ it.effect(
         expect(model.menu.animation.transitionState).toBe('Idle'),
       ),
       Story.Command.expectNone(),
-      Story.messageFrom(
+      Story.messageIn(
         MenuBinding,
         RefinedMenu.Message.SelectedItem({ item: 'Edit', index: 0 }),
       ),

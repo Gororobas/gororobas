@@ -3,9 +3,9 @@ import { Block } from 'foldkit'
 import * as Dom from 'foldkit/dom'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { AnimationBlock, layer as AnimationLayer } from '@foldkit/ui/animation'
+import { Animation } from '@foldkit/ui'
 
-const Model = Schema.Struct({ animation: AnimationBlock.Model })
+const Model = Schema.Struct({ animation: Animation.AnimationBlock.Model })
 type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
@@ -15,44 +15,43 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const AnimationExampleKey = Symbol('AnimationExample')
-
 export const AnimationExampleBlock = Block.make('AnimationExample', {
   key: AnimationExampleKey,
   Model,
   Message,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
-const { makeCommandsStep, makeNoopStep } = AnimationExampleBlock
+const {
+  makeCommandsStep,
+  makeNoopStep,
+  makeCommand,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = AnimationExampleBlock
 
-const WaitForPanelSettled = AnimationExampleBlock.makeCommand(
-  'WaitForPanelSettled',
-  {
-    args: { generation: Schema.Number },
-    messages: [Message.CompletedWaitForPanelSettled],
-    handler: function* () {
-      return ({ generation }) =>
-        Dom.waitForAnimationSettled('#drawer-panel').pipe(
-          Effect.as(Message.CompletedWaitForPanelSettled({ generation })),
-        )
-    },
+const WaitForPanelSettled = makeCommand('WaitForPanelSettled', {
+  args: { generation: Schema.Number },
+  messages: [Message.CompletedWaitForPanelSettled],
+  handler: function* () {
+    return ({ generation }) =>
+      Dom.waitForAnimationSettled('#drawer-panel').pipe(
+        Effect.as(Message.CompletedWaitForPanelSettled({ generation })),
+      )
   },
-)
+})
 
-const foldAnimationOutMessage = AnimationExampleBlock.makeOutMessageFold(
-  AnimationBlock,
-  {
-    StartedLeaveAnimating: ({ generation }) =>
-      makeCommandsStep(() => [WaitForPanelSettled({ generation })]),
-    TransitionedOut: makeNoopStep,
-  },
-)
-const AnimationBinding = AnimationExampleBlock.makeBinding(AnimationBlock, {
+const AnimationBinding = makeRequiredFieldBinding(Animation.AnimationBlock, {
   field: 'animation',
   init: { contextToArgs: () => [{ id: 'drawer' }] },
 }).withOutMessagePolicy({
-  fold: foldAnimationOutMessage,
+  fold: makeOutMessageFold(Animation.AnimationBlock, {
+    StartedLeaveAnimating: ({ generation }) =>
+      makeCommandsStep(() => [WaitForPanelSettled({ generation })]),
+    TransitionedOut: makeNoopStep,
+  }),
 })
-const AnimationExampleComposition = AnimationExampleBlock.makeComposition({
+const AnimationExampleComposition = makeComposition({
   bindings: [AnimationBinding],
 })
 const init = AnimationExampleComposition.makeInit(() => ({ model: {} }))
@@ -64,15 +63,8 @@ const update = AnimationExampleComposition.makeUpdate({
     AnimationBinding.requestFinish(generation)(model),
 })
 
-export const layer = AnimationExampleBlock.makeLayer(
-  Effect.gen(function* () {
-    const animation = yield* AnimationBinding
-
-    return {
-      children: [animation],
-      init,
-      update,
-      EffectsLayer: WaitForPanelSettled.layer,
-    }
-  }),
-).pipe(Layer.provide(AnimationLayer))
+export const layer = AnimationExampleBlock.makeLayer({
+  init,
+  update,
+  EffectsLayer: WaitForPanelSettled.layer,
+}).pipe(Layer.provide(Animation.layer))

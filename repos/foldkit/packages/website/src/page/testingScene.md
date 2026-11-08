@@ -2,11 +2,15 @@
 
 ## Overview
 
-A Block-aware `scene({ block: FeatureBlock, layer }, init(...args), ...steps)` returns an Effect that acquires and scopes the implementation graph. The selected Layer supplies the feature's construction providers. Use `given(model)` for an existing Model, and pass `{ block, layer, viewInputs, updateContext, routing }` when the view or test requires those inputs. Handler Services are unnecessary for pure Scenes because handlers do not run.
+Application behavior tests use the Story or Scene DSL. Deliver Messages or InMessages, resolve Commands and assert through those steps. Do not replace the runner with a chain of acquired update calls or direct Step applications. A pure fixture may build an initial Model or deliberately use `given(model)`; an advanced scoped fixture may need acquired initialization, graph identity or view context. Keep the behavior itself in the DSL. Pure domain and selector unit tests remain separate; raw transition tests belong to framework infrastructure.
+
+A Block-aware `scene({ block: FeatureBlock, layer }, init(...args), ...steps)` returns an Effect that acquires and scopes the implementation graph. The pair selects the public Block contract and its implementation Layer; tests often name it `featureSubject`. Pass `viewInputs`, `updateContext` or `routing` when the view or test requires them. Handler Services are unnecessary for pure Scenes because handlers do not run.
+
+Use `init(...args)` to exercise the real initializer, including startup Commands that the Scene must resolve. Use `given(model)` for an intentional immutable view fixture; it skips the initializer and adds no startup Commands. A loading-state fixture can therefore isolate presentation, while a Scene starting with `init` verifies the interaction and pending work that produce it.
 
 In Vitest, return the Scene Effect from `it.effect` in `@effect/vitest`. The integration owns execution and test cleanup, so normal tests need no `Effect.runPromise` wrapper or manual extraction of update and view. Use `init` and explicit Command resolution for startup scenarios. Provide test Layers for any remaining construction dependencies through ordinary `Effect.provide`.
 
-Use `withBlock` for an advanced fixture that needs acquired pure functions or a custom test view. Keep the Scope alive throughout the test.
+Use `withBlock` for an advanced fixture that needs initialized state or a custom test view. Keep the Scope alive throughout the test.
 
 ## Testing Through the View
 
@@ -14,7 +18,7 @@ Use `withBlock` for an advanced fixture that needs acquired pure functions or a 
 
 Scene operates on VNodes directly. It needs no DOM, jsdom, or browser.
 
-Import the steps you need from `foldkit/scene`. Use named imports when the file contains only Scene tests. If a file contains both Story and Scene tests, import the namespaces from `foldkit` so `Story.given` and `Scene.given` stay distinct.
+Import the `Scene` namespace from `foldkit` and qualify every step through it. This keeps the testing DSL visible at call sites such as `Scene.given`, `Scene.click`, and `Scene.expect`.
 
 ## Locators
 
@@ -223,6 +227,7 @@ The kept Command remains visible to `expectHas`, `expectExact`, and every resolv
 | `Command.resolveAll([Def, ResultMessage], ...)`      | Resolves a batch of pending Commands, walking cascades. Each entry resolves exactly one matching dispatch in declaration order and unmatched entries carry forward; compose with Array.makeBy for N identical responses.                        |
 | `Command.resolveAllExact([Def, ResultMessage], ...)` | Resolves a batch and throws unless every listed resolver matches within the call and no actual Commands remain unresolved. Repeated Definition entries consume repeated dispatches in declaration order.                                        |
 | `Command.expectExact(A, B)`                          | The pending Commands are exactly A and B (order-independent).                                                                                                                                                                                   |
+| `Command.expectExactInOrder(A, B)`                   | The pending Commands are exactly A then B in dispatch order, with the same identity, args and occurrence matching.                                                                                                                              |
 | `Command.expectHas(A)`                               | A is among the pending Commands (subset check).                                                                                                                                                                                                 |
 | `Command.expectNone()`                               | There are no pending Commands.                                                                                                                                                                                                                  |
 | `Command.keepPending(A)`                             | Lets later Scene Messages arrive while the one exact matching invocation remains pending. Assertions, resolvers, `resolveAllExact`, and final completeness still include it.                                                                    |
@@ -239,7 +244,7 @@ When a Scene helper needs to read captured args before resolving a Command, use 
 
 `Navigation.changedUrl` delivers a URL through the Scene's configured `routing.onUrlChange`. Scene applies the resulting Message through update and renders the next view. Use the same callback or canonical Message constructor that the Program uses.
 
-Inside a Scene test, import the named helpers from `foldkit/scene` and the shown Commands, `Message`, initial Model, update, and view from your search feature. The feature increments its request id when input changes; its URL-change handler returns `FetchSearch`.
+Inside a Scene test, import the `Scene` namespace from `foldkit` and the shown Commands, `Message`, initial Model, update, and view from your search feature. The feature increments its request id when input changes; its URL-change handler returns `FetchSearch`.
 
 ::Snippet{name="sceneNavigation" label="Search through URL-change delivery"}
 
@@ -259,14 +264,16 @@ Root-relative paths, query references such as `?q=foldkit`, and fragments such a
 
 ## Mounts
 
-Scene follows the renderer's element identity. A Mount starts when Snabbdom inserts its element. While Snabbdom patches that element in place, it keeps the Mount it was inserted with, even if `OnMount` changes or disappears; adding `OnMount` to an already-rendered element does not start a Mount. A Mount ends when its element is removed or replaced, and the test acknowledges that with `Mount.expectEnded`.
+Scene follows the renderer's element identity and, for a Block-aware subject, the acquiring Block occurrence. A Mount initially starts when Snabbdom inserts its element. Omitting `OnMount` on a retained element keeps the existing acquisition. A marker for a different occurrence ends the previous acquisition and starts a new pending Mount; removing and recreating a child under the same key creates a different occurrence. Adding the first `OnMount` to an already-rendered element does not start a Mount.
+
+While the acquiring occurrence remains active, retained Mount results follow the currently rendered Block boundary. A Mount ends when its element is removed or replaced, or its acquiring occurrence retires. Acknowledge every such end with `Mount.expectEnded`.
 
 This applies to Mounts declared inside `@foldkit/ui` components too. Popovers, dialogs, and other components expose their original Mount Definitions under their public `test` namespaces so a consumer test can name and resolve them.
 
 ### Mount Lifecycle Rules
 
-- A patched element keeps its pending or resolved Mount across re-renders. A new element starts a new Mount, even when it has the same Mount Definition.
-- Every mount that fires and unmounts during a scene must be acknowledged with `Mount.expectEnded`, even if it was already resolved. `resolve` handles a mount’s result Message; `expectEnded` handles its unmount. Unacknowledged unmounts throw at the end of the scene.
+- A patched element keeps its pending or resolved Mount while the acquiring occurrence remains active and no different marked owner replaces it. A new element starts a new Mount, even when it has the same Mount Definition.
+- Every acquired Mount that ends during a Scene must be acknowledged with `Mount.expectEnded`, even if it was already resolved. `resolve` handles a Mount's result Message; `expectEnded` acknowledges element removal, replacement or occurrence retirement. Unacknowledged ends throw at the end of the Scene.
 - Same-named Mounts are disambiguated by their current tree order. `Mount.resolve` resolves the first pending Mount; a second call resolves the next. Keyed moves keep each element's Mount with it.
 - Interactions throw if there are unresolved mounts or unacknowledged unmounts when they try to dispatch a Message. Same contract as Commands.
 - `scene` throws at the end if any mount remains unresolved.
@@ -283,7 +290,7 @@ This applies to Mounts declared inside `@foldkit/ui` components too. Popovers, d
 | `Mount.expectExact(A, B)`                     | The pending mounts are exactly A and B (order-independent, by source identity).                                                                                                                                                      |
 | `Mount.expectHas(A)`                          | A is among the pending mounts by source identity.                                                                                                                                                                                    |
 | `Mount.expectNone()`                          | There are no pending mounts.                                                                                                                                                                                                         |
-| `Mount.expectEnded(A)`                        | A's element was removed or replaced. Required for every Mount that fired before its element was removed or replaced, regardless of whether it was resolved first; otherwise the scene throws at the end.                             |
+| `Mount.expectEnded(A)`                        | A's element was removed or replaced, its marked owner changed, or its acquiring Block occurrence retired. Required for every ended acquisition, even if it was already resolved; otherwise the Scene throws at the end.              |
 
 UI components expose their Mount Definitions as `Popover.test.AnchorPopover`, `Listbox.test.AnchorListbox`, and so on. These are the original declarations, so source-identity matching survives placement-qualified runtime names. The [testing migration cookbook](/testing#migrate-an-existing-test-suite) shows the public Block contract and test namespace together.
 
@@ -295,7 +302,7 @@ This example assumes `CanvasBlock` renders `ObserveCanvas`, a stream Mount that 
 
 ::Snippet{name="sceneMountStream" label="Later measurements from a mounted stream"}
 
-`Mount.emit` accepts the stream's declared raw Message and validates its payload. Child Block boundary lifts are replayed automatically. The selected element must still be mounted, and its first result must already be resolved. Resolve pending Commands and Mounts and acknowledge ended Mounts before emitting again. `Mount.expectNone` checks pending Mounts; an active, resolved stream does not count as pending.
+`Mount.emit` accepts the stream's declared raw Message and validates its payload. A Block-aware Scene routes it through the currently rendered boundary while the acquiring occurrence remains active. Low-level Scenes without a Block graph replay their captured boundary lifts. The selected element must still be mounted, and its first result must already be resolved. Resolve pending Commands and Mounts and acknowledge ended Mounts before emitting again. `Mount.expectNone` checks pending Mounts; an active, resolved stream does not count as pending.
 
 When several active Mounts share the same source, pass the bound instance and its complete args to select one occurrence. An ambiguous match throws. Stream emissions do not execute handler Layers, so the same steps work for attached and host-owned implementations.
 
@@ -308,6 +315,8 @@ When several active Mounts share the same source, pass the bound instance and it
 Each Subscription entry's `messages` collection is its emission contract. `emit(entry, message)` accepts only a raw Message declared by that registered entry and validates its payload at runtime. An entry with `messages: []` has no Message that Scene can emit.
 
 For a lifted Subscription, pass the child Message. Scene replays the entry's generated delivery through every child boundary before calling the update under test. The entry argument always makes the event source explicit, including when several Subscriptions declare the same Message.
+
+A keyed child Binding contributes passive inspection templates rather than executable Streams. Select one occurrence with `Scene.Subscription.at(Binding, key, childSubscriptions.entry)`, then pass that selection to `emit`, `expectActive`, or `expectInactive`. The Scene step types reject the raw child entry because it does not identify a key. An absent key is inactive. Emitting for an absent key throws instead of delivering the Message to another occurrence.
 
 `emit` supplies an output from the registered Subscription graph; it does not check whether the current Model activates the entry. This allows a test to represent an event that was already queued when its Subscription became inactive. Assert activity before emitting when the test needs to prove that the Runtime would be listening.
 
@@ -327,7 +336,9 @@ A [ManagedResource](/core/managed-resources) reports three lifecycle outcomes: a
 
 Drive the Model into the matching state before declaring an outcome. `acquire` and `failAcquire` throw unless `modelToMaybeRequirements` returns `Some`. `release` throws until it returns `None`.
 
-These steps dispatch immediately and leave nothing pending. They are optional because Scene sees update and view, not the application's ManagedResources record. A scene may end while the Model still requests a resource, just as the runtime can wait for its acquire Effect to finish. If a lifecycle step contradicts the Model, it throws immediately.
+These steps dispatch immediately and leave nothing pending. A scene may end while the Model still requests a resource, just as the runtime can wait for its acquire Effect to finish. If a lifecycle step contradicts the Model, it throws immediately.
+
+A keyed child Binding also contributes passive ManagedResource inspection templates. Select one occurrence with `Scene.ManagedResource.at(Binding, key, childResources.entry)` before using `acquire`, `failAcquire`, or `release`. A Block-aware Scene rejects a raw child entry because it does not name an occurrence. Selecting an absent key and declaring a lifecycle outcome throws before update runs.
 
 ### Supply Lifecycle Results
 

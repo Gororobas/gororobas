@@ -1,8 +1,8 @@
+import { makeOptionalKeyedFieldBinding } from '../block'
 import { RoomBlock } from '../blocks'
-import { ApplicationBlock } from '../definition'
 import * as ApplicationRoute from '../route'
 
-export const MaybeRoomInstanceBinding = ApplicationBlock.makeBinding(
+export const MaybeRoomInstanceBinding = makeOptionalKeyedFieldBinding(
   RoomBlock,
   {
     field: 'maybeRoomInstance',

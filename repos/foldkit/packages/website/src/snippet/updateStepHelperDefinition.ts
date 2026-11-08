@@ -5,10 +5,9 @@ import { Message } from './message'
 import { Model } from './model'
 
 export const SearchKey = Symbol('Search')
-
 export const SearchBlock = Block.make('Search', {
   key: SearchKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })

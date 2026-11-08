@@ -1,4 +1,3 @@
-import { Effect } from 'effect'
 // src/init.ts
 
 import { ApplicationComposition } from './composition'
@@ -28,20 +27,15 @@ import type { Model } from './model'
 import { update } from './update'
 import { view } from './view'
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-    }
-  }),
-)
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+})
 
 // src/entry.ts
 
-import { ApplicationBlock } from './application'
+import { ApplicationBlock } from './block'
 import { Flags, flags } from './flags'
 
 const program = Program.make({
@@ -53,4 +47,4 @@ const program = Program.make({
 
 Runtime.run(program, { flags })
 
-export { ApplicationBlock } from './application'
+export { ApplicationBlock } from './block'

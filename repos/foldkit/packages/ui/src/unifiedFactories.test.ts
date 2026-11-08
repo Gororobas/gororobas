@@ -38,12 +38,15 @@ const UiUnifiedFactoryTestBlock = Block.make('UiUnifiedFactoryTest', {
   key: ParentKey,
   Model: Schema.Struct({ picker: Picker.Model }),
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
-const PickerBinding = UiUnifiedFactoryTestBlock.makeBinding(Picker, {
-  field: 'picker',
-  init: { contextToArgs: () => [{ id: 'deferred-picker' }] },
-}).withOutMessagePolicy({
+const PickerBinding = UiUnifiedFactoryTestBlock.makeRequiredFieldBinding(
+  Picker,
+  {
+    field: 'picker',
+    init: { contextToArgs: () => [{ id: 'deferred-picker' }] },
+  },
+).withOutMessagePolicy({
   fold: UiUnifiedFactoryTestBlock.makeOutMessageFold(Picker, {
     Selected: () => UiUnifiedFactoryTestBlock.makeNoopStep(),
     ClearedSelection: () => UiUnifiedFactoryTestBlock.makeNoopStep(),

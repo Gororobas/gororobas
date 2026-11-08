@@ -15,7 +15,7 @@ export const WorkspaceConsumerBlock = Block.make('WorkspaceConsumer', {
   key: WorkspaceConsumerKey,
   Model,
   Message,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const WorkspaceConsumerComposition = WorkspaceConsumerBlock.makeComposition()
 const { makeFieldsStep } = WorkspaceConsumerBlock
@@ -30,15 +30,10 @@ export const update = WorkspaceConsumerComposition.makeUpdate({
   })),
 })
 
-export const layer = WorkspaceConsumerBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-    }
-  }),
-)
+export const layer = WorkspaceConsumerBlock.makeLayer({
+  init,
+  update,
+})
 
 await Effect.runPromise(
   withBlock({ block: WorkspaceConsumerBlock, layer }, consumer => {

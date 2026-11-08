@@ -34,7 +34,7 @@ Nested Blocks repeat the same pattern. By the time a Stream reaches the root, ev
 
 ## Install the Root
 
-The Composition registers child relationships. The constructor passed to `ApplicationBlock.makeLayer` yields those Bindings and returns the acquired children, local Subscription registry, and handlers. The Program host acquires that graph; `Program.make` adds browser host configuration:
+The Composition registers child relationships. The record passed to `ApplicationBlock.makeLayer` supplies init, update, view, the local Subscription registry, and handlers. Its Layer acquires the registered children when built. The Program host acquires that graph; `Program.make` adds browser host configuration:
 
 ::Snippet{name="subscriptionOrganizationRoot" label="Installing the root Subscription graph"}
 
@@ -68,7 +68,7 @@ An omitted entry has no additional parent gate. It still stops when `read` retur
 
 ## Keyed Children
 
-For an array storing child Models directly, use `ParentBlock.makeBinding` with `field` and a string-valued `key`. The child Schema must expose its declared Struct fields. An exact array of closed Struct wrappers adds `childField`, whose required Schema has exactly the same decoded shape as the child Model; its distinct required `key` belongs to the wrapper. Custom writes, opaque, union, or open/index-signature wrappers, and non-array enumeration use `readAll`, function-valued `key`, `read`, and `writeAt`. The Binding declares storage, stable identity, and generated child delivery once. Every active key receives independent Stream scopes and its own gate evaluation.
+For an array storing child Models directly, use `ParentBlock.makeKeyedArrayBinding` with `field` and a string-valued `key`. The child Schema must expose its declared Struct fields. An exact array of closed Struct wrappers adds `childField`, whose required Schema has exactly the same decoded shape as the child Model; its distinct required `key` belongs to the wrapper. Custom writes, opaque, union, or open/index-signature wrappers, and non-array enumeration use `makeCustomKeyedBinding` with `readAll`, function-valued `key`, `read`, and `writeAt`. The Binding declares storage, stable identity, and generated child delivery once. Every active key receives independent Stream scopes and its own gate evaluation.
 
 Removing a key stops those Streams. Reusing the key later creates a fresh occurrence, so callbacks captured by the old occurrence cannot dispatch into the replacement.
 

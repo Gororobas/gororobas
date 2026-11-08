@@ -1,4 +1,4 @@
-import { Effect, Layer, Number, Schema } from 'effect'
+import { Layer, Number, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -21,22 +21,26 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type
 
 export const ApplicationKey = Symbol('Application')
-
 export const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [SettingsStore] },
   Model,
   Message,
   OutMessage,
 })
 
-const { makeOutMessageStep } = ApplicationBlock
+const {
+  makeOutMessageStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = ApplicationBlock
 
-export const SettingsBinding = ApplicationBlock.makeBinding(SettingsBlock, {
+export const SettingsBinding = makeRequiredFieldBinding(SettingsBlock, {
   field: 'settings',
 }).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(SettingsBlock, {
+  fold: makeOutMessageFold(SettingsBlock, {
     ChangedTheme: ({ theme }) =>
       makeOutMessageStep(model =>
         OutMessage.ChangedTheme({
@@ -56,7 +60,7 @@ const changeTheme = (theme: Theme) => {
     )
 }
 
-const ApplicationComposition = ApplicationBlock.makeComposition({
+const ApplicationComposition = makeComposition({
   bindings: [SettingsBinding],
 })
 
@@ -68,14 +72,7 @@ const init = ApplicationComposition.makeInit(() => ({
   model: { themeChangeCount: 3 },
 }))
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    const settings = yield* SettingsBinding
-
-    return {
-      children: [settings],
-      init,
-      update,
-    }
-  }),
-).pipe(Layer.provide(SettingsLayer))
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+}).pipe(Layer.provide(SettingsLayer))

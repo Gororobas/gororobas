@@ -27,6 +27,10 @@ import {
 } from '../../block/operation.js'
 import { makeOperationMessageValidator } from '../../block/operationMessage.js'
 import type { OperationOutputs } from '../../block/operationOutputs.js'
+import {
+  type InputOperationName,
+  inputOperationName,
+} from '../../message/inMessageOperation.js'
 import * as Update from '../../update/index.js'
 import type { OperationEnvironment } from '../../update/operationRecipe.js'
 import type { AuthoringSource, Plan } from '../hybrid/authoring.js'
@@ -63,32 +67,8 @@ type InvalidConstructors<SchemaValue extends AnySchema> = {
         : Tag
 }[InputTag<SchemaValue>]
 
-/** @internal Derives parent request names from the two explicit input fact prefixes. */
-export type InputOperationName<Tag extends PropertyKey> =
-  Tag extends `Requested${infer Operation}`
-    ? Operation extends ''
-      ? never
-      : `request${Operation}`
-    : Tag extends `InformedOf${infer Operation}`
-      ? Operation extends ''
-        ? never
-        : `inform${Operation}`
-      : never
-
-/** @internal Enforces the same finite input protocol for erased declarations. */
-export const inputOperationName = (tag: string): string => {
-  if (tag.startsWith('Requested') && tag.length > 'Requested'.length) {
-    return `request${tag.slice('Requested'.length)}`
-  }
-
-  if (tag.startsWith('InformedOf') && tag.length > 'InformedOf'.length) {
-    return `inform${tag.slice('InformedOf'.length)}`
-  }
-
-  throw new Error(
-    '[foldkit] InMessage variants must use Requested... or InformedOf... with a nonempty operation name.',
-  )
-}
+export { inputOperationName }
+export type { InputOperationName }
 
 /** @internal A generated input API requires finite, owned callable variants. */
 export type ValidateInMessageSchema<SchemaValue extends AnySchema> =
@@ -277,7 +257,12 @@ export type InMessageUpdateContext<InputUpdate extends AnyFunction> =
     ? Context
     : never
 
-/** @internal Model-first input functions compiled for native Binding lowering. */
+/**
+ * @internal Model-first input functions compiled for native Binding lowering.
+ * Binding methods are generated from the InMessage union, with constructor
+ * payload arguments and the declared InMessage context. Parent authors call
+ * those generated methods directly; no manual operation mapping is required.
+ */
 export type CompiledInputs<
   SchemaValue extends AnySchema,
   InputUpdate extends AnyFunction,
@@ -302,7 +287,19 @@ export type CompiledInputs<
   >
 }
 
-/** Portable InMessage authoring shares focused composition with local updates. */
+/**
+ * Authors a portable, exhaustive handler record for parent InMessages.
+ *
+ * Declare parent inputs once in the Block's InMessage union. A variant named
+ * `RequestedOpen` generates `Binding.requestOpen()`, while
+ * `InformedOfRouteChanged` generates `Binding.informOfRouteChanged(payload)`.
+ * Those calls return connected parent Steps and retain the child's declared
+ * output and requirement channels. Keep UI facts and Command results in the
+ * separate local Message update.
+ *
+ * The focused composition helpers and withContext follow the local update
+ * authoring API. InMessage context remains separate from local update context.
+ */
 export interface MakeInMessageUpdatePlan<
   Model,
   InMessage,
@@ -479,9 +476,13 @@ export const assertInMessageConfiguration = (
       }
 
       for (const key of Reflect.ownKeys(output)) {
-        if (key !== 'outMessage' && key !== 'services' && key !== 'resources') {
+        if (
+          key !== 'outMessage' &&
+          key !== 'services' &&
+          key !== 'managedResources'
+        ) {
           throw new Error(
-            '[foldkit] InMessage output contracts support only outMessage, services, and resources.',
+            '[foldkit] InMessage output contracts support only outMessage, services, and managedResources.',
           )
         }
       }

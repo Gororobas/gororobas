@@ -1,12 +1,14 @@
-import { Layer } from 'effect'
-
-import * as Command from './command'
+import { HomeBlock } from './block'
+import { EffectsLayer } from './effectsLayer'
+import { init } from './init'
 import { subscriptions } from './subscription'
+import { update } from './update'
+import { view } from './view'
 
-export const EffectsLayer = Layer.mergeAll(
-  Command.CreateRoom.layer,
-  Command.JoinRoomFromHome.layer,
-  Command.FocusUsernameInput.layer,
-  Command.FocusRoomIdInput.layer,
-  subscriptions.layer,
-)
+export const layer = HomeBlock.makeLayer({
+  init,
+  update,
+  view,
+  subscriptions,
+  EffectsLayer,
+})

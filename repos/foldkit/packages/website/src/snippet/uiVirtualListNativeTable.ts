@@ -1,13 +1,9 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { childAttributes } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  layer as VirtualListLayer,
-  ScrollContainer as VirtualListScrollContainer,
-  makeBlock as makeVirtualListBlock,
-} from '@foldkit/ui/virtualList'
+import { VirtualList } from '@foldkit/ui'
 
 const Invoice = Schema.Struct({
   id: Schema.String,
@@ -16,7 +12,7 @@ const Invoice = Schema.Struct({
 })
 type Invoice = typeof Invoice.Type
 
-const InvoiceRowsBlock = makeVirtualListBlock<Invoice>()
+const InvoiceRowsBlock = VirtualList.makeBlock<Invoice>()
 const Model = Schema.Struct({
   invoices: Schema.Array(Invoice),
   invoiceRows: InvoiceRowsBlock.Model,
@@ -27,37 +23,41 @@ const Message = defineMessageUnion({ ClickedJumpToLastInvoice: {} })
 type Message = typeof Message.Type
 
 export const InvoiceTableKey = Symbol('InvoiceTable')
-
 export const InvoiceTableBlock = Block.make('InvoiceTable', {
   key: InvoiceTableKey,
-  Init: Schema.Tuple([Schema.Array(Invoice)]),
+  InitArgs: Schema.Tuple([Schema.Array(Invoice)]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
-const { makeNoopStep } = InvoiceTableBlock
+const {
+  makeNoopStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = InvoiceTableBlock
 
-const InvoiceRowsBinding = InvoiceTableBlock.makeBinding(InvoiceRowsBlock, {
+const InvoiceRowsBinding = makeRequiredFieldBinding(InvoiceRowsBlock, {
   field: 'invoiceRows',
   init: {
     contextToArgs: () => [
       {
         id: 'invoice-rows',
         rowHeightPx: 48,
-        scrollContainer: VirtualListScrollContainer.Ancestor({
+        scrollContainer: VirtualList.ScrollContainer.Ancestor({
           selector: '#invoice-scroll',
         }),
       },
     ],
   },
 }).withOutMessagePolicy({
-  fold: InvoiceTableBlock.makeOutMessageFold(InvoiceRowsBlock, {
+  fold: makeOutMessageFold(InvoiceRowsBlock, {
     ObservedContainerScroll: makeNoopStep,
     ApproachedLoadedStart: makeNoopStep,
     EndedContainerScroll: makeNoopStep,
   }),
 })
-const InvoiceTableComposition = InvoiceTableBlock.makeComposition({
+const InvoiceTableComposition = makeComposition({
   bindings: [InvoiceRowsBinding],
 })
 const init = InvoiceTableComposition.makeInit(invoices => ({
@@ -132,15 +132,8 @@ const view = InvoiceTableComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = InvoiceTableBlock.makeLayer(
-  Effect.gen(function* () {
-    const invoiceRows = yield* InvoiceRowsBinding
-
-    return {
-      children: [invoiceRows],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(VirtualListLayer))
+export const layer = InvoiceTableBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(VirtualList.layer))

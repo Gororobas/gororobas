@@ -1,11 +1,18 @@
 import { Layer } from 'effect'
 
-import { FetchPostDetail, FetchPosts, FetchStats } from './command'
-import { subscriptions } from './subscription'
+import { Tabs } from '@foldkit/ui'
 
-export const EffectsLayer = Layer.mergeAll(
-  FetchPosts.layer,
-  FetchPostDetail.layer,
-  FetchStats.layer,
-  subscriptions.layer,
-)
+import { ApplicationBlock } from './block'
+import { EffectsLayer } from './effectsLayer'
+import { init } from './init'
+import { subscriptions } from './subscription'
+import { update } from './update'
+import { view } from './view/view'
+
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+  subscriptions,
+  EffectsLayer,
+}).pipe(Layer.provide(Tabs.layer))

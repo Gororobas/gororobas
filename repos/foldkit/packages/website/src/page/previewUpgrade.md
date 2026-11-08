@@ -12,6 +12,8 @@ This guide covers upgrades from the Block previews listed below to the candidate
 | `1fbeaffe6563`                                    | [Upgrade from 1fbeaffe6563](#upgrade-from-1fbeaffe6563).                                                                                                                            |
 | `c701daa80af1`, `396b19976386`, or `bfd880b1e6ca` | Follow the complete guide, including the application boundary, Step composition, and UI call-site changes. These three snapshots share the same application API for this migration. |
 
+Every path also applies the shared changes before the snapshot-specific sections: notification names, InMessage declarations, serialization, Listbox factories, keyed folds, Layer-based construction, and testing. A section may require no edit when the application does not use that API.
+
 The older-preview baseline was checked at Coverchart checkpoint `084f1c94f38137837e9609c63ef08176ad607c9a`, with `foldkit@0.168.0-canary.bfd880b1e6ca` and its installed Foldkit packages aligned to that snapshot.
 
 The candidate is not available merely because this page exists. An uploaded integration preview identifies itself in the page banner and in the same-origin [`preview-release.json`](/preview-release.json). Use the exact source commit and package versions from that manifest. Do not guess a version, npm tag, or package URL.
@@ -52,24 +54,88 @@ The result lists installed Effect copies and their locations. Check that the app
 
 After updating manifests and the lockfile, run `npm ci` to verify that the lockfile reproduces the intended graph. Preserve the existing lockfile while diagnosing an upgrade; an older workspace constraint can explain a retained version without a corrupt lockfile. If a prerelease lockfile still cannot resolve the declared target, retain the npm version, manifests, lockfile and error for a reproduction before attempting a wider lockfile regeneration.
 
+## Rename child notification methods
+
+`InMessage.InformedOfX` now generates `Binding.informOfX(...)`, retaining the preposition at the call site. Rename generated calls such as `informRouteChange(...)` to `informOfRouteChange(...)`. Keep the `InformedOfX` tags and payloads; `RequestedX` still generates `requestX`. The former method names are removed without aliases.
+
+UI's explicitly authored notification operations use the same spelling:
+
+| Block                | Former operation                  | Current operation                   |
+| -------------------- | --------------------------------- | ----------------------------------- |
+| Calendar, DatePicker | `informMinDateChanged`            | `informOfMinDateChanged`            |
+| Calendar, DatePicker | `informMaxDateChanged`            | `informOfMaxDateChanged`            |
+| Calendar, DatePicker | `informDisabledDatesChanged`      | `informOfDisabledDatesChanged`      |
+| Calendar, DatePicker | `informDisabledDaysOfWeekChanged` | `informOfDisabledDaysOfWeekChanged` |
+| Slider               | `informRangeChange`               | `informOfRangeChange`               |
+| Tooltip              | `informShowDelayChanged`          | `informOfShowDelayChanged`          |
+| VirtualList          | `informItemsChanged`              | `informOfItemsChanged`              |
+| VirtualList          | `informHistoryPrepended`          | `informOfHistoryPrepended`          |
+
+These operations retain their arguments and behavior. A preview predating Slider's separate InMessages may spell its operation `informRangeChanged`; migrate that call to `informOfRangeChange` too. See [Informing Blocks](/patterns/informing-blocks) for the current authoring pattern.
+
+Use `defineInMessageUnion` as the canonical helper for ordinary InMessage case records. Local Message and OutMessage unions continue to use `defineMessageUnion`. The helper validates `RequestedX` and `InformedOfX` names at their literal declarations and for erased runtime inputs, while returning the ordinary MessageUnion surface with no brand. Extracted literal case records remain supported. A custom InMessage Schema can keep its existing form and continues through the Block constructor's tag validation.
+
+If the installed preview uses `Composition.makeReceive`, rename it to `Composition.makeInMessageUpdate`, return the plan under the implementation field `inMessageUpdate`, and rename a dedicated `receive.ts` module to `inMessageUpdate.ts`. The old names are removed.
+
+## Migrate Block Serialization
+
+Delete any Block `codec` field in the installed preview. `codec.decoding` and `codec.encoding` have no replacement aliases. The Model, local Message, and complete generated Message Codecs must encode and decode synchronously without Effect Services. Registered child envelopes propagate that check through the parent graph, so repair a Service-dependent child transformation at its owning Schema.
+
+Synchronous transformations backed by `Effect.succeed` remain supported, as do standard JSON Codecs for `Option` and `Date`. A requirement of `never` proves that an Effect needs no Service; it does not prove that a Promise-backed or otherwise suspended transformation is synchronous. Foldkit rejects suspension when an actual serialization boundary runs. Schema validation errors remain Schema errors; suspension and unexpected non-Schema failures report a serialization diagnostic. `Block.make`, `makeComposition`, `makeLayer`, and `Program.make` create passive configuration; building the selected Layer runs its graph constructor. None probes Codecs against fabricated values. Command and other explicitly effectful boundary Codecs retain their full Effect Schema requirements.
+
+DevTools dispatch decodes the acquired root executable's complete Message synchronously. Replay uses the Models and Messages already retained in memory. If development Model encoding fails, preservation invalidates the cached snapshot without changing the live Model. Incompatible snapshot validation warns and falls back to init. Hydratable server rendering transfers Flags, not Model or Messages, through the same synchronous boundary. A non-hydratable static render skips that handoff Codec. See [Block serialization](/core/block#serializable-model-and-message-codecs) and [the Flags handoff](/core/server-rendering#flags-payload) for the complete boundaries.
+
+For a generic Model or Message Schema parameter, use `Schema.Codec<Value, Encoded, never, never>` to preserve its encoded type and establish both Service bounds. `Schema.Schema<Value>` leaves those requirements unknown.
+
+## Supply Listbox Value Schemas
+
+Listbox Single and Multi no longer accept a generic-only narrow value contract. Use no Schema for unrestricted strings, one string Value Schema when items are the selected values, or an Item Schema and string Value Schema when the view renders richer objects:
+
+::Snippet{name="uiListboxFactoryForms" label="Schema-backed Listbox factories"}
+
+The Value Codec validates selection Messages, the `Selected` OutMessage, and selection inside a generated parent envelope while preserving its encoded type. It must be service-free and complete synchronously when Foldkit serializes it. The Item Schema supplies view typing only and adds no serialization or Service requirement. Pass `itemToValue` when an Item is not itself a Value, and provide `Listbox.layer` or `Listbox.Multi.layer` to the parent construction Layer.
+
+## Simplify keyed OutMessage folds
+
+Keyed OutMessage folds can omit forwarding wrappers. Pass
+`makeOutMessageFold(ChildBlock, handlers)` directly when handlers do not use the
+key, or use `fold: key => makeOutMessageFold(ChildBlock, handlers)` when they do.
+Pass compatible extracted factories directly; keep callbacks that defer a
+declaration read or adapt inputs. The explicit `(key, outMessage, context) => step`
+form is supported. The Binding supplies the OutMessage and FoldContext to an
+authored returned fold and applies its parent Step after the child write.
+The authored fold retains the exact child local Message and OutMessage contracts
+because its FoldContext can lift child Commands. A fold for a different child is
+rejected even when both children expose the same OutMessage shape. Pure
+forwarders remain compatible by their exact OutMessage contract alone because
+they do not receive FoldContext. Configuration stays passive, and an absent
+occurrence does not invoke a key-dependent producer.
+See [keyed folds](/core/block#surfacing-facts) for a complete example.
+
 ## Adopt Layer-based Block construction
 
 This candidate establishes each public Block contract before its implementation. Keep your Model, Message, child relationships, and transition behavior while changing completion:
 
-1. Declare each concrete feature once as `FooBlock = Block.make(...)`. Retain its stable unique `key`, Model, Message, Init tuple, Context, view, operation, and effect contracts.
+1. Declare each concrete feature once as `FooBlock = Block.make(...)`. Retain its stable unique `key`, Model, Message, InitArgs tuple, Context, view, operation, and effect contracts.
 2. Use that same `FooBlock` for local helpers and parent authorship. Remove a separate Definition and its `.contract` projection. Parent Schemas and Bindings use `FooBlock` directly.
-3. Complete the implementation with `layer = FooBlock.makeLayer(Effect.gen(function* () { ... }))`. Yield each registered Binding and return the acquired connections as `children`, alongside the portable builders and local lifecycle and handler declarations. A leaf returns `children: []`.
+3. Complete the implementation with `layer = FooBlock.makeLayer({ init, update, view, ... })`. Omit `children`. The Layer acquires the init plan's registered Binding inventory internally; all plans must belong to the same Composition.
 4. Provide child implementations through ordinary Layer composition: `.pipe(Layer.provide(Child.layer))`.
-5. Pass `{ block: ApplicationBlock, layer }` to Program and Server. Use the same pair for normal `story` and `scene` tests, followed by `init(...args)` or `given(model)`. Use `withBlock` only for fixtures needing direct pure functions.
+5. Pass `{ block: ApplicationBlock, layer }` to Program and Server. Use the same pair for normal Story and Scene tests, followed by `init(...args)` or `given(model)`. Use `withBlock` only for fixtures needing direct pure functions.
 6. Check emitted declarations and a relocated consumer when publishing a package. Ordinary application exports need no `FromAssembly*` annotations.
+
+If an unpublished snapshot declared the initializer Schema under `Init`, rename that contract key to `InitArgs`. The initializer function and `makeInit` keep their names. No `Init` compatibility alias remains.
+
+Replace a constructor that only collects registered child handles with the record form. Remove its `Effect.gen`, `acquireChildren()` call and returned `children` field together. Childless implementations use the same record form. Keep an Effect constructor when construction performs work or acquires dependencies or scoped resources; that form still acquires and returns its own children. `Composition.acquireChildren()` remains available inside a custom constructor. Neither form initializes Models or starts handlers or Model-driven lifecycles during acquisition.
 
 ::Snippet{name="blockFeatureExports" label="Contract-first Block completion"}
 
 The constructor builds the executable graph. Initialization remains deferred, state stays in the Model, and ordinary request Services stay in Command handler constructors. See [Block](/core/block) and [Project Organization](/patterns/project-organization) for the complete layout.
 
-Keep canonical local handlers in the implementation's `EffectsLayer`. An attached handler normally receives host-selected HTTP, storage, or transport Services. When the integrator owns specific handler implementations, the constructor can instead return their original definitions under `hostHandlers`. Select providers for every listed definition with `layer.pipe(FeatureBlock.provideHandlers(HandlersLayer))`, using those definitions' `toLayer` methods. Provider Services and constructor errors must fit the Block's declared effects contract. Selection remains passive.
+Keep canonical local handlers in the implementation's `EffectsLayer`. An attached handler normally receives host-selected HTTP, storage, or transport Services. When the integrator owns specific handler implementations, the implementation can instead list their original definitions under `hostHandlers`. Select providers for every listed definition with `layer.pipe(FeatureBlock.provideHandlers(HandlersLayer))`, using those definitions' `toLayer` methods. Provider Services and constructor errors must fit the Block's declared effects contract. Selection remains passive.
 
 The passive public child contract does not expose the implementation's private handler inventory. Apply handler selection to its ordinary construction Layer with the Block's `provideHandlers` helper. Query and other generic family APIs can also expose a checked host-handler selector. See [host implementations](/core/layers#host-implementations-for-reusable-features).
+
+Rename public ManagedResource requirement lists from `effects.resources` to `effects.managedResources`, `operations.<name>.resources` to `operations.<name>.managedResources`, and `inMessageOutputs.<tag>.resources` to `inMessageOutputs.<tag>.managedResources`. The entries retain their original contracts and identities. Unrelated resource APIs keep their names. See [effect contracts](/core/layers#public-bounds-and-construction-dependencies) for handler-Layer bounds and separately inferred graph-constructor requirements.
 
 ## Create standard child-array occurrences
 
@@ -79,9 +145,29 @@ Creation-bearing field results are opaque connected recipes until checked execut
 
 This addition covers standard string-keyed top-level arrays. Keep existing initialization paths for Option fields, maps, wrappers with extra metadata, or identity stored directly in the child Model. No storage migration is required.
 
+For an existing direct child Model array with `init.instances`, remove an identity `toItem: (_occurrence, entry) => entry`. Direct storage now supplies that projection. Wrapped arrays and parent metadata still require their explicit adapter, and keys and init Commands retain the same checks.
+
 ### Rename a conflicting family member
 
 `Instance` is now a reserved Block member. If an advanced generic library factory supplies a convenience named `Instance` through `BlockFamily.resolveFamily`'s `members` record, rename that convenience and update its callers. The resolver belongs to Foldkit’s internal library-authoring entry; ordinary application Blocks need no family machinery. It cannot replace the ready Instance Schema. Both TypeScript and runtime validation reject the conflicting member, including JavaScript callers with erased types. See [Generic Blocks](/core/block#generic-blocks).
+
+## Update Story and Scene Tests
+
+Import the `Story` and `Scene` namespaces from `foldkit` and qualify each testing step. Rename `Story.messageFrom` to `Story.messageIn`; the old export has no alias. `Story.messageIn(Binding, childMessage)`, or its keyed form, handles a local child Message through that Binding's routing and OutMessage policy without rendering a view:
+
+::Snippet{name="testingHeadlessChildMessage" label="Delivering a child fact without a view"}
+
+Use a Scene when a rendered interaction is the behavior under test. Formal parent inputs use `Story.inMessage` or `Scene.inMessage`; `Story.messageIn` is not a formal InMessage. It remains passive and does not simulate live Runtime generation admission.
+
+Block-aware Story returns its final Model after checking that every Command was resolved. Use that immutable result or `Story.models` instead of assigning a Model into an outer variable. A helper whose declared result must remain `Effect<void, ...>` can pipe the Story through `Effect.asVoid`.
+
+::Snippet{name="testingModelComparison" label="Comparing Models without a mutable capture"}
+
+A keyed child Binding contributes passive Subscription and ManagedResource inspection templates. Select one occurrence with `Scene.Subscription.at(Binding, key, entry)` or `Scene.ManagedResource.at(Binding, key, entry)`. The raw child entry is ambiguous in a keyed parent. An absent key is inactive, and declaring an emission or lifecycle outcome for that key throws.
+
+Nested `Story.messageIn` takes a nonempty Binding path, with `{ binding, key }` for keyed segments. Replace manually nested routing envelopes and forwarding-only helpers with that path. Use ordinary `it.effect` and explicitly yielded immutable fixture Effects when a custom test fixture only injected Models.
+
+Replace ordinary callbacks inspecting `simulation.commands` with `Command.expectExact` or `Command.expectExactInOrder`. The latter checks dispatch order in addition to exact identity, args, occurrence and count. Preserve an existing ordering assertion when migrating; `expectExact` remains order-independent.
 
 ## Upgrade from 90746b32d2ca
 
@@ -91,9 +177,9 @@ The source snapshot is `90746b32d2ca8bc0476de7a051ace396ca590ae0`. It includes t
 
 The source snapshot is `f3be22cfeefed437164ad614d08b16d9000e0703`. It already includes checked `Block.assemble(prepare)` exports, record-only `makeUpdate`, focused Step producer callbacks, and aggregate ManagedResource Layers. Keep the existing child graph and follow [Layer-based construction](#adopt-layer-based-block-construction) for the target completion API.
 
-After installing one coherent target, replace standalone `makeMapBinding` calls with the [parent Block method](#move-map-bindings-to-their-parent-block). The `foldkit/mapBinding` import is removed. Applications without map Bindings need no API migration for this change.
+After installing one coherent target, replace implicit or standalone Binding calls with the [storage-specific parent Block constructors](#move-map-bindings-to-their-parent-block). The `foldkit/mapBinding` import is removed. Every authored Binding must select its storage constructor.
 
-For retained children stored directly in Record or HashMap fields, optionally use [makeInitIfMissingStep](/core/init-and-flags#dynamic-storage-helpers) to preserve an existing child or initialize a missing one with its Commands. [Route.parsePathWithFallback](/core/routing-and-navigation#parse-relative-paths) is also available for decoding origin-relative paths; it does not require changing existing Routes.
+[Route.parsePathWithFallback](/core/routing-and-navigation#parse-relative-paths) is available for decoding origin-relative paths; it does not require changing existing Routes. The shared [optional convenience](#optional-convenience) section covers Model-selected map initialization and focused Step producers for every starting snapshot.
 
 The optional [makeStep.fromMessage](/core/block#featureblockmakestep) adapter lets a Message-only producer select or compose Steps without an unused Model parameter. Inline handler records infer the Message payload; extracted producers need an exact variant annotation. Step validation also checks every possible result branch, so an invalid Model or result channel cannot be hidden beside a valid branch.
 
@@ -123,7 +209,7 @@ Contextual update records now accept compatible Steps and Binding operations dir
 
 Extracting registration evidence from returned Commands now avoids TS2589 in the reported large Root composition, while retaining registration checks. This does not establish a general limit on the number of Blocks or remove all compiler costs in large graphs.
 
-Scene follows renderer element identity when tracking Mount lifetimes. A replaced element ends its old Mount; a patched element keeps its original Mount even if its `OnMount` attribute changes. Review Scene tests that resolved a Mount which never starts in the browser. Runtime teardown also releases the original Mount when its element is removed after dropping `OnMount`.
+Scene follows renderer element identity and, for Block-aware subjects, the acquiring occurrence. A retained element keeps its Mount when `OnMount` is omitted; a marker for a different occurrence starts a replacement acquisition. Removing and recreating a child under the same key creates a different occurrence. Retained results follow the currently rendered boundary while the acquiring occurrence remains active. Acknowledge element removal, replacement and occurrence retirement with `Mount.expectEnded`. Review tests that resolved a Mount which never starts in the browser. Runtime teardown also releases the original Mount when its element is removed after dropping `OnMount`.
 
 `Scene.unhover(target)` now exercises hover exit through the element's `OnMouseLeave` handler, falling back to `OnMouseOut`. See [Scene interactions](/testing/scene#interactions).
 
@@ -133,7 +219,7 @@ SSR development reloads recreate Block declarations with their implementation La
 
 ### UI Block factories
 
-Rename `create` to `makeBlock` on Listbox, Combobox, Menu, RadioGroup, Tabs, and VirtualList, including the Listbox and Combobox Multi variants. Rename `Toast.make` to `Toast.makeBlock` too. Type parameters and Schema arguments stay the same; the old factory names have no compatibility aliases.
+Rename `create` to `makeBlock` on Combobox, Menu, RadioGroup, Tabs, and VirtualList, including the Combobox Multi variant. Rename `Toast.make` to `Toast.makeBlock` too. Those factory renames retain their existing type parameters or Schema arguments. Listbox and Listbox Multi also rename `create` to `makeBlock`, but they require the [runtime Value Schema forms above](#supply-listbox-value-schemas). The old factory names have no compatibility aliases.
 
 Each factory returns a passive public Block contract. Declare it once at module scope, bind that value in the parent, and provide the component's implementation Layer to the parent's construction Layer. Calling the factory does not initialize an occurrence or start effects. After graph acquisition, parent init calls the child's initializer and retains its Model and Commands. See [Selection Blocks](/ui/selection-blocks#make-block-factory), [Toast](/ui/toast), and [VirtualList](/ui/virtual-list) for current usage.
 
@@ -176,10 +262,9 @@ Reciprocal Binding policies now resolve converging paths without repeatedly expa
 The following additions are optional:
 
 - Paths stored in query parameters can use [Route.parsePathWithFallback](/core/routing-and-navigation#parse-relative-paths). Decode return locations through the query Schema and store typed Routes in the Model; application selectors can then use those values directly.
-- Schema-backed Record and HashMap child fields can use [ParentBlock.makeMapBinding](/core/block#keyed-map-fields), removing repeated lookup and replacement configuration. Existing standalone calls need the [map Binding migration](#move-map-bindings-to-their-parent-block). General keyed Bindings remain supported for custom relationships.
+- Schema-backed Record and HashMap child fields can use [makeRecordBinding and makeHashMapBinding](/core/block#keyed-map-fields), removing repeated lookup and replacement configuration. Existing standalone calls need the [map Binding migration](#move-map-bindings-to-their-parent-block). General keyed Bindings remain supported for custom relationships.
 - A closed, fully attached ManagedResource registry supplies its handler recipes through [managedResources.layer](/core/managed-resources), matching Subscriptions. Empty registries supply `Layer.empty`; mixed attached/host-owned registries require explicit provider selection.
 - Story and Scene helpers can inspect captured Command arguments through [Command.argsOf](/testing/story#inspect-captured-command-arguments), matching the original Definition's source identity without changing the pending Command or selecting an occurrence.
-- Parent Stories can wrap a child fact with [Story.messageFrom](/testing#send-a-child-fact-without-a-view), using the exact Binding without view setup or fabricated envelope fields. Existing Command and Subscription replay paths remain appropriate for their respective sources.
 - Whole tagged child variants can use [makeVariantBinding](/core/block#whole-tagged-variants). [Dynamic storage helpers](/core/init-and-flags#dynamic-storage-helpers) set singular children, append initialized keyed arrays, and insert direct-value map entries without repeating storage writers.
 - Story can [derive a Message from the current Model](/testing/story#build-a-message-from-the-current-model) with `messageWith` or [deliver a decoded registered Subscription Message](/testing/story#deliver-a-subscription-message) with an acquired fixture’s `Subscription.from(block.subscriptions).emit`.
 - Scene can [keep one exact ordinary Command pending](/testing/scene#pending-command-rules) across another interaction with `Command.keepPending`. The Command remains visible to assertions and resolution, and must resolve before the Scene ends.
@@ -214,11 +299,9 @@ Popover, Menu, and Listbox report trigger clicks as `ClickedButton`. Include tha
 
 For a Popover with the default focus policy, use `Scene.focusLeave(panel)` instead of `Scene.blur(panel)` when testing dismissal as focus leaves the panel. Moving focus between the panel and its descendants keeps it open. With `contentFocus: true`, the application owns focus and dismissal.
 
-Optional `makeVariantBinding` from `foldkit/variantBinding` replaces manual accessors when a child occupies one complete tagged member of the parent `Schema.Union`. Include the actual child Model Schema in that union. Parent update still owns variant switches and explicit initialization. See [whole tagged variants](/core/block#whole-tagged-variants).
+`ParentBlock.makeVariantBinding(ChildBlock)` replaces manual accessors when a child occupies one complete tagged member of the parent `Schema.Union`. Include the actual child Model Schema in that union. Parent update still owns variant switches and explicit initialization. See [whole tagged variants](/core/block#whole-tagged-variants).
 
-The optional `foldkit/bindingInit` module adds `initAndSet` for required/optional direct fields and exact key/child Option wrappers, `initAndAppend` for arrays with an existing `init.instances`/`init.toItem` policy, and `initAndInsert` for direct-value Record/HashMap storage. Pass the Binding, current parent Model and `{ args }`, adding `key` for keyed storage. Append and insert reject occupied keys. Keep explicit initialization for additional wrapper metadata, sibling changes, parent Commands, or whole tagged variants. See [dynamic storage helpers](/core/init-and-flags#dynamic-storage-helpers).
-
-For Record/HashMap fields storing child Models directly, `makeInitIfMissingStep(Binding, { key, args })` replaces a separate membership check and insertion when existing children should be retained. It returns a connected Step that checks the Binding's field when applied, preserving an existing child or retaining all init Commands for a missing one. Both paths require the registered Binding.
+The optional `foldkit/binding` module adds `initAndSet` for required/optional direct fields and exact key/child Option wrappers, `initAndAppend` for arrays with an existing `init.instances`/`init.toItem` policy, and `initAndInsert` for direct-value Record/HashMap storage. Pass the Binding, current parent Model and `{ args }`, adding `key` for keyed storage. Append and insert reject occupied keys. Keep explicit initialization for additional wrapper metadata, sibling changes, parent Commands, or whole tagged variants. See [dynamic storage helpers](/core/init-and-flags#dynamic-storage-helpers).
 
 ## Update the Application Boundary
 
@@ -226,7 +309,7 @@ This section applies to `c701daa80af1`, `396b19976386`, and `bfd880b1e6ca`.
 
 ### Complete an ordinary root Block
 
-Declare the root's unique key, Init, Model, Message, and view contract in `ApplicationBlock`. Complete it with `ApplicationBlock.makeLayer`, yielding registered child Bindings and returning their connections under `children`. Export the returned ordinary `layer` and provide child implementations with `Layer.provide`. Program and Server receive `{ block: ApplicationBlock, layer }`.
+Declare the root's unique key, InitArgs, Model, Message, and view contract in `ApplicationBlock`. Complete it with `ApplicationBlock.makeLayer({ init, update, view, ... })`, which acquires the registered child graph when built. Export the returned ordinary `layer` and provide child implementations with `Layer.provide`. Program and Server receive `{ block: ApplicationBlock, layer }`.
 
 ::Snippet{name="blockFeatureExports" label="Independent contract and checked implementation"}
 
@@ -258,32 +341,50 @@ Canonical routing Messages can be passed directly when their payloads are `{ req
 
 ### Pass the Block and Layer to the server {#pass-the-completed-block-to-the-server}
 
-`Server.renderToString` receives `{ block: ApplicationBlock, layer }`, selecting the same contract and construction Layer as the browser Program. Its second argument contains server host declarations such as `Flags` and `routing`. Its third argument contains request inputs such as `flags` and `url`. Keep init, update, view, lifecycle declarations and handler recipes in the implementation returned by `makeLayer`; the server acquires that graph before running init and view.
+`Server.renderToString` receives `{ block: ApplicationBlock, layer }`, selecting the same contract and construction Layer as the browser Program. Its second argument contains server host declarations such as `Flags` and `routing`. Its third argument contains request inputs such as `flags` and `url`. Keep init, update, view, lifecycle declarations and handler recipes in the implementation record passed to `makeLayer`; the server acquires that graph before running init and view.
 
 ::Snippet{name="serverRenderingBlockServerEntry" label="Rendering the root Block and Layer"}
 
-## Move Map Bindings to Their Parent Block
+## Choose Explicit Binding Storage {#move-map-bindings-to-their-parent-block}
 
-Remove the standalone `makeMapBinding` import from `foldkit/mapBinding`. Call the parent Block's `makeMapBinding` method with the child Block and existing config. The parent Block is no longer a positional argument. The standalone subpath is removed.
+Replace `makeBinding` and `makeMapBinding` with the parent Block constructor that describes the stored child Model:
 
-For a split feature, destructure and export `makeMapBinding` from its `definition.ts`, then import that factory from the feature module. Its parent contracts remain attached when destructured. Keep the existing Binding registration, key Schema, storage, OutMessage policy, and initialization. See [map Bindings](/core/block#keyed-map-fields) for the current calls.
+| Previous call and storage                                  | Current parent method                      |
+| ---------------------------------------------------------- | ------------------------------------------ |
+| `makeBinding` with one required child field                | `makeRequiredFieldBinding`                 |
+| `makeBinding` with one Option child field                  | `makeOptionalFieldBinding`                 |
+| `makeBinding` with one keyed Option wrapper                | `makeOptionalKeyedFieldBinding`            |
+| `makeBinding` with a direct or wrapped keyed array         | `makeKeyedArrayBinding`                    |
+| `makeMapBinding` with a Record field                       | `makeRecordBinding`                        |
+| `makeMapBinding` with a HashMap field                      | `makeHashMapBinding`                       |
+| `makeBinding` with `read` and `write`                      | `makeCustomBinding`                        |
+| `makeBinding` with `readAll`, `key`, `read`, and `writeAt` | `makeCustomKeyedBinding`                   |
+| Standalone `makeVariantBinding(parent, child, config)`     | `parent.makeVariantBinding(child, config)` |
+
+The field, key, childField, delivery and OutMessage policies keep their existing roles. Select from the actual parent Schema rather than whether the child happens to be present during startup. Keyed identity can describe one optional occurrence as well as a collection.
+
+Rename direct-field `presentWhen` to `activeWhen`. Its semantics are unchanged: false deactivates the whole child occurrence while retaining its stored Model. A required child field can be inactive. `delivery.when` only admits incoming child Messages, and `subscriptions.when` only gates Streams. The rename does not add activity predicates to keyed, map, custom or variant configurations.
+
+Move initialization-helper imports from `foldkit/bindingInit` to `foldkit/binding`; the helper names and calling forms are unchanged. Remove `foldkit/variantBinding` and call the parent's `makeVariantBinding`. Older standalone map calls from `foldkit/mapBinding` also move to the appropriate parent method, dropping the parent positional argument. These removed names and subpaths have no compatibility aliases.
+
+Split features may export their needed destructured constructors from `block.ts`. They preserve the parent contracts when imported into composition modules. Register the policy-complete Binding in the Composition; ordinary record completion acquires that same relationship automatically, so no child implementation or lifecycle migration is required. See [Binding constructors](/core/block#binding-constructors) for supported shapes and [map fields](/core/block#keyed-map-fields) for key and initialization rules.
 
 ## Rename Definition Authoring Factories
 
 Block-owned factories now use the same `make*` naming as `makeInit`, `makeUpdate`, and `makeView`. Replace each removed name:
 
-| Previous preview                   | Current API                              |
-| ---------------------------------- | ---------------------------------------- |
-| `Definition.command(...)`          | `FeatureBlock.makeCommand(...)`          |
-| `Definition.mount(...)`            | `FeatureBlock.makeMount(...)`            |
-| `Definition.mountStream(...)`      | `FeatureBlock.makeMountStream(...)`      |
-| `Definition.resource(...)`         | `FeatureBlock.makeResource(...)`         |
-| `Definition.subscriptions(...)`    | `FeatureBlock.makeSubscriptions(...)`    |
-| `Definition.managedResources(...)` | `FeatureBlock.makeManagedResources(...)` |
-| `Definition.bindChild(...)`        | `FeatureBlock.makeBinding(...)`          |
-| `Definition.step(...)`             | `FeatureBlock.makeStep(...)`             |
-| `Definition.stepFields(...)`       | `FeatureBlock.makeFieldsStep(...)`       |
-| `Definition.stepNoop()`            | `FeatureBlock.makeNoopStep()`            |
+| Previous preview                   | Current API                                    |
+| ---------------------------------- | ---------------------------------------------- |
+| `Definition.command(...)`          | `FeatureBlock.makeCommand(...)`                |
+| `Definition.mount(...)`            | `FeatureBlock.makeMount(...)`                  |
+| `Definition.mountStream(...)`      | `FeatureBlock.makeMountStream(...)`            |
+| `Definition.resource(...)`         | `FeatureBlock.makeResource(...)`               |
+| `Definition.subscriptions(...)`    | `FeatureBlock.makeSubscriptions(...)`          |
+| `Definition.managedResources(...)` | `FeatureBlock.makeManagedResources(...)`       |
+| `Definition.bindChild(...)`        | The storage-specific Binding constructor above |
+| `Definition.step(...)`             | `FeatureBlock.makeStep(...)`                   |
+| `Definition.stepFields(...)`       | `FeatureBlock.makeFieldsStep(...)`             |
+| `Definition.stepNoop()`            | `FeatureBlock.makeNoopStep()`                  |
 
 Apply the primitive factory renames to an early Namespace used by a generic Block factory as well. `FeatureBlock.makeCommandsStep(...)` retains its name but now requires the [callback argument below](#pass-a-callback-to-makecommandsstep). Keep completion fields such as `subscriptions` and `managedResources`, public Block metadata, and standalone Command and Update APIs unchanged. The removed factory names have no compatibility aliases.
 
@@ -393,7 +494,7 @@ Publish the contract, not an inferred descendant graph. Generic library interfac
 
 The checklist below applies to the older `c701daa80af1`, `396b19976386`, and `bfd880b1e6ca` snapshots. For `1fbeaffe6563`, use [its direct upgrade path](#upgrade-from-1fbeaffe6563), then [verify the upgrade](#verify-the-upgrade). Search first, then change only the code the project contains:
 
-- Replace previous completion methods and preparation producers with the [declared contract and effectful constructor](#adopt-layer-based-block-construction).
+- Replace previous completion methods and preparation producers with the [declared contract and implementation Layer](#adopt-layer-based-block-construction).
 - Replace every removed Definition or Namespace factory name using the table above. Do not rename completion config fields, public Block metadata, or standalone Command and Update APIs.
 - Convert each existing `makeCommandsStep(commands)` call to a callback. Construct Model-dependent Commands inside that callback so they read the Model at Step application time.
 - Replace remaining `makeApplicationDefinition`, `assembleApplication`, and `assembleElement` uses with the root Block/Layer pair and Program boundary above.
@@ -401,7 +502,7 @@ The checklist below applies to the older `c701daa80af1`, `396b19976386`, and `bf
 - Replace Animation `viewInputs.content` with a top-level `toView` renderer.
 - Replace `Animation.defaultLeaveCommand` and its Model read or `liftCommand` wiring with the bound `requestWaitForLeaveSettlement()` operation. Preserve custom leave Commands that also watch movement or another completion signal.
 - Replace module-level `Toast.test` calls with the selected Toast contract's fixture and exact Binding.
-- Move every child OutMessage policy out of the previous preview's `bindChild` config, rename that factory to `makeBinding`, and select the policy with `.withOutMessagePolicy({ fold?, forward? })`. Build every callable fold with `ParentBlock.makeOutMessageFold(ChildBlock, handlers)`, including inline folds. The forwarding API is unchanged. Export and register the policy-complete `<Child>Binding`. Keep an unconfigured base internal when self-referential or reciprocal helpers need it to break a dependency cycle. No raw child matcher or return annotation is needed.
+- Move every child OutMessage policy out of the previous preview's `bindChild` config, choose its storage-specific Binding constructor, and select the policy with `.withOutMessagePolicy({ fold?, forward? })`. Build every callable fold with `ParentBlock.makeOutMessageFold(ChildBlock, handlers)`, including inline folds. The forwarding API is unchanged. Export and register the policy-complete `<Child>Binding`. Keep an unconfigured base internal when self-referential or reciprocal helpers need it to break a dependency cycle. No raw child matcher or return annotation is needed.
 - Run typechecking against every `makeInit` plan and connected Binding Step. An ordinary Step must return an update result. Preserve a deferred connected operation through the owning Block's `makeStep`, and execute it only inside the Composition that registered its Binding. The stronger checks also retain Command requirements from combined initialization Steps.
 - Keep callbacks at the top level of `viewInputs`. A callback nested in a record, array, tuple, union, or `Option` is rejected because its dispatch boundary is ambiguous. Return callback-bearing Html from a top-level renderer such as `toView` instead.
 
@@ -425,7 +526,13 @@ Converting existing value/collection arguments is required. Adopting focused hel
 
 ### Simplify keyed storage
 
-An exact required `Schema.Option` field containing one keyed Struct wrapper can use the `field`, `key`, and `childField` Binding shorthand. `None` means absent, and `Binding.init` remains responsible for creating an occurrence. Existing explicit `readAll`, `read`, `writeAt`, and `keySchema` policies remain supported. See [Optional keyed children](/core/block#fold-child-at) before choosing the shorthand.
+An exact required `Schema.Option` field containing one keyed Struct wrapper uses `makeOptionalKeyedFieldBinding` with `field`, `key`, and `childField`. `None` means absent, and `Binding.init` remains responsible for creating an occurrence. Existing explicit `readAll`, `read`, and `writeAt` policies remain supported. A Message-bearing child also supplies `keySchema`; a Message-free child omits it. See [Optional keyed children](/core/block#fold-child-at) before choosing the shorthand.
+
+### Select map initialization from the Model
+
+For Record or HashMap fields storing child Models directly, `makeInitIfMissingStep` can preserve an existing child or initialize a missing one. The `{ key, args }` form snapshots a static selection. When selection depends on current state, pass a pure producer that receives the contextually typed Step Model and returns `Option.some({ key, args })` or `Option.none()`.
+
+Construction remains passive. The registered graph evaluates the producer exactly once during Step interpretation. `None` and an existing key preserve the exact Model, emit no Commands, and do not run child init. A missing selected key retains every child init Command. Every branch requires the original Binding. Keep explicit `Binding.init` for wrappers, custom metadata, or parent Commands. This producer form is optional; existing static calls remain valid.
 
 ## Refresh Agent Context
 

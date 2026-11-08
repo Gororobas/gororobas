@@ -1,12 +1,12 @@
-import { view as buttonView } from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import { DatePicker, Field } from '../../../../view'
+import { Message } from './block'
 import {
   EndDateBinding,
   StartDateBinding,
   WorkHistoryEntryComposition,
 } from './composition'
-import { Message } from './definition'
 
 const ANCHOR = { placement: 'bottom-start' as const, gap: 4, padding: 8 }
 
@@ -123,7 +123,7 @@ export const view = WorkHistoryEntryComposition.makeView((model, h) => {
       h.div(
         [h.Class('flex justify-end')],
         [
-          buttonView(
+          Button.view(
             {
               onClick: Message.ClickedRemoveSelf(),
               toView: attributes =>

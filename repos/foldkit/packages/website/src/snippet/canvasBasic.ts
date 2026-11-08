@@ -12,17 +12,18 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const CanvasAppKey = Symbol('CanvasApp')
-
 const CanvasAppBlock = Block.make('CanvasApp', {
   key: CanvasAppKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
-const CanvasAppComposition = CanvasAppBlock.makeComposition()
 
-const subscriptions = CanvasAppBlock.makeSubscriptions(entry => ({
+const { makeComposition, makeSubscriptions } = CanvasAppBlock
+const CanvasAppComposition = makeComposition()
+
+const subscriptions = makeSubscriptions(entry => ({
   animationFrameTicks: entry(
     'AnimationFrameTicks',
     { isActive: Schema.Boolean },

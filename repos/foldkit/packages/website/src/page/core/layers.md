@@ -97,7 +97,7 @@ The host implements that Service with browser storage or a document API:
 
 The implementation Layer retains the real Command handler. The host’s provider supplies the storage dependency. An execution test can replace the storage transport and still exercise request construction, error handling, and result mapping.
 
-When the integrator owns a handler implementation, an ordinary Block constructor can list the original definition under `hostHandlers`. Select providers for every listed definition with `layer.pipe(FeatureBlock.provideHandlers(HandlersLayer))`, using their original `toLayer` methods. Provider Services and constructor errors must fit the Block's declared effects contract. This selection is passive; handler Layers are built later by the Runtime.
+When the integrator owns a handler implementation, an ordinary Block implementation can list the original definition under `hostHandlers`. Select providers for every listed definition with `layer.pipe(FeatureBlock.provideHandlers(HandlersLayer))`, using their original `toLayer` methods. Provider Services and constructor errors must fit the Block's declared effects contract. This selection is passive; handler Layers are built later by the Runtime.
 
 The passive public child contract does not expose the implementation's private handler inventory. Some generic family APIs, including Query, deliberately publish original host-handler contracts with their own checked `provideHandlers` selector. For normal storage or transport variation, keep the feature's workflow in its attached handler and provide the ordinary Service boundary shown above.
 
@@ -164,7 +164,7 @@ Foldkit’s `Http.layer` uses Effect’s Fetch-backed client with trace-header p
 
 ## Services in Flags
 
-Flags remain startup Effects rather than handler definitions. The Flags Effect can require services too. `Runtime.run` resolves Flags before calling init, so an application Layer that supplies a Flags dependency must build during startup.
+Flags remain startup Effects rather than handler definitions. The Flags Effect can require Services while obtaining an already decoded value. `Runtime.run` resolves Flags before calling init, so an application Layer that supplies a Flags dependency must build during startup. A hydratable server handoff is different: its Flags Schema must encode and decode synchronously without Effect Services.
 
 The root `services.ts` defines the session client and combines its provider with `Http.layer`:
 
@@ -216,7 +216,7 @@ When separate Blocks need the same HTTP, storage, or domain operation, share an 
 
 ::Snippet{name="layersMultiple" label="Multiple shared services"}
 
-Keep a small feature bundle in `block.ts`, or beside root Command definitions in `command.ts`. Extract `layer.ts` when composition is substantial or reused. Root `services.ts` exports `ApplicationLayer`; `block.ts` exports the construction `layer`, and `entry.ts` supplies the Layer to the Program. [Project Organization](/patterns/project-organization#composing-handler-layers) shows the complete compact and split layouts.
+Keep a compact feature bundle with its complete implementation. A split feature uses `effectsLayer.ts` for a separate handler bundle. Root `services.ts` exports `ApplicationLayer`; `layer.ts` exports the construction `layer`, and `entry.ts` supplies the Layer to the Program. [Project Organization](/patterns/project-organization#composing-handler-layers) shows the complete compact and split layouts.
 
 Choose an implementation through its Layer and provide controlled ordinary Services beneath its real handlers. APIs that deliberately publish host-handler contracts, such as Query, expose their checked provider selector. See [handler providers](/core/block#select-a-local-handler-recipe).
 
@@ -256,3 +256,11 @@ View-only components need no Block. Stateful Foldkit UI components export public
 A Schema-refined Combobox contract retains the factory's inferred Model, Message, OutMessage, view inputs and Binding operations. Bind the returned declaration exactly like a non-generic component; callable init, update and view functions belong to the acquired executable.
 
 Including Mounts in a Composition gives its view builder the allowed Mount contracts and adds their handler requirements to the application. TypeScript rejects a Mount outside that capability set or an embedded child view whose Mount requirements are missing. `FeatureComposition.makeView` derives this evidence from the local `mounts` and child Bindings. Providing the handler Layer satisfies execution; Composition declares which definitions the view may render. Composition starts no element work until the Mount appears in the view. Its included handler Layer builds at application startup. See [Mount requirements in reusable views](/core/mount#mount-requirements-in-reusable-views) for attribute and child-view composition.
+
+## Public bounds and construction dependencies
+
+A Block's `effects.services`, `effects.managedResources` and `effects.Error` bound its handler-Layer Services, ManagedResource handles and construction failures. Record completion infers graph-construction requirements and errors from its registered children. A custom Effect constructor adds its own requirements and errors. Ordinary request Services remain in their handler constructors, and invocation failures become Messages.
+
+The implementation's `EffectsLayer` selects local handler recipes. A separate bundle lives in `effectsLayer.ts`; `layer.ts` constructs the Block and provides child implementation Layers. `Block.makeEffectsContract<E, R>()` supplies generic handler-Layer error and ordinary Service bounds without repeating a finite Schema list.
+
+[Serializable Model and Message Codecs](/core/block#serializable-model-and-message-codecs) must complete synchronously without Effect Services. The check includes generated child delivery envelopes, so a Service-dependent child Message rejects the complete parent graph too. Keep ordinary Services in handlers and other effectful boundaries instead of moving them into a Block Codec.

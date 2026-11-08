@@ -1,6 +1,7 @@
 import type { Context, Effect, Layer, Schema, Scope } from 'effect'
 
 import type { AnyBinding, RequirementsOfBindings } from '../../block/binding.js'
+import type { ValidateCompleteMessageSelfContainedCodec } from '../../block/childEnvelope.js'
 import type { MakeCommandsStep } from '../../block/commandsStep.js'
 import type {
   Completed,
@@ -71,6 +72,7 @@ import type {
   ViewContract,
 } from '../constructed/contract.js'
 import type { InMessagePlanSourceValidation } from '../constructed/planSourceValidation.js'
+import type { RelationshipConstructors } from '../constructed/relationshipAuthoring.js'
 import type {
   AuthoringSource,
   Plan,
@@ -94,6 +96,7 @@ import type {
   ValidateInMessageSchema,
 } from './inMessageUpdate.js'
 import type { InputContract, InputOf } from './inputContract.js'
+import type { LegacyManagedResourceConfiguration } from './requirementNames.js'
 
 declare const NominalIdTypeId: unique symbol
 
@@ -102,7 +105,22 @@ export type NominalId<Id extends string, Key extends symbol> = Id &
   Readonly<{ [NominalIdTypeId]: Key }>
 
 type AnySchema = Schema.Codec<any, any, any, any>
+type AnySelfContainedSchema = Schema.Codec<any, any, never, never>
 type AnyFunction = (...args: ReadonlyArray<any>) => any
+/** @internal Preserves the exact Effect channels of a registered Binding. */
+export type BindingAcquisition<Binding> =
+  Binding extends Readonly<{
+    [Symbol.iterator](): Effect.EffectIterator<
+      infer Acquisition extends Effect.Effect<any, any, any>
+    >
+  }>
+    ? Acquisition
+    : never
+type AcquiredChildren<Bindings extends ReadonlyArray<unknown>> = {
+  readonly [Index in keyof Bindings]: Effect.Success<
+    BindingAcquisition<Bindings[Index]>
+  >
+}
 type TupleContract =
   | Schema.Codec<ReadonlyArray<unknown>, any, any, any>
   | InputContract<ReadonlyArray<unknown>>
@@ -121,7 +139,8 @@ type Resource = ManagedResource<any, any>
 export interface OperationDeclaration {
   readonly message: OperationSource
   readonly outMessage?: AnySchema
-  readonly resources?: ReadonlyArray<Resource>
+  /** Original ManagedResource contracts required by this result. */
+  readonly managedResources?: ReadonlyArray<Resource>
   readonly services?: ReadonlyArray<ServiceKey>
 }
 
@@ -129,7 +148,7 @@ export interface OperationDeclaration {
 export interface ContractConfiguration {
   readonly key: symbol
   readonly isMessageFree?: true
-  readonly Init: TupleContract
+  readonly InitArgs: TupleContract
   readonly Context?: TupleContract
   readonly InMessage?: AnySchema
   readonly InMessageContext?: TupleContract
@@ -148,14 +167,13 @@ export interface ContractConfiguration {
   readonly effects?:
     | EffectsContract<unknown, unknown>
     | Readonly<{
+        /** Ordinary Services required when the implementation builds its handler Layer. */
         services?: ReadonlyArray<ServiceKey>
-        resources?: ReadonlyArray<Resource>
+        /** Original ManagedResource contracts whose handles the implementation needs. */
+        managedResources?: ReadonlyArray<Resource>
+        /** Failures from building the handler Layer; Command invocation failures become Messages. */
         Error?: AnySchema
       }>
-  readonly codec?: Readonly<{
-    decoding?: ReadonlyArray<ServiceKey>
-    encoding?: ReadonlyArray<ServiceKey>
-  }>
 }
 
 type Channel<Value, Key extends PropertyKey, Default = never> =
@@ -173,12 +191,8 @@ type Effects<Config> = Channel<Config, 'effects'>
 type Services<Config> =
   | EffectsRequirementsOf<Effects<Config>>
   | ServiceOfKeys<Channel<Effects<Config>, 'services'>>
-type Resources<Config> = ResourceServices<Channel<Effects<Config>, 'resources'>>
-type Decoding<Config> = ServiceOfKeys<
-  Channel<Channel<Config, 'codec'>, 'decoding'>
->
-type Encoding<Config> = ServiceOfKeys<
-  Channel<Channel<Config, 'codec'>, 'encoding'>
+type Resources<Config> = ResourceServices<
+  Channel<Effects<Config>, 'managedResources'>
 >
 type HandlerError<Config> =
   | EffectsErrorOf<Effects<Config>>
@@ -229,7 +243,7 @@ type InvalidInMessageOutput<Config> = {
   [Tag in keyof InMessageOutputs<Config>]: [
     Exclude<
       keyof InMessageOutput<Config, Tag>,
-      'outMessage' | 'services' | 'resources'
+      'outMessage' | 'services' | 'managedResources'
     >,
   ] extends [never]
     ? Fits<
@@ -241,8 +255,7 @@ type InvalidInMessageOutput<Config> = {
     : Tag
 }[keyof InMessageOutputs<Config>]
 
-/** @internal Checks input ownership and public result bounds before implementation exists. */
-export type InMessageConfigurationArguments<Config> =
+type InMessageConfigurationArguments<Config> =
   Config extends Readonly<{
     InMessage: infer In extends AnySchema
     Message: infer Local extends AnySchema
@@ -265,6 +278,23 @@ export type InMessageConfigurationArguments<Config> =
           | Readonly<{ InMessageContext: unknown }>
       ? readonly [missingInMessageSchema: never]
       : readonly []
+type LegacyCodecConfiguration<Config> =
+  Config extends Readonly<{
+    codec: unknown
+  }>
+    ? true
+    : never
+/** @internal Checks input ownership and public requirement names before implementation exists. */
+export type DefinitionConfigurationArguments<Config> = readonly [
+  ...([LegacyManagedResourceConfiguration<Config>] extends [never]
+    ? readonly []
+    : readonly [renamedManagedResourcesRequirement: never]),
+  ...([LegacyCodecConfiguration<Config>] extends [never]
+    ? readonly []
+    : readonly [retiredCodecDeclaration: never]),
+  ...InMessageConfigurationArguments<Config>,
+]
+
 type OperationMessage<Value> = Value extends OperationSource
   ? Value
   : Value extends OperationDeclaration
@@ -278,7 +308,7 @@ type OperationOut<Value> =
     : never
 type OperationRequirements<Value> =
   | ServiceOfKeys<Channel<Value, 'services'>>
-  | ResourceServices<Channel<Value, 'resources'>>
+  | ResourceServices<Channel<Value, 'managedResources'>>
 
 /** @internal Operation mappings declared once and installed during completion. */
 type DeclaredOperationSources<Config> = {
@@ -380,14 +410,14 @@ type InputFacts<Config> =
 
 /** Flat stable facts whose values never depend on an implementation type. */
 export type DeclaredFacts<
-  MessageSchema extends AnySchema,
+  _MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
   OwnerValue = Owner<string>,
 > = Readonly<{
   identity: Config['key']
   isMessageFree: Config extends Readonly<{ isMessageFree: true }> ? true : false
-  initArgs: InputOf<Config['Init']>
+  initArgs: InputOf<Config['InitArgs']>
   init: ResultContract<never, Resources<Config> | RuntimeCapability<OwnerValue>>
   updateContext: UpdateContext<Config>
   update: ResultContract<
@@ -404,8 +434,8 @@ export type DeclaredFacts<
   hostRequirements: HandlerRequirements<Services<Config>>
   programRequirements: Services<Config> | Resources<Config>
   runtimeServices: RuntimeCapability<OwnerValue>
-  decodingServices: MessageSchema['DecodingServices'] | Decoding<Config>
-  encodingServices: MessageSchema['EncodingServices'] | Encoding<Config>
+  decodingServices: never
+  encodingServices: never
 }> &
   InputFacts<Config>
 
@@ -415,8 +445,8 @@ export type DeclaredFacts<
  */
 export interface Contract<
   OwnerValue extends Owner<string>,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   Facts extends PublicFacts,
 > {
@@ -473,8 +503,8 @@ export interface ContractGraph<
 /** A selected implementation Layer and the bounded public contract it supplies. */
 export interface Block<
   OwnerValue extends Owner<string>,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   Facts extends PublicFacts,
   ConstructorError,
@@ -665,7 +695,7 @@ export type InMessageUpdateBodyValidation<
     : InMessagePlanSourceValidation<Body>
 
 type NativeFacts<
-  MessageSchema extends AnySchema,
+  MessageSchema extends AnySelfContainedSchema,
   Body extends ConstructorBody,
   Config,
 > = ProjectFacts<
@@ -721,7 +751,7 @@ type RuntimeClosedFacts<OwnerValue, Facts extends PublicFacts> = {
 
 /** @internal Projects exact runtime-closed facts for both completion surfaces. */
 export type ActualFacts<
-  MessageSchema extends AnySchema,
+  MessageSchema extends AnySelfContainedSchema,
   Body extends ConstructorBody,
   Config,
 > = Body extends unknown
@@ -743,7 +773,7 @@ type WithSelectedRuntimeServices<
 
 /** @internal Retains actual installed Services only on the selected implementation Layer. */
 export type SelectedActualFacts<
-  MessageSchema extends AnySchema,
+  MessageSchema extends AnySelfContainedSchema,
   Body extends ConstructorBody,
   Config,
 > = Body extends unknown
@@ -938,7 +968,7 @@ export type HostContractValidation<
 
 /** @internal Checks family channels against selected or host-owned handler bounds. */
 export type FamilyValidation<
-  MessageSchema extends AnySchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
   Body extends ConstructorBody,
@@ -962,8 +992,8 @@ export type FamilyValidation<
 /** @internal Checks a passive family template before selecting its original host providers. */
 export interface MakeFamilyBlock<
   Id extends string,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
 > {
@@ -1020,8 +1050,8 @@ export type ValidateFamilyHandlers<Definitions, Handlers> =
 /** Checks a constructor against native registration and the independent contract. */
 export interface MakeBlock<
   Id extends string,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
 > {
@@ -1197,7 +1227,30 @@ export type ContractComposition<
 > &
   AuthoringSourceEvidence<Source> &
   Readonly<{
-    makeInit: MakeInit<Source, InputOf<Config['Init']>>
+    /** Acquires the registered inventory inside a custom Effect constructor.
+     * Ordinary record completion acquires these children internally.
+     * The returned Effect preserves Binding order and is passive until executed and does not initialize
+     * child Models or start their handlers and lifecycles. Use individual
+     * Binding yields when construction needs their acquired handles.
+     *
+     * @example
+     * ```ts
+     * const children = yield* ApplicationComposition.acquireChildren()
+     *
+     * return {
+     *   children,
+     *   init,
+     *   update,
+     *   view,
+     *   EffectsLayer,
+     * }
+     * ``` */
+    acquireChildren: () => Effect.Effect<
+      AcquiredChildren<Source['bindings']>,
+      Effect.Error<BindingAcquisition<Source['bindings'][number]>>,
+      Effect.Services<BindingAcquisition<Source['bindings'][number]>>
+    >
+    makeInit: MakeInit<Source, InputOf<Config['InitArgs']>>
     makeView: MakeView<Source, ViewInputs<Channel<Config, 'view'>>>
     makeUpdate: MakeComposableUpdatePlan<Source, UpdateContext<Config>>
   }> &
@@ -1220,8 +1273,8 @@ export type ContractComposition<
 /** Static relationship inventory with independently declared startup inference. */
 export interface MakeComposition<
   Id extends string,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   ChildInitContextSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
@@ -1240,7 +1293,7 @@ export interface MakeComposition<
       readonly [],
       readonly []
     >,
-    Readonly<{ key: Config['key']; Init: Config['Init'] }> &
+    Readonly<{ key: Config['key']; InitArgs: Config['InitArgs'] }> &
       (Config extends Readonly<{ Context: infer Context }>
         ? Readonly<{ Context: Context }>
         : unknown) &
@@ -1273,7 +1326,8 @@ export interface MakeComposition<
         ModelSchema['Type'],
         MessageSchema['Type'],
         OutValue<OutMessageSchema>
-      >,
+      > &
+      ValidateCompleteMessageSelfContainedCodec<MessageSchema, Bindings>,
   ): ContractComposition<
     StaticSource<
       Owner<NominalId<Id, Config['key']>, true>,
@@ -1283,7 +1337,7 @@ export interface MakeComposition<
       Mounts,
       BindingSpecs<Bindings>
     >,
-    Readonly<{ key: Config['key']; Init: Config['Init'] }> &
+    Readonly<{ key: Config['key']; InitArgs: Config['InitArgs'] }> &
       (Config extends Readonly<{ Context: infer Context }>
         ? Readonly<{ Context: Context }>
         : unknown) &
@@ -1302,40 +1356,48 @@ export interface MakeComposition<
 /** @internal Retains the shared declared identity and reader slots. */
 export interface DefinitionFields<
   Id extends string,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   ChildInitContextSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
-> extends Pick<
-  ConstructedDefinition<
-    NominalId<Id, Config['key']>,
-    ModelSchema,
-    MessageSchema,
-    OutMessageSchema,
-    ChildInitContextSchema,
-    'Provided'
-  >,
-  | 'owner'
-  | 'Model'
-  | 'Message'
-  | 'mounts'
-  | 'bindings'
-  | 'makeStep'
-  | 'makeFieldsStep'
-  | 'makeNoopStep'
-  | 'makeCommandsStep'
-  | 'makeSubscriptions'
-  | 'makeManagedResources'
-  | 'makeBinding'
-  | 'makeMapBinding'
-  | 'makeOutMessageFold'
-  | 'makeOutMessageForward'
-  | 'makeCommand'
-  | 'makeMount'
-  | 'makeMountStream'
-  | 'makeResource'
-> {
+>
+  extends
+    Pick<
+      ConstructedDefinition<
+        NominalId<Id, Config['key']>,
+        ModelSchema,
+        MessageSchema,
+        OutMessageSchema,
+        ChildInitContextSchema,
+        'Provided'
+      >,
+      | 'owner'
+      | 'Model'
+      | 'Message'
+      | 'mounts'
+      | 'bindings'
+      | 'makeStep'
+      | 'makeFieldsStep'
+      | 'makeNoopStep'
+      | 'makeCommandsStep'
+      | 'makeSubscriptions'
+      | 'makeManagedResources'
+      | 'makeOutMessageFold'
+      | 'makeOutMessageForward'
+      | 'makeCommand'
+      | 'makeMount'
+      | 'makeMountStream'
+      | 'makeResource'
+    >,
+    RelationshipConstructors<
+      ModelSchema,
+      MessageSchema,
+      OutMessageSchema,
+      ChildInitContextSchema,
+      'Provided',
+      Owner<NominalId<Id, Config['key']>, true>
+    > {
   readonly [DescriptorTypeId]: DeclaredFacts<
     MessageSchema,
     OutMessageSchema,
@@ -1390,8 +1452,8 @@ export interface DefinitionFields<
 /** @internal Names local-only authoring contracts independently of input helper specializations. */
 export type BaseDefinition<
   Id extends string,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   ChildInitContextSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
@@ -1435,8 +1497,8 @@ export type BaseDefinition<
 /** @internal Keeps input authorship nameable across declaration consumers. */
 export interface InMessageDefinitionFields<
   Id extends string,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   ChildInitContextSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
@@ -1474,8 +1536,8 @@ export interface InMessageDefinitionFields<
 
 /** @internal Names the emitting helper independently from its inferred overloads. */
 export interface InMessageOutMessageFields<
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema,
   In extends AnySchema,
 > {
@@ -1490,8 +1552,8 @@ export interface InMessageOutMessageFields<
 /** @internal Preserves named input helpers without exposing an implementation graph. */
 export type InMessageDefinition<
   Id extends string,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   ChildInitContextSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,
@@ -1546,8 +1608,8 @@ export type InMessageDefinition<
 /** Authoring helpers retain separate incoming and Command-result Message contracts. */
 export type Definition<
   Id extends string,
-  ModelSchema extends AnySchema,
-  MessageSchema extends AnySchema,
+  ModelSchema extends AnySelfContainedSchema,
+  MessageSchema extends AnySelfContainedSchema,
   OutMessageSchema extends AnySchema | undefined,
   ChildInitContextSchema extends AnySchema | undefined,
   Config extends ContractConfiguration,

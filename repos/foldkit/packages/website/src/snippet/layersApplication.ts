@@ -1,4 +1,3 @@
-import { Effect } from 'effect'
 import { Block } from 'foldkit'
 
 import type { Model } from './layers'
@@ -8,9 +7,11 @@ import {
   LoadUser,
   Message,
   UserState,
+  makeComposition,
+  makeFieldsStep,
 } from './layers'
 
-export const ApplicationComposition = ApplicationBlock.makeComposition()
+export const ApplicationComposition = makeComposition()
 
 export const init = ApplicationComposition.makeInit(() => ({
   model: { user: UserState.Loading() },
@@ -18,10 +19,10 @@ export const init = ApplicationComposition.makeInit(() => ({
 }))
 
 export const update = ApplicationComposition.makeUpdate({
-  SucceededLoadUser: ApplicationBlock.makeFieldsStep.fromMessage(
-    ({ user }) => ({ user: () => UserState.Loaded({ user }) }),
-  ),
-  FailedLoadUser: ApplicationBlock.makeFieldsStep.fromMessage(({ error }) => ({
+  SucceededLoadUser: makeFieldsStep.fromMessage(({ user }) => ({
+    user: () => UserState.Loaded({ user }),
+  })),
+  FailedLoadUser: makeFieldsStep.fromMessage(({ error }) => ({
     user: () => UserState.Failed({ error }),
   })),
 })
@@ -35,16 +36,11 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   }),
 }))
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-      EffectsLayer,
-    }
-  }),
-)
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer,
+})
 
 export { ApplicationBlock } from './layers'

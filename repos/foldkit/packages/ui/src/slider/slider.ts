@@ -19,7 +19,7 @@ import {
   childAttributes,
 } from 'foldkit/html'
 import * as BlockFamily from 'foldkit/internal/block'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
@@ -91,7 +91,7 @@ export type PressedKeyboardNavigation =
   typeof Message.PressedKeyboardNavigation.Type
 
 /** Parent-owned configuration changes accepted independently from local Slider events. */
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   InformedOfRangeChange: { min: Schema.Number, max: Schema.Number },
 })
 export type InMessage = typeof InMessage.Type
@@ -123,7 +123,7 @@ const makeSliderDefinition = () =>
     Model,
     Message,
     OutMessage,
-    Init: Schema.Tuple([InitConfig]),
+    InitArgs: Schema.Tuple([InitConfig]),
     view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
     InMessage,
   })
@@ -865,17 +865,14 @@ const makeSliderLayer = ({
   view,
   subscriptions,
 }: SliderAuthoring) =>
-  Definition.makeLayer(
-    Effect.succeed({
-      children: [],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-      subscriptions,
-      EffectsLayer: subscriptions.layer,
-    }),
-  )
+  Definition.makeLayer({
+    init,
+    update,
+    inMessageUpdate,
+    view,
+    subscriptions,
+    EffectsLayer: subscriptions.layer,
+  })
 
 type SliderLayer = ReturnType<typeof makeSliderLayer>
 interface SliderImplementation extends Block.FamilyLifetime {

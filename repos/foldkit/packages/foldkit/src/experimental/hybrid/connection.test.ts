@@ -35,12 +35,29 @@ const ChildBlock: Block.FromAssemblyWithOutMessage<
   typeof prepare
 > = Block.assemble(prepare)
 
+it('authors direct keyed initialization without an identity adapter', () => {
+  const ParentDefinition = Hybrid.makeDefinition(
+    'DirectKeyedConnectionParent',
+    {
+      Model: Schema.Struct({ children: Schema.Array(ChildBlock.Model) }),
+      Message: Schema.Never,
+    },
+  )
+  const Binding = ParentDefinition.makeKeyedArrayBinding(ChildBlock, {
+    field: 'children',
+    key: 'count',
+    init: { instances: () => [{ key: 0, args: [] }] },
+  })
+
+  expect(Object.hasOwn(Binding, 'connect')).toBe(true)
+})
+
 it('retains the selected and reselected policy on an experimental connection alias', async () => {
   const ParentDefinition = Hybrid.makeDefinition('ConnectionExtensionParent', {
     Model: Schema.Struct({ child: ChildBlock.Model, observed: Schema.Number }),
     Message: defineMessageUnion({ ClickedIncrement: {} }),
   })
-  const Binding = ParentDefinition.makeBinding(ChildBlock, {
+  const Binding = ParentDefinition.makeRequiredFieldBinding(ChildBlock, {
     field: 'child',
     init: false,
   })
@@ -119,7 +136,9 @@ it('keeps connect available as an ordinary child operation and reserves it only 
     Model: Schema.Struct({ child: NativeBlock.Model }),
     Message,
   })
-  const NativeBinding = Parent.makeBinding(NativeBlock, { field: 'child' })
+  const NativeBinding = Parent.makeRequiredFieldBinding(NativeBlock, {
+    field: 'child',
+  })
   const ParentComposition = Parent.makeComposition({
     bindings: [NativeBinding],
   })
@@ -134,7 +153,7 @@ it('keeps connect available as an ordinary child operation and reserves it only 
 
   expect(updated.model.child.count).toBe(1)
   expect(() =>
-    Reflect.apply(Experimental.makeBinding, undefined, [
+    Reflect.apply(Experimental.makeRequiredFieldBinding, undefined, [
       NativeBlock,
       { field: 'child' },
     ]),
@@ -142,7 +161,7 @@ it('keeps connect available as an ordinary child operation and reserves it only 
 
   if (false) {
     // @ts-expect-error Only experimental connection methods reserve the operation name.
-    Experimental.makeBinding(NativeBlock, { field: 'child' })
+    Experimental.makeRequiredFieldBinding(NativeBlock, { field: 'child' })
   }
 })
 
@@ -154,7 +173,7 @@ it('connects keyed storage through the internal native protocol and preserves it
     }),
     Message: defineMessageUnion({ ClickedIncrement: {} }),
   })
-  const Binding = ParentDefinition.makeMapBinding(ChildBlock, {
+  const Binding = ParentDefinition.makeRecordBinding(ChildBlock, {
     field: 'children',
   }).withOutMessagePolicy({
     fold: (key, outMessage) =>

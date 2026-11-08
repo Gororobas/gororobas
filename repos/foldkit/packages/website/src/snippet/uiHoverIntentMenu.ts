@@ -1,15 +1,11 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  HoverIntentBlock,
-  layer as HoverIntentLayer,
-  type RenderInfo as HoverIntentRenderInfo,
-} from '@foldkit/ui/hoverIntent'
+import { HoverIntent } from '@foldkit/ui'
 
 const Model = Schema.Struct({
-  hoverMenu: HoverIntentBlock.Model,
+  hoverMenu: HoverIntent.HoverIntentBlock.Model,
   // ...your other fields
 })
 type Model = typeof Model.Type
@@ -20,30 +16,34 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const HoverMenuKey = Symbol('HoverMenu')
-
 export const HoverMenuBlock = Block.make('HoverMenu', {
   key: HoverMenuKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = HoverMenuBlock
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = HoverMenuBlock
 
-const foldHoverMenuOutMessage = HoverMenuBlock.makeOutMessageFold(
-  HoverIntentBlock,
+const HoverMenuBinding = makeRequiredFieldBinding(
+  HoverIntent.HoverIntentBlock,
   {
+    field: 'hoverMenu',
+  },
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(HoverIntent.HoverIntentBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
-  },
-)
+  }),
+})
 
-const HoverMenuBinding = HoverMenuBlock.makeBinding(HoverIntentBlock, {
-  field: 'hoverMenu',
-}).withOutMessagePolicy({ fold: foldHoverMenuOutMessage })
-
-const HoverMenuComposition = HoverMenuBlock.makeComposition({
+const HoverMenuComposition = makeComposition({
   bindings: [HoverMenuBinding],
 })
 
@@ -68,7 +68,7 @@ const view = HoverMenuComposition.makeView((model, h) => {
     trigger,
     panel,
     isVisible,
-  }: HoverIntentRenderInfo) =>
+  }: HoverIntent.RenderInfo) =>
     h.div(
       [h.Class('relative')],
       [
@@ -127,15 +127,8 @@ const view = HoverMenuComposition.makeView((model, h) => {
   )
 })
 
-export const layer = HoverMenuBlock.makeLayer(
-  Effect.gen(function* () {
-    const hoverMenu = yield* HoverMenuBinding
-
-    return {
-      children: [hoverMenu],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(HoverIntentLayer))
+export const layer = HoverMenuBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(HoverIntent.layer))

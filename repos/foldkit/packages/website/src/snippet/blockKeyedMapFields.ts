@@ -16,22 +16,24 @@ const Model = Schema.Struct({
 type Model = typeof Model.Type
 
 export const ApplicationKey = Symbol('Application')
-
 const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message: Schema.Never,
 })
 
-export const EntriesByIdBinding = ApplicationBlock.makeMapBinding(EntryBlock, {
+const { makeRecordBinding, makeHashMapBinding, makeComposition } =
+  ApplicationBlock
+
+export const EntriesByIdBinding = makeRecordBinding(EntryBlock, {
   field: 'entriesById',
 })
-export const RowsByIdBinding = ApplicationBlock.makeMapBinding(EntryBlock, {
+export const RowsByIdBinding = makeHashMapBinding(EntryBlock, {
   field: 'rowsById',
   childField: 'entry',
 })
-export const ApplicationComposition = ApplicationBlock.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [EntriesByIdBinding, RowsByIdBinding],
 })
 export const init = ApplicationComposition.makeInit(() => ({

@@ -1,6 +1,6 @@
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const Model = Schema.Struct({ routeChangeCount: Schema.Number })
@@ -11,21 +11,22 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const InMessage = defineMessageUnion({ InformedOfRouteChange: {} })
+const InMessage = defineInMessageUnion({ InformedOfRouteChange: {} })
 type InMessage = typeof InMessage.Type
 
 export const RouteAwareKey = Symbol('RouteAware')
-
 export const RouteAwareBlock = Block.make('RouteAware', {
   key: RouteAwareKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 
   Model,
   Message,
   InMessage,
 })
 
-const RouteAwareComposition = RouteAwareBlock.makeComposition()
+const { makeComposition } = RouteAwareBlock
+
+const RouteAwareComposition = makeComposition()
 
 const init = RouteAwareComposition.makeInit(() => ({
   model: Model.make({ routeChangeCount: 0 }),
@@ -45,13 +46,8 @@ const inMessageUpdate = RouteAwareComposition.makeInMessageUpdate({
   }),
 })
 
-export const layer = RouteAwareBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      inMessageUpdate,
-    }
-  }),
-)
+export const layer = RouteAwareBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+})

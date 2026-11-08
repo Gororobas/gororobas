@@ -1,9 +1,9 @@
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import { type SwitchAttributes, view as uiSwitchView } from '@foldkit/ui/switch'
+import { Switch } from '@foldkit/ui'
 
 // Store the on/off state as a plain boolean field in your Model:
 const Model = Schema.Struct({
@@ -19,17 +19,17 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const NotificationSettingsKey = Symbol('NotificationSettings')
-
 export const NotificationSettingsBlock = Block.make('NotificationSettings', {
   key: NotificationSettingsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const NotificationSettingsComposition =
-  NotificationSettingsBlock.makeComposition()
+const { makeComposition } = NotificationSettingsBlock
+
+const NotificationSettingsComposition = makeComposition()
 
 // In your init function, start it off:
 const init = NotificationSettingsComposition.makeInit(() => ({
@@ -52,7 +52,7 @@ const update = NotificationSettingsComposition.makeUpdate({
 // track color keys off the data-checked attribute; the knob position derives
 // from the same Model field.
 const view = NotificationSettingsComposition.makeView((model, h) => {
-  const switchView = (attributes: SwitchAttributes<Message>) =>
+  const switchView = (attributes: Switch.SwitchAttributes<Message>) =>
     h.div(
       [h.Class('flex items-center gap-3')],
       [
@@ -87,7 +87,7 @@ const view = NotificationSettingsComposition.makeView((model, h) => {
       ],
     )
 
-  return uiSwitchView(
+  return Switch.view(
     {
       id: 'notifications',
       isChecked: model.notificationsEnabled,
@@ -99,13 +99,8 @@ const view = NotificationSettingsComposition.makeView((model, h) => {
   )
 })
 
-export const layer = NotificationSettingsBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-    }
-  }),
-)
+export const layer = NotificationSettingsBlock.makeLayer({
+  init,
+  update,
+  view,
+})

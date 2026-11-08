@@ -1,22 +1,22 @@
 import type { Block } from 'foldkit'
 
-import { DialogBlock } from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
 import {
-  makeBinding,
   makeComposition,
   makeFieldsStep,
   makeNoopStep,
   makeOutMessageFold,
-} from './definition'
+  makeRequiredFieldBinding,
+} from './block'
 
-export const DialogBinding = makeBinding(DialogBlock, {
+export const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
   field: 'dialog',
   init: {
     contextToArgs: () => [{ id: 'workspace-command-palette' }],
   },
 }).withOutMessagePolicy({
-  fold: makeOutMessageFold(DialogBlock, {
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: () =>
       makeFieldsStep(() => ({

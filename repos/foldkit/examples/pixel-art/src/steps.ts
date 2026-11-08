@@ -2,9 +2,9 @@ import { Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeFieldsStep, makeStep } from './block'
 import { saveCanvas } from './command'
 import { GridSizeConfirmDialogBinding } from './composition'
-import { makeFieldsStep, makeStep } from './definition'
 import { createEmptyGrid, isGridEmpty } from './grid'
 import { type PaletteIndex, type Tool } from './model'
 
@@ -31,7 +31,7 @@ export const applyGridSizeChange = (size: number) =>
     }),
   }))
 
-export const requestGridSizeChange = (size: number) =>
+export const changeGridSize = (size: number) =>
   makeStep(model => {
     if (size === model.gridSize) {
       return { model }

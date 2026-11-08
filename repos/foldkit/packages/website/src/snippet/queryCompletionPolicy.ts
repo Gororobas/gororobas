@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Result, Schema } from 'effect'
+import { Layer, Option, Result, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { Query } from 'foldkit/experimental'
 
@@ -11,32 +11,39 @@ const Model = Schema.Struct({
 type Model = typeof Model.Type
 
 export const ApplicationKey = Symbol('Application')
-
 export const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 
   Model,
   Message: Schema.Never,
 })
 
-const PostDetailsBinding = ApplicationBlock.makeBinding(postQuery, {
+const {
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeFieldsStep,
+  makeNoopStep,
+  makeComposition,
+} = ApplicationBlock
+
+const PostDetailsBinding = makeRequiredFieldBinding(postQuery, {
   field: 'postDetails',
 }).withOutMessagePolicy({
-  fold: ApplicationBlock.makeOutMessageFold(postQuery, {
+  fold: makeOutMessageFold(postQuery, {
     CompletedFetch: ({ args, result }) =>
       Result.isFailure(result)
-        ? ApplicationBlock.makeFieldsStep(() => ({
+        ? makeFieldsStep(() => ({
             maybeNotice: () =>
               Option.some(
                 `Could not load post ${args.postId}: ${result.failure}`,
               ),
           }))
-        : ApplicationBlock.makeNoopStep(),
+        : makeNoopStep(),
   }),
 })
 
-const ApplicationComposition = ApplicationBlock.makeComposition({
+const ApplicationComposition = makeComposition({
   bindings: [PostDetailsBinding],
 })
 const init = ApplicationComposition.makeInit(() => ({
@@ -44,14 +51,7 @@ const init = ApplicationComposition.makeInit(() => ({
 }))
 const update = ApplicationComposition.makeUpdate({})
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    const postDetails = yield* PostDetailsBinding
-
-    return {
-      children: [postDetails],
-      init,
-      update,
-    }
-  }),
-).pipe(Layer.provide(Query.layer))
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+}).pipe(Layer.provide(Query.layer))

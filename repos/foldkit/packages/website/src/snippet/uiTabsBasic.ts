@@ -1,17 +1,13 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  layer as TabsLayer,
-  type RenderInfo as TabsRenderInfo,
-  makeBlock as makeTabsBlock,
-} from '@foldkit/ui/tabs'
+import { Tabs } from '@foldkit/ui'
 
 const Framework = Schema.Literals(['Foldkit', 'React', 'Elm'])
 type Framework = typeof Framework.Type
 
-const FrameworkTabs = makeTabsBlock<Framework>()
+const FrameworkTabs = Tabs.makeBlock<Framework>()
 
 // Add fields to your Model for the Tabs Block and the active tab. The
 // Block keeps private keyboard-focus state; the parent owns the active
@@ -27,16 +23,20 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const TabsExampleKey = Symbol('TabsExample')
-
 export const TabsExampleBlock = Block.make('TabsExample', {
   key: TabsExampleKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = TabsExampleBlock
+const {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = TabsExampleBlock
 
 const frameworks: ReadonlyArray<Framework> = ['Foldkit', 'React', 'Elm']
 
@@ -52,25 +52,25 @@ const descriptions: Record<Framework, string> = {
 // returns an Update.Step over the parent Model, which already has the next
 // Tabs Model written back. Passing the whole child lets the parent Block
 // infer the refined `Framework` OutMessage and parent Step:
-const foldTabsOutMessage = TabsExampleBlock.makeOutMessageFold(FrameworkTabs, {
-  // The child has emitted `Selected`. Store the selected value as the new
-  // active tab. In this arm the parent can also update its own state or
-  // dispatch Commands, for example route to a new URL, persist the
-  // selection, or trigger a panel content fetch.
-  Selected: ({ value }) =>
-    makeFieldsStep(() => ({
-      activeFramework: () => value,
-    })),
-})
-
 // The Binding declares placement, typed startup, and OutMessage policy.
 // The construction Layer below supplies the child implementation.
-const TabsBinding = TabsExampleBlock.makeBinding(FrameworkTabs, {
+const TabsBinding = makeRequiredFieldBinding(FrameworkTabs, {
   field: 'tabs',
   init: { contextToArgs: () => [{ id: 'framework-tabs' }] },
-}).withOutMessagePolicy({ fold: foldTabsOutMessage })
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(FrameworkTabs, {
+    // The child has emitted `Selected`. Store the selected value as the new
+    // active tab. In this arm the parent can also update its own state or
+    // dispatch Commands, for example route to a new URL, persist the
+    // selection, or trigger a panel content fetch.
+    Selected: ({ value }) =>
+      makeFieldsStep(() => ({
+        activeFramework: () => value,
+      })),
+  }),
+})
 
-const TabsExampleComposition = TabsExampleBlock.makeComposition({
+const TabsExampleComposition = makeComposition({
   bindings: [TabsBinding],
 })
 
@@ -92,7 +92,7 @@ const view = TabsExampleComposition.makeView((model, h) => {
     tablist,
     tabs,
     activeIndex,
-  }: TabsRenderInfo<Framework>) =>
+  }: Tabs.RenderInfo<Framework>) =>
     h.div(
       [],
       [
@@ -135,15 +135,8 @@ const view = TabsExampleComposition.makeView((model, h) => {
   )
 })
 
-export const layer = TabsExampleBlock.makeLayer(
-  Effect.gen(function* () {
-    const tabs = yield* TabsBinding
-
-    return {
-      children: [tabs],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(TabsLayer))
+export const layer = TabsExampleBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Tabs.layer))

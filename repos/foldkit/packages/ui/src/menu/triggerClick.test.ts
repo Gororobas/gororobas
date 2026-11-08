@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
@@ -16,7 +16,7 @@ const MenuTriggerClickTestBlock = Block.make('MenuTriggerClickTest', {
   key: MenuTriggerClickTestKey,
   Model,
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   ChildInitContext: InitConfig,
   view: { kind: 'Element' },
 })
@@ -27,10 +27,13 @@ const foldMenuOutMessage = MenuTriggerClickTestBlock.makeOutMessageFold(
     Closed: () => MenuTriggerClickTestBlock.makeNoopStep(),
   },
 )
-const MenuBinding = MenuTriggerClickTestBlock.makeBinding(TestMenu, {
-  field: 'menu',
-  init: { contextToArgs: config => [config] },
-}).withOutMessagePolicy({ fold: foldMenuOutMessage })
+const MenuBinding = MenuTriggerClickTestBlock.makeRequiredFieldBinding(
+  TestMenu,
+  {
+    field: 'menu',
+    init: { contextToArgs: config => [config] },
+  },
+).withOutMessagePolicy({ fold: foldMenuOutMessage })
 const MenuTriggerClickTestComposition =
   MenuTriggerClickTestBlock.makeComposition({
     bindings: [MenuBinding],
@@ -61,18 +64,11 @@ const init = MenuTriggerClickTestComposition.makeInit(() => ({
 const update = MenuTriggerClickTestComposition.makeUpdate({})
 const ApplicationBlock = {
   block: MenuTriggerClickTestBlock,
-  layer: MenuTriggerClickTestBlock.makeLayer(
-    Effect.gen(function* () {
-      const menu = yield* MenuBinding
-
-      return {
-        children: [menu],
-        init,
-        update,
-        view,
-      }
-    }),
-  ).pipe(Layer.provide(MenuLayer)),
+  layer: MenuTriggerClickTestBlock.makeLayer({
+    init,
+    update,
+    view,
+  }).pipe(Layer.provide(MenuLayer)),
 }
 
 const requireElement = (id: string): HTMLElement => {

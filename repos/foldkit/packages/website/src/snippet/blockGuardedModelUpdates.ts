@@ -10,10 +10,9 @@ const Model = Schema.Struct({ title: Schema.String, saveState: SaveState })
 type Model = typeof Model.Type
 
 export const DraftKey = Symbol('Draft')
-
 const DraftBlock = Block.make('Draft', {
   key: DraftKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   isMessageFree: true,
 
   Model,

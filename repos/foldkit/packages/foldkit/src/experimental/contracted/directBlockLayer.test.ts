@@ -31,7 +31,7 @@ const Child = Block.make('DirectBlockLayerChild', {
   Model: ChildModel,
   Message: ChildMessage,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const ChildComposition = Child.makeComposition()
 const childInit = ChildComposition.makeInit(() => ({ model: { value: 7 } }))
@@ -48,10 +48,10 @@ const Parent = Block.make('DirectBlockLayerParent', {
   Model: ParentModel,
   Message: ParentMessage,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-const ChildBinding = Parent.makeBinding(Child, { field: 'child' })
+const ChildBinding = Parent.makeRequiredFieldBinding(Child, { field: 'child' })
 const ParentComposition = Parent.makeComposition({ bindings: [ChildBinding] })
 const parentInit = ParentComposition.makeInit(() => ({ model: {} }))
 const parentUpdate = ParentComposition.makeUpdate({})
@@ -108,7 +108,7 @@ const ForeignChild = Block.make('DirectBlockLayerForeignChild', {
   Model: ChildModel,
   Message: ChildMessage,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const ForeignChildComposition = ForeignChild.makeComposition()
 const foreignChildLayer = ForeignChild.makeLayer(
@@ -125,7 +125,7 @@ const DocumentChild = Block.make('DirectBlockLayerDocumentChild', {
   Model: DocumentChildModel,
   Message: Schema.Never,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Document' },
 })
 const ParentWithDocumentKey = Symbol('DirectBlockLayerParentWithDocument')
@@ -134,12 +134,15 @@ const ParentWithDocument = Block.make('DirectBlockLayerParentWithDocument', {
   Model: Schema.Struct({ document: DocumentChildModel }),
   Message: Schema.Never,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Document' },
 })
-const DocumentStateBinding = ParentWithDocument.makeBinding(DocumentChild, {
-  field: 'document',
-})
+const DocumentStateBinding = ParentWithDocument.makeRequiredFieldBinding(
+  DocumentChild,
+  {
+    field: 'document',
+  },
+)
 const ParentWithDocumentComposition = ParentWithDocument.makeComposition({
   bindings: [DocumentStateBinding],
 })
@@ -172,7 +175,7 @@ const PageBlock = Block.make('DirectBlockLayerPage', {
   key: PageKey,
   Model: Schema.Struct({ url: Url, language: Schema.String }),
   Message: PageMessage,
-  Init: Schema.Tuple([PageFlags, Url]),
+  InitArgs: Schema.Tuple([PageFlags, Url]),
   view: { kind: 'Document' },
 })
 const PageComposition = PageBlock.makeComposition()
@@ -205,7 +208,7 @@ const HandlerBlock = Block.make('DirectBlockLayerHandlers', {
   key: HandlerKey,
   Model: HandlerModel,
   Message: HandlerMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
 const Read = HandlerBlock.makeCommand('Read', {
@@ -412,7 +415,7 @@ const LifecycleBlock = Block.make('DirectBlockLayerLifecycle', {
   key: LifecycleKey,
   Model: Schema.Struct({ value: Schema.Number }),
   Message: LifecycleMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
 const Pulse = LifecycleBlock.makeMount('Pulse', {
@@ -483,7 +486,7 @@ const DocumentBlock = Block.make('DirectBlockLayerServerDocument', {
   Model: DocumentModel,
   Message: Schema.Never,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Document' },
 })
 const DocumentComposition = DocumentBlock.makeComposition()
@@ -762,17 +765,24 @@ describe('unified Block.make and makeLayer prototype', () => {
   })
 
   it('runs a Story against the explicit public Block and selected Layer pair', async () => {
-    const testLayer = Layer.provide(
-      selectedParentLayer,
-      Layer.succeed(ParentService, { value: 'story' }),
+    const selectedStory = Story.story(
+      { block: Parent, layer: selectedParentLayer },
+      Story.given({ child: { value: 7 } }),
     )
+    expectTypeOf<Effect.Success<typeof selectedStory>>().toEqualTypeOf<
+      typeof Parent.Model.Type
+    >()
+    expectTypeOf<Effect.Error<typeof selectedStory>>().toEqualTypeOf<never>()
+    expectTypeOf<
+      Effect.Services<typeof selectedStory>
+    >().toEqualTypeOf<ParentService>()
 
-    await Effect.runPromise(
-      Story.story(
-        { block: Parent, layer: testLayer },
-        Story.given({ child: { value: 7 } }),
+    const finalModel = await Effect.runPromise(
+      selectedStory.pipe(
+        Effect.provideService(ParentService, { value: 'story' }),
       ),
     )
+    expect(finalModel).toEqual({ child: { value: 7 } })
   })
 
   it('runs a Scene against the explicit public Block and selected Layer pair', async () => {

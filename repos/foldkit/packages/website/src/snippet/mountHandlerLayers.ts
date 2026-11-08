@@ -11,18 +11,17 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const PanelKey = Symbol('Panel')
-
 export const PanelBlock = Block.make('Panel', {
   key: PanelKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = PanelBlock
+const { makeFieldsStep, makeMount, makeComposition } = PanelBlock
 
-const MeasurePanel = PanelBlock.makeMount('MeasurePanel', {
+const MeasurePanel = makeMount('MeasurePanel', {
   messages: [Message.CompletedMeasurePanel],
   handler: function* () {
     return ({ element }) =>
@@ -34,7 +33,7 @@ const MeasurePanel = PanelBlock.makeMount('MeasurePanel', {
   },
 })
 
-const PanelComposition = PanelBlock.makeComposition({
+const PanelComposition = makeComposition({
   mounts: [MeasurePanel],
 })
 
@@ -61,14 +60,9 @@ const init = PanelComposition.makeInit(() => ({
   model: Model.make({ panelHeight: Option.none() }),
 }))
 
-export const layer = PanelBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-      EffectsLayer: MeasurePanel.layer,
-    }
-  }),
-)
+export const layer = PanelBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer: MeasurePanel.layer,
+})

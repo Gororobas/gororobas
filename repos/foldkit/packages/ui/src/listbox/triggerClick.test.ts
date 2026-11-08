@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Schema } from 'effect'
+import { Layer, Option, Schema } from 'effect'
 import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
@@ -7,7 +7,7 @@ import { describe, it } from '@effect/vitest'
 import { layer as ListboxLayer, makeBlock } from './public.js'
 import { InitConfig } from './types.js'
 
-const TestListbox = makeBlock<string>()
+const TestListbox = makeBlock()
 
 const Model = Schema.Struct({ listbox: TestListbox.Model })
 type Model = typeof Model.Type
@@ -16,7 +16,7 @@ const ListboxTriggerClickTestBlock = Block.make('ListboxTriggerClickTest', {
   key: ListboxTriggerClickTestKey,
   Model,
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   ChildInitContext: InitConfig,
   view: { kind: 'Element' },
 })
@@ -26,10 +26,13 @@ const foldListboxOutMessage = ListboxTriggerClickTestBlock.makeOutMessageFold(
     Selected: () => ListboxTriggerClickTestBlock.makeNoopStep(),
   },
 )
-const ListboxBinding = ListboxTriggerClickTestBlock.makeBinding(TestListbox, {
-  field: 'listbox',
-  init: { contextToArgs: config => [config] },
-}).withOutMessagePolicy({ fold: foldListboxOutMessage })
+const ListboxBinding = ListboxTriggerClickTestBlock.makeRequiredFieldBinding(
+  TestListbox,
+  {
+    field: 'listbox',
+    init: { contextToArgs: config => [config] },
+  },
+).withOutMessagePolicy({ fold: foldListboxOutMessage })
 const ListboxTriggerClickTestComposition =
   ListboxTriggerClickTestBlock.makeComposition({
     bindings: [ListboxBinding],
@@ -61,18 +64,11 @@ const init = ListboxTriggerClickTestComposition.makeInit(() => ({
 const update = ListboxTriggerClickTestComposition.makeUpdate({})
 const ApplicationBlock = {
   block: ListboxTriggerClickTestBlock,
-  layer: ListboxTriggerClickTestBlock.makeLayer(
-    Effect.gen(function* () {
-      const listbox = yield* ListboxBinding
-
-      return {
-        children: [listbox],
-        init,
-        update,
-        view,
-      }
-    }),
-  ).pipe(Layer.provide(ListboxLayer)),
+  layer: ListboxTriggerClickTestBlock.makeLayer({
+    init,
+    update,
+    view,
+  }).pipe(Layer.provide(ListboxLayer)),
 }
 
 const requireElement = (id: string): HTMLElement => {

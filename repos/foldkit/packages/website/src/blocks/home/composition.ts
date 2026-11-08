@@ -1,40 +1,29 @@
 import type { Block } from 'foldkit'
 
-import { AsyncCounterDemoBlock, NotePlayerDemoBlock } from './blocks'
 import {
-  HomeBlock,
+  makeComposition,
   makeFieldsStep,
   makeNoopStep,
+  makeOutMessageFold,
   makeOutMessageStep,
-} from './definition'
+  makeRequiredFieldBinding,
+} from './block'
+import { AsyncCounterDemoBlock, NotePlayerDemoBlock } from './blocks'
 import * as DemoTab from './demoTab'
 import { OutMessage } from './message'
 import { PlaygroundMenuBlock } from './playgroundMenu'
 
-export const DemoTabsBinding = HomeBlock.makeBinding(DemoTab.DemoTabsBlock, {
+export const DemoTabsBinding = makeRequiredFieldBinding(DemoTab.DemoTabsBlock, {
   field: 'demoTabs',
   init: { contextToArgs: () => [{ id: 'demo-tabs' }] },
 }).withOutMessagePolicy({
-  fold: HomeBlock.makeOutMessageFold(DemoTab.DemoTabsBlock, {
+  fold: makeOutMessageFold(DemoTab.DemoTabsBlock, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({ activeDemoTab: () => value })),
   }),
 })
 
-const foldPlaygroundMenuOutMessage = HomeBlock.makeOutMessageFold(
-  PlaygroundMenuBlock,
-  {
-    Selected: ({ value }) =>
-      makeOutMessageStep(() =>
-        OutMessage.SelectedPlaygroundExample({
-          exampleSlug: value,
-        }),
-      ),
-    Closed: makeNoopStep,
-  },
-)
-
-export const PlaygroundMenuBinding = HomeBlock.makeBinding(
+export const PlaygroundMenuBinding = makeRequiredFieldBinding(
   PlaygroundMenuBlock,
   {
     field: 'playgroundMenu',
@@ -42,23 +31,33 @@ export const PlaygroundMenuBinding = HomeBlock.makeBinding(
       contextToArgs: () => [{ id: 'playground-menu', isAnimated: true }],
     },
   },
-).withOutMessagePolicy({ fold: foldPlaygroundMenuOutMessage })
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(PlaygroundMenuBlock, {
+    Selected: ({ value }) =>
+      makeOutMessageStep(() =>
+        OutMessage.SelectedPlaygroundExample({
+          exampleSlug: value,
+        }),
+      ),
+    Closed: makeNoopStep,
+  }),
+})
 
-export const AsyncCounterDemoBinding = HomeBlock.makeBinding(
+export const AsyncCounterDemoBinding = makeRequiredFieldBinding(
   AsyncCounterDemoBlock,
   {
     field: 'asyncCounterDemo',
   },
 )
 
-export const NotePlayerDemoBinding = HomeBlock.makeBinding(
+export const NotePlayerDemoBinding = makeRequiredFieldBinding(
   NotePlayerDemoBlock,
   {
     field: 'notePlayerDemo',
   },
 )
 
-export const HomeComposition = HomeBlock.makeComposition({
+export const HomeComposition = makeComposition({
   bindings: [
     AsyncCounterDemoBinding,
     DemoTabsBinding,

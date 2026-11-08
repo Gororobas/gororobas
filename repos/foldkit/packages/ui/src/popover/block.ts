@@ -12,7 +12,7 @@ import {
 import * as Block from 'foldkit/block'
 import * as Dom from 'foldkit/dom'
 import { type ChildAttribute, type Html, childAttributes } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 import type * as Mount from 'foldkit/mount'
 import { modifyFields } from 'foldkit/struct'
 import * as Update from 'foldkit/update'
@@ -74,7 +74,7 @@ export type IgnoredMouseClick = typeof Message.IgnoredMouseClick.Type
 export type SuppressedSpaceScroll = typeof Message.SuppressedSpaceScroll.Type
 
 /** Requests accepted from a parent independently of local Popover events. */
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   RequestedOpen: {},
   RequestedClose: {},
 })
@@ -166,7 +166,7 @@ export const mounts = [AnchorPopover, PortalPopoverBackdrop]
 
 export const PopoverBlock = Block.make(PopoverNamespace, {
   key: PopoverKey,
-  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  InitArgs: Block.makeInputContract<readonly [config: InitConfig]>(),
   view: {
     kind: 'Element',
     Inputs: Block.makeInputContract<ViewInputs>(),
@@ -355,7 +355,7 @@ const foldAnimationOutMessage = PopoverBlock.makeOutMessageFold(
 )
 
 /** @internal Original Animation relationship used by lifecycle test delivery. */
-export const AnimationBinding = PopoverBlock.makeBinding(
+export const AnimationBinding = PopoverBlock.makeRequiredFieldBinding(
   Animation.AnimationBlock,
   {
     field: 'animation',
@@ -784,20 +784,13 @@ export const view = PopoverComposition.makeView.withInputs(
   },
 )
 
-export const layer = PopoverBlock.makeLayer(
-  Effect.gen(function* () {
-    const animation = yield* AnimationBinding
-
-    return {
-      children: [animation],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-      EffectsLayer,
-    }
-  }),
-).pipe(Layer.provide(Animation.layer))
+export const layer = PopoverBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+  view,
+  EffectsLayer,
+}).pipe(Layer.provide(Animation.layer))
 
 /** @internal Selected implementation used by component tests. */
 export const block = { block: PopoverBlock, layer }

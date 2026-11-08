@@ -368,7 +368,7 @@ export const assertValidBindingOperationNames = (
 }
 
 /**
- * Structural portion of a complete Block accepted by `Definition.makeBinding`.
+ * Structural portion of a complete Block accepted by `Block relationship constructors`.
  * It preserves every channel collected by parents without introducing a
  * recursive complete Block constraint.
  */
@@ -828,10 +828,19 @@ const liftManagedResources = <
     config,
   )
 
-/** @internal Projects declared operations as connected parent Steps. Their
- * graph-checked inputs and opaque results preserve the direct child channels
- * and an invariant policy obligation. A completed Composition resolves the
- * policy-produced channels against its full registered graph. */
+/**
+ * @internal Projects explicit operations and generated InMessage methods as
+ * connected parent Steps. `RequestedOpen` generates `requestOpen`, and
+ * `InformedOfRouteChanged` generates `informOfRouteChanged`. Methods accept the
+ * variant payload, when present, followed by its InMessage context; keyed
+ * Bindings also require the occurrence key first.
+ *
+ * Pass the returned Step directly to a parent handler or compose it with other
+ * Steps. It preserves the child Commands, OutMessages and registered Binding
+ * requirement until checked graph execution. No additional request wrapper or
+ * parent-owned child Message is needed. A completed Composition resolves the
+ * policy-produced channels against its full registered graph.
+ */
 export type BoundExposedOperations<
   BlockValue extends Readonly<{
     operations: Readonly<Record<string, (...args: ReadonlyArray<any>) => any>>
@@ -1443,7 +1452,7 @@ export const blockOf = (binding: AnyBinding): BindableBlock => {
   const block = runtimeBindingOf(binding).block
   if (block === undefined) {
     throw new Error(
-      '[foldkit] Block Binding metadata is unavailable. Create Bindings through the parent Definition.makeBinding method.',
+      '[foldkit] Block Binding metadata is unavailable. Create Bindings through the parent Block relationship constructor.',
     )
   }
 

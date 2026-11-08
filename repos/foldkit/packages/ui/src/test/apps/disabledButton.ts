@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Schema } from 'effect'
+import { Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
@@ -25,7 +25,7 @@ export type Message = typeof Message.Type
 const DisabledButtonTestKey = Symbol('DisabledButtonTest')
 const DisabledButtonTestBlock = Block.make('DisabledButtonTest', {
   key: DisabledButtonTestKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
@@ -42,10 +42,13 @@ const foldDialogOutMessage = DisabledButtonTestBlock.makeOutMessageFold(
   },
 )
 
-const DialogBinding = DisabledButtonTestBlock.makeBinding(Dialog.DialogBlock, {
-  field: 'dialog',
-  init: { contextToArgs: () => [{ id: 'test-dialog' }] },
-}).withOutMessagePolicy({ fold: foldDialogOutMessage })
+const DialogBinding = DisabledButtonTestBlock.makeRequiredFieldBinding(
+  Dialog.DialogBlock,
+  {
+    field: 'dialog',
+    init: { contextToArgs: () => [{ id: 'test-dialog' }] },
+  },
+).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
 const DisabledButtonTestComposition = DisabledButtonTestBlock.makeComposition({
   bindings: [DialogBinding],
@@ -144,16 +147,9 @@ export const viewWithDialog = DisabledButtonTestComposition.makeView(
 
 export const block = {
   block: DisabledButtonTestBlock,
-  layer: DisabledButtonTestBlock.makeLayer(
-    Effect.gen(function* () {
-      const dialog = yield* DialogBinding
-
-      return {
-        children: [dialog],
-        init,
-        update,
-        view: viewWithDialog,
-      }
-    }),
-  ).pipe(Layer.provide(Dialog.layer)),
+  layer: DisabledButtonTestBlock.makeLayer({
+    init,
+    update,
+    view: viewWithDialog,
+  }).pipe(Layer.provide(Dialog.layer)),
 }

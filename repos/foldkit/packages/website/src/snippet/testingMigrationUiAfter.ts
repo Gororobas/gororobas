@@ -3,41 +3,41 @@ import { Effect, Layer, Schema } from 'effect'
 import { Block, Scene } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import {
-  DialogBlock,
-  layer as DialogLayer,
-  test as DialogTest,
-} from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
-const Model = Schema.Struct({ dialog: DialogBlock.Model })
+const Model = Schema.Struct({ dialog: Dialog.DialogBlock.Model })
 type Model = typeof Model.Type
 
 const Message = defineMessageUnion({ ClickedOpenConfirm: {} })
 type Message = typeof Message.Type
 
 export const ConfirmKey = Symbol('Confirm')
-
 export const ConfirmBlock = Block.make('Confirm', {
   key: ConfirmKey,
   Model,
   Message,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
 
-const { makeNoopStep } = ConfirmBlock
+const {
+  makeNoopStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = ConfirmBlock
 
-const DialogBinding = ConfirmBlock.makeBinding(DialogBlock, {
+const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
   field: 'dialog',
   init: { contextToArgs: () => [{ id: 'confirm' }] },
 }).withOutMessagePolicy({
-  fold: ConfirmBlock.makeOutMessageFold(DialogBlock, {
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
     CompletedClose: makeNoopStep,
   }),
 })
-const ConfirmComposition = ConfirmBlock.makeComposition({
+const ConfirmComposition = makeComposition({
   bindings: [DialogBinding],
 })
 
@@ -69,18 +69,11 @@ const view = ConfirmComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = ConfirmBlock.makeLayer(
-  Effect.gen(function* () {
-    const dialog = yield* DialogBinding
-
-    return {
-      children: [dialog],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(DialogLayer))
+export const layer = ConfirmBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Dialog.layer))
 
 await Effect.runPromise(
   Scene.scene(
@@ -88,12 +81,12 @@ await Effect.runPromise(
     Scene.init(),
     Scene.click(Scene.role('button', { name: 'Open confirmation' })),
     Scene.Command.resolve(
-      DialogTest.ShowDialog,
-      DialogBlock.Message.SucceededShowDialog(),
+      Dialog.test.ShowDialog,
+      Dialog.DialogBlock.Message.SucceededShowDialog(),
     ),
     Scene.Mount.resolve(
-      DialogTest.AcquireResources,
-      DialogBlock.Message.SucceededAcquireResources(),
+      Dialog.test.AcquireResources,
+      Dialog.DialogBlock.Message.SucceededAcquireResources(),
     ),
   ),
 )

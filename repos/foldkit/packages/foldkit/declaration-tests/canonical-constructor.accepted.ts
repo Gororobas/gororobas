@@ -27,14 +27,11 @@ export const ChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
   typeof prepareChildBlock
 > = Block.assemble(prepareChildBlock)
 const ParentModel = Schema.Struct({ child: ChildModel })
-declare const PayloadWithUnknownDecodingServices: Schema.Codec<
-  string,
-  string,
-  unknown,
-  never
->
+export const Payload = Schema.String.pipe(
+  Schema.brand('DeclarationCanonicalConstructorPayload'),
+)
 export const ParentMessage = Message.defineMessageUnion({
-  ReceivedPayload: { payload: PayloadWithUnknownDecodingServices },
+  ReceivedPayload: { payload: Payload },
 })
 export const DeclarationCanonicalConstructorParentDefinition =
   Block.makeDefinition('DeclarationCanonicalConstructorParent', {
@@ -42,14 +39,20 @@ export const DeclarationCanonicalConstructorParentDefinition =
     Message: ParentMessage,
   })
 export const CanonicalBinding =
-  DeclarationCanonicalConstructorParentDefinition.makeBinding(ChildBlock, {
-    field: 'child',
-  })
+  DeclarationCanonicalConstructorParentDefinition.makeRequiredFieldBinding(
+    ChildBlock,
+    {
+      field: 'child',
+    },
+  )
 export const AlternativeBinding =
-  DeclarationCanonicalConstructorParentDefinition.makeBinding(ChildBlock, {
-    field: 'child',
-    placement: 'other',
-  })
+  DeclarationCanonicalConstructorParentDefinition.makeRequiredFieldBinding(
+    ChildBlock,
+    {
+      field: 'child',
+      placement: 'other',
+    },
+  )
 export const DeclarationCanonicalConstructorParentComposition =
   DeclarationCanonicalConstructorParentDefinition.makeComposition({
     bindings: [CanonicalBinding],
@@ -127,13 +130,13 @@ export type CompleteMessageIsExact = Expect<
     typeof ParentMessage.Type | ExpectedEnvelope
   >
 >
-export type CompleteDecodingServicesAreNotErased = Expect<
+export type CompleteDecodingServicesAreSelfContained = Expect<
   Equal<
     typeof DeclarationCanonicalConstructorParentComposition.Message.DecodingServices,
-    unknown
+    never
   >
 >
-export type CompleteEncodingServicesAreNotWidened = Expect<
+export type CompleteEncodingServicesAreSelfContained = Expect<
   Equal<
     typeof DeclarationCanonicalConstructorParentComposition.Message.EncodingServices,
     never

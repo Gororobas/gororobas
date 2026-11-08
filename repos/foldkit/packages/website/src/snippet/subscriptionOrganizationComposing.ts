@@ -6,28 +6,29 @@ import { Model } from './model'
 import * as ThemeMenu from './themeMenu'
 
 export const SettingsKey = Symbol('Settings')
-
 export const SettingsBlock = Block.make('Settings', {
   key: SettingsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeNoopStep } = SettingsBlock
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = SettingsBlock
 
-const foldThemeMenuOutMessage = SettingsBlock.makeOutMessageFold(
-  ThemeMenu.ThemeMenuBlock,
-  {
+const ThemeMenuBinding = makeRequiredFieldBinding(ThemeMenu.ThemeMenuBlock, {
+  field: 'themeMenu',
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ThemeMenu.ThemeMenuBlock, {
     Selected: makeNoopStep,
     Closed: makeNoopStep,
-  },
-)
+  }),
+})
 
-const ThemeMenuBinding = SettingsBlock.makeBinding(ThemeMenu.ThemeMenuBlock, {
-  field: 'themeMenu',
-}).withOutMessagePolicy({ fold: foldThemeMenuOutMessage })
-
-export const SettingsComposition = SettingsBlock.makeComposition({
+export const SettingsComposition = makeComposition({
   bindings: [ThemeMenuBinding],
 })

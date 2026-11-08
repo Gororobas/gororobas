@@ -1,17 +1,13 @@
 import { Effect, Layer, Schema } from 'effect'
-import { Block } from 'foldkit'
+import { Block, Story } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import * as Story from 'foldkit/story'
 
-import {
-  layer as ToastLayer,
-  makeBlock as makeToastBlock,
-} from '@foldkit/ui/toast'
+import { Toast } from '@foldkit/ui'
 
 const ToastPayload = Schema.Struct({ body: Schema.String })
 type ToastPayload = typeof ToastPayload.Type
 
-const ToastBlock = makeToastBlock(ToastPayload)
+const ToastBlock = Toast.makeBlock(ToastPayload)
 
 const Model = Schema.Struct({ toast: ToastBlock.Model })
 type Model = typeof Model.Type
@@ -20,26 +16,31 @@ const Message = defineMessageUnion({ RequestedShowToast: {} })
 type Message = typeof Message.Type
 
 export const ApplicationKey = Symbol('Application')
-
 export const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeNoopStep } = ApplicationBlock
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = ApplicationBlock
 
-const foldToastOutMessage = ApplicationBlock.makeOutMessageFold(ToastBlock, {
-  DismissedToast: makeNoopStep,
-})
-const ToastBinding = ApplicationBlock.makeBinding(ToastBlock, {
+const ToastBinding = makeRequiredFieldBinding(ToastBlock, {
   field: 'toast',
   init: {
     contextToArgs: () => [{ id: 'notifications' }],
   },
-}).withOutMessagePolicy({ fold: foldToastOutMessage })
-const ApplicationComposition = ApplicationBlock.makeComposition({
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ToastBlock, {
+    DismissedToast: makeNoopStep,
+  }),
+})
+const ApplicationComposition = makeComposition({
   bindings: [ToastBinding],
 })
 
@@ -48,17 +49,10 @@ const update = ApplicationComposition.makeUpdate({
   RequestedShowToast: ToastBinding.requestShow({ payload: { body: 'Saved' } }),
 })
 
-const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    const toast = yield* ToastBinding
-
-    return {
-      children: [toast],
-      init,
-      update,
-    }
-  }),
-).pipe(Layer.provide(ToastLayer))
+const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+}).pipe(Layer.provide(Toast.layer))
 
 await Effect.runPromise(
   Story.story(

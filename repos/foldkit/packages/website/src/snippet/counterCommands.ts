@@ -13,20 +13,20 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 export const ApplicationKey = Symbol('Application')
-
 export const ApplicationBlock = Block.make('Application', {
   key: ApplicationKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeCommandsStep } = ApplicationBlock
+const { makeFieldsStep, makeCommandsStep, makeComposition, makeCommand } =
+  ApplicationBlock
 
-export const ApplicationComposition = ApplicationBlock.makeComposition()
+export const ApplicationComposition = makeComposition()
 
-export const WaitBeforeReset = ApplicationBlock.makeCommand('WaitBeforeReset', {
+export const WaitBeforeReset = makeCommand('WaitBeforeReset', {
   messages: [Message.CompletedWaitBeforeReset],
   handler: function* () {
     return () =>
@@ -67,14 +67,9 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-export const layer = ApplicationBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-      EffectsLayer,
-    }
-  }),
-)
+export const layer = ApplicationBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer,
+})

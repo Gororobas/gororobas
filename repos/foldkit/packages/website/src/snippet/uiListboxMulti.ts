@@ -1,8 +1,8 @@
-import { Array, Effect, Layer, Schema } from 'effect'
+import { Array, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Multi as MultiListbox } from '@foldkit/ui/listbox'
+import { Listbox } from '@foldkit/ui'
 
 const Person = Schema.Literals([
   'Michael Bluth',
@@ -11,7 +11,7 @@ const Person = Schema.Literals([
 ])
 type Person = typeof Person.Type
 // Declare a typed multi-select Listbox once at module scope:
-const PeopleListbox = MultiListbox.makeBlock<Person>()
+const PeopleListbox = Listbox.Multi.makeBlock(Person)
 
 // Add a field to your Model for the multi-select Listbox Block, plus a field
 // for the selected values your app actually cares about. Using the
@@ -27,16 +27,20 @@ const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
 export const PeoplePickerKey = Symbol('PeoplePicker')
-
 export const PeoplePickerBlock = Block.make('PeoplePicker', {
   key: PeoplePickerKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = PeoplePickerBlock
+const {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = PeoplePickerBlock
 
 // At module scope, fold the OutMessage into your own Model. `Selected` carries
 // the activated value. The parent owns the selection and decides what it
@@ -44,9 +48,13 @@ const { makeFieldsStep } = PeoplePickerBlock
 // returns an Update.Step over the parent Model, which already has the next
 // Listbox Model written back. The parent Block infers the refined child
 // payload and checks every named variant:
-const foldListboxMultiOutMessage = PeoplePickerBlock.makeOutMessageFold(
-  PeopleListbox,
-  {
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const ListboxMultiBinding = makeRequiredFieldBinding(PeopleListbox, {
+  field: 'listboxMulti',
+  init: { contextToArgs: () => [{ id: 'people' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(PeopleListbox, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({
         selectedPeople: selectedPeople =>
@@ -54,17 +62,10 @@ const foldListboxMultiOutMessage = PeoplePickerBlock.makeOutMessageFold(
             ? Array.filter(selectedPeople, person => person !== value)
             : Array.append(selectedPeople, value),
       })),
-  },
-)
+  }),
+})
 
-// The Binding declares placement, typed startup, and OutMessage policy.
-// The construction Layer below supplies the child implementation.
-const ListboxMultiBinding = PeoplePickerBlock.makeBinding(PeopleListbox, {
-  field: 'listboxMulti',
-  init: { contextToArgs: () => [{ id: 'people' }] },
-}).withOutMessagePolicy({ fold: foldListboxMultiOutMessage })
-
-const PeoplePickerComposition = PeoplePickerBlock.makeComposition({
+const PeoplePickerComposition = makeComposition({
   bindings: [ListboxMultiBinding],
 })
 
@@ -123,15 +124,8 @@ const view = PeoplePickerComposition.makeView((model, h) =>
   ),
 )
 
-export const layer = PeoplePickerBlock.makeLayer(
-  Effect.gen(function* () {
-    const peopleListbox = yield* ListboxMultiBinding
-
-    return {
-      children: [peopleListbox],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(MultiListbox.layer))
+export const layer = PeoplePickerBlock.makeLayer({
+  init,
+  update,
+  view,
+}).pipe(Layer.provide(Listbox.Multi.layer))

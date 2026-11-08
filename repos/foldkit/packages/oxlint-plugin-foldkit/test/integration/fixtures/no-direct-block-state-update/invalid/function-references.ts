@@ -24,18 +24,18 @@ const ApplicationDefinition = Block.makeDefinition('Application', {
   Model,
   Message,
 })
-const ChildBinding = ApplicationDefinition.makeBinding(Child.block, {
+const ChildBinding = ApplicationDefinition.makeRequiredFieldBinding(Child.block, {
   field: 'child',
   parentMessage: Message.GotChildMessage,
 })
-const AliasedChildBinding = ApplicationDefinition.makeBinding(
+const AliasedChildBinding = ApplicationDefinition.makeRequiredFieldBinding(
   ImportedChildBlock,
   {
     field: 'aliasedChild',
     parentMessage: Message.GotAliasedChildMessage,
   },
 )
-const EntriesBinding = ApplicationDefinition.makeBinding(Child.block, {
+const EntriesBinding = ApplicationDefinition.makeKeyedArrayBinding(Child.block, {
   field: 'entries',
   key: 'id',
   toParentMessage: (id, message) => Message.GotEntryMessage({ id, message }),
@@ -69,9 +69,9 @@ export const update = ApplicationComposition.makeUpdate({
     })
     void Update.combineSteps(model, [
       revealChildFields,
-      ChildBinding.informThemeChanged({ theme: 'Light' }),
+      ChildBinding.informOfThemeChanged({ theme: 'Light' }),
     ])
 
-    return ChildBinding.informThemeChanged({ theme: 'Light' })(model)
+    return ChildBinding.informOfThemeChanged({ theme: 'Light' })(model)
   },
 })

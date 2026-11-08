@@ -46,7 +46,7 @@ import {
 import type {
   ContractConfiguration,
   Definition,
-  InMessageConfigurationArguments,
+  DefinitionConfigurationArguments,
 } from './contract.js'
 import {
   assertInMessageConfiguration,
@@ -56,12 +56,13 @@ import {
 } from './inMessageUpdate.js'
 
 type AnySchema = Schema.Codec<any, any, any, any>
+type AnySelfContainedSchema = Schema.Codec<any, any, never, never>
 type AnyFunction = (...args: ReadonlyArray<any>) => any
 /** @internal Retains the shared exact declaration configuration. */
 export type Declaration = ContractConfiguration &
   Readonly<{
-    Model: AnySchema
-    Message: AnySchema
+    Model: AnySelfContainedSchema
+    Message: AnySelfContainedSchema
     OutMessage?: AnySchema
     ChildInitContext?: AnySchema
   }>
@@ -223,6 +224,45 @@ const checkFixedProviderAcquisition = (
   )
 }
 
+const acquireCompositionChildren = (
+  bindings: ReadonlyArray<object>,
+): Effect.Effect<ReadonlyArray<object>, any, any> =>
+  Effect.suspend(() =>
+    Effect.map(
+      Effect.forEach(
+        bindings,
+        binding => {
+          const construct = Reflect.get(binding, 'construct')
+
+          if (!Predicate.isFunction(construct)) {
+            throw new Error(
+              '[foldkit] Composition.acquireChildren requires original registered Bindings.',
+            )
+          }
+
+          const acquisition = Reflect.apply(construct, binding, [])
+          if (!Effect.isEffect(acquisition)) {
+            throw new Error(
+              '[foldkit] Composition.acquireChildren requires original registered Binding constructors.',
+            )
+          }
+
+          return Effect.map(acquisition, child => {
+            if (!Predicate.isObject(child)) {
+              throw new Error(
+                '[foldkit] Composition.acquireChildren received an invalid child acquisition.',
+              )
+            }
+
+            return child
+          })
+        },
+        { concurrency: 1 },
+      ),
+      children => Object.freeze(children),
+    ),
+  )
+
 const snapshotArray = (
   value: unknown,
   name: string,
@@ -295,7 +335,13 @@ const snapshotChannelRecord = (
 ): Record<string, any> => {
   const record = snapshotRecord(value, name)
 
-  for (const key of ['services', 'resources']) {
+  if (Object.hasOwn(record, 'resources')) {
+    throw new Error(
+      `[foldkit] ${name}.resources has been renamed to ${name}.managedResources.`,
+    )
+  }
+
+  for (const key of ['services', 'managedResources']) {
     if (Object.hasOwn(record, key)) {
       Object.defineProperty(record, key, {
         configurable: false,
@@ -394,28 +440,38 @@ export function snapshotDefinitionConfiguration(config: Declaration): object {
     })
   }
 
-  for (const key of ['effects', 'codec']) {
-    if (Object.hasOwn(snapshot, key) && snapshot[key] !== undefined) {
-      const declaration = snapshotRecord(snapshot[key], key)
+  if (Object.hasOwn(snapshot, 'codec')) {
+    throw new Error(
+      '[foldkit] Block codec declarations are no longer supported. Model and complete Message Codecs must not require Services.',
+    )
+  }
 
-      for (const member of ['services', 'resources', 'decoding', 'encoding']) {
-        if (Object.hasOwn(declaration, member)) {
-          Object.defineProperty(declaration, member, {
-            configurable: false,
-            enumerable: true,
-            value: snapshotArray(declaration[member], `${key}.${member}`),
-            writable: false,
-          })
-        }
-      }
+  if (Object.hasOwn(snapshot, 'effects') && snapshot['effects'] !== undefined) {
+    const declaration = snapshotRecord(snapshot['effects'], 'effects')
 
-      Object.defineProperty(snapshot, key, {
-        configurable: false,
-        enumerable: true,
-        value: Object.freeze(declaration),
-        writable: false,
-      })
+    if (Object.hasOwn(declaration, 'resources')) {
+      throw new Error(
+        '[foldkit] effects.resources has been renamed to effects.managedResources.',
+      )
     }
+
+    for (const member of ['services', 'managedResources']) {
+      if (Object.hasOwn(declaration, member)) {
+        Object.defineProperty(declaration, member, {
+          configurable: false,
+          enumerable: true,
+          value: snapshotArray(declaration[member], `effects.${member}`),
+          writable: false,
+        })
+      }
+    }
+
+    Object.defineProperty(snapshot, 'effects', {
+      configurable: false,
+      enumerable: true,
+      value: Object.freeze(declaration),
+      writable: false,
+    })
   }
 
   return Object.freeze(snapshot)
@@ -478,7 +534,7 @@ export const makeDefinition = <
     (symbol extends Key ? never : true extends IsUnion<Key> ? never : unknown),
   ..._validation: readonly [
     ...MessageFreeValidation<NoInfer<Config & Readonly<{ key: Key }>>>,
-    ...InMessageConfigurationArguments<
+    ...DefinitionConfigurationArguments<
       NoInfer<Config & Readonly<{ key: Key }>>
     >,
   ]
@@ -504,7 +560,7 @@ export interface ContractNamespaceMakeDefinition<Id extends string> {
       ([Id] extends [LiteralContractId<Id>] ? unknown : never),
     ...validation: readonly [
       ...MessageFreeValidation<NoInfer<Config & Readonly<{ key: Key }>>>,
-      ...InMessageConfigurationArguments<
+      ...DefinitionConfigurationArguments<
         NoInfer<Config & Readonly<{ key: Key }>>
       >,
     ]
@@ -548,6 +604,12 @@ export const makeDefinitionRuntime = (
   publicDescriptor: 'Contract' | 'Block' = 'Contract',
 ): any => {
   config = snapshotDefinitionConfiguration(config)
+
+  if (config.InitArgs === undefined) {
+    throw new Error(
+      '[foldkit] A Block contract requires an InitArgs contract for its positional initializer arguments.',
+    )
+  }
 
   if (!Predicate.isString(id) || id.length === 0) {
     throw new Error(
@@ -867,7 +929,11 @@ export const makeDefinitionRuntime = (
     contract,
     makeComposition: (graph: unknown = {}) => {
       const composition = definition.makeComposition(graph)
-      authoringSources.add(authoringSourceOf(composition))
+      const source = authoringSourceOf(composition)
+      authoringSources.add(source)
+      Object.assign(composition, {
+        acquireChildren: () => acquireCompositionChildren(source.bindings),
+      })
 
       if (config.InMessage === undefined) {
         return composition
@@ -880,8 +946,44 @@ export const makeDefinitionRuntime = (
       })
     },
     makeBlock: complete,
-    makeLayer: (constructor: Effect.Effect<any, any, any>) =>
-      complete(constructor).layer,
+    makeLayer: (implementation: Effect.Effect<any, any, any> | object) => {
+      if (Effect.isEffect(implementation)) {
+        if ('init' in implementation && 'update' in implementation) {
+          throw new Error(
+            '[foldkit] A Block constructor Effect must return its implementation fields, not carry them. Pass an implementation record or an Effect constructor separately.',
+          )
+        }
+
+        return complete(implementation).layer
+      }
+
+      for (const field of ['children', 'bindings', 'operations']) {
+        if (Object.hasOwn(implementation, field)) {
+          throw new Error(
+            field === 'children'
+              ? '[foldkit] Record Block completion cannot declare "children"; use an Effect constructor for explicit child acquisition.'
+              : `[foldkit] Record Block completion cannot declare "${field}"; declare Bindings on the Composition and operations on the Block.`,
+          )
+        }
+      }
+
+      const body = Object.freeze({ ...implementation })
+      const constructor = Effect.gen(function* () {
+        const source = planComposition<any>(Reflect.get(body, 'init'))
+
+        if (!authoringSources.has(source)) {
+          throw new Error(
+            '[foldkit] Constructor plans belong to another Definition.',
+          )
+        }
+
+        const children = yield* acquireCompositionChildren(source.bindings)
+
+        return { ...body, children }
+      })
+
+      return complete(constructor).layer
+    },
     provideHandlers: (handlers: Layer.Any) => (layer: Layer.Any) => {
       if (!Layer.isLayer(handlers) || !Layer.isLayer(layer)) {
         throw new Error(

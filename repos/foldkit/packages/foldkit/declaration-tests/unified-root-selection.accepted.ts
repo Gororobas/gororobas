@@ -24,8 +24,8 @@ export const SessionBlock = Block.make(SessionNamespace, {
   key: SessionKey,
   Model: Schema.Null,
   Message: ResourceMessage,
-  effects: { resources: [Session], services: [Store] },
-  Init: Schema.Tuple([]),
+  effects: { managedResources: [Session], services: [Store] },
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
 export const ReadSession = SessionBlock.makeCommand('ReadSession', {
@@ -179,7 +179,7 @@ export const DeclaredStoreChildBlock = Block.make('KeyedProbeChild', {
   key: ChildKey,
   Model: Schema.Struct({}),
   Message: defineMessageUnion({ CompletedRead: {} }),
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [Store] },
 })
 const Read = DeclaredStoreChildBlock.makeCommand('Read', {
@@ -217,15 +217,23 @@ export const ParentBlock = Block.make('KeyedProbeParent', {
     ),
   }),
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [Store] },
   view: { kind: 'Element' },
 })
-const ChildrenBinding = ParentBlock.makeBinding(DeclaredStoreChildBlock, {
-  field: 'children',
-  key: 'id',
-  childField: 'model',
-})
+export const ChildrenBinding = ParentBlock.makeKeyedArrayBinding(
+  DeclaredStoreChildBlock,
+  {
+    field: 'children',
+    key: 'id',
+    childField: 'model',
+  },
+)
+export const readFirstChild = Story.messageIn(
+  ChildrenBinding,
+  'first',
+  DeclaredStoreChildBlock.Message.CompletedRead(),
+)
 const ParentComposition = ParentBlock.makeComposition({
   bindings: [ChildrenBinding],
 })
@@ -246,7 +254,7 @@ const ClosedChildBlock = Block.make('ClosedChild', {
   key: ClosedChildKey,
   Model: Schema.Struct({}),
   Message: defineMessageUnion({ CompletedRead: {} }),
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const ReadClosed = ClosedChildBlock.makeCommand('Read', {
   messages: [ClosedChildBlock.Message.CompletedRead],
@@ -280,14 +288,17 @@ export const ClosedParentBlock = Block.make('ClosedParent', {
     ),
   }),
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Element' },
 })
-const ClosedChildrenBinding = ClosedParentBlock.makeBinding(ClosedChildBlock, {
-  field: 'children',
-  key: 'id',
-  childField: 'model',
-})
+const ClosedChildrenBinding = ClosedParentBlock.makeKeyedArrayBinding(
+  ClosedChildBlock,
+  {
+    field: 'children',
+    key: 'id',
+    childField: 'model',
+  },
+)
 const ClosedParentComposition = ClosedParentBlock.makeComposition({
   bindings: [ClosedChildrenBinding],
 })
@@ -325,8 +336,8 @@ export const PageBlock = Block.make('UnionServicePage', {
   key: PageKey,
   Model: Schema.Null,
   Message: ResourceMessage,
-  Init: Schema.Tuple([]),
-  effects: { resources: [Session] },
+  InitArgs: Schema.Tuple([]),
+  effects: { managedResources: [Session] },
   view: { kind: 'Document' },
 })
 const PageComposition = PageBlock.makeComposition()
@@ -379,8 +390,8 @@ export const OtherBlock = Block.make('OtherServiceRoot', {
   key: OtherKey,
   Model: Schema.Null,
   Message: ResourceMessage,
-  Init: Schema.Tuple([]),
-  effects: { resources: [Session] },
+  InitArgs: Schema.Tuple([]),
+  effects: { managedResources: [Session] },
   view: { kind: 'Element' },
 })
 const OtherComposition = OtherBlock.makeComposition()
@@ -445,7 +456,7 @@ export const SetupBlock = Block.make('SetupRoot', {
   key: SetupKey,
   Model: Schema.Struct({ value: Schema.String }),
   Message: defineMessageUnion({ UpdatedValue: { value: Schema.String } }),
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Context: Schema.Tuple([Schema.String]),
   view: { kind: 'Element' },
 })
@@ -513,7 +524,7 @@ export const SetupPageBlock = Block.make('SetupPageRoot', {
   isMessageFree: true,
   Model: Schema.Null,
   Message: Schema.Never,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   view: { kind: 'Document' },
 })
 const SetupPageComposition = SetupPageBlock.makeComposition()
@@ -557,7 +568,7 @@ export const RoutedPageBlock = Block.make('RoutedSelectionPage', {
     RequestedNavigation: { request: UrlRequest },
     ChangedUrl: { url: Url },
   }),
-  Init: Schema.Tuple([Url]),
+  InitArgs: Schema.Tuple([Url]),
   view: { kind: 'Document' },
 })
 const RoutedPageComposition = RoutedPageBlock.makeComposition()

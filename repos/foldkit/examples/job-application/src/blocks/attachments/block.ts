@@ -1,25 +1,36 @@
-import { Effect, Layer } from 'effect'
+import { Schema } from 'effect'
+import { Block, File } from 'foldkit'
+import { defineMessageUnion } from 'foldkit/message'
 
-import { layer as FileDropLayer } from '@foldkit/ui/fileDrop'
+import { FileDrop } from '@foldkit/ui'
 
-import { AdditionalFilesDropBinding, ResumeDropBinding } from './composition'
-import { AttachmentsBlock } from './definition'
-import { init } from './init'
-import { update } from './update'
-import { view } from './view'
+export const Model = Schema.Struct({
+  resumeDrop: FileDrop.FileDropBlock.Model,
+  maybeResume: Schema.Option(File.File),
+  additionalFilesDrop: FileDrop.FileDropBlock.Model,
+  additionalFiles: Schema.Array(File.File),
+})
+export type Model = typeof Model.Type
 
-export const layer = AttachmentsBlock.makeLayer(
-  Effect.gen(function* () {
-    const resumeDrop = yield* ResumeDropBinding
-    const additionalFilesDrop = yield* AdditionalFilesDropBinding
+export const Message = defineMessageUnion({
+  RemovedResume: {},
+  RemovedAdditionalFile: { fileIndex: Schema.Number },
+})
+export type Message = typeof Message.Type
 
-    return {
-      children: [resumeDrop, additionalFilesDrop],
-      init,
-      update,
-      view,
-    }
-  }),
-).pipe(Layer.provide(Layer.mergeAll(FileDropLayer)))
+export const AttachmentsKey = Symbol('Attachments')
+export const AttachmentsBlock = Block.make('Attachments', {
+  key: AttachmentsKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  Model,
+  Message,
+})
 
-export { AttachmentsBlock } from './definition'
+export const {
+  makeRequiredFieldBinding,
+  makeComposition,
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+} = AttachmentsBlock

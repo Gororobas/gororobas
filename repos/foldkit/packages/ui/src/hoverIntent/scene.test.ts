@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from 'effect'
+import { Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import * as Scene from 'foldkit/scene'
 
@@ -9,7 +9,7 @@ import { HoverIntentBlock, layer } from './block.js'
 const HoverIntentSceneKey = Symbol('HoverIntentScene')
 const HoverIntentSceneBlock = Block.make('HoverIntentScene', {
   key: HoverIntentSceneKey,
-  Init: Block.makeInputContract<readonly []>(),
+  InitArgs: Block.makeInputContract<readonly []>(),
   Model: Schema.Struct({ hoverIntent: HoverIntentBlock.Model }),
   Message: Schema.Never,
   view: { kind: 'Element' },
@@ -23,10 +23,13 @@ const foldHoverIntentOutMessage = HoverIntentSceneBlock.makeOutMessageFold(
   },
 )
 
-const HoverIntentBinding = HoverIntentSceneBlock.makeBinding(HoverIntentBlock, {
-  field: 'hoverIntent',
-  init: { contextToArgs: () => [{}] },
-}).withOutMessagePolicy({ fold: foldHoverIntentOutMessage })
+const HoverIntentBinding = HoverIntentSceneBlock.makeRequiredFieldBinding(
+  HoverIntentBlock,
+  {
+    field: 'hoverIntent',
+    init: { contextToArgs: () => [{}] },
+  },
+).withOutMessagePolicy({ fold: foldHoverIntentOutMessage })
 
 const HoverIntentSceneComposition = HoverIntentSceneBlock.makeComposition({
   bindings: [HoverIntentBinding],
@@ -61,18 +64,11 @@ const panel = Scene.selector('#panel')
 
 const hoverIntentScene = {
   block: HoverIntentSceneBlock,
-  layer: HoverIntentSceneBlock.makeLayer(
-    Effect.gen(function* () {
-      const child = yield* HoverIntentBinding
-
-      return {
-        children: [child],
-        init,
-        update,
-        view: sceneView,
-      }
-    }),
-  ).pipe(Layer.provide(layer)),
+  layer: HoverIntentSceneBlock.makeLayer({
+    init,
+    update,
+    view: sceneView,
+  }).pipe(Layer.provide(layer)),
 }
 
 describe('HoverIntent', () => {

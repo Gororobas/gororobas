@@ -1,7 +1,10 @@
 import { Context, Effect, Layer, Schema, Stream } from 'effect'
 
 import { makeDefinition } from '../../../block/public.js'
-import { defineMessageUnion } from '../../../message/index.js'
+import {
+  defineInMessageUnion,
+  defineMessageUnion,
+} from '../../../message/index.js'
 
 export class CounterSource extends Context.Service<
   CounterSource,
@@ -18,7 +21,7 @@ export const Message = defineMessageUnion({
   ReceivedCount: { count: Schema.Number },
 })
 type Message = typeof Message.Type
-const InMessage = defineMessageUnion({ RequestedIncrement: {} })
+const InMessage = defineInMessageUnion({ RequestedIncrement: {} })
 type InMessage = typeof InMessage.Type
 const OutMessage = defineMessageUnion({
   ChangedCount: { count: Schema.Number },
@@ -31,7 +34,7 @@ const CounterDefinition = makeDefinition('OccurrenceCounter', {
   Message,
   InMessage,
   OutMessage,
-  Init: Schema.Tuple([Schema.Number]),
+  InitArgs: Schema.Tuple([Schema.Number]),
   effects: { services: [CounterSource] },
   inMessageOutputs: {
     RequestedIncrement: { outMessage: OutMessage.ChangedCount },

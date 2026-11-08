@@ -1,30 +1,67 @@
-import { Effect, Layer } from 'effect'
+import { Schema } from 'effect'
+import { Block } from 'foldkit'
+import { CalendarDate } from 'foldkit/calendar'
+import { Field } from 'foldkit/fieldValidation'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 
-import { layer as DatePickerLayer } from '@foldkit/ui/datePicker'
-import { layer as ListboxLayer } from '@foldkit/ui/listbox'
+import { DatePicker, Listbox } from '@foldkit/ui'
 
-import { EffectsLayer } from './command'
-import { AvailableDateBinding, PronounsBinding } from './composition'
-import { PersonalInfoBlock } from './definition'
-import { inMessageUpdate } from './inMessageUpdate'
-import { init } from './init'
-import { update } from './update'
-import { view } from './view'
+import { PronounOption } from '../../domain'
 
-export const layer = PersonalInfoBlock.makeLayer(
-  Effect.gen(function* () {
-    const pronounsListbox = yield* PronounsBinding
-    const availableDatePicker = yield* AvailableDateBinding
+export const PronounsListboxBlock = Listbox.makeBlock(
+  PronounOption.PronounOption,
+)
 
-    return {
-      children: [pronounsListbox, availableDatePicker],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-      EffectsLayer,
-    }
-  }),
-).pipe(Layer.provide(Layer.mergeAll(ListboxLayer, DatePickerLayer)))
+export const Model = Schema.Struct({
+  firstName: Field(Schema.String),
+  lastName: Field(Schema.String),
+  email: Field(Schema.String),
+  emailValidationId: Schema.Number,
+  phone: Field(Schema.String),
+  pronouns: PronounsListboxBlock.Model,
+  maybeSelectedPronoun: Schema.Option(PronounOption.PronounOption),
+  customPronouns: Schema.String,
+  portfolioUrl: Field(Schema.String),
+  availableDate: DatePicker.DatePickerBlock.Model,
+  maybeAvailableDate: Schema.Option(CalendarDate),
+})
+export type Model = typeof Model.Type
 
-export { PersonalInfoBlock } from './definition'
+export const Message = defineMessageUnion({
+  UpdatedFirstName: { value: Schema.String },
+  UpdatedLastName: { value: Schema.String },
+  UpdatedEmail: { value: Schema.String },
+  CompletedValidateEmailAsync: {
+    validationId: Schema.Number,
+    field: Field(Schema.String),
+  },
+  UpdatedPhone: { value: Schema.String },
+  UpdatedCustomPronouns: { value: Schema.String },
+  UpdatedPortfolioUrl: { value: Schema.String },
+})
+export type Message = typeof Message.Type
+
+export const InMessage = defineInMessageUnion({
+  RequestedRevealErrors: {},
+})
+export type InMessage = typeof InMessage.Type
+
+export const PersonalInfoKey = Symbol('PersonalInfo')
+export const PersonalInfoBlock = Block.make('PersonalInfo', {
+  key: PersonalInfoKey,
+  InitArgs: Schema.Tuple([CalendarDate]),
+  view: { kind: 'Element' },
+  Model,
+  Message,
+  InMessage,
+  ChildInitContext: CalendarDate,
+})
+
+export const {
+  makeRequiredFieldBinding,
+  makeCommand,
+  makeComposition,
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+} = PersonalInfoBlock

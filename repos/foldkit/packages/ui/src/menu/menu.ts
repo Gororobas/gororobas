@@ -17,7 +17,11 @@ import * as Block from 'foldkit/block'
 import * as Dom from 'foldkit/dom'
 import type { ChildAttribute, Html } from 'foldkit/html'
 import * as BlockFamily from 'foldkit/internal/block'
-import { type MessageUnion, defineMessageUnion } from 'foldkit/message'
+import {
+  type MessageUnion,
+  defineInMessageUnion,
+  defineMessageUnion,
+} from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 import * as Update from 'foldkit/update'
 
@@ -119,7 +123,7 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 /** Parent opening and closing requests, separate from local interactions. */
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   RequestedOpen: {},
   RequestedClose: {},
 })
@@ -772,7 +776,7 @@ const MenuBlock = Block.make(MenuNamespace, {
   Message,
   InMessage,
   OutMessage,
-  Init: Schema.Tuple([InitConfig]),
+  InitArgs: Schema.Tuple([InitConfig]),
   ChildInitContext: InitConfig,
   view: {
     kind: 'Element',
@@ -801,10 +805,13 @@ const foldAnimationOutMessage = MenuBlock.makeOutMessageFold(
   },
 )
 
-const AnimationBinding = MenuBlock.makeBinding(Animation.AnimationBlock, {
-  field: 'animation',
-  init: { contextToArgs: config => [{ id: `${config.id}-items` }] },
-}).withOutMessagePolicy({ fold: foldAnimationOutMessage })
+const AnimationBinding = MenuBlock.makeRequiredFieldBinding(
+  Animation.AnimationBlock,
+  {
+    field: 'animation',
+    init: { contextToArgs: config => [{ id: `${config.id}-items` }] },
+  },
+).withOutMessagePolicy({ fold: foldAnimationOutMessage })
 
 const MenuComposition = MenuBlock.makeComposition({
   mounts,
@@ -945,7 +952,6 @@ const menuViewImpl = (
     id,
     isOpen,
     animation: { transitionState },
-    maybeActiveItemIndex,
     searchQuery,
   } = model
 
@@ -976,6 +982,11 @@ const menuViewImpl = (
     ariaLabel,
     ariaLabelledBy,
   } = viewInputs
+
+  const maybeActiveItemIndex = pipe(
+    model.maybeActiveItemIndex,
+    Option.filter(index => index >= 0 && index < items.length),
+  )
 
   const dispatchSelectedItem = (item: string, index: number) =>
     Message.SelectedItem({ index, item })
@@ -1015,17 +1026,19 @@ const menuViewImpl = (
       Option.exists(item => isItemDisabled(item, index)),
     )
 
-  const firstEnabledIndex = findFirstEnabledIndex(
-    items.length,
-    0,
-    isDisabled,
-  )(0, 1)
+  const maybeFirstEnabledIndex = Array.isReadonlyArrayEmpty(items)
+    ? Option.none<number>()
+    : Option.some(findFirstEnabledIndex(items.length, 0, isDisabled)(0, 1))
 
-  const lastEnabledIndex = findFirstEnabledIndex(
-    items.length,
-    0,
-    isDisabled,
-  )(items.length - 1, -1)
+  const maybeLastEnabledIndex = Array.isReadonlyArrayEmpty(items)
+    ? Option.none<number>()
+    : Option.some(
+        findFirstEnabledIndex(
+          items.length,
+          0,
+          isDisabled,
+        )(items.length - 1, -1),
+      )
 
   const handleButtonKeyDown = (key: string): Option.Option<Message> => {
     if (isOpen) {
@@ -1036,14 +1049,14 @@ const menuViewImpl = (
       Match.whenOr('Enter', ' ', 'ArrowDown', () =>
         Option.some(
           Message.Opened({
-            maybeActiveItemIndex: Option.some(firstEnabledIndex),
+            maybeActiveItemIndex: maybeFirstEnabledIndex,
           }),
         ),
       ),
       Match.when('ArrowUp', () =>
         Option.some(
           Message.Opened({
-            maybeActiveItemIndex: Option.some(lastEnabledIndex),
+            maybeActiveItemIndex: maybeLastEnabledIndex,
           }),
         ),
       ),
@@ -1071,21 +1084,28 @@ const menuViewImpl = (
   const handleSpaceKeyUp = (key: string): Option.Option<Message> =>
     OptionExt.when(key === ' ', Message.SuppressedSpaceScroll())
 
-  const resolveActiveIndex = (key: string): number =>
+  const resolveActiveIndex = (key: string): Option.Option<number> =>
     Option.match(maybeActiveItemIndex, {
       onNone: () =>
         Match.value(key).pipe(
-          Match.whenOr('ArrowUp', 'End', 'PageDown', () => lastEnabledIndex),
-          Match.orElse(() => firstEnabledIndex),
+          Match.whenOr(
+            'ArrowUp',
+            'End',
+            'PageDown',
+            () => maybeLastEnabledIndex,
+          ),
+          Match.orElse(() => maybeFirstEnabledIndex),
         ),
       onSome: activeIndex =>
-        keyToIndex(
-          'ArrowDown',
-          'ArrowUp',
-          items.length,
-          activeIndex,
-          isDisabled,
-        )(key),
+        Option.some(
+          keyToIndex(
+            'ArrowDown',
+            'ArrowUp',
+            items.length,
+            activeIndex,
+            isDisabled,
+          )(key),
+        ),
     })
 
   const searchForKey = (key: string): Option.Option<Message> => {
@@ -1124,9 +1144,9 @@ const menuViewImpl = (
         'PageUp',
         'PageDown',
         () =>
-          Option.some(
+          Option.map(resolveActiveIndex(key), index =>
             Message.ActivatedItem({
-              index: resolveActiveIndex(key),
+              index,
               activationTrigger: 'Keyboard',
             }),
           ),
@@ -1380,20 +1400,13 @@ const menuViewImpl = (
 const view = MenuComposition.makeView.withInputs(menuViewImpl)
 
 /** @internal Acquired implementation used by focused library tests. */
-const canonicalLayer = MenuBlock.makeLayer(
-  Effect.gen(function* () {
-    const animation = yield* AnimationBinding
-
-    return {
-      children: [animation],
-      init,
-      update,
-      inMessageUpdate,
-      view,
-      EffectsLayer,
-    }
-  }),
-).pipe(Layer.provide(Animation.layer))
+const canonicalLayer = MenuBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+  view,
+  EffectsLayer,
+}).pipe(Layer.provide(Animation.layer))
 /** Constructs Menu and its private Animation dependency. */
 type CanonicalIdentity = Block.SelectedPublicIdentity<typeof MenuBlock>
 const MenuRefinementRule = Symbol('Menu.Refinement')
@@ -1485,7 +1498,7 @@ type RefinedContract<Item extends string> = Block.Contract<
 type RefinedConfiguration<Item extends string> = Readonly<{
   key: typeof MenuKey
   InMessage: typeof InMessage
-  Init: Schema.Tuple<readonly [typeof InitConfig]>
+  InitArgs: Schema.Tuple<readonly [typeof InitConfig]>
   ChildInitContext: typeof InitConfig
   view: Readonly<{
     kind: 'Element'

@@ -1,17 +1,23 @@
 import { Effect, Option, Schema } from 'effect'
 import { Update } from 'foldkit'
-import { initAndSet } from 'foldkit/bindingInit'
+import { initAndSet } from 'foldkit/binding'
 import { pushUrl } from 'foldkit/navigation'
 
 import * as Shared from '@typing-game/shared'
 
+import {
+  makeCommand,
+  makeCommandsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from '../block'
 import { HomeBlock } from '../blocks'
-import { ApplicationBlock, makeCommandsStep, makeStep } from '../definition'
 import { Message } from '../message'
 import { ApplicationRoute, roomRouter } from '../route'
 import { MaybeRoomInstanceBinding } from './room'
 
-export const NavigateToRoom = ApplicationBlock.makeCommand('NavigateToRoom', {
+export const NavigateToRoom = makeCommand('NavigateToRoom', {
   args: { roomId: Schema.String },
   messages: [Message.CompletedNavigateToRoom],
   handler: function* () {
@@ -36,16 +42,16 @@ const initRoomInstance = (roomId: string) =>
 const enterJoinedRoom = (roomId: string, player: Shared.Player) =>
   Update.combineSteps([
     initRoomInstance(roomId),
-    MaybeRoomInstanceBinding.informJoin(roomId, { player }, { roomId }),
+    MaybeRoomInstanceBinding.informOfJoin(roomId, { player }, { roomId }),
     navigateToRoom(roomId),
   ])
 
-const foldHomeOutMessage = ApplicationBlock.makeOutMessageFold(HomeBlock, {
-  CreatedRoom: ({ roomId, player }) => enterJoinedRoom(roomId, player),
-  JoinedRoom: ({ roomId, player }) => enterJoinedRoom(roomId, player),
-})
-
-export const HomeBinding = ApplicationBlock.makeBinding(HomeBlock, {
+export const HomeBinding = makeRequiredFieldBinding(HomeBlock, {
   field: 'home',
-  presentWhen: model => ApplicationRoute.guards.Home(model.route),
-}).withOutMessagePolicy({ fold: foldHomeOutMessage })
+  activeWhen: model => ApplicationRoute.guards.Home(model.route),
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(HomeBlock, {
+    CreatedRoom: ({ roomId, player }) => enterJoinedRoom(roomId, player),
+    JoinedRoom: ({ roomId, player }) => enterJoinedRoom(roomId, player),
+  }),
+})

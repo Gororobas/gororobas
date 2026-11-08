@@ -1,7 +1,6 @@
-import { Effect, Schema } from 'effect'
-import { Block } from 'foldkit'
+import { Schema } from 'effect'
+import { Block, Story } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { withBlock } from 'foldkit/story'
 import * as Update from 'foldkit/update'
 
 const Model = Schema.Struct({
@@ -17,19 +16,18 @@ const DispatchContext = Schema.Struct({ requestId: Schema.String })
 type DispatchContext = typeof DispatchContext.Type
 
 export const ContextualRefreshKey = Symbol('ContextualRefresh')
-
 export const ContextualRefreshBlock = Block.make('ContextualRefresh', {
   key: ContextualRefreshKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   Context: Schema.Tuple([DispatchContext]),
 
   Model,
   Message,
 })
 
-const { makeFieldsStep } = ContextualRefreshBlock
+const { makeFieldsStep, makeComposition } = ContextualRefreshBlock
 
-const ContextualRefreshComposition = ContextualRefreshBlock.makeComposition()
+const ContextualRefreshComposition = makeComposition()
 const update = ContextualRefreshComposition.makeUpdate.withContext(
   ({ requestId }: DispatchContext) => ({
     RequestedRefresh: makeFieldsStep(() => ({
@@ -42,17 +40,12 @@ const init = ContextualRefreshComposition.makeInit(() => ({
   model: { lastRequestId: '', refreshCount: 0 },
 }))
 
-const layer = ContextualRefreshBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-    }
-  }),
-)
+const layer = ContextualRefreshBlock.makeLayer({
+  init,
+  update,
+})
 
-export const requestRefresh = withBlock(
+export const requestRefresh = Story.withBlock(
   { block: ContextualRefreshBlock, layer },
   block => {
     const refresh = (model: Model) =>

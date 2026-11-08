@@ -6,12 +6,12 @@ A Block keeps a feature's Model, Messages, transitions, view, and lifecycle work
 
 The public Block contract describes what a parent can use. An implementation Layer constructs the child graph behind that contract. A Binding declares the relationship once, so update, init, and view can be authored independently of construction.
 
-| Value                | Responsibility                                                                                                                                  |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Block declaration    | Establish Model, local Message, optional InMessage, Init, OutMessage and Context contracts; expose typed helpers and the public child boundary. |
-| Composition          | Register Bindings and Mounts; author graph-aware init, update, InMessage updates, and views.                                                    |
-| Implementation Layer | Acquire child implementations and connect them to the authored init, update, view, and lifecycle declarations.                                  |
-| Program              | Select the browser host, Flags, routing, Ports, and DevTools.                                                                                   |
+| Value                | Responsibility                                                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Block declaration    | Establish Model, local Message, optional InMessage, InitArgs, OutMessage and Context contracts; expose typed helpers and the public child boundary. |
+| Composition          | Register Bindings and Mounts; author graph-aware init, update, InMessage updates, and views.                                                        |
+| Implementation Layer | Acquire child implementations and connect them to the authored init, update, view, and lifecycle declarations.                                      |
+| Program              | Select the browser host, Flags, routing, Ports, and DevTools.                                                                                       |
 
 For a complete application, the [Workspace example](/example-apps/workspace) shows retained editors, keyed Boards, Commands, Subscriptions, optimistic updates, and Story and Scene tests.
 
@@ -29,17 +29,17 @@ If a section only renders parent state, use a view function. A card that receive
 
 ### Establish the feature boundary
 
-Call `Block.make` once at module scope. Supply a stable unique `key`, the Model and local Message Schemas, and an `Init` tuple. Declare an OutMessage Schema when the child reports facts to its parent.
+Call `Block.make` once at module scope. Put its unique key immediately above the declaration without a blank line, using the same Symbol description as the readable Block name. Supply that `key`, the Model and local Message Schemas, and an `InitArgs` tuple. Declare an OutMessage Schema when the child reports facts to its parent.
 
-When published inferred declarations carry the Block’s unique-symbol identity, export its key value through the feature’s public barrel. TypeScript needs that value to name computed-property identities in downstream declarations.
+A compact key can remain private when it does not cross an emitted boundary. Split implementation modules commonly need to export the original key declaration because their inferred contracts carry that identity. When downstream declarations need to name it, the feature’s public barrel can use a type-only re-export of the original declaration. Verify real source and relocated declarations before removing an export.
 
-`Init` describes initializer arguments. `Context` describes read-only per-dispatch arguments. `ChildInitContext` describes the value that the parent's init passes to deferred child argument producers. These are separate inputs; none starts construction or lifecycle work.
+`InitArgs` describes initializer arguments. `Context` describes read-only per-dispatch arguments. `ChildInitContext` describes the value that the parent's init passes to deferred child argument producers. These are separate inputs; none starts construction or lifecycle work.
 
 Declare a rendered Block's `view.kind` and optional `view.Inputs`. Use Schema tuples and records for ordinary data. Use `Block.makeInputContract<...>()` for deliberately nonserialized inputs such as render callbacks. Declare ordinary handler Services under `effects.services` and any public operation channels on the Block.
 
 ::Snippet{name="blockDefinition" label="Block contracts and a local Command"}
 
-A Command's generator constructor obtains its Services and returns its invocation function. Keep request state in the Model and changing request inputs in Command args. The Block constructor acquires the executable child graph; it does not replace the Command handler constructor.
+A Command's generator constructor obtains its Services and returns its invocation function. Keep request state in the Model and changing request inputs in Command args. The Block implementation Layer acquires the executable child graph; it does not replace the Command handler constructor.
 
 ### Define the Composition
 
@@ -51,15 +51,25 @@ Features without children or Mounts still call `makeComposition()`. Creating a C
 
 ### Construct the implementation
 
-Complete the implementation with `FeatureBlock.makeLayer(Effect.gen(function* () { ... }))`. Yield the registered Bindings to acquire their child implementations. Return those connections as `children`, together with the complete init, update, and view builder expressions and the local handler and lifecycle declarations.
+Complete the implementation with `FeatureBlock.makeLayer({ init, update, view, ... })`. The record acquires the init plan's registered child inventory when its Layer is built. Init, update, InMessage update, and view plans must belong to that same Composition. Omit `children`, including for a childless Block.
 
 ::Snippet{name="blockFeatureExports" label="Public contract and implementation Layer"}
 
-Provide each child's implementation Layer through ordinary Layer composition. The static Composition uses `bindings`; the constructor returns the acquired `children`. Each relationship is declared once. Yielding it acquires that relationship's executable implementation.
+Provide each child's implementation Layer through ordinary Layer composition. Composition declares the Bindings; `makeLayer` acquires their selected implementations in registration order.
 
-A complete builder expression can stay inline, move to a local value in the constructor, or move to another module. Its owning Block or Composition preserves contextual inference. Extracted transitions keep referring to stable Binding declarations, so they need no bag of constructor-local child instances.
+::Snippet{name="blockAcquireChildren" label="Constructing the registered child graph"}
 
-Declaring the constructor is passive. The host builds its Layer under a Scope. Construction does not call init, evaluate `init.contextToArgs`, construct handler Layers, or start Commands, Subscriptions, ManagedResources, or Mounts. The acquired init, update, and operations are synchronous.
+A complete builder expression can stay inline, move to a local value, or move to another module. Its owning Block or Composition preserves contextual inference. Extracted transitions keep referring to stable Binding declarations, so they need no bag of constructor-local child instances.
+
+Creating the Layer is passive. The host builds it under a Scope with the existing Layer memoization. Acquisition does not call init, evaluate `init.contextToArgs`, construct handler Layers, or start Commands, Subscriptions, ManagedResources, or Mounts. The acquired init, update, and operations are synchronous.
+
+### Custom construction
+
+Pass an Effect when construction itself needs to perform work, acquire an implementation dependency, or own a scoped resource. For example, a constructor can record when its graph is built:
+
+::Snippet{name="blockCustomConstruction" label="Logging during graph construction"}
+
+An Effect constructor supplies its own `children`. Use `Composition.acquireChildren()` to collect the registered inventory, or yield Bindings individually when construction uses their handles. Foldkit does not add children to this form. The record form rejects an explicit `children` field, keeping automatic and custom acquisition separate. Ordinary request Services belong in handler constructors; Model-driven resources belong in ManagedResources or Mounts.
 
 ### Export the feature
 
@@ -73,7 +83,7 @@ The contract is bounded before the implementation exists. Ordinary applications 
 
 ## Bind a Child {#embedding}
 
-Call the parent Block's `makeBinding` method with the child's public contract. The resulting Binding belongs to the parent because it describes parent decisions: where the child Model lives, how child Messages enter the parent, and how the parent responds to child OutMessages.
+Choose the parent Block's Binding constructor from the child's storage. A required field uses `makeRequiredFieldBinding(ChildBlock, { field })`. The resulting Binding belongs to the parent because it describes parent decisions: where the child Model lives, how child Messages enter the parent, and how the parent responds to child OutMessages.
 
 ::Snippet{name="blockProfile" label="Binding a required child"}
 
@@ -85,7 +95,7 @@ A child whose Message Schema is `Schema.Never` cannot emit a Message. Its Bindin
 
 ::Snippet{name="blockMessageFreeChild" label="Binding a Message-free child"}
 
-`makeBinding` creates passive configuration. The example registers `SettingsBinding` in `ApplicationComposition.bindings` so the parent update and view can use it. The constructor yields that Binding to acquire the selected child implementation. The acquired graph routes child Messages, validates embedded views, collects handler recipes and lifecycle definitions, and assembles child startup through the same relationship. Declaring the Binding and Composition runs none of that work.
+Every Binding constructor creates passive configuration. The example registers `SettingsBinding` in `ApplicationComposition.bindings` so the parent update and view can use it. The implementation Layer acquires that Binding to obtain the selected child implementation. The acquired graph routes child Messages, validates embedded views, collects handler recipes and lifecycle definitions, and assembles child startup through the same relationship. Declaring the Binding and Composition runs none of that work.
 
 ### Route child Messages {#fold-child}
 
@@ -95,7 +105,7 @@ Composition automatically routes the Messages of every registered child. The Bin
 
 ### Receive parent requests and notifications {#inmessages}
 
-Declare an optional `InMessage` Schema for transitions a parent can initiate. Keep local facts such as `SubmittedForm` and Command results in `Message`. The two Schemas have distinct tags; InMessages do not join the local update record or generated child Message delivery.
+Declare an ordinary optional `InMessage` Schema with `defineInMessageUnion` for transitions a parent can initiate. Keep local facts such as `SubmittedForm`, Command results, and OutMessages on `defineMessageUnion`. The two Schemas have distinct tags; InMessages do not join the local update record or generated child Message delivery.
 
 This MessageComposer can receive a submit request, a clear request, or a changed draft:
 
@@ -105,29 +115,31 @@ Author an exhaustive `Composition.makeInMessageUpdate` record alongside `makeUpd
 
 ::Snippet{name="blockInMessageHandlers" label="Sharing a transition across local and parent inputs"}
 
-Return `inMessageUpdate` from the constructor with init, update, and view:
+Include `inMessageUpdate` in the implementation record with init, update, and view:
 
 ::Snippet{name="blockInMessageImplementation" label="Completing a Block with parent input handling"}
 
-The Block generates Binding methods directly from each tag:
+`defineInMessageUnion` returns the same Schema, constructors, and exhaustive matcher as `defineMessageUnion`; it adds no brand. It rejects invalid names at the offending literal property, keeps that validation for an extracted literal case record, and repeats the check at runtime when JavaScript or type erasure hides the keys. Other Schema forms remain valid InMessage contracts subject to the Block's existing constructor and tag validation.
 
-| InMessage tag            | Binding method                 |
-| ------------------------ | ------------------------------ |
-| `RequestedSubmit`        | `requestSubmit()`              |
-| `RequestedClear`         | `requestClear()`               |
-| `InformedOfDraftChanged` | `informDraftChanged({ text })` |
+The Block generates Binding methods directly from its InMessage tags. `RequestedX` becomes `requestX`; `InformedOfX` becomes `informOfX`. The remaining suffix is preserved exactly. Other prefixes and empty suffixes are rejected:
 
-Each method takes the variant's constructor payload when it has fields. Keyed Bindings take the occurrence key first. The parent calls the method from its own Composition-authored transition:
+| InMessage tag            | Binding method                   |
+| ------------------------ | -------------------------------- |
+| `RequestedSubmit`        | `requestSubmit()`                |
+| `RequestedClear`         | `requestClear()`                 |
+| `InformedOfDraftChanged` | `informOfDraftChanged({ text })` |
+
+Each method takes the variant's constructor payload when it has fields. Keyed Bindings take the occurrence key first. The method invokes the matching `makeInMessageUpdate` handler through a connected parent Step; authors do not write a separate wrapper or `operations` mapping for that request. Pass the Step directly to a handler record or compose it in a parent transition:
 
 ::Snippet{name="blockInMessageParent" label="Calling generated request and inform methods"}
 
-`inMessageOutputs` declares each input's public result bounds. Include an entry when that input can emit an OutMessage or needs additional `services` or `resources`. An omitted entry is silent and adds no public requirements. Commands returned from `inMessageUpdate` still produce local Messages, which enter update when the Runtime completes them.
+`inMessageOutputs` declares each input's public result bounds. Include an entry when that input can emit an OutMessage or needs additional `services` or `managedResources`. An omitted entry is silent and adds no public requirements. Commands returned from `inMessageUpdate` still produce local Messages, which enter update when the Runtime completes them.
 
 Declare an `InMessageContext` tuple when `inMessageUpdate` needs read-only per-call values. Author the record with `Composition.makeInMessageUpdate.withContext`, whose factory receives those values. Generated Binding methods take the InMessage context after the payload. This context is separate from update's `Context`; `delivery.toUpdateContext` supplies only incoming child update context.
 
 Receiving an InMessage is synchronous and pure. It returns the next Model, Commands, and optional OutMessage without enqueueing another Runtime Message. Binding storage, OutMessage policy, occurrence identity, and lifecycle ownership remain the same. Defining or acquiring an InMessage update does not create Model occurrences or start effects.
 
-Use `Story.inMessage` and `Scene.inMessage` in Block-aware tests. The runner acquires the selected implementation before applying the cause; Command results still use the ordinary resolution steps. Supply required InMessage context through `{ block, inMessageContext: [...] }`, independently of `updateContext`.
+Use `Story.inMessage` and `Scene.inMessage` in Block-aware tests. The runner acquires the selected implementation before applying the cause; Command results still use the ordinary resolution steps. Supply required InMessage context through `{ block, layer, inMessageContext: [...] }`, independently of `updateContext`.
 
 ::Snippet{name="blockInMessageTesting" label="Testing a parent input through Story and Scene"}
 
@@ -151,6 +163,8 @@ Generated input methods and explicit operation adapters produce connected parent
 
 These calls are pure. A Binding operation produces a connected parent Update.Step whose Model input requires the exact registered graph. A raw domain Model cannot satisfy that input. Return or compose the connected result intact from `makeUpdate` or startup processing; its public type exposes no `.model` or `.commands` before checked execution. A Block-owned `makeStep` may preserve or wrap a connected Step for later execution. The Composition consumes it while the graph is active and returns the readable next Model, optional Commands, and optional OutMessage. An acquired Block operation is also a checked executor: it accepts the raw Block Model and returns the readable result. Explicit operations retain their declared Command requirements and OutMessage bounds. Aggregate update utilities retain the union across local handlers. Calling a pure operation does not run effects returned by another branch. Ordinary internal Update.Steps remain directly callable. The Runtime executes returned Commands later.
 
+Use a payload-mapping callback when the parent needs to derive different inputs. A wrapper that only renames the generated request adds no transition behavior.
+
 ### Adapt explicit operation arguments
 
 The explicit `operations` path remains available for positional arguments, generic adapters, defaults, or mappings to existing local Messages. Put the local Message constructor directly under `operations` when the public arguments map directly to its payload. Completion creates the callable operation without constructing a startup Message. A constructor with payload fields takes one constructor payload object, with constructor defaults honored, followed by any update context. A constructor without payload fields takes no payload placeholder. These operations pass their Message through the child's update synchronously.
@@ -164,7 +178,7 @@ An operation must supply the child's required update context even when its selec
 Binding operations retain the exact argument types, Command requirements, Binding requirement, and OutMessage behavior of the child operation.
 
 :::Info{label="Completion inference"}
-Author update through `Composition.makeUpdate`. The complete expression retains its contextual Model and per-Message typing inline in the constructor return, as a constructor-local value, or in an extracted module.
+Author update through `Composition.makeUpdate`. The complete expression retains its contextual Model and per-Message typing as an inline implementation-record property, as an implementation-local value, or in an extracted module. A custom Effect constructor retains the same inference for its return fields.
 :::
 
 ### Initialize the child
@@ -177,7 +191,7 @@ Use `init: { contextToArgs }` when another child needs inputs, or `init: false` 
 
 The parent init callback returns only parent-owned fields. Composition calls the selected child initializer, stores its Model, and retains its Commands. See [Init & Flags](/core/init-and-flags#child-initialization) for optional children, keyed occurrences, custom storage, Command batching, and initial Steps.
 
-Block init cannot emit an OutMessage. Author it through the Block Composition, then return that init builder from `FeatureBlock.makeLayer`. An optional `boot` helper is an ordinary initial Step listed in the parent's init plan after the child Model exists; Foldkit has no special Runtime boot phase. When an existing request such as `RequestedRestore` or `RequestedOpen` already describes the transition, call its generated Binding method. The same method may run later from update. Do not create a separate startup-only Message when an existing InMessage already describes the request.
+Block init cannot emit an OutMessage. Author it through the Block Composition, then include that init builder in the implementation record passed to `FeatureBlock.makeLayer`. An optional `boot` helper is an ordinary initial Step listed in the parent's init plan after the child Model exists; Foldkit has no special Runtime boot phase. When an existing request such as `RequestedRestore` or `RequestedOpen` already describes the transition, call its generated Binding method. The same method may run later from update. Do not create a separate startup-only Message when an existing InMessage already describes the request.
 
 The Binding's selected `fold` policy can handle a fact from that initial Step against the complete parent Model. Parent init cannot forward an OutMessage, so a startup Step used there must finish with a plain update result.
 
@@ -201,7 +215,7 @@ Let `makeView` infer the primary view's builder. For an extracted helper on the 
 
 A shared helper that forwards Mount-bearing child Attributes accepts a typed caller-owned render callback. The callback uses the caller's inferred builder, preserving its registered Binding capability. See [Builder ownership](/core/view#builder-ownership) for the shared Dialog pattern.
 
-The local `Message` alias describes the facts handled by authored update logic. A boundary such as `Runtime.CrashContext` also accepts private child delivery. Derive its dispatch type from `Block.ExecutableOf<typeof FeatureBlock>`; use the acquired implementation's `Message` Codec when decoding or replaying complete history.
+The local `Message` alias describes the facts handled by authored update logic. A boundary such as `Runtime.CrashContext` also accepts private child delivery. Derive its dispatch type from `Block.ExecutableOf<typeof FeatureBlock>`; use the acquired implementation's `Message` Codec when decoding serialized complete history. DevTools replay uses values already retained in memory and does not run that Codec.
 
 ::Snippet{name="blockCompositionTypes" label="Composition-specific builder and dispatch types"}
 
@@ -210,8 +224,9 @@ The local `Message` alias describes the facts handled by authored update logic. 
 A child reports facts to its parent through an OutMessage. A public operation carries a parent request down; an OutMessage carries a child fact up. For example, Profile may ask Settings to reset, while Settings reports that its theme changed. The parent Binding decides what that reported fact means at this boundary.
 
 Every Binding for a Block with OutMessages must select an explicit policy with
-`withOutMessagePolicy`. Keep the ordinary case as one fluent declaration:
-`ParentBlock.makeBinding(ChildBlock, config).withOutMessagePolicy(policy)`.
+`withOutMessagePolicy` on the storage-specific Binding. For a required-field
+child, keep the ordinary case as one fluent declaration:
+`ParentBlock.makeRequiredFieldBinding(ChildBlock, config).withOutMessagePolicy(policy)`.
 The selected value is the full Binding to register and use.
 
 - `fold` handles the fact in the current parent and returns a parent Step.
@@ -223,8 +238,25 @@ public contract:
 
 ::Snippet{name="blockOutMessagePolicy" label="Handling a child OutMessage"}
 
-Inline a one-way policy as
-`ParentBlock.makeBinding(ChildBlock, config).withOutMessagePolicy({ fold: ParentBlock.makeOutMessageFold(ChildBlock, handlers) })`.
+Keep a single-use exhaustive fold inline with its Binding. Extract a reused fold or a mapping that substantially obscures the relationship. For a complicated branch, first consider extracting its transition while keeping the tag mapping here. Explicit no-op cases record deliberate parent behavior; the child still performs its own update. Reciprocal policies may need an extracted fold to keep inference independent of the Binding declarations.
+
+Keyed Bindings accept the same authored fold directly when the handlers do not
+need the occurrence key. When they need it, return the fold from a callback:
+`fold: key => makeOutMessageFold(ChildBlock, handlers)`. The Binding supplies the
+OutMessage and its FoldContext; handlers close over the exact key type.
+
+::Snippet{name="blockKeyedOutMessageFolds" label="Handling keyed child facts with and without the key"}
+
+Both forms preserve exhaustive payload inference, Command requirements and
+sibling Binding checks. Construction stays passive. A key-dependent callback
+runs only when an existing occurrence emits an OutMessage, and its parent Step
+receives the Model after the child write. Take FoldContext inside the variant
+handler when using `modelBeforeUpdate` or its lifters. The explicit
+`(key, outMessage, context) => step` form is also supported for adaptations that
+need those inputs together.
+
+For a required-field child, inline a one-way policy as
+`ParentBlock.makeRequiredFieldBinding(ChildBlock, config).withOutMessagePolicy({ fold: ParentBlock.makeOutMessageFold(ChildBlock, handlers) })`.
 The child supplies the exact OutMessage contract, while the parent
 Block supplies the Model, Message, and OutMessage contracts. Name the fold
 when reuse, keyed adaptation, or reciprocal staging benefits from a separate
@@ -245,7 +277,7 @@ variants that stop here. At least one handler must forward.
 
 ::Snippet{name="blockOutMessageForward" label="Forwarding selected child OutMessages"}
 
-`makeBinding` fixes storage, delivery, lifecycle, and child identity before policy
+The selected constructor fixes storage, delivery, lifecycle, and child identity before policy
 selection. `withOutMessagePolicy` selects one immutable policy for that same
 child Binding. Register the selected Binding in the Composition. A missing
 policy, a missing or extra handler, an undeclared forwarded OutMessage, or a
@@ -258,7 +290,7 @@ The parent configures integration policy in its child Binding. That policy execu
 
 ## Complete the Application
 
-Create the root's `ApplicationBlock` with its unique `key`, Model, Message, `Init` tuple, and view contract. Author init, update, and the primary view through `ApplicationComposition`, then export `layer = ApplicationBlock.makeLayer(...)`. In `entry.ts`, pass `{ block: ApplicationBlock, layer }` and browser inputs to `Program.make` or `Program.makeElement`.
+Create the root's `ApplicationBlock` with its unique `key`, Model, Message, `InitArgs` tuple, and view contract. Author init, update, and the primary view through `ApplicationComposition`, then export `layer = ApplicationBlock.makeLayer(...)`. In `entry.ts`, pass `{ block: ApplicationBlock, layer }` and browser inputs to `Program.make` or `Program.makeElement`.
 
 Root `services.ts` supplies the shared store required by the child handler:
 
@@ -270,7 +302,7 @@ The entry gives `{ block: ApplicationBlock, layer }` to `Program.make` and start
 
 The Application Composition carries the child graph. Its completion config supplies root-local handler recipes and lifecycle definitions. Registered child Blocks contribute their own handlers through that graph. `ApplicationLayer` supplies ordinary application Services such as storage or an HTTP client. It does not re-merge each feature's `EffectsLayer`.
 
-`ApplicationBlock.makeLayer` checks the returned child connections and implementation. `Program.make` records the host configuration and `program.provide(ApplicationLayer)` records providers. The Runtime acquires the graph and builds the selected handlers when the Program starts. Missing handlers, incompatible child Bindings, unavailable Mount requirements, and an unhandled root OutMessage fail before a user interaction.
+`ApplicationBlock.makeLayer` checks the implementation plans and registered child graph. `Program.make` records the host configuration and `program.provide(ApplicationLayer)` records providers. The Runtime acquires the graph and builds the selected handlers when the Program starts. Missing handlers, incompatible child Bindings, unavailable Mount requirements, and an unhandled root OutMessage fail before a user interaction.
 
 Server rendering uses the same root:
 
@@ -322,7 +354,7 @@ At completion, the compiler checks the primary view owner, handler coverage, and
 
 A Binding already knows the child Message and its captured occurrence. Use `delivery.toUpdateContext` only for additional arguments required by the child's update. Its callback receives the current parent Model; a keyed Binding also supplies the captured key. Return the exact context tuple, without repeating the child Message or key. Optional and defaulted parameters still need an explicit policy; return an empty tuple to use child defaults when that signature permits it.
 
-Use `delivery.when` to ignore incoming child Messages under a parent-owned condition. A false result leaves the parent Model unchanged. This gate does not make the child absent, stop its lifecycle work, or gate an explicitly invoked Binding operation. Use `presentWhen` or a custom reader for whole-child presence, and `subscriptions.when` to gate only Streams.
+Use `delivery.when` to ignore incoming child Messages under a parent-owned condition. A false result leaves the parent Model unchanged. This gate does not make the child absent, stop its lifecycle work, or gate an explicitly invoked Binding operation. Use `activeWhen` or a custom reader for whole-child presence, and `subscriptions.when` to gate only Streams.
 
 `delivery.when` does not receive the child Message. When a policy must allow completion Messages while refusing user interaction, pass the current parent policy through `delivery.toUpdateContext` and apply it in the relevant child handlers. Leave completion handlers ungated so in-flight work can settle:
 
@@ -345,11 +377,11 @@ An exact `Option<ChildModel>` field declares an optional child without a manual 
 
 When the child reappears, Foldkit creates a new occurrence with new lifecycle scopes. A Command already running for the old occurrence keeps application lifetime, but its result is discarded if that occurrence is no longer current. This preserves Command interruption semantics while preventing a stale result from updating a replacement child.
 
-Use `presentWhen` with a direct field when parent policy controls the whole child's presence independently of storage. The predicate applies to folds, operations, Subscriptions, ManagedResources, and Mounts. A false result behaves like an absent Option field and never clears or replaces the stored child Model.
+Use `activeWhen` with a direct field when parent policy controls the whole child's presence independently of storage. The predicate applies to folds, operations, Subscriptions, ManagedResources, and Mounts. A false result behaves like an absent Option field and never clears or replaces the stored child Model.
 
 ::Snippet{name="blockPresenceGate" label="Gating a child occurrence"}
 
-Use explicit `read` and `write` for nested storage or custom child placement. For a child occupying one complete tagged parent variant, use the Schema-backed helper below. The accessor's `None` result already determines presence, so accessor Bindings do not also take `presentWhen`.
+Use explicit `read` and `write` for nested storage or custom child placement. For a child occupying one complete tagged parent variant, use the Schema-backed helper below. The accessor's `None` result already determines presence, so accessor Bindings do not also take `activeWhen`.
 
 A Binding's `write` or `writeAt` places the next child Model into parent storage. Keep parent reactions to child transitions in its OutMessage policy. Do not compare old and new child state in a writer to generate announcements, trigger sibling changes, or maintain unrelated parent fields. Nested storage, keyed replacement, presence checks, and preservation of wrapper metadata remain legitimate custom writes. If a parent needs a child fact that is not exposed, add a truthful public OutMessage rather than using the writer as an event hook.
 
@@ -371,7 +403,7 @@ A retained occurrence remains present even when its view is hidden. Its pending 
 
 ### Whole tagged variants
 
-Use `makeVariantBinding` from `foldkit/variantBinding` when a child Model is one complete member of the parent `Schema.Union`. Include the actual `ChildBlock.Model` Schema in that union. The child must have one required literal `_tag`; parent members need distinct tags and closed records.
+Use `ParentBlock.makeVariantBinding(ChildBlock)` when a child Model is one complete member of the parent `Schema.Union`. Include the actual `ChildBlock.Model` Schema in that union. The child must have one required literal `_tag`; parent members need distinct tags and closed records.
 
 For example, this child owns the editing state:
 
@@ -385,13 +417,13 @@ The helper derives presence from the child's tag. Folds and operations leave oth
 
 Optional configuration accepts `placement`, `delivery` and `subscriptions`. Delivery context still supplies the child's exact update arguments. Subscription gates control only Streams. Add OutMessage policy with the ordinary `.withOutMessagePolicy` call and register the selected Binding in the Composition.
 
-Use general accessors for nested or wrapped variants, custom writers, or opaque Schemas. TypeScript checks the exact decoded member and its tag; runtime validation also requires the actual child Schema instance in the union. It cannot prove Schema object identity statically. Do not reconstruct a same-shaped member or mix the helper with field/accessor initialization options. The separate import keeps this specialized generic surface out of ordinary authoring.
+Use general accessors for nested or wrapped variants, custom writers, or opaque Schemas. TypeScript checks the exact decoded member and its tag; runtime validation also requires the actual child Schema instance in the union. It cannot prove Schema object identity statically. Do not reconstruct a same-shaped member or mix the helper with field/accessor initialization options.
 
 ## Coordinate Sibling Blocks
 
 A policy may return a parent Step that calls a registered sibling Binding operation. This supports parent-owned coordination in either direction: one child's OutMessage can initialize, update, or remove another child while preserving both boundaries. Keep reciprocal policies together in the same parent `composition.ts` or `composition/composition.ts`. Export and register the policy-complete `HomeBinding` and `RoomBinding`. Keep base Bindings internal when deferred reciprocal callbacks need them to break a dependency cycle. `makeComposition` validates the policy's captured output and confirms that every sibling Binding used by the policy is registered in `bindings`. Keep the chain synchronous and finite; one policy may invoke another Binding policy before the original update returns.
 
-This parent opens the selected Room when Home reports `SelectedRoom`. When Room later reports `SavedRoom`, the parent marks that Room as saved in Home. The omitted child contracts provide both operations: `RoomBinding.requestOpen` returns a pure connected Step, while `HomeBinding.informRoomSaved` returns a connected Step with a persistence Command. Neither operation emits another sibling OutMessage:
+This parent opens the selected Room when Home reports `SelectedRoom`. When Room later reports `SavedRoom`, the parent marks that Room as saved in Home. The omitted child contracts provide both operations: `RoomBinding.requestOpen` returns a pure connected Step, while `HomeBinding.informOfRoomSaved` returns a connected Step with a persistence Command. Neither operation emits another sibling OutMessage:
 
 ::Snippet{name="blockSiblingCoordination" label="Coordinating sibling Blocks in both directions"}
 
@@ -431,9 +463,9 @@ An exact `Schema.Option` field can hold zero or one keyed wrapper with the same 
 
 The Option must be required on the parent Struct, and its value must be one closed Struct wrapper. The key and child fields follow the same rules as wrapped arrays. `None` means the occurrence is absent. A fold or operation replaces only the child Model when the stored key matches, preserves the wrapper's other fields, and never creates a missing occurrence. A different key leaves the exact parent Model unchanged. The Binding defaults placement to the child Block ID.
 
-The parent owns optional presence. For a wrapper containing only its key and child fields, `initAndSet` from `foldkit/bindingInit` derives the storage writer. Keep `MaybeRoomInstanceBinding.init({ key, args, toParentModel })` when creating additional parent-owned wrapper metadata. Both retain child init Commands. Automatic `init.instances` applies only to keyed arrays and is rejected for Option storage. See [dynamic storage helpers](/core/init-and-flags#dynamic-storage-helpers).
+The parent owns optional presence. For a wrapper containing only its key and child fields, `initAndSet` from `foldkit/binding` derives the storage writer. Keep `MaybeRoomInstanceBinding.init({ key, args, toParentModel })` when creating additional parent-owned wrapper metadata. Both retain child init Commands. Automatic `init.instances` applies only to keyed arrays and is rejected for Option storage. See [dynamic storage helpers](/core/init-and-flags#dynamic-storage-helpers).
 
-Use the general keyed form when the parent or wrapper Schema is opaque, wrappers are a union or use open/index-signature storage such as `Schema.StructWithRest`, a zero-or-one occurrence does not use the exact Option wrapper shape above, or writing a child requires other parent changes. `readAll` enumerates the items, `key` selects stable identity, `read` selects the child Model, and `writeAt` stores its next value. Supply `keySchema` for this general form so the complete Message Schema can validate and serialize the selected key. Field shorthands derive that Schema from the declared key field.
+Use the general keyed form when the parent or wrapper Schema is opaque, wrappers are a union or use open/index-signature storage such as `Schema.StructWithRest`, a zero-or-one occurrence does not use the exact Option wrapper shape above, or writing a child requires other parent changes. `readAll` enumerates the items, `key` selects stable identity, `read` selects the child Model, and `writeAt` stores its next value. For a Message-bearing child, supply `keySchema` so the complete Message Schema can validate and serialize the selected key. Omit it for a Message-free child because that relationship has no delivery envelope. Field shorthands derive the key Schema from their declared key field.
 
 Each active key gets independent Subscription, ManagedResource, and Mount scopes. `fold`, operations, `init`, and `embedView` take the key first. The key must be a stable string or finite number and must be unique in the current collection.
 
@@ -455,10 +487,10 @@ The child Model contains state the child owns. Choose how parent-owned data cros
 | --------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Read current parent data while rendering                                          | View inputs                                            |
 | Read current parent data while handling a Message                                 | Update context, supplied by `delivery.toUpdateContext` |
-| React to an external event by changing state or producing Commands or OutMessages | An `inform*` operation                                 |
+| React to an external event by changing state or producing Commands or OutMessages | An `informOf*` operation                               |
 | Keep an independent value or historical editing baseline                          | The child Model                                        |
 
-View inputs and update context supply values when the view or update runs. Changing those values does not itself dispatch a child Message. Send an inform when an external change requires a child transition; avoid copying parent data into the child merely to make it available.
+View inputs and update context supply values when the view or update runs. Changing those values does not itself dispatch a child Message. Call an `informOf*` operation when an external change requires a child transition; avoid copying parent data into the child merely to make it available.
 
 The basic Settings Block needs only its Model and Message. When a different child truly needs parent state for each transition, declare that context in the child's update signature and supply it through the Binding's Message route. This separate AccountSettings Block records which current user changed the theme:
 
@@ -468,11 +500,11 @@ Pass render-only values through `viewInputs`:
 
 ::Snippet{name="blockParentStateInView" label="Parent state through view inputs" class="mb-4"}
 
-An editor may retain the original editable fields and revision for an unsaved draft while receiving current comments as view inputs. A changed field revision may require an inform to refresh a clean form or flag an editing conflict. A new comment can appear through view inputs without changing that baseline.
+An editor may retain the original editable fields and revision for an unsaved draft while receiving current comments as view inputs. A changed field revision may require an `informOf*` operation to refresh a clean form or flag an editing conflict. A new comment can appear through view inputs without changing that baseline.
 
 ## Inform a Child about External State {#informing-external-state}
 
-When an external fact requires a child transition, expose an `inform*` operation that produces an `InformedOf*` Message and call it through the registered Binding. For example, a URL change may reset a child-owned selection or invalidate work. Values needed only for a current read belong in view inputs or update context.
+When an external fact requires a child transition, expose an `informOf*` operation that produces an `InformedOf*` Message and call it through the registered Binding. For example, a URL change may reset a child-owned selection or invalidate work. Values needed only for a current read belong in view inputs or update context.
 
 ::Snippet{name="blockInformExternalState" label="Informing a child about URL state"}
 
@@ -558,7 +590,7 @@ Register each repeated Binding once in the parent's Composition. This Chat paren
 
 ::Snippet{name="blockRegisterChildren" label="Registering repeated child Bindings"}
 
-An unkeyed direct field defaults placement to `field`, including an optional field. Record and HashMap Bindings created by `ParentBlock.makeMapBinding` also default to `field`. Accessor Bindings and keyed array or Option Bindings default to the child Block ID. A keyed Binding's key distinguishes instances under that one placement. An explicit `placement` overrides either default. A direct `Option` field keeps the same placement whether it contains `Some` or `None`.
+An unkeyed direct field defaults placement to `field`, including an optional field. Record and HashMap Bindings created by their respective constructors also default to `field`. Accessor Bindings and keyed array or Option Bindings default to the child Block ID. A keyed Binding's key distinguishes instances under that one placement. An explicit `placement` overrides either default. A direct `Option` field keeps the same placement whether it contains `Some` or `None`.
 
 Set `placement` only when a default would collide with a sibling Binding or when the graph deliberately needs another stable identity. For example, two accessor Bindings of the same Composer Block both default to `Composer`, so the second needs another placement:
 
@@ -582,7 +614,7 @@ Generations belong to one Program runtime. They are not portable occurrence IDs 
 
 ### Block.make
 
-`Block.make(id, { key, Model, Message, Init, ... })` declares the public contract and provides typed effect, Step, lifecycle, and child Binding authoring methods. `id` is a nonempty segment without `/` or `::`. Name the result `<Id>Block`, such as `SettingsBlock` for the ID `Settings`. Keep the factory and its unique Symbol key at module scope. That same value exposes the public contract and typed authoring helpers; its Composition authors graph-aware init, update, and views.
+`Block.make(id, { key, Model, Message, InitArgs, ... })` declares the public contract and provides typed effect, Step, lifecycle, and child Binding authoring methods. `id` is a nonempty segment without `/` or `::`. Name the result `<Id>Block`, such as `SettingsBlock` for the ID `Settings`. Keep the factory and its unique Symbol key at module scope. That same value exposes the public contract and typed authoring helpers; its Composition authors graph-aware init, update, and views.
 
 When related contracts share owned effect definitions, `Block.makeNamespace(id)` supplies their identity and primitive helpers. Name that value `<Id>Namespace` and pass it to `Block.make(FeatureNamespace, contracts)`. Both calls are passive configuration. Generic libraries with a shared implementation provider use the advanced mechanism described under [Generic Blocks](#generic-blocks).
 
@@ -592,7 +624,9 @@ When related contracts share owned effect definitions, `Block.makeNamespace(id)`
 
 ### FeatureBlock.makeLayer
 
-`FeatureBlock.makeLayer(constructor)` checks the constructor's returned init, update, view, local lifecycle declarations, handler recipe, and acquired `children` against the Block declaration and Composition. Missing, duplicate, incompatible, or unregistered child connections are rejected. A leaf returns `children: []`.
+`FeatureBlock.makeLayer({ init, update, view, ... })` checks the portable plans, local lifecycle declarations and handler recipe against the Block declaration and the init plan's Composition. Its Layer acquires that Composition's registered children. All implementation plans must belong to the same Composition. The record rejects explicit `children`, `bindings`, and `operations` fields.
+
+`FeatureBlock.makeLayer(effect)` supports custom construction. That Effect acquires and returns its own `children`; missing, duplicate, incompatible, or unregistered connections are rejected. A custom childless constructor returns `children: []`.
 
 The returned ordinary Layer is passive. Compose child implementation providers with `.pipe(Layer.provide(Child.layer))`. Program and Server receive `{ block: FeatureBlock, layer }` and acquire the graph under their lifetime. Scoped Story and Scene runners accept that same pair.
 
@@ -600,31 +634,82 @@ The returned ordinary Layer is passive. Compose child implementation providers w
 
 `ChildBlock.Instance` is the ready Schema for `{ key: string, model: ChildModel }`. Use `Schema.Array(ChildBlock.Instance)` for a required top-level collection with standard occurrence storage. The Schema retains the exact child contract's ownership. Its `make` constructor creates a ready value from an existing child Model; it does not call child init or produce its Commands. Schema decoding likewise restores ready data without initialization.
 
-### ParentBlock.makeBinding
+### Handler requirement bounds
 
-`ParentBlock.makeBinding(FooBlock, config)` creates one static, optional, or keyed Binding in the parent Model context. Use `field` for an exact Struct field containing the child Model or `Option<ChildModel>`. Use `presentWhen` for whole-child presence policy, or explicit `read`/`write` for custom storage. Generated delivery carries each child's exact Message Schema and occurrence identity. A child with OutMessages requires `.withOutMessagePolicy({ fold?, forward? })`; register and use that returned full Binding. Chain the call for an ordinary one-way policy. Name the complete value after its Model field: `activeMemberListbox` becomes `ActiveMemberListboxBinding`, and `issueDetails` becomes `IssueDetailsBinding`. Preserve optional prefixes, plurals, and control roles. For wrapped storage, include the nested role when the container alone would hide it, such as `EntriesAnimationBinding` for `entries[].animation`. Custom and whole-variant storage use a meaningful relationship name. Keep a necessary `Base<Field>Binding` internal when a self-referential or reciprocal policy needs its operations to break a dependency cycle.
+The public `effects` contract describes runtime handler capabilities. The implementation chooses the corresponding handlers in its local `EffectsLayer`.
 
-`delivery.when` gates incoming child Messages without making the child absent. `delivery.toUpdateContext` returns the exact additional arguments required by the child update. Unkeyed callbacks receive the parent Model; keyed callbacks also receive the occurrence key. General keyed accessors supply `keySchema`; direct array adapters derive it from the key field. A Message-free child omits delivery configuration. Unkeyed direct fields and `ParentBlock.makeMapBinding` default placement to `field`; accessor Bindings and keyed array or Option Bindings default to the child Block ID. `subscriptions.when` gates only Streams. OutMessage handling remains parent policy.
+| Contract field             | What it bounds                                              |
+| -------------------------- | ----------------------------------------------------------- |
+| `effects.services`         | Ordinary Services required while building the handler Layer |
+| `effects.managedResources` | ManagedResource handle requirements                         |
+| `effects.Error`            | Failures while building the handler Layer                   |
 
-### ParentBlock.makeMapBinding {#keyed-map-fields}
+Graph-construction requirements and errors come from the registered child Layers and any custom constructor Effect, separately from the handler bounds. A Command invocation's ordinary failures still become Messages. Use `Block.makeEffectsContract<E, R>()` as the type-based alternative for generic handler-Layer errors and ordinary Service bounds. Extra ManagedResource requirements on an explicit operation or `inMessageOutputs` use the same `managedResources` spelling.
 
-Call `ParentBlock.makeMapBinding(ChildBlock, { field })` for a required `Schema.Record(Key, ChildBlock.Model)` or `Schema.HashMap(Key, ChildBlock.Model)` field. The parent Block supplies the exact child relationship and key contract from its Model Schema. The property or map key identifies the child occurrence; the child Model does not need to repeat it. Add `childField` when each value is a closed parent-owned wrapper containing the child Model.
+## Serializable Model and Message Codecs
 
-The factory can also be destructured from the parent Block. In a split feature, export `makeMapBinding` from its `definition.ts` and import it from that module when authoring Bindings. The factory retains its parent Block's contracts.
+Foldkit serializes a Block's Model and Messages at synchronous host boundaries. The Model Codec, local Message Codec, and complete Message Codec must encode and decode without Effect Services. Delete the `codec` config when migrating; `codec.decoding` and `codec.encoding` have no replacement aliases.
+
+The complete Message Codec contains generated child delivery envelopes. A child Message transformation therefore propagates through every parent that registers that child. Foldkit checks the complete graph instead of trusting the parent's local Message alone.
+
+A synchronous transformation may still use `SchemaTransformation.transformEffect` with `Effect.succeed`. Standard JSON Codecs for values such as `Option` and `Date` are supported too. An Effect requirement of `never` proves that no Service is needed; it does not prove the Effect completes synchronously. A transformation that suspends on a Promise is rejected when Foldkit actually serializes or deserializes a value. Block declaration, Composition, and Layer construction remain passive and do not run the Codec against fabricated values.
+
+Generic factories carry the encoded type and bind both Service channels to `never` with `Schema.Codec<Value, Encoded, never, never>`. A decoded-only `Schema.Schema<Value>` leaves those Service requirements unknown.
+
+This child trims a submitted label through a synchronous transformation:
+
+::Snippet{name="blockCodecChild" label="Child Messages with a synchronous transformation"}
+
+The parent registers the child without repeating or widening its Codec. Its acquired executable receives the complete Message Codec, including the generated child envelope:
+
+::Snippet{name="blockCodecParent" label="Complete Message Codec from the registered graph"}
+
+The restriction applies to Foldkit-managed Model and Message serialization. A Command or another effectful API can retain an effectful boundary Codec and supply its requirements through the Effect that runs it. Any Message emitted back into update must still belong to the owning Block's service-free local Message Codec.
+
+## Binding constructors
+
+Choose a constructor from the parent Model's storage. Each method receives the child Block's public contract and checks the selected relationship against both Schemas.
+
+| Parent storage                              | Constructor                     | Required configuration                                                                |
+| ------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
+| One child Model field                       | `makeRequiredFieldBinding`      | `field`                                                                               |
+| One `Option<ChildModel>` field              | `makeOptionalFieldBinding`      | `field`                                                                               |
+| One closed keyed Option wrapper             | `makeOptionalKeyedFieldBinding` | `field`, `key`, `childField`                                                          |
+| An array of child Models                    | `makeKeyedArrayBinding`         | `field`, `key`                                                                        |
+| An array of closed wrappers                 | `makeKeyedArrayBinding`         | `field`, `key`, `childField`                                                          |
+| A Record of children or closed wrappers     | `makeRecordBinding`             | `field`, optional `childField`                                                        |
+| A HashMap of children or closed wrappers    | `makeHashMapBinding`            | `field`, optional `childField`                                                        |
+| Custom unkeyed storage                      | `makeCustomBinding`             | `read`, `write`                                                                       |
+| Custom keyed storage                        | `makeCustomKeyedBinding`        | `readAll`, function `key`, `read`, `writeAt`; `keySchema` for a Message-bearing child |
+| One complete tagged child member of a union | `makeVariantBinding`            | Optional placement, delivery and Subscription policies                                |
+
+All fields in these adapters are required Schema fields. Optional child storage means a required field whose value is an `Option`, not an optional object property. A required child field can retain its Model while `activeWhen` is false. Both direct-field constructors support that predicate; it deactivates the whole occurrence without changing storage. Keyed, map and variant constructors do not accept it. A custom reader expresses absence through `None`.
+
+Generated delivery carries the exact child Message Schema and occurrence identity. `delivery.when` gates incoming Messages; `delivery.toUpdateContext` derives the child's dispatch arguments. Keyed callbacks also receive the occurrence key. `subscriptions.when` gates only Streams. A Message-free child needs no delivery policy.
+
+A child with OutMessages requires `.withOutMessagePolicy({ fold?, forward? })`. Register and use that policy-complete Binding. Name field-backed Bindings after their Model field: `activeMemberListbox` becomes `ActiveMemberListboxBinding`, and `issueDetails` becomes `IssueDetailsBinding`. Preserve optional prefixes, plurals and control roles. Include a nested role when a wrapper container would hide it, such as `EntriesAnimationBinding` for `entries[].animation`. Custom and whole-variant storage use a meaningful relationship name. Keep a necessary `Base<Field>Binding` internal when a self-referential or reciprocal policy needs its operations.
+
+### Record and HashMap fields {#keyed-map-fields}
+
+Call `ParentBlock.makeRecordBinding(ChildBlock, { field })` for a required `Schema.Record(Key, ChildBlock.Model)` field, or `ParentBlock.makeHashMapBinding(ChildBlock, { field })` for a required `Schema.HashMap(Key, ChildBlock.Model)` field. The parent Schema supplies the exact key contract. The property or map key identifies the occurrence; the child Model need not repeat it. Add `childField` for a closed parent-owned wrapper around each child Model.
+
+A split feature can export the needed destructured constructor from its `block.ts` and import it from that owning module. Extraction preserves the parent contracts and contextual inference.
 
 The Entry implementation owns its rename transition:
 
 ::Snippet{name="blockKeyedMapChild" label="The map's child contract"}
 
-The parent can store exact child Models in a Record and wrapped child Models in a HashMap:
+The parent stores exact child Models in a Record and wrapped child Models in a HashMap:
 
 ::Snippet{name="blockKeyedMapFields" label="Schema-backed map Bindings"}
 
-`ParentBlock.makeMapBinding` defaults the Binding placement to the parent field name. Override `placement` when two Bindings use different child fields in the same wrapper collection. The placement distinguishes the relationships; each stored key identifies an occurrence within that relationship.
+Both constructors default placement to the parent field. Override `placement` when two Bindings select different child fields in the same wrapper collection. Placement distinguishes those relationships; each stored key identifies an occurrence within one relationship.
 
-Record keys must decode to strings. Lookup uses own properties, and enumeration follows JavaScript's own enumerable string-key order. HashMap keys decode to strings or numbers; actual numeric occurrence keys must be finite even when the declared Schema is broader. HashMap iteration does not establish display order. Keep a separate ordered list of IDs when the application needs one.
+Record keys decode to strings. Lookup uses own properties, and enumeration follows JavaScript's own enumerable string-key order. HashMap keys decode to strings or numbers; actual numeric occurrence keys must be finite. HashMap iteration does not establish display order. Keep a separate ordered list of IDs when the application needs one.
 
-Ordinary child folds and operations replace only an existing matching entry. Wrapped writes preserve parent metadata, and absent entries leave the same parent Model unchanged. Parents own membership. Removing a stored key ends that child occurrence's lifecycle. For direct child values, `initAndInsert` from `foldkit/bindingInit` creates an absent entry and rejects occupied keys. `makeInitIfMissingStep(Binding, { key, args })` creates a connected Step that retains an existing child and initializes an absent one. Wrapped maps keep explicit `Binding.init({ key, args, toParentModel })` so the parent supplies their metadata. These helpers retain the initialized child's Commands. Use general keyed accessors for custom writers, custom enumeration, or composite domain keys with a separate stable primitive occurrence identity. A fresh plain object is not a structural HashMap key merely because a Struct Schema describes it.
+Ordinary folds and operations replace only existing matching entries. Wrapped writes preserve parent metadata; missing entries preserve the parent Model. Parents own membership, and removing a key ends that occurrence's lifecycle. For direct child values, `initAndInsert` from `foldkit/binding` inserts an absent key and rejects an occupied one. `makeInitIfMissingStep(Binding, { key, args })` retains existing children. Its producer form selects `Option.some({ key, args })` or `Option.none()` from the current Step Model, evaluated once during checked execution. Both forms preserve Model identity and emit no Commands when selection is `None` or the key exists. A missing selected key initializes the child and retains its init Commands. Every branch requires the original Binding registration.
+
+Wrapped maps, custom metadata and parent Commands use explicit `Binding.init({ key, args, toParentModel })`. Use custom keyed accessors for custom writers, enumeration, or composite storage keys with a separate primitive occurrence identity. A fresh object is not a structural HashMap key merely because a Struct Schema describes it.
 
 ### Focused Step Producers
 
@@ -668,6 +753,12 @@ When combined after another Step, the callback receives the Model produced by th
 
 `FeatureBlock.makeStep(producer)` handles reusable mixed transitions, additional producer arguments, connected Binding operations, initialization, delegated results, and other composed results. It preserves or wraps a connected value until a Composition interprets it under the registered graph, and infers the operation's arguments, result Messages, Command requirements, and Binding requirements. Cohesive mixed handlers can return `{ model, commands, outMessage }` directly. Declare parent inputs through InMessage and inMessageUpdate; retain `operations` for explicit adapters.
 
+An inline handler gets its exact Message from the Composition. An extracted Message-dependent callback needs that contract at its parameter when no handler record supplies it. Annotate the variant; let `makeStep` infer the output, Command requirements and connected graph evidence. The same convention applies to `makeStep.fromMessage`:
+
+::Snippet{name="updateExtractedMessage" label="Exact Message contracts for extracted Steps"}
+
+Do not pass a single Message type argument to these helpers. TypeScript cannot infer the remaining output parameters through the tested one-call encodings; broad defaults lose the exact result channels. The parameter annotation keeps the current inference intact.
+
 Use `makeStep.fromMessage(producer)` when only the Message is needed to select or construct a Step, compose Steps, or create an initialization recipe. An inline `makeUpdate` entry infers the exact Message variant for both the ordinary Model-aware form and `.fromMessage`, including `.withContext` records. The returned handler receives `(model, message)`; applying it evaluates the producer and passes the incoming Model to a returned Step. Construction is passive. An extracted producer needs a precise Message variant annotation, as with the focused helpers. Dispatch context stays in `makeUpdate.withContext`, where the producer can close over it.
 
 Choose the helper when authoring a Step. Inside a local `makeStep` callback, return results directly, including `{ model }` for an unchanged Model. Constructing and immediately applying another local Step merely to express a branch adds an unnecessary layer:
@@ -690,7 +781,7 @@ Calling an existing reusable Step still expresses a named operation, and `Update
 
 ### Declaring operation adapters
 
-Declare ordinary parent inputs through [InMessage and inMessageUpdate](#inmessages). Keep the Block's `operations` record for explicit adapters. A local Message constructor is the short form. Use an operation declaration with `message`, `outMessage`, `services`, or `resources` when the adapter exposes those channels. Completion checks the implementation against the declaration; it cannot silently drop an OutMessage or Service requirement.
+Declare ordinary parent inputs through [InMessage and inMessageUpdate](#inmessages). Keep the Block's `operations` record for explicit adapters. A local Message constructor is the short form. Use an operation declaration with `message`, `outMessage`, `services`, or `managedResources` when the adapter exposes those channels. Completion checks the implementation against the declaration; it cannot silently drop an OutMessage or Service requirement.
 
 The acquired implementation dispatches the produced Message through its update. A constructor with fields becomes `(model, payload, ...context)` on its `operations`; a constructor without fields becomes `(model, ...context)`. A Binding operation omits the child Model, and a keyed Binding prepends the occurrence key.
 
@@ -720,7 +811,7 @@ For reset behavior, prefer a child-owned InMessage request handled through `inMe
 
 ### Scoped child delivery
 
-Use `Story.messageFrom(binding, message)` to deliver a direct child fact in a Block-aware Story. For an advanced direct transition fixture, `withBlock` supplies an acquired test Block and `Test.toParentMessageFor(block)` maps exact child Messages into its dispatch contract. A selected child Binding as the second argument resolves nested delivery against that same graph.
+Use `Story.messageIn(binding, message)` to deliver a direct child fact in a Block-aware Story. For an advanced direct transition fixture, `withBlock` supplies an acquired test Block and `Test.toParentMessageFor(block)` maps exact child Messages into its dispatch contract. A selected child Binding as the second argument resolves nested delivery against that same graph.
 
 Private lifecycle inventories and inferred child envelopes do not form part of the public Block contract. Test behavior through the owning implementation and its registered definitions.
 

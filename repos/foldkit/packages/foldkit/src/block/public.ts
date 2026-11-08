@@ -62,7 +62,9 @@ export interface InstanceSchema<
 export type { AssemblyDraft } from './assemblyState.js'
 export type { MakeMapBinding, MapBindingResultConfig } from './mapBinding.js'
 export type {
-  BindChild,
+  BindSingularChild,
+  BindFieldChild,
+  BindCustomKeyedChild,
   BindingWithoutOutMessagePolicy,
   SelectedChildBinding,
   UnselectedOutMessagePolicy,
@@ -198,7 +200,9 @@ export type {
 } from '../experimental/constructed/contract.js'
 export type {
   BindingParent,
-  MakeBinding,
+  MakeSingularBinding,
+  MakeFieldBinding,
+  MakeCustomKeyedBinding,
   MakeDescriptorOutMessageFold,
   MakeDescriptorOutMessageForward,
   StaticSource,
@@ -236,7 +240,10 @@ export type { RuntimeCapability } from './runtimeCapability.js'
 export type { DefineStepFields, DefineStepNoop } from './fieldStep.js'
 export type { CommandsStep, MakeCommandsStep } from './commandsStep.js'
 /** @internal Keeps extracted field helpers nameable in consumer declarations. */
-export type { FocusedObjectStepFields } from './fieldStep.js'
+export type {
+  FocusedObjectStepFields,
+  MessageFreeObjectStepFields,
+} from './fieldStep.js'
 /** @internal Keeps extracted Command helpers nameable in consumer declarations. */
 export type { FocusedMakeCommandsStep } from './commandsStep.js'
 export type { OutMessageStep, MakeOutMessageStep } from './outMessageStep.js'
@@ -353,3 +360,13 @@ export type {
 
 export type { AuthoredInitPlan } from '../experimental/contracted/contract.js'
 export type { AuthoredUpdatePlan } from '../experimental/hybrid/authoring.js'
+
+/** @internal Names the parent-specialized relationship authoring contracts. */
+export type { NativeRelationshipConstructors } from './bindingAuthoring.js'
+/** @internal Names portable constructor-authored relationship methods. */
+export type { RelationshipConstructors } from '../experimental/constructed/relationshipAuthoring.js'
+/** @internal Names inferred whole-variant callables without exposing private module paths. */
+export type {
+  OwnedContractVariantBinding,
+  OwnedNativeVariantBinding,
+} from './variantBinding.js'

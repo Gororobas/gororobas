@@ -1,12 +1,9 @@
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import {
-  type DisclosureAttributes,
-  view as uiDisclosureView,
-} from '@foldkit/ui/disclosure'
+import { Disclosure } from '@foldkit/ui'
 
 // Store the open state as a plain boolean field in your Model:
 const Model = Schema.Struct({
@@ -22,20 +19,20 @@ const Message = defineMessageUnion({
 type Message = typeof Message.Type
 
 export const FrequentlyAskedQuestionsKey = Symbol('FrequentlyAskedQuestions')
-
 export const FrequentlyAskedQuestionsBlock = Block.make(
   'FrequentlyAskedQuestions',
   {
     key: FrequentlyAskedQuestionsKey,
-    Init: Schema.Tuple([]),
+    InitArgs: Schema.Tuple([]),
     view: { kind: 'Element' },
     Model,
     Message,
   },
 )
 
-const FrequentlyAskedQuestionsComposition =
-  FrequentlyAskedQuestionsBlock.makeComposition()
+const { makeComposition } = FrequentlyAskedQuestionsBlock
+
+const FrequentlyAskedQuestionsComposition = makeComposition()
 
 // In your init function, start it closed:
 const init = FrequentlyAskedQuestionsComposition.makeInit(() => ({
@@ -67,7 +64,7 @@ const view = FrequentlyAskedQuestionsComposition.makeView((model, h) => {
     button,
     panel,
     animatePanel,
-  }: DisclosureAttributes<Message>) =>
+  }: Disclosure.DisclosureAttributes<Message>) =>
     h.div(
       [h.Class('border rounded-lg overflow-hidden')],
       [
@@ -84,7 +81,7 @@ const view = FrequentlyAskedQuestionsComposition.makeView((model, h) => {
       ],
     )
 
-  return uiDisclosureView(
+  return Disclosure.view(
     {
       id: 'faq-1',
       isOpen: model.isFaqOpen,
@@ -95,13 +92,8 @@ const view = FrequentlyAskedQuestionsComposition.makeView((model, h) => {
   )
 })
 
-export const layer = FrequentlyAskedQuestionsBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-    }
-  }),
-)
+export const layer = FrequentlyAskedQuestionsBlock.makeLayer({
+  init,
+  update,
+  view,
+})

@@ -19,7 +19,7 @@ const InputOnlyBlock = Block.make('InputOnly', {
   key: InputOnlyKey,
   Model,
   Message: InMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const SendInput = InputOnlyBlock.makeCommand('SendInput', {
   messages: [InMessage.RequestedSet],
@@ -85,10 +85,13 @@ if (false) {
   )
 }
 
-const UnregisteredBinding = ApplicationBlock.makeBinding(EditorBlock, {
-  field: 'editor',
-  placement: 'unregistered',
-}).withOutMessagePolicy({
+const UnregisteredBinding = ApplicationBlock.makeRequiredFieldBinding(
+  EditorBlock,
+  {
+    field: 'editor',
+    placement: 'unregistered',
+  },
+).withOutMessagePolicy({
   fold: ApplicationBlock.makeOutMessageFold(EditorBlock, {
     Edited: () => Update.defineStep((model: Model) => ({ model })),
   }),
@@ -96,7 +99,7 @@ const UnregisteredBinding = ApplicationBlock.makeBinding(EditorBlock, {
 if (false) {
   makeInMessageUpdate.cases({
     // @ts-expect-error Connected operations must belong to this exact graph.
-    RequestedSet: UnregisteredBinding.informTextChange({ text: '' }),
+    RequestedSet: UnregisteredBinding.informOfTextChange({ text: '' }),
   })
 }
 
@@ -126,7 +129,7 @@ const ForeignInputBlock = Block.make('ForeignInput', {
   Model,
   Message,
   InMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 const foreignBundle =
   ForeignInputBlock.makeComposition().makeInMessageUpdate.each(model => ({
@@ -142,7 +145,7 @@ if (false) {
   makeInMessageUpdate.each(() => wrongModelStep)
 }
 
-const EmittingBinding = ApplicationBlock.makeBinding(EditorBlock, {
+const EmittingBinding = ApplicationBlock.makeRequiredFieldBinding(EditorBlock, {
   field: 'editor',
   placement: 'emitting',
 }).withOutMessagePolicy({
@@ -159,7 +162,7 @@ const EmittingComposition = ApplicationBlock.makeComposition({
 if (false) {
   // @ts-expect-error A shared connected operation cannot hide a child-derived OutMessage.
   EmittingComposition.makeInMessageUpdate.each(() =>
-    EmittingBinding.informTextChange({ text: 'child' }),
+    EmittingBinding.informOfTextChange({ text: 'child' }),
   )
 }
 

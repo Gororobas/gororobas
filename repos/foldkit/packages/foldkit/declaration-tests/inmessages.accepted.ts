@@ -1,6 +1,6 @@
 import { Context, Effect, Schema } from 'effect'
 import * as Block from 'foldkit/block'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 import { taggedStruct } from 'foldkit/schema'
 
 type Equal<Left, Right> =
@@ -22,7 +22,7 @@ export const Message = defineMessageUnion({
   CompletedSave: { count: Schema.Number },
 })
 export type Message = typeof Message.Type
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   RequestedClear: {},
   RequestedSetCount: { count: Schema.Number },
   RequestedSave: { count: Schema.Number },
@@ -64,11 +64,11 @@ export const CounterDefinition = Block.makeDefinition('InMessagesCounter', {
   Message,
   InMessage,
   OutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   inMessageOutputs: {
     RequestedReport: { outMessage: OutMessage.Reported },
   },
-  operations: { informLabel: Message.UpdatedLabel },
+  operations: { informOfLabel: Message.UpdatedLabel },
   effects: { services: [Storage], Error: HandlerUnavailable },
 })
 export const CounterContract = CounterDefinition.contract
@@ -176,7 +176,7 @@ export const ParentModel = Schema.Struct({ counter: CounterContract.Model })
 export type ParentModel = typeof ParentModel.Type
 export const ParentMessage = defineMessageUnion({ ClickedClear: {} })
 export type ParentMessage = typeof ParentMessage.Type
-export const ParentInMessage = defineMessageUnion({
+export const ParentInMessage = defineInMessageUnion({
   RequestedClearChild: {},
   RequestedReportChild: { label: Schema.String },
 })
@@ -192,16 +192,19 @@ export const ParentDefinition = Block.makeDefinition('InMessagesParent', {
   Message: ParentMessage,
   InMessage: ParentInMessage,
   OutMessage: ParentOutMessage,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   inMessageOutputs: {
     RequestedReportChild: { outMessage: ParentOutMessage.ChildReported },
   },
   effects: { services: [Storage], Error: HandlerUnavailable },
 })
 export const ParentContract = ParentDefinition.contract
-export const CounterBinding = ParentDefinition.makeBinding(CounterContract, {
-  field: 'counter',
-}).withOutMessagePolicy({
+export const CounterBinding = ParentDefinition.makeRequiredFieldBinding(
+  CounterContract,
+  {
+    field: 'counter',
+  },
+).withOutMessagePolicy({
   forward: ParentDefinition.makeOutMessageForward(CounterContract, {
     Reported: ({ label }) => ParentOutMessage.ChildReported({ label }),
   }),
@@ -252,7 +255,7 @@ export const receiveResults = Effect.gen(function* () {
 
   return { clear, set, save, report }
 }).pipe(Effect.provide(CounterBlock.layer))
-export const InputOnlyInMessage = defineMessageUnion({
+export const InputOnlyInMessage = defineInMessageUnion({
   RequestedClear: {},
   RequestedSetCount: {
     count: Schema.Number.pipe(Schema.withConstructorDefault(Effect.succeed(1))),
@@ -266,7 +269,7 @@ export const InputOnlyDefinition = Block.makeDefinition('InMessagesInputOnly', {
   Message: Schema.Never,
   InMessage: InputOnlyInMessage,
   isMessageFree: true,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 export const InputOnlyContract = InputOnlyDefinition.contract
 export const InputOnlyComposition = InputOnlyDefinition.makeComposition()
@@ -314,7 +317,7 @@ export type ExactGeneratedOperationNames = Assert<
     | 'requestSetCount'
     | 'requestSave'
     | 'requestReport'
-    | 'informLabel'
+    | 'informOfLabel'
   >
 >
 
@@ -322,7 +325,7 @@ export const InputFamilyKey = Symbol('InMessagesFamily')
 export const makeInputFamily = <Value, Encoded>(
   Value: Schema.Codec<Value, Encoded>,
 ) => {
-  const FamilyInMessage = defineMessageUnion({
+  const FamilyInMessage = defineInMessageUnion({
     RequestedSet: { value: Value },
     RequestedClear: {},
   })
@@ -335,7 +338,7 @@ export const makeInputFamily = <Value, Encoded>(
     InMessage: FamilyInMessage,
     OutMessage: FamilyOutMessage,
     isMessageFree: true,
-    Init: Block.makeInputContract<readonly [value: Value]>(),
+    InitArgs: Block.makeInputContract<readonly [value: Value]>(),
     inMessageOutputs: {
       RequestedSet: { outMessage: FamilyOutMessage.Reported },
     },

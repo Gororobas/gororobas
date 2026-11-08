@@ -68,7 +68,7 @@ export const TooltipBlock = Block.make(TooltipNamespace, {
   Model,
   Message,
   OutMessage,
-  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  InitArgs: Block.makeInputContract<readonly [config: InitConfig]>(),
   view: {
     kind: 'Element',
     Inputs: Block.makeInputContract<ViewInputs>(),
@@ -77,7 +77,7 @@ export const TooltipBlock = Block.make(TooltipNamespace, {
   operations: {
     /** Supplies a new hover delay without changing visibility or restarting a
      * pending timer. Accepts any Effect Duration input. */
-    informShowDelayChanged: {
+    informOfShowDelayChanged: {
       message: (showDelay: Duration.Input) =>
         Tuple.make(
           Message.InformedOfShowDelayChange({
@@ -401,17 +401,12 @@ export const view = TooltipComposition.makeView.withInputs(
 )
 
 /** Constructs the Tooltip implementation without starting occurrence effects. */
-export const layer = TooltipBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-      EffectsLayer,
-    }
-  }),
-)
+export const layer = TooltipBlock.makeLayer({
+  init,
+  update,
+  view,
+  EffectsLayer,
+})
 
 /** @internal Selected implementation used by component tests. */
 export const block = { block: TooltipBlock, layer }

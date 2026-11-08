@@ -12,7 +12,7 @@ Event attributes complete the loop. They produce Messages for the runtime to dis
 
 In the [restaurant analogy](/core/architecture#the-restaurant-analogy), view is the meal on the table. The Model records the current facts; view presents them.
 
-The Counter's named `ApplicationComposition` supplies the primary view builder, so the view's Model, Message, child, and Mount capabilities come from the same Composition used by the Block’s implementation Layer. This excerpt remains in the compact Counter's `application.ts` after the Application and Composition declarations.
+The Counter's named `ApplicationComposition` supplies the primary view builder, so the view's Model, Message, child, and Mount capabilities come from the same Composition used by the Block’s implementation Layer. This excerpt remains in the compact Counter's `block.ts` after the Application and Composition declarations.
 
 ::Snippet{name="counterView" label="Using view"}
 
@@ -111,7 +111,9 @@ Ordinary feature-local helpers remain plain functions. After establishing `Featu
 
 When an extracted renderer's attribute contract needs that builder's Message type, derive it with `Html.MessageOf<FeatureViewBuilder>`. The local Message union alone excludes private child delivery. The helper preserves the builder's exact Message contract without importing the feature's completed implementation.
 
-The owner prefix identifies the specific Composition at a plain type import site. Structural contracts keep the standard names `Model`, `Message`, and `OutMessage` because the public Block declaration supplies the feature context, such as `SearchBlock.Model`. Give a helper only the other parameters it uses: a heading helper can take only `h`, a card helper can take its domain value and `h`, and a list helper can take the Model and `h`. Let TypeScript infer whether the helper returns one `Html` value or an array.
+The owner prefix identifies the specific Composition at a plain type import site. Structural contracts keep the standard names `Model`, `Message`, and `OutMessage` because the public Block declaration supplies the feature context, such as `SearchBlock.Model`.
+
+Let the primary Block view receive its own Model. A cohesive page, form, or tab composer may keep that Model when it coordinates most of the same state. Smaller helpers take the fields, derived domain values, or child Models they render, followed by `h`. Calling a selector does not justify giving a leaf helper the whole Model; pass the selector result when that is the value it renders. Do not introduce a ViewModel merely to bundle slices for these helpers. Let TypeScript infer whether the helper returns one `Html` value or an array.
 
 ::Snippet{name="featureViewHelpers" label="View helpers within a feature"}
 

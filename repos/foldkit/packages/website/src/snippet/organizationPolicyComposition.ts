@@ -1,13 +1,17 @@
 import * as Counter from '../../counter'
-import { EditorBlock } from '../definition'
+import {
+  EditorBlock,
+  makeRequiredFieldBinding,
+  makeComposition,
+} from '../block'
 import { FocusEditor } from '../mount'
 import { DialogBinding } from './dialog'
 
-export const CounterBinding = EditorBlock.makeBinding(Counter.CounterBlock, {
+export const CounterBinding = makeRequiredFieldBinding(Counter.CounterBlock, {
   field: 'counter',
 })
 
-export const EditorComposition = EditorBlock.makeComposition({
+export const EditorComposition = makeComposition({
   bindings: [CounterBinding, DialogBinding],
   mounts: [FocusEditor],
 })

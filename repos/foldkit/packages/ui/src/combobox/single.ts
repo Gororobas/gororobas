@@ -76,7 +76,7 @@ const makeAuthoring = <Item extends string, ItemEncoded>(
     ComboboxNamespace,
     {
       key: ComboboxKey,
-      Init: Schema.Tuple([InitConfigSchema]),
+      InitArgs: Schema.Tuple([InitConfigSchema]),
       ChildInitContext: InitConfigSchema,
       view: {
         kind: 'Element',
@@ -100,7 +100,7 @@ const makeAuthoring = <Item extends string, ItemEncoded>(
   )
 
   const itemUpdate = makeUpdateHandlers(
-    ComboboxDefinition.makeBinding,
+    ComboboxDefinition.makeRequiredFieldBinding,
     ComboboxDefinition.makeOutMessageFold,
     ComboboxDefinition.makeStep,
     ComboboxDefinition.makeFieldsStep,
@@ -172,6 +172,7 @@ const makeAuthoring = <Item extends string, ItemEncoded>(
 
   return {
     Definition: ComboboxDefinition,
+    Composition: ComboboxComposition,
     AnimationBinding: itemUpdate.AnimationBinding,
     init,
     update,
@@ -186,20 +187,13 @@ type Authoring<Item extends string, ItemEncoded> = ReturnType<
 const construct = <Item extends string, ItemEncoded>(
   authoring: Authoring<Item, ItemEncoded>,
 ) =>
-  authoring.Definition.makeLayer(
-    Effect.gen(function* () {
-      const animation = yield* authoring.AnimationBinding
-
-      return {
-        children: [animation],
-        init: authoring.init,
-        update: authoring.update,
-        inMessageUpdate: authoring.inMessageUpdate,
-        view: authoring.view,
-        EffectsLayer,
-      }
-    }),
-  ).pipe(Layer.provide(AnimationLayer))
+  authoring.Definition.makeLayer({
+    init: authoring.init,
+    update: authoring.update,
+    inMessageUpdate: authoring.inMessageUpdate,
+    view: authoring.view,
+    EffectsLayer,
+  }).pipe(Layer.provide(AnimationLayer))
 
 interface ComboboxImplementation extends Block.FamilyLifetime {
   readonly construct: typeof construct

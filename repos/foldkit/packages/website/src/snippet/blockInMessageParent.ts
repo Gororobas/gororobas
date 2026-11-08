@@ -19,30 +19,35 @@ const ConversationBlock = Block.make('Conversation', {
   key: ConversationKey,
   Model,
   Message,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
 })
 
-export const ComposerBinding = ConversationBlock.makeBinding(
-  MessageComposerBlock,
-  {
-    field: 'composer',
-    init: { contextToArgs: () => ['message'] },
-  },
-).withOutMessagePolicy({
-  fold: ConversationBlock.makeOutMessageFold(MessageComposerBlock, {
+const {
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeFieldsStep,
+  makeComposition,
+  makeStep,
+} = ConversationBlock
+
+export const ComposerBinding = makeRequiredFieldBinding(MessageComposerBlock, {
+  field: 'composer',
+  init: { contextToArgs: () => ['message'] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(MessageComposerBlock, {
     Submitted: ({ text }) =>
-      ConversationBlock.makeFieldsStep(() => ({
+      makeFieldsStep(() => ({
         maybeSubmittedText: () => Option.some(text),
       })),
   }),
 })
-const ConversationComposition = ConversationBlock.makeComposition({
+const ConversationComposition = makeComposition({
   bindings: [ComposerBinding],
 })
 
 export const update = ConversationComposition.makeUpdate({
   ClickedSend: ComposerBinding.requestSubmit(),
-  ChangedDraft: ConversationBlock.makeStep.fromMessage(({ text }) =>
-    ComposerBinding.informDraftChanged({ text }),
+  ChangedDraft: makeStep.fromMessage(({ text }) =>
+    ComposerBinding.informOfDraftChanged({ text }),
   ),
 })

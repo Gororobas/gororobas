@@ -1,7 +1,7 @@
-// definition.ts
-import { Effect, Schema } from 'effect'
+// block.ts
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
-import { defineMessageUnion } from 'foldkit/message'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 
 export const Theme = Schema.Literals(['Light', 'Dark'])
 export type Theme = typeof Theme.Type
@@ -11,7 +11,7 @@ export const Message = defineMessageUnion({
 })
 export type Message = typeof Message.Type
 
-export const InMessage = defineMessageUnion({
+export const InMessage = defineInMessageUnion({
   RequestedRestore: { theme: Theme },
 })
 export type InMessage = typeof InMessage.Type
@@ -25,10 +25,9 @@ export const Model = Schema.Struct({ theme: Theme })
 export type Model = typeof Model.Type
 
 export const SettingsKey = Symbol('Settings')
-
 export const SettingsBlock = Block.make('Settings', {
   key: SettingsKey,
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   inMessageOutputs: {
     RequestedRestore: { outMessage: OutMessage.RestoredTheme },
   },
@@ -39,13 +38,15 @@ export const SettingsBlock = Block.make('Settings', {
   OutMessage,
 })
 
+const { makeComposition } = SettingsBlock
+
 // settings.ts
 
 import { modifyFields } from 'foldkit/struct'
 
 import { EffectsLayer, RefreshAvailableThemes } from './command'
 
-const SettingsComposition = SettingsBlock.makeComposition()
+const SettingsComposition = makeComposition()
 
 export const init = SettingsComposition.makeInit(() => ({
   model: Model.make({ theme: 'Light' }),
@@ -63,14 +64,9 @@ export const inMessageUpdate = SettingsComposition.makeInMessageUpdate({
   }),
 })
 
-export const layer = SettingsBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      inMessageUpdate,
-      EffectsLayer,
-    }
-  }),
-)
+export const layer = SettingsBlock.makeLayer({
+  init,
+  update,
+  inMessageUpdate,
+  EffectsLayer,
+})

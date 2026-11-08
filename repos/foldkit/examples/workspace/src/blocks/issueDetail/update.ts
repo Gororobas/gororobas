@@ -1,33 +1,44 @@
 import { Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { Issue } from '../../domain'
 import { RepositoryError } from '../../repository'
+import { makeOutMessageStep, makeStep } from './block'
 import { IssueDetailComposition } from './composition'
-import { makeOutMessageStep, makeStep } from './definition'
-import { latestRevision, reconcileIssue } from './draft'
+import { refreshCleanDraftFromIssue } from './draft'
 import type { FailedSaveIssue, SucceededSaveIssue } from './message'
 import { type Model, SaveState } from './model'
 import { OutMessage } from './outMessage'
 import { editDraft, saveIssue } from './steps'
 
-const resetDraftFields = (model: Model) => {
-  const nextBaseline = latestRevision(model)
+const resetDraftFromIssue = (maybeIssue: Option.Option<Issue.Issue>) =>
+  makeStep(model => {
+    if (SaveState.guards.Saving(model.saveState)) {
+      return { model }
+    }
 
-  return {
-    baseline: () => nextBaseline,
-    draft: () => nextBaseline.fields,
-    maybeIncomingRevision: () => Option.none(),
-    saveState: () => SaveState.Idle(),
-  }
-}
+    if (Option.isNone(maybeIssue)) {
+      return {
+        model: modifyFields(model, {
+          saveState: () =>
+            SaveState.Failed({
+              error: 'This issue is unavailable. Your draft has been kept.',
+            }),
+        }),
+      }
+    }
 
-const resetDraft = makeStep(model => {
-  if (SaveState.guards.Saving(model.saveState)) {
-    return { model }
-  }
+    const issue = maybeIssue.value
+    const nextBaselineRevision = Issue.toRevision(issue)
 
-  return { model: modifyFields(model, resetDraftFields(model)) }
-})
+    return {
+      model: modifyFields(model, {
+        baselineRevision: () => nextBaselineRevision,
+        draft: () => nextBaselineRevision.fields,
+        saveState: () => SaveState.Idle(),
+      }),
+    }
+  })
 
 const isCurrentSave = (
   model: Model,
@@ -40,28 +51,29 @@ const isCurrentSave = (
 
 const handleSucceededSaveIssue = (
   model: Model,
-  { savedIssue, expectedVersion }: SucceededSaveIssue,
+  { saveResult, expectedVersion }: SucceededSaveIssue,
+  maybeIssue: Option.Option<Issue.Issue>,
 ) => {
-  if (!isCurrentSave(model, savedIssue.issueId, expectedVersion)) {
+  if (!isCurrentSave(model, saveResult.issueId, expectedVersion)) {
     return { model }
   }
 
-  const savedRevision = savedIssue.revision
-  const latestKnownRevision = latestRevision(model)
-
-  const nextBaseline =
-    latestKnownRevision.version > savedRevision.version
-      ? latestKnownRevision
-      : savedRevision
+  const savedRevision = saveResult.revision
+  const nextBaselineRevision = Option.match(maybeIssue, {
+    onNone: () => savedRevision,
+    onSome: issue =>
+      issue.version > savedRevision.version
+        ? Issue.toRevision(issue)
+        : savedRevision,
+  })
 
   return {
     model: modifyFields(model, {
-      baseline: () => nextBaseline,
-      draft: () => nextBaseline.fields,
-      maybeIncomingRevision: () => Option.none(),
+      baselineRevision: () => nextBaselineRevision,
+      draft: () => nextBaselineRevision.fields,
       saveState: () => SaveState.Idle(),
     }),
-    outMessage: OutMessage.Saved({ savedIssue }),
+    outMessage: OutMessage.Saved({ saveResult }),
   }
 }
 
@@ -76,16 +88,12 @@ const handleFailedSaveIssue = (
   return RepositoryError.matchOrElse(
     error,
     {
-      Conflict: ({ latestIssue }) => {
-        const reconciledModel = reconcileIssue(model, latestIssue)
-
-        return {
-          model: modifyFields(reconciledModel, {
-            saveState: () => SaveState.Failed({ error: error.message }),
-          }),
-          outMessage: OutMessage.ReceivedIssue({ issue: latestIssue }),
-        }
-      },
+      Conflict: ({ latestIssue }) => ({
+        model: modifyFields(model, {
+          saveState: () => SaveState.Failed({ error: error.message }),
+        }),
+        outMessage: OutMessage.DetectedSaveConflict({ latestIssue }),
+      }),
     },
     () => ({
       model: modifyFields(model, {
@@ -98,18 +106,37 @@ const handleFailedSaveIssue = (
   )
 }
 
-export const update = IssueDetailComposition.makeUpdate({
-  UpdatedTitle: (model, { value }) =>
-    editDraft(draft => modifyFields(draft, { title: () => value }))(model),
-  UpdatedDescription: (model, { value }) =>
-    editDraft(draft => modifyFields(draft, { description: () => value }))(
-      model,
-    ),
-  SubmittedIssueForm: saveIssue,
-  ClickedRetrySave: saveIssue,
-  ClickedReloadIssue: resetDraft,
-  ClickedDiscardChanges: resetDraft,
-  ClickedClose: makeOutMessageStep(() => OutMessage.Closed()),
-  SucceededSaveIssue: handleSucceededSaveIssue,
-  FailedSaveIssue: handleFailedSaveIssue,
-})
+const { makeUpdate } = IssueDetailComposition
+
+const refreshCleanDraftBeforeUpdate = makeUpdate.each(
+  (model, _message, _frame, maybeIssue: Option.Option<Issue.Issue>) => ({
+    model: Option.match(maybeIssue, {
+      onNone: () => model,
+      onSome: issue => refreshCleanDraftFromIssue(model, issue),
+    }),
+  }),
+)
+
+const updateForIssue = makeUpdate.withContext(
+  (maybeIssue: Option.Option<Issue.Issue>) => ({
+    UpdatedTitle: (model, { value }) =>
+      editDraft(draft => modifyFields(draft, { title: () => value }))(model),
+    UpdatedDescription: (model, { value }) =>
+      editDraft(draft => modifyFields(draft, { description: () => value }))(
+        model,
+      ),
+    SubmittedIssueForm: saveIssue(maybeIssue),
+    ClickedRetrySave: saveIssue(maybeIssue),
+    ClickedReloadIssue: resetDraftFromIssue(maybeIssue),
+    ClickedDiscardChanges: resetDraftFromIssue(maybeIssue),
+    ClickedClose: makeOutMessageStep(() => OutMessage.RequestedClose()),
+    SucceededSaveIssue: (model, message) =>
+      handleSucceededSaveIssue(model, message, maybeIssue),
+    FailedSaveIssue: handleFailedSaveIssue,
+  }),
+)
+
+export const update = makeUpdate.compose(
+  refreshCleanDraftBeforeUpdate,
+  updateForIssue,
+)

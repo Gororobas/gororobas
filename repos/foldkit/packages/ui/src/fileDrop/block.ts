@@ -1,4 +1,4 @@
-import { Array, Effect, Schema } from 'effect'
+import { Array, Schema } from 'effect'
 import * as Block from 'foldkit/block'
 import * as File from 'foldkit/file'
 import { type ChildAttribute, type Html, childAttributes } from 'foldkit/html'
@@ -42,13 +42,12 @@ export type OutMessage = typeof OutMessage.Type
 
 /** @internal Stable identity of the FileDrop contract. */
 export const FileDropKey = Symbol('FileDrop')
-
 export const FileDropBlock = Block.make('FileDrop', {
   key: FileDropKey,
   Model,
   Message,
   OutMessage,
-  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  InitArgs: Block.makeInputContract<readonly [config: InitConfig]>(),
   view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
 })
 
@@ -166,16 +165,11 @@ export const view = FileDropComposition.makeView.withInputs(
 )
 
 /** Constructs the FileDrop implementation without starting occurrence effects. */
-export const layer = FileDropBlock.makeLayer(
-  Effect.gen(function* () {
-    return {
-      children: [],
-      init,
-      update,
-      view,
-    }
-  }),
-)
+export const layer = FileDropBlock.makeLayer({
+  init,
+  update,
+  view,
+})
 
 /** @internal Selected implementation used by component tests. */
 export const block = { block: FileDropBlock, layer }

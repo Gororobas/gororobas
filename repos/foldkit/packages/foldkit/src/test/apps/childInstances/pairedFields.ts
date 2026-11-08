@@ -22,7 +22,7 @@ export const PairedMessage = Message.defineMessageUnion({
   ClickedKeepCounters: {},
 })
 export type PairedMessage = typeof PairedMessage.Type
-export const PairedInMessage = Message.defineMessageUnion({
+export const PairedInMessage = Message.defineInMessageUnion({
   RequestedAddPair: { key: Schema.String, count: Schema.Number },
 })
 export type PairedInMessage = typeof PairedInMessage.Type
@@ -34,11 +34,11 @@ export const PairedDefinition = Block.makeDefinition('PairedCounterFields', {
   InMessage: PairedInMessage,
   Context: Schema.Tuple([Schema.Number]),
   InMessageContext: Schema.Tuple([Schema.Number]),
-  Init: Schema.Tuple([]),
+  InitArgs: Schema.Tuple([]),
   effects: { services: [CounterSource] },
 })
 const { makeFieldsStep, makeStep } = PairedDefinition
-export const PrimaryCountersBinding = PairedDefinition.makeBinding(
+export const PrimaryCountersBinding = PairedDefinition.makeKeyedArrayBinding(
   CounterBlock,
   {
     field: 'primaryCounters',
@@ -53,7 +53,7 @@ export const PrimaryCountersBinding = PairedDefinition.makeBinding(
         makeFieldsStep(() => ({ primaryCount: () => count })),
     })(outMessage),
 })
-export const SecondaryCountersBinding = PairedDefinition.makeBinding(
+export const SecondaryCountersBinding = PairedDefinition.makeKeyedArrayBinding(
   CounterBlock,
   {
     field: 'secondaryCounters',
