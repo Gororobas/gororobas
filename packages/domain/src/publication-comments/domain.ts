@@ -68,7 +68,6 @@ export const PublicationCommentRow = Schema.Union([
 
 export type PublicationCommentRow = typeof PublicationCommentRow.Type
 
-// @todo perhaps can use Schema.is(DeletedPublicationCommentRow) ?
 export const isDeletedPublicationComment = <Comment extends { readonly deletedAt: unknown }>(
   comment: Comment,
 ): comment is Extract<Comment, { readonly deletedAt: TimestampColumn }> =>
