@@ -1,0 +1,23 @@
+import { Option, Schema } from "effect"
+
+import { WikiArticleId } from "../../common/ids.js"
+import { defineProperty } from "../property.js"
+
+/**
+ * New: an authored relation, with a qualifier as part of its value. Text inference reads it from
+ * publications ("o mamão até que cresce bem no Cerrado"), shown with its quote and flaggable.
+ */
+export const GrowsInProperty = defineProperty({
+  id: "growsIn",
+  value: Schema.Struct({
+    place: WikiArticleId,
+    nativity: Schema.NullOr(Schema.Literals(["NATIVE", "INTRODUCED"])),
+  }),
+  subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
+  scope: "ARTICLE_WIDE",
+  cardinality: "SET",
+  mergeStrategy: "ALL_SOURCES",
+  sources: ["PERSON", "TEXT_INFERENCE"],
+  references: { kinds: ["PLACE"], target: ({ place }) => Option.some(place) },
+  sameValue: (self, that) => self.place === that.place,
+})
