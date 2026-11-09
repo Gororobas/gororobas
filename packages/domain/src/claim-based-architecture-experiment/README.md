@@ -15,7 +15,8 @@ relation.
 | **Source** | Who asserted it, carrying their evidence. People's claims are *reviewed*; machines' are *automatic* (providers, text inference, machine translation, references in article text). |
 | **Evaluation** | A moderator's verdict on something people submitted: a claim or a text revision. |
 | **Moderation status** | Where an automatic claim or machine translation stands: visible by default, censorable. |
-| **Flag** | A reader reporting an automatic claim, which can lead to censoring it. |
+| **Dispute** | A community member saying an automatic claim is wrong. It never censors anything: it puts the claim in the moderation queue, where a moderator decides. |
+| **Endorsement** | A community member confirming a claim without asserting it: "7 pessoas confirmam". Not reviewed, withdrawable. |
 | **Retraction** | A person's claim removing another person's claim once approved. |
 | **Resolution** | Turning an article's claims into what readers see, per property and language. |
 | **Resolved value** | A value as readers see it, with its **attestations**: every claim asserting it. |
@@ -23,9 +24,11 @@ relation.
 | **Text revision** | One Loro update to article text, from a frontier. "Revision" keeps today's meaning, scoped to text. |
 | **Changeset** | What one person submits at once to one article: claims and text revisions, with a summary. Named after OpenStreetMap's. |
 
-Names are still split into `label` and `aliases` in `properties/`, but the intended direction is
-one ordered list of **names** per language (see "Names" below). Scientific names stay a property
-of their own: they name a taxon, belong to no language, and come mostly from GBIF.
+An article has one ordered list of **names** per language (see "Names" below). Scientific names
+stay a property of their own: they name a taxon, belong to no language, and come mostly from GBIF.
+
+`IMPLEMENTATION_PLAN.md` has the invariants, the SQL schema and the open design work for building
+this; `test/claim-based-architecture-experiment/` runs the invariants the code already enforces.
 
 ## Decisions
 
@@ -45,9 +48,9 @@ Machines never propose for review. Two cases looked like they needed it, and nei
   the gazetteer) already come with Who's On First's Wikidata concordance. Searching automatically
   for articles without an ID wouldn't add much, and a one-off backfill can be reviewed by a person
   who then asserts the results.
-- **Typed facts read from text** (`growsIn` from a publication): they're `TEXT_INFERENCE`, like
-  links. They show with a notice and their quote, can be flagged, and rank after people's claims.
-  A property that shouldn't take a machine's reading at all leaves `TEXT_INFERENCE` out of its
+- **Typed facts read from text** (`growsIn` from a publication): they're `ARTICLE_TEXT_INFERENCE`, like
+  links. They show with a notice and their quote, can be disputed, and rank after people's claims.
+  A property that shouldn't take a machine's reading at all leaves `ARTICLE_TEXT_INFERENCE` out of its
   sources.
 
 **Properties list their sources, best first.** It's one field: which sources may assert the
@@ -71,8 +74,23 @@ claims with the text revisions submitted alongside them, and can be reverted as 
 `lifespan`, `contentChannels`. Evaluating claims one by one then can't accept half of an
 invariant.
 
-**Order lives in values where it's a fact.** Credits (`bookAuthors`, `filmDirectors`) keep their
-`position` in the value, since order is a fact about the book. Names are the exception (below).
+**Order lives on people's claims.** `LIST` properties (`names`, `scientificNames`, `bookAuthors`,
+`filmDirectors`) give each person's claim a fractional position (`values/fractional-index.ts`): a
+key that always fits between two others, so moving a value supersedes only that value's claim.
+Values only other sources assert follow people's, in source order.
+
+**Equality comes from value schemas.** Two claims attest one value when the value schema's
+equivalence (`Schema.toEquivalence`) says so, and readers see the best-ranked claim's version. A
+schema folds only what readers don't distinguish: names compare case- and accent-folded
+(`FoldedName`), ISBNs by their digits. A different gender or nativity is a
+different value, so correcting one is always a change.
+
+**Edits change only what the form showed.** The form sends the IDs of the people's claims it
+showed with the draft (`editing.ts`). Values missing from the draft retract only those claims, and
+if one of them no longer shows, the diff reports the form stale instead of guessing.
+
+**Retracting undoes.** Claims are settled newest first (`resolution.ts`), so retracting a claim
+that superseded another brings the other back, and reverting a changeset is retracting its claims.
 
 **Cultivars inherit by listing traits.** Today every cultivar attribute is wrapped in
 `Unknown | Inherit | Value`. Now `inheritsFromParent` lists the traits shown from the plant, a
@@ -87,10 +105,10 @@ people's are evaluated, machine translations are moderated. Entity references in
 OT's appeal is a central server ordering operations, but pending revisions sit for days on old
 frontiers, which is exactly what CRDT merging handles and OT makes you rebase.
 
-## Text inference
+## Article text inference
 
 One workflow reads publications and article text, and asserts two kinds of claims, both
-`TEXT_INFERENCE`: links (`relatedTo`, and publications' links to articles) and typed facts.
+`ARTICLE_TEXT_INFERENCE`: links (`relatedTo`, and publications' links to articles) and typed facts.
 "O mamão até que cresce bem no Cerrado" becomes a `growsIn` claim on the papaya article pointing
 to the Cerrado, with the quote and the publication as evidence. This is the basis for extracting
 structured knowledge from publications. Things it should handle:
@@ -101,10 +119,12 @@ structured knowledge from publications. Things it should handle:
 - **Hedges and experiences.** "Até que cresce bem" is one grower's experience, not a botanical
   fact. The value doesn't say so; the attestation's quote does. Whether `growsIn` needs a
   qualifier for this ("observed by growers" vs "native range") is worth deciding before building it.
-- **Flags stick.** A censored inference stays censored across re-runs (`shouldAssert`), and
+- **Censoring sticks to the evidence.** A censored inference stays out of re-runs reading the same
+  text (`isAllowedToAssert`), while other publications saying the same thing still count, and
   verdicts feed the evaluation sets (`link-inference.evaluation-set.ts`).
-- **Confirming is asserting.** A person who agrees with an inferred value asserts it in the form;
-  both claims then attest one value, and the person's ranks first.
+- **Confirming.** A person who agrees with an inferred value endorses it ("7 pessoas confirmam"),
+  or asserts it in the form, which makes it theirs too: reviewed, ranked first, and kept if the
+  machine's claim is censored.
 
 ## Legacy data
 
@@ -141,7 +161,7 @@ behind them:
    domain, besides its line in the web app's presentation registry.
 2. **Reading an article.** `ResolvedArticle<Kind>`: every value is a `ResolvedValue`, with the same
    shape whatever its source. Attestations carry just enough for a badge ("from GBIF", "suggested
-   automatically"), a link and a flag button; the evidence (quote, rationale, observation) is
+   automatically"), a link, a confirmation count and a dispute button; the evidence (quote, rationale, observation) is
    fetched when someone opens it.
 3. **Editing an article.** The form sends a **draft** per property and language, plus text
    revisions and a summary, as one changeset. The server turns drafts into claims
@@ -149,16 +169,17 @@ behind them:
    The form never sees claims.
 
 For people, this gives one mental model: **every fact shows where it came from; you can fix what
-people wrote, and flag what machines found.** In the form, values from other sources are
-read-only, with a flag button. Retracting a provider's value would be undone by its next refresh,
-whereas a censored value stays censored (`shouldAssert`).
+people wrote, and confirm or dispute what machines found.** In the form, values from other sources
+are read-only, with confirm and dispute buttons. Retracting a provider's value would be undone by
+its next refresh, whereas a value censored from that provider stays out (`isAllowedToAssert`).
 
 The API follows the same three interfaces:
 
 - `GET` an article returns the resolved article.
 - `GET` a claim's evidence fills the details panel.
 - `POST` a changeset submits drafts, text revisions and a summary.
-- `POST` a flag reports an automatic claim.
+- `POST` a dispute sends an automatic claim to the moderation queue; `POST`/`DELETE` an
+  endorsement confirms a claim or withdraws the confirmation.
 
 ## Editing UX and code
 
@@ -172,7 +193,7 @@ Editors belong to value shapes, not properties: about a dozen components cover a
 | Chip set of choices | `strata`, `edibleParts`, `toolUsage`… |
 | Range: two inputs, one schema message | `height`, `temperature`, `developmentCycle` |
 | Partial dates, single or paired | `publicationDate`, `lifespan`, `activePeriod` |
-| Ordered names per language | `label`, `aliases` (to become `names`) |
+| Ordered names per language | `names` |
 | Article or name picker | `publisher`, `basedIn`, `filmGenres`… |
 | Ordered credits | `bookAuthors`, `filmDirectors` |
 | Relation, with qualifier fields when it has any | `growsIn`, `containedByPlace`, `cultivarOf`, `relatedTo` |
@@ -188,10 +209,11 @@ top. Languages without values show another language's, with a notice.
 
 ## Names
 
-The intended direction, not built yet: one ordered list of **names** per language, replacing
-`label` and `aliases`. No name is canonical; the first is the one most people recognize, and it
-gives the article its handle, URL and default title. Readers may see another first, the name they
-searched for ("maize" over "corn"), which is a read-time choice that doesn't change storage.
+One ordered list of **names** per language (`properties/names.ts`), today's `commonNames`. No name
+is canonical; the first is the one most people recognize, and it's the default title. Readers may
+see another first (the name they searched for, "maize" over "corn"), chosen when reading. The
+article's handle comes from the first name people gave (or the gazetteer's), never a machine's,
+and is never replaced.
 
 Why "names" over the alternatives:
 
@@ -202,12 +224,8 @@ Why "names" over the alternatives:
 - **Names** is plain for every kind, and the web app can still label it per kind ("nomes
   populares" for plants).
 
-It brings back what splitting removed:
-
-- **`LIST` cardinality**, for people's order, with a fractional position per claim. Claims from
-  other sources have no position of their own, so they follow people's in source order.
-- **A minimum count**: "at least one name" in some language, like `presence: "REQUIRED"` for `ONE`
-  properties.
+It's a `LIST`, ordered by people, and `REQUIRED`, so an article always keeps a name in some
+language.
 
 ## Open questions
 

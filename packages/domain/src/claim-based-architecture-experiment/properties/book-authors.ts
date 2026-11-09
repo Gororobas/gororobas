@@ -1,17 +1,17 @@
 import { defineProperty } from "../property.js"
-import { Credit, articleOf } from "../values/article-or-name.js"
+import { ArticleOrName, articleOf } from "../values/article-or-name.js"
 
-/** Ordered by `position`, which is part of the value: order is a fact about the book. */
+/** In credit order, which people set: a book's first author is a fact about it. */
 export const BookAuthorsProperty = defineProperty({
   id: "bookAuthors",
-  value: Credit,
+  value: ArticleOrName,
   subjectKinds: ["BOOK"],
   scope: "UNIVERSAL",
-  cardinality: "SET",
+  cardinality: "LIST",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "TEXT_INFERENCE"],
+  sources: ["PERSON", "ARTICLE_TEXT_INFERENCE"],
   references: {
     kinds: ["NOTEWORTHY_PERSON", "NOTEWORTHY_ENTITY", "CONTENT_PRODUCER"],
-    target: ({ credited }) => articleOf(credited),
+    target: articleOf,
   },
 })

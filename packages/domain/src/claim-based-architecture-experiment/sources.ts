@@ -56,12 +56,13 @@ export const AutomaticSource = Schema.TaggedUnion({
     /** The raw response stays in the observation log, so claims stay small. */
     observationId: ExternalDataObservationId,
   },
+  MACHINE_TRANSLATION: { model: LanguageModelInfo, translatedFrom: ClaimId },
   /**
    * A model reading text: today's link inference (`MENTION` and `INFERENCE`), and the typed facts
    * it can read alongside links ("o mamão cresce bem no Cerrado" → `growsIn`). Which properties
    * accept it is each property's choice.
    */
-  TEXT_INFERENCE: {
+  ARTICLE_TEXT_INFERENCE: {
     model: Schema.NullOr(LanguageModelInfo),
     version: Schema.String,
     location: TextLocation,
@@ -69,7 +70,6 @@ export const AutomaticSource = Schema.TaggedUnion({
     /** Absent when the text names the article, so the quote is the evidence. */
     rationale: Schema.NullOr(Schema.NonEmptyString),
   },
-  MACHINE_TRANSLATION: { model: LanguageModelInfo, translatedFrom: ClaimId },
   /**
    * An `entityReference` node a person placed in article text: replaced whenever that text
    * changes, never reviewed on its own, since the text revision was. Today's `ENTITY_REFERENCE`.

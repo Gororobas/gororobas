@@ -8,6 +8,6 @@ export const PublisherProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON", "TEXT_INFERENCE"],
+  sources: ["PERSON", "ARTICLE_TEXT_INFERENCE"],
   references: { kinds: ["NOTEWORTHY_ENTITY"], target: articleOf },
 })

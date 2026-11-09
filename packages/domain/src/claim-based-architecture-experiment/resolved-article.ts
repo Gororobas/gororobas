@@ -1,4 +1,5 @@
 import type { Option } from "effect"
+import type { NonEmptyReadonlyArray } from "effect/Array"
 
 import type { SupportedLanguage } from "../common/enums.js"
 import type { WikiArticleId } from "../common/ids.js"
@@ -16,12 +17,25 @@ type PropertiesOf<Kind extends ArticleKind> = Property extends infer P
 
 type ValueOf<P extends Property> = P["value"]["Type"]
 
-/** Required `ARTICLE` properties always have a value on a published article. */
+/**
+ * Required universal properties always have a value on a published article (`keepsRequiredValue`
+ * guards it). Required language-specific ones have one in some language, not necessarily the
+ * reader's: readers missing theirs see another language's, with a notice.
+ */
+type IsGuaranteed<P extends Property> = P extends {
+  readonly presence: "REQUIRED"
+  readonly scope: "UNIVERSAL"
+}
+  ? true
+  : false
+
 type ByCardinality<P extends Property> = P extends { readonly cardinality: "ONE" }
-  ? P extends { readonly presence: "REQUIRED"; readonly scope: "UNIVERSAL" }
+  ? IsGuaranteed<P> extends true
     ? ResolvedValue<ValueOf<P>>
     : Option.Option<ResolvedValue<ValueOf<P>>>
-  : ReadonlyArray<ResolvedValue<ValueOf<P>>>
+  : IsGuaranteed<P> extends true
+    ? NonEmptyReadonlyArray<ResolvedValue<ValueOf<P>>>
+    : ReadonlyArray<ResolvedValue<ValueOf<P>>>
 
 /** Language-specific properties resolve per language. */
 type ResolvedShape<P extends Property> = P["scope"] extends "UNIVERSAL"

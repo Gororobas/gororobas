@@ -1,16 +1,16 @@
 import { defineProperty } from "../property.js"
-import { Credit, articleOf } from "../values/article-or-name.js"
+import { ArticleOrName, articleOf } from "../values/article-or-name.js"
 
 export const FilmDirectorsProperty = defineProperty({
   id: "filmDirectors",
-  value: Credit,
+  value: ArticleOrName,
   subjectKinds: ["FILM"],
   scope: "UNIVERSAL",
-  cardinality: "SET",
+  cardinality: "LIST",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "TEXT_INFERENCE"],
+  sources: ["PERSON", "ARTICLE_TEXT_INFERENCE"],
   references: {
     kinds: ["NOTEWORTHY_PERSON", "NOTEWORTHY_ENTITY", "CONTENT_PRODUCER"],
-    target: ({ credited }) => articleOf(credited),
+    target: articleOf,
   },
 })

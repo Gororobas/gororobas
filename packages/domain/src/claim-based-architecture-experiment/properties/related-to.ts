@@ -17,6 +17,6 @@ export const RelatedToProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "ARTICLE_TEXT_REFERENCE", "TEXT_INFERENCE"],
+  sources: ["PERSON", "ARTICLE_TEXT_REFERENCE", "ARTICLE_TEXT_INFERENCE"],
   references: { kinds: everyKind, target: Option.some },
 })

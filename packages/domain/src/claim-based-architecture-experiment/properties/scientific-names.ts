@@ -4,16 +4,17 @@ import { defineProperty } from "../property.js"
 import { FoldedName } from "../values/folded-name.js"
 
 /**
- * GBIF ranks first: it knows the accepted name. People still name what GBIF can't match (or
- * hasn't been fetched), and legacy data comes with names. Cultivar names ('Cherokee Purple') are
- * labels, not scientific names.
+ * In order, the accepted name first and its synonyms after. GBIF ranks first: it knows the
+ * accepted name, and while it has any, its names replace people's. People still name and order
+ * what GBIF can't match (or hasn't been fetched), and legacy data comes with names. Cultivar names
+ * ('Cherokee Purple') are names, not scientific names.
  */
 export const ScientificNamesProperty = defineProperty({
   id: "scientificNames",
   value: FoldedName,
   subjectKinds: ["PLANT", "PLANT_CULTIVAR", "ANIMAL"],
   scope: "UNIVERSAL",
-  cardinality: "SET",
+  cardinality: "LIST",
   mergeStrategy: "FIRST_SOURCE_WITH_VALUES",
   sources: ["GBIF", "PERSON"],
   extract: {

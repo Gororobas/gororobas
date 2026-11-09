@@ -16,7 +16,6 @@ import { type DateTime, Schema } from "effect"
 
 import { ModerationStatus, SupportedLanguage } from "../common/enums.js"
 import { PersonId, WikiArticleId } from "../common/ids.js"
-import { IntNonNegative } from "../common/primitives.js"
 import {
   type AllowedAutomaticSource,
   type AllowedPersonSource,
@@ -26,6 +25,7 @@ import {
   type SourceKey,
   automaticSourceKey,
 } from "./sources.js"
+import { FractionalIndex } from "./values/fractional-index.js"
 
 /** A verdict on something people submitted: a claim or an article text revision. */
 export const Evaluation = Schema.TaggedUnion({
@@ -56,7 +56,7 @@ export const PropertyScope = Schema.Literals(["UNIVERSAL", "LANGUAGE_SPECIFIC"])
 
 export type PropertyScope = typeof PropertyScope.Type
 
-const languageColumn = {
+const LANGUAGE_COLUMN_SCHEMA = {
   UNIVERSAL: Schema.Null,
   LANGUAGE_SPECIFIC: SupportedLanguage,
 } as const
@@ -83,7 +83,7 @@ export interface PersonClaim<Value, Scope extends PropertyScope> extends ClaimBa
         readonly value: Value
         readonly supersedes: ClaimId | null
         /** Where people put the value in a `LIST` property; null for every other cardinality. */
-        readonly position: number | null
+        readonly position: FractionalIndex | null
       }
     | { readonly _tag: "RETRACT"; readonly retracts: ClaimId }
   readonly evaluation: Evaluation
@@ -147,7 +147,7 @@ export const claimSchema = <
     id: ClaimId,
     subjectId: WikiArticleId,
     property: Schema.Literal(property.id),
-    language: languageColumn[property.scope],
+    language: LANGUAGE_COLUMN_SCHEMA[property.scope],
     createdAt: Schema.DateTimeUtcFromString,
   }
 
@@ -160,7 +160,7 @@ export const claimSchema = <
           value: property.value,
           /** A claim by the same person or another this one replaces once approved. */
           supersedes: Schema.NullOr(ClaimId),
-          position: Schema.NullOr(IntNonNegative).check(
+          position: Schema.NullOr(FractionalIndex).check(
             Schema.makeFilter(
               (position) =>
                 (property.cardinality === "LIST") === (position !== null) ||
