@@ -5,7 +5,7 @@ export const ReleaseDateProperty = defineProperty({
   id: "releaseDate",
   value: PartialDate,
   subjectKinds: ["FILM"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

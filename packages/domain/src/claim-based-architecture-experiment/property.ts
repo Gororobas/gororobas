@@ -14,7 +14,7 @@ import type { SourceKey } from "./sources.js"
 
 export type PropertyCardinality = "ONE" | "SET"
 
-export type Extracted<Value, Scope extends PropertyScope> = Scope extends "ARTICLE_WIDE"
+export type Extracted<Value, Scope extends PropertyScope> = Scope extends "UNIVERSAL"
   ? { readonly value: Value }
   : { readonly language: LanguageOf<Scope>; readonly value: Value }
 

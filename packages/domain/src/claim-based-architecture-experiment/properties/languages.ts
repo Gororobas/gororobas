@@ -12,7 +12,7 @@ export const LanguagesProperty = defineProperty({
   id: "languages",
   value: LanguageTag,
   subjectKinds: ["BOOK", "FILM"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "GOOGLE_BOOKS"],

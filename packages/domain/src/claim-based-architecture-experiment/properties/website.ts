@@ -6,7 +6,7 @@ export const WebsiteProperty = defineProperty({
   id: "website",
   value: UrlAsString,
   subjectKinds: ["BOOK", "FILM", "NOTEWORTHY_ENTITY", "NOTEWORTHY_PERSON"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

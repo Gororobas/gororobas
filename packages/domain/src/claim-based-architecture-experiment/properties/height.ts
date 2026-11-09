@@ -14,7 +14,7 @@ export const HeightProperty = defineProperty({
     title: "Height range",
   }),
   subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

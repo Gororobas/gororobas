@@ -5,7 +5,7 @@ export const ResourceFormatProperty = defineProperty({
   id: "resourceFormat",
   value: ResourceFormat,
   subjectKinds: ["RESOURCE"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
   sources: ["PERSON"],

@@ -6,7 +6,7 @@ export const TaxonomicClassificationProperty = defineProperty({
   id: "taxonomicClassification",
   value: GbifClassification,
   subjectKinds: ["PLANT"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["GBIF"],

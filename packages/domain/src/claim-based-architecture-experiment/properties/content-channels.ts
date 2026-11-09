@@ -8,7 +8,7 @@ export const ContentChannelsProperty = defineProperty({
   id: "contentChannels",
   value: Schema.Struct({ type: ContentChannelType, url: UrlAsString }),
   subjectKinds: ["CONTENT_PRODUCER"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],

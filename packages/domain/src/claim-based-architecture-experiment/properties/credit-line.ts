@@ -5,7 +5,7 @@ export const CreditLineProperty = defineProperty({
   id: "creditLine",
   value: NonEmptyTrimmedString,
   subjectKinds: ["RESOURCE"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

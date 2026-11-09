@@ -6,7 +6,7 @@ export const AreasOfWorkProperty = defineProperty({
   id: "areasOfWork",
   value: ArticleOrName,
   subjectKinds: ["NOTEWORTHY_PERSON"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "TEXT_INFERENCE"],

@@ -12,7 +12,7 @@ export const ScientificNamesProperty = defineProperty({
   id: "scientificNames",
   value: ValidName,
   subjectKinds: ["PLANT", "PLANT_CULTIVAR", "ANIMAL"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "FIRST_SOURCE_WITH_VALUES",
   sources: ["GBIF", "PERSON"],

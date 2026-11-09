@@ -7,7 +7,7 @@ import type { FetchedProvider } from "./providers.js"
 /**
  * Which identifiers each provider is fetched by: a change to one of their resolved values requests
  * a fetch, replacing `startExternalDataFetch` per property. Fetches only read identifiers from
- * people, model proposals people approved, and the gazetteer; otherwise Google Books asserting an
+ * people and the gazetteer; otherwise Google Books asserting an
  * ISBN would request a fetch by that ISBN, and so on.
  *
  * After a fetch, every property listing the provider among its sources extracts its claims from

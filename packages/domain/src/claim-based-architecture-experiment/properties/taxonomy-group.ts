@@ -7,7 +7,7 @@ export const TaxonomyGroupProperty = defineProperty({
   id: "taxonomyGroup",
   value: Schema.NonEmptyString,
   subjectKinds: ["PLANT"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["GBIF"],

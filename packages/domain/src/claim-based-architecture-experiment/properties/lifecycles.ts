@@ -5,7 +5,7 @@ export const LifecyclesProperty = defineProperty({
   id: "lifecycles",
   value: PlantLifecycle,
   subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],

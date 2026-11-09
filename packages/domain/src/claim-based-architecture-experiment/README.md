@@ -225,11 +225,5 @@ It brings back what splitting removed:
   different labels, resolution picks the newest. A provider-specific rule might do better.
 - **Publications as subjects.** `publication_wiki_articles` would be the same claims about a
   publication. It's left out until generalizing subjects is worth it.
-- **Downloaded provider media.** Every image is a media asset, providers' photos included: the
-  fetch downloads them before extractors run (`DownloadedMedia`), so they're served at every size.
-  Media assets can't hold them yet. `owner_profile_id` is required, so either it becomes nullable or
-  a system profile owns imported media. Credits cover the credit line and source URL, but there's
-  no license, which CC BY photos must show. Nothing records which provider URL an asset came from,
-  which is needed to download each photo once and to keep it across refreshes.
 - **Search.** Resolution runs per article on every claim change and materializes its output, as
   projections do today; the search columns would be built from resolved articles.

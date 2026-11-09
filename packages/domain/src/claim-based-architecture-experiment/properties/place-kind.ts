@@ -5,7 +5,7 @@ export const PlaceKindProperty = defineProperty({
   id: "placeKind",
   value: PlaceKind,
   subjectKinds: ["PLACE"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["WHOS_ON_FIRST", "PERSON"],

@@ -18,13 +18,13 @@ type ValueOf<P extends Property> = P["value"]["Type"]
 
 /** Required `ARTICLE` properties always have a value on a published article. */
 type ByCardinality<P extends Property> = P extends { readonly cardinality: "ONE" }
-  ? P extends { readonly presence: "REQUIRED"; readonly scope: "ARTICLE_WIDE" }
+  ? P extends { readonly presence: "REQUIRED"; readonly scope: "UNIVERSAL" }
     ? ResolvedValue<ValueOf<P>>
     : Option.Option<ResolvedValue<ValueOf<P>>>
   : ReadonlyArray<ResolvedValue<ValueOf<P>>>
 
 /** Language-specific properties resolve per language. */
-type ResolvedShape<P extends Property> = P["scope"] extends "ARTICLE_WIDE"
+type ResolvedShape<P extends Property> = P["scope"] extends "UNIVERSAL"
   ? ByCardinality<P>
   : { readonly [L in SupportedLanguage]?: ByCardinality<P> }
 

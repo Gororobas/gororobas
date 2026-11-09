@@ -16,7 +16,7 @@ export const IsbnProperty = defineProperty({
   id: "isbn",
   value: Isbn,
   subjectKinds: ["BOOK"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "GOOGLE_BOOKS"],

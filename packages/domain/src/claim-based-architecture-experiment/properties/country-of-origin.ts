@@ -6,7 +6,7 @@ export const CountryOfOriginProperty = defineProperty({
   id: "countryOfOrigin",
   value: ArticleOrName,
   subjectKinds: ["FILM"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],

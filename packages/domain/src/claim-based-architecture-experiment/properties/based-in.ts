@@ -6,7 +6,7 @@ export const BasedInProperty = defineProperty({
   id: "basedIn",
   value: ArticleOrName,
   subjectKinds: ["NOTEWORTHY_PERSON", "NOTEWORTHY_ENTITY"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "TEXT_INFERENCE"],

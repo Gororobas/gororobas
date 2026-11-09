@@ -1,7 +1,7 @@
 import { Schema } from "effect"
 
 import { MediaAssetId } from "../common/ids.js"
-import { ExternalDataProvider, ExternalMedia } from "../wiki/external-data/common.js"
+import { ExternalDataProvider, ProviderPhoto } from "../wiki/external-data/common.js"
 import { BookResult } from "../wiki/external-data/kinds/book-external-data.js"
 import { GbifPlantResult, WikidataResult } from "../wiki/external-data/kinds/plant-external-data.js"
 
@@ -16,21 +16,21 @@ export const Provider = Schema.Literals([
 export type Provider = typeof Provider.Type
 
 /**
- * A provider's photo, downloaded into a media asset before any claim points at it, so it's served
- * from our servers at every size like uploads are. The fetch downloads each photo once, keyed by
- * its source URL, and the asset keeps the credit line, source and license.
+ * A provider's photo once it's imported into a media asset, as the external data fetch does
+ * before persisting: served from our storage at every size, with its credits and license.
+ * Extractors only ever see imported photos, so image claims always point at media assets.
  */
-export const DownloadedMedia = Schema.Struct({
-  ...ExternalMedia.fields,
+export const ImportedPhoto = Schema.Struct({
+  ...ProviderPhoto.fields,
   mediaAssetId: MediaAssetId,
 })
 
-export type DownloadedMedia = typeof DownloadedMedia.Type
+export type ImportedPhoto = typeof ImportedPhoto.Type
 
-/** GBIF's result once its photos are downloaded: what extractors read. */
-export const GbifResultWithDownloadedMedia = Schema.Struct({
+/** GBIF's result with its photos imported: what extractors read. */
+export const GbifResultWithImportedPhotos = Schema.Struct({
   ...GbifPlantResult.fields,
-  media: Schema.Array(DownloadedMedia),
+  photos: Schema.Array(ImportedPhoto),
 })
 
 /**
@@ -40,7 +40,7 @@ export const GbifResultWithDownloadedMedia = Schema.Struct({
 export interface ProviderResults {
   readonly GOOGLE_BOOKS: typeof BookResult.Type
   readonly WIKIDATA: typeof WikidataResult.Type
-  readonly GBIF: typeof GbifResultWithDownloadedMedia.Type
+  readonly GBIF: typeof GbifResultWithImportedPhotos.Type
 }
 
 export type FetchedProvider = keyof ProviderResults

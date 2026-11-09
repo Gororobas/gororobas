@@ -11,7 +11,7 @@ export const LifespanProperty = defineProperty({
     died: Schema.optionalKey(PartialDate),
   }),
   subjectKinds: ["NOTEWORTHY_PERSON"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

@@ -5,7 +5,7 @@ export const GoogleBooksVolumeIdProperty = defineProperty({
   id: "googleBooksVolumeId",
   value: GoogleBooksVolumeId,
   subjectKinds: ["BOOK"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

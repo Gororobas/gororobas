@@ -5,7 +5,7 @@ export const PublisherProperty = defineProperty({
   id: "publisher",
   value: ArticleOrName,
   subjectKinds: ["BOOK"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON", "TEXT_INFERENCE"],

@@ -6,7 +6,7 @@ export const SuggestedKindProperty = defineProperty({
   id: "suggestedKind",
   value: ValidName,
   subjectKinds: ["UNCATEGORIZED"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

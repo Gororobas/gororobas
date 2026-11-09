@@ -6,7 +6,7 @@ export const BookEditionsProperty = defineProperty({
   id: "bookEditions",
   value: BookEdition,
   subjectKinds: ["BOOK"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["GOOGLE_BOOKS"],

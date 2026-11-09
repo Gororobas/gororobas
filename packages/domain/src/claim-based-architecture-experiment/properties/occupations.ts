@@ -6,7 +6,7 @@ export const OccupationsProperty = defineProperty({
   id: "occupations",
   value: ValidName,
   subjectKinds: ["NOTEWORTHY_PERSON"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],

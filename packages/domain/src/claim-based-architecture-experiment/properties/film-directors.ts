@@ -5,7 +5,7 @@ export const FilmDirectorsProperty = defineProperty({
   id: "filmDirectors",
   value: Credit,
   subjectKinds: ["FILM"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "TEXT_INFERENCE"],

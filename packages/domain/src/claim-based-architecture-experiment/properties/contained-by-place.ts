@@ -11,7 +11,7 @@ export const ContainedByPlaceProperty = defineProperty({
   id: "containedByPlace",
   value: WikiArticleId,
   subjectKinds: ["PLACE"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["WHOS_ON_FIRST", "PERSON"],

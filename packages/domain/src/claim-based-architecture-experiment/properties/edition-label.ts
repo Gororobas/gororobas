@@ -6,7 +6,7 @@ export const EditionLabelProperty = defineProperty({
   id: "editionLabel",
   value: NonEmptyTrimmedString,
   subjectKinds: ["BOOK"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

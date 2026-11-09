@@ -5,7 +5,7 @@ export const ToolUsageProperty = defineProperty({
   id: "toolUsage",
   value: ToolUsage,
   subjectKinds: ["TOOL"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],

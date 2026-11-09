@@ -12,13 +12,13 @@ export const MainImageProperty = defineProperty({
   id: "mainImage",
   value: MediaAssetId,
   subjectKinds: everyKind,
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON", "GBIF"],
   extract: {
     GBIF: (result) =>
-      Option.toArray(EffectArray.head(result.media)).map(({ mediaAssetId }) => ({
+      Option.toArray(EffectArray.head(result.photos)).map(({ mediaAssetId }) => ({
         value: mediaAssetId,
       })),
   },

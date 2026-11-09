@@ -12,7 +12,7 @@ export const DevelopmentCycleProperty = defineProperty({
     title: "Development cycle range",
   }),
   subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

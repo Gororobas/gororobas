@@ -6,7 +6,7 @@ export const FilmGenresProperty = defineProperty({
   id: "filmGenres",
   value: ArticleOrName,
   subjectKinds: ["FILM"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],

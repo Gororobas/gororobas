@@ -6,7 +6,7 @@ export const BookAuthorsProperty = defineProperty({
   id: "bookAuthors",
   value: Credit,
   subjectKinds: ["BOOK"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "TEXT_INFERENCE"],

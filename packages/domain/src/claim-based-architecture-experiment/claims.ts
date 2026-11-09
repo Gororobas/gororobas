@@ -42,22 +42,23 @@ export type Evaluation = typeof Evaluation.Type
 export const isVisibleModerationStatus = (status: ModerationStatus) => status !== "CENSORED"
 
 /**
- * - `ARTICLE_WIDE`: one set of claims for the article (identifiers, measurements, relations).
+ * - `UNIVERSAL`: one set of claims for the article, the same in every language (identifiers,
+ *   measurements, relations).
  * - `LANGUAGE_SPECIFIC`: claims per language (names, Wikipedia pages, plant origins). Readers
  *   missing their language see another one, with a notice.
  */
-export const PropertyScope = Schema.Literals(["ARTICLE_WIDE", "LANGUAGE_SPECIFIC"])
+export const PropertyScope = Schema.Literals(["UNIVERSAL", "LANGUAGE_SPECIFIC"])
 
 export type PropertyScope = typeof PropertyScope.Type
 
 const languageColumn = {
-  ARTICLE_WIDE: Schema.Null,
+  UNIVERSAL: Schema.Null,
   LANGUAGE_SPECIFIC: SupportedLanguage,
 } as const
 
 /** The language a claim is stored in, and the one a reader asks for. */
 export type LanguageOf<Scope extends PropertyScope> = {
-  readonly ARTICLE_WIDE: null
+  readonly UNIVERSAL: null
   readonly LANGUAGE_SPECIFIC: SupportedLanguage
 }[Scope]
 

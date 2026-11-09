@@ -20,4 +20,3 @@ pre-commit:
     - name: test
       glob: "*.{ts,tsx,feature}"
       run: pnpm run test
-

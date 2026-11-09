@@ -8,7 +8,7 @@ export const CultivarOfProperty = defineProperty({
   id: "cultivarOf",
   value: WikiArticleId,
   subjectKinds: ["PLANT_CULTIVAR"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
   sources: ["PERSON"],

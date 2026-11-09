@@ -14,7 +14,7 @@ export const ActivePeriodProperty = defineProperty({
     dissolved: Schema.optionalKey(PartialDate),
   }),
   subjectKinds: ["NOTEWORTHY_ENTITY"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

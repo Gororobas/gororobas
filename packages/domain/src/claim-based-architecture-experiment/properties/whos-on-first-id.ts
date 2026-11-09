@@ -6,7 +6,7 @@ export const WhosOnFirstIdProperty = defineProperty({
   id: "whosOnFirstId",
   value: WhosOnFirstId,
   subjectKinds: ["PLACE"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["WHOS_ON_FIRST", "PERSON"],

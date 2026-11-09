@@ -5,7 +5,7 @@ export const AnimalRolesProperty = defineProperty({
   id: "animalRoles",
   value: AnimalRole,
   subjectKinds: ["ANIMAL"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],

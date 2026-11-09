@@ -9,7 +9,7 @@ export const WikidataIdProperty = defineProperty({
   id: "wikidataId",
   value: WikidataId,
   subjectKinds: ["PLANT", "PLACE"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON", "WHOS_ON_FIRST"],

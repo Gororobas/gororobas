@@ -6,7 +6,7 @@ export const ResourceUrlProperty = defineProperty({
   id: "resourceUrl",
   value: UrlAsString,
   subjectKinds: ["RESOURCE"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
   sources: ["PERSON"],

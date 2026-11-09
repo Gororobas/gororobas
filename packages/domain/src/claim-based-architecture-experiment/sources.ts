@@ -39,11 +39,6 @@ export const TextLocation = Schema.TaggedUnion({
 
 export type TextLocation = typeof TextLocation.Type
 
-/**
- * What a model proposed. Both are reviewed because a wrong answer costs more than a missing one:
- * a wrong record pulls a provider's data about something else into the article, and a wrong typed
- * relation states a fact ("grows in the Cerrado") rather than a hint.
- */
 export const PersonSource = Schema.TaggedStruct("PERSON", {
   changesetId: ChangesetId,
   /**

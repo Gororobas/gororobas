@@ -14,7 +14,7 @@ export const RelatedToProperty = defineProperty({
   id: "relatedTo",
   value: WikiArticleId,
   subjectKinds: everyKind,
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "ARTICLE_TEXT_REFERENCE", "TEXT_INFERENCE"],

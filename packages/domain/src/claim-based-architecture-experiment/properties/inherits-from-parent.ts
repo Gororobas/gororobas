@@ -10,7 +10,7 @@ export const InheritsFromParentProperty = defineProperty({
   id: "inheritsFromParent",
   value: InheritableTrait,
   subjectKinds: ["PLANT_CULTIVAR"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],

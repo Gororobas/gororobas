@@ -10,7 +10,7 @@ export const PublicationDateProperty = defineProperty({
   id: "publicationDate",
   value: PartialDate,
   subjectKinds: ["BOOK"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["PERSON"],

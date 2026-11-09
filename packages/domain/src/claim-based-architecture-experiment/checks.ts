@@ -11,7 +11,7 @@ import type { PersonSource } from "./sources.js"
 
 export const articleWideClaimsMatch = (
   claim: ClaimOf<typeof HeightProperty>,
-): Claim<typeof HeightProperty.value.Type, "ARTICLE_WIDE"> => claim
+): Claim<typeof HeightProperty.value.Type, "UNIVERSAL"> => claim
 
 export const languageSpecificClaimsMatch = (
   claim: ClaimOf<typeof LabelProperty>,

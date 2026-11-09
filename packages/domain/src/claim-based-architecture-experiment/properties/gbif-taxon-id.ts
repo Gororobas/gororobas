@@ -9,7 +9,7 @@ export const GbifTaxonIdProperty = defineProperty({
   id: "gbifTaxonId",
   value: GbifTaxonId,
   subjectKinds: ["PLANT"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
   sources: ["GBIF", "WIKIDATA"],

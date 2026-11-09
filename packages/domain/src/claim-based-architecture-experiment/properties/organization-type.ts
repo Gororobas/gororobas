@@ -6,7 +6,7 @@ export const OrganizationTypeProperty = defineProperty({
   id: "organizationType",
   value: NoteworthyEntityType,
   subjectKinds: ["NOTEWORTHY_ENTITY"],
-  scope: "ARTICLE_WIDE",
+  scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
   sources: ["PERSON"],
