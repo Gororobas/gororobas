@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const PlaceKindProperty = defineProperty({
   id: "placeKind",
-  value: PlaceKind,
-  subjectKinds: ["PLACE"],
+  valueSchema: PlaceKind,
+  kinds: ["PLACE"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

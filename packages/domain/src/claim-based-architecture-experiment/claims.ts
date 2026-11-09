@@ -3,7 +3,7 @@
  * its source's lifecycle, so invalid states don't decode:
  *
  * - A person's claim asserts or retracts, and has an evaluation.
- * - An automatic claim asserts, and has a moderation status. It's never pending, never retracts.
+ * - a machine claim asserts, and has a moderation status. It's never pending, never retracts.
  *
  * A property's `Claim` schema only accepts the sources it lists, in its type too: `make` on a
  * people-only property won't take a provider source.
@@ -17,13 +17,13 @@ import { type DateTime, Schema } from "effect"
 import { ModerationStatus, SupportedLanguage } from "../common/enums.js"
 import { PersonId, WikiArticleId } from "../common/ids.js"
 import {
-  type AllowedAutomaticSource,
+  type AllowedMachineSource,
   type AllowedPersonSource,
-  AutomaticSource,
+  MachineSource,
   ClaimId,
   PersonSource,
   type SourceKey,
-  automaticSourceKey,
+  machineSourceKey,
 } from "./sources.js"
 import { FractionalIndex } from "./values/fractional-index.js"
 
@@ -69,7 +69,7 @@ export type LanguageOf<Scope extends PropertyScope> = {
 
 interface ClaimBase<Scope extends PropertyScope> {
   readonly id: ClaimId
-  readonly subjectId: WikiArticleId
+  readonly articleId: WikiArticleId
   readonly property: string
   readonly language: LanguageOf<Scope>
   readonly createdAt: DateTime.Utc
@@ -89,9 +89,14 @@ export interface PersonClaim<Value, Scope extends PropertyScope> extends ClaimBa
   readonly evaluation: Evaluation
 }
 
-export interface AutomaticClaim<Value, Scope extends PropertyScope> extends ClaimBase<Scope> {
-  readonly source: AutomaticSource
+export interface MachineClaim<Value, Scope extends PropertyScope> extends ClaimBase<Scope> {
+  readonly source: MachineSource
   readonly value: Value
+  /**
+   * In a `LIST` property, the order the source gave (Wikidata's label before its aliases, Google
+   * Books' first author first), among that source's values; null for every other cardinality.
+   */
+  readonly position: FractionalIndex | null
   readonly moderationStatus: ModerationStatus
 }
 
@@ -101,7 +106,7 @@ export interface AutomaticClaim<Value, Scope extends PropertyScope> extends Clai
  */
 export type Claim<Value, Scope extends PropertyScope> =
   | PersonClaim<Value, Scope>
-  | AutomaticClaim<Value, Scope>
+  | MachineClaim<Value, Scope>
 
 export const claimSchema = <
   const Id extends string,
@@ -111,7 +116,7 @@ export const claimSchema = <
   Source extends SourceKey,
 >(property: {
   readonly id: Id
-  readonly value: Schema.Codec<Value, Encoded>
+  readonly valueSchema: Schema.Codec<Value, Encoded>
   readonly scope: Scope
   readonly cardinality: "ONE" | "SET" | "LIST"
   readonly sources: ReadonlyArray<Source>
@@ -136,16 +141,33 @@ export const claimSchema = <
     ),
   )
 
-  const automaticSource = AutomaticSource.pipe(
+  const machineSource = MachineSource.pipe(
     Schema.refine(
-      (source): source is AllowedAutomaticSource<Source> => lists(automaticSourceKey(source)),
+      (source): source is AllowedMachineSource<Source> => lists(machineSourceKey(source)),
       annotations,
+    ),
+  )
+
+  /** A position exactly when the property is a list. */
+  const position = Schema.NullOr(FractionalIndex).check(
+    Schema.makeFilter(
+      (candidate) =>
+        // @todo clearer check below, this code is quite confusing. Do an early return if cardinality !== LIST
+        (property.cardinality === "LIST") === (candidate !== null) ||
+        (property.cardinality === "LIST"
+          ? `${property.id} is a list: its claims need a position`
+          : `${property.id} isn't a list: its claims have no position`),
+      {
+        identifier: "ClaimPosition",
+        title: "Claim position",
+        description: "A position exactly when the property is a list.",
+      },
     ),
   )
 
   const common = {
     id: ClaimId,
-    subjectId: WikiArticleId,
+    articleId: WikiArticleId,
     property: Schema.Literal(property.id),
     language: LANGUAGE_COLUMN_SCHEMA[property.scope],
     createdAt: Schema.DateTimeUtcFromString,
@@ -157,23 +179,10 @@ export const claimSchema = <
       source: personSource,
       change: Schema.Union([
         Schema.TaggedStruct("ASSERT", {
-          value: property.value,
+          value: property.valueSchema,
           /** A claim by the same person or another this one replaces once approved. */
           supersedes: Schema.NullOr(ClaimId),
-          position: Schema.NullOr(FractionalIndex).check(
-            Schema.makeFilter(
-              (position) =>
-                (property.cardinality === "LIST") === (position !== null) ||
-                (property.cardinality === "LIST"
-                  ? `${property.id} is a list: its claims need a position`
-                  : `${property.id} isn't a list: its claims have no position`),
-              {
-                identifier: "ClaimPosition",
-                title: "Claim position",
-                description: "A position exactly when the property is a list.",
-              },
-            ),
-          ),
+          position,
         }),
         /** Removes a person's claim once approved. Machine claims are disputed instead. */
         Schema.TaggedStruct("RETRACT", { retracts: ClaimId }),
@@ -182,8 +191,9 @@ export const claimSchema = <
     }),
     Schema.Struct({
       ...common,
-      source: automaticSource,
-      value: property.value,
+      source: machineSource,
+      value: property.valueSchema,
+      position,
       moderationStatus: ModerationStatus,
     }),
   ])
@@ -197,4 +207,4 @@ export type ClaimOf<Property extends { readonly Claim: Schema.Top }> = Exclude<
 
 export const claimSourceKey = <Value, Scope extends PropertyScope>(
   claim: Claim<Value, Scope>,
-): SourceKey => ("moderationStatus" in claim ? automaticSourceKey(claim.source) : claim.source._tag)
+): SourceKey => ("moderationStatus" in claim ? machineSourceKey(claim.source) : claim.source._tag)

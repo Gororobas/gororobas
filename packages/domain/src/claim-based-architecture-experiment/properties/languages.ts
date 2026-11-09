@@ -10,8 +10,8 @@ const LanguageTag = Schema.String.check(Schema.isPattern(/^[a-z]{2,3}(-[A-Za-z0-
 /** Today's book `language` and film `languages`. */
 export const LanguagesProperty = defineProperty({
   id: "languages",
-  value: LanguageTag,
-  subjectKinds: ["BOOK", "FILM"],
+  valueSchema: LanguageTag,
+  kinds: ["BOOK", "FILM"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

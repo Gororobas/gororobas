@@ -12,11 +12,12 @@ relation.
 | **Property** | The definition of one kind of fact: `isbn`, `height`, `growsIn` (`defineProperty`). |
 | **Claim** | One source asserting one value of one property about one article. |
 | **Value** | What a claim asserts. Qualifiers are fields of the value (`growsIn` → `{ place, nativity }`). |
-| **Source** | Who asserted it, carrying their evidence. People's claims are *reviewed*; machines' are *automatic* (providers, text inference, machine translation, references in article text). |
+| **Source** | Who asserted it, carrying their evidence. People's claims are *reviewed*; machines' are *automatic* (`MachineSource`: providers, text inference, machine translation, references in article text). |
 | **Evaluation** | A moderator's verdict on something people submitted: a claim or a text revision. |
-| **Moderation status** | Where an automatic claim or machine translation stands: visible by default, censorable. |
-| **Dispute** | A community member saying an automatic claim is wrong. It never censors anything: it puts the claim in the moderation queue, where a moderator decides. |
-| **Endorsement** | A community member confirming a claim without asserting it: "7 pessoas confirmam". Not reviewed, withdrawable. |
+| **Moderation status** | Where a machine claim or machine translation stands: visible by default, censorable. |
+| **Dispute** | A community member saying a machine claim is wrong. It never censors anything: it puts the claim in the moderation queue, where a moderator decides. |
+| **Endorsement** | A community member saying "aye, looks right" about a claim without asserting it: "7 pessoas endossam". Not reviewed, withdrawable. |
+| **Claimed value** | A value with the visible claim stating it: what resolution works with once approval, moderation, supersession and retraction are applied. |
 | **Retraction** | A person's claim removing another person's claim once approved. |
 | **Resolution** | Turning an article's claims into what readers see, per property and language. |
 | **Resolved value** | A value as readers see it, with its **attestations**: every claim asserting it. |
@@ -37,7 +38,7 @@ property, and there are only two, so claims have two shapes (`claims.ts`) and in
 don't decode:
 
 - a person's claim asserts or retracts, and has an `evaluation`;
-- an automatic claim asserts, and has a `moderationStatus`. It's never pending, and never retracts.
+- a machine claim asserts, and has a `moderationStatus`. It's never pending, and never retracts.
 
 `Evaluation` is a tagged union, so an approved claim always says who approved it and when.
 
@@ -74,8 +75,8 @@ claims with the text revisions submitted alongside them, and can be reverted as 
 `lifespan`, `contentChannels`. Evaluating claims one by one then can't accept half of an
 invariant.
 
-**Order lives on people's claims.** `LIST` properties (`names`, `scientificNames`, `bookAuthors`,
-`filmDirectors`) give each person's claim a fractional position (`values/fractional-index.ts`): a
+**Order lives on people's claims.** `LIST` properties (`names`, `scientificNames`, `authors`,
+`directors`) give each person's claim a fractional position (`values/fractional-index.ts`): a
 key that always fits between two others, so moving a value supersedes only that value's claim.
 Values only other sources assert follow people's, in source order.
 
@@ -101,7 +102,7 @@ plain.
 translation never conflicts with an edit in another language. Peritext merges pending revisions,
 and node IDs stay stable for evidence. Text revisions use the same two lifecycles as claims:
 people's are evaluated, machine translations are moderated. Entity references in the text become
-`ARTICLE_TEXT_REFERENCE` claims, replaced whenever the text changes. I'd keep CRDTs over OT here:
+`ARTICLE_TEXT_ENTITY_REFERENCE` claims, replaced whenever the text changes. I'd keep CRDTs over OT here:
 OT's appeal is a central server ordering operations, but pending revisions sit for days on old
 frontiers, which is exactly what CRDT merging handles and OT makes you rebase.
 
@@ -122,7 +123,7 @@ structured knowledge from publications. Things it should handle:
 - **Censoring sticks to the evidence.** A censored inference stays out of re-runs reading the same
   text (`isAllowedToAssert`), while other publications saying the same thing still count, and
   verdicts feed the evaluation sets (`link-inference.evaluation-set.ts`).
-- **Confirming.** A person who agrees with an inferred value endorses it ("7 pessoas confirmam"),
+- **Endorsing.** A person who agrees with an inferred value endorses it ("7 pessoas endossam"),
   or asserts it in the form, which makes it theirs too: reviewed, ranked first, and kept if the
   machine's claim is censored.
 
@@ -161,7 +162,7 @@ behind them:
    domain, besides its line in the web app's presentation registry.
 2. **Reading an article.** `ResolvedArticle<Kind>`: every value is a `ResolvedValue`, with the same
    shape whatever its source. Attestations carry just enough for a badge ("from GBIF", "suggested
-   automatically"), a link, a confirmation count and a dispute button; the evidence (quote, rationale, observation) is
+   automatically"), a link, who endorses and disputes it, and a dispute button; the evidence (quote, rationale, observation) is
    fetched when someone opens it.
 3. **Editing an article.** The form sends a **draft** per property and language, plus text
    revisions and a summary, as one changeset. The server turns drafts into claims
@@ -169,8 +170,8 @@ behind them:
    The form never sees claims.
 
 For people, this gives one mental model: **every fact shows where it came from; you can fix what
-people wrote, and confirm or dispute what machines found.** In the form, values from other sources
-are read-only, with confirm and dispute buttons. Retracting a provider's value would be undone by
+people wrote, and endorse or dispute what machines found.** In the form, values from other sources
+are read-only, with endorse and dispute buttons. Retracting a provider's value would be undone by
 its next refresh, whereas a value censored from that provider stays out (`isAllowedToAssert`).
 
 The API follows the same three interfaces:
@@ -178,8 +179,8 @@ The API follows the same three interfaces:
 - `GET` an article returns the resolved article.
 - `GET` a claim's evidence fills the details panel.
 - `POST` a changeset submits drafts, text revisions and a summary.
-- `POST` a dispute sends an automatic claim to the moderation queue; `POST`/`DELETE` an
-  endorsement confirms a claim or withdraws the confirmation.
+- `POST` a dispute sends a machine claim to the moderation queue; `POST`/`DELETE` an
+  endorsement endorses a claim or withdraws the endorsement.
 
 ## Editing UX and code
 
@@ -195,7 +196,7 @@ Editors belong to value shapes, not properties: about a dozen components cover a
 | Partial dates, single or paired | `publicationDate`, `lifespan`, `activePeriod` |
 | Ordered names per language | `names` |
 | Article or name picker | `publisher`, `basedIn`, `filmGenres`… |
-| Ordered credits | `bookAuthors`, `filmDirectors` |
+| Ordered credits | `authors`, `directors` |
 | Relation, with qualifier fields when it has any | `growsIn`, `containedByPlace`, `cultivarOf`, `relatedTo` |
 | Media asset picker | `images`, `mainImage` |
 

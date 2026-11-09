@@ -50,7 +50,7 @@ export const PersonSource = Schema.TaggedStruct("PERSON", {
 
 export type PersonSource = typeof PersonSource.Type
 
-export const AutomaticSource = Schema.TaggedUnion({
+export const MachineSource = Schema.TaggedUnion({
   EXTERNAL_PROVIDER: {
     provider: Provider,
     /** The raw response stays in the observation log, so claims stay small. */
@@ -74,17 +74,17 @@ export const AutomaticSource = Schema.TaggedUnion({
    * An `entityReference` node a person placed in article text: replaced whenever that text
    * changes, never reviewed on its own, since the text revision was. Today's `ENTITY_REFERENCE`.
    */
-  ARTICLE_TEXT_REFERENCE: { location: TextLocation },
+  ARTICLE_TEXT_ENTITY_REFERENCE: { location: TextLocation },
 })
 
-export type AutomaticSource = typeof AutomaticSource.Type
+export type MachineSource = typeof MachineSource.Type
 
-/** The automatic sources a property lists, as source values: providers narrowed to those listed. */
-export type AllowedAutomaticSource<Source extends SourceKey> =
-  | Extract<AutomaticSource, { readonly _tag: Extract<Source, AutomaticSource["_tag"]> }>
+/** The machine sources a property lists, as source values: providers narrowed to those listed. */
+export type AllowedMachineSource<Source extends SourceKey> =
+  | Extract<MachineSource, { readonly _tag: Extract<Source, MachineSource["_tag"]> }>
   | ([Extract<Source, Provider>] extends [never]
       ? never
-      : Extract<AutomaticSource, { readonly _tag: "EXTERNAL_PROVIDER" }> & {
+      : Extract<MachineSource, { readonly _tag: "EXTERNAL_PROVIDER" }> & {
           readonly provider: Extract<Source, Provider>
         })
 
@@ -96,9 +96,9 @@ export type AllowedPersonSource<Source extends SourceKey> = "PERSON" extends Sou
  * What a property's `sources` lists, in resolution order. Providers count individually, so
  * `strata` can trust Syntropedia over people while `names` trusts people over Google Books.
  */
-export type AutomaticSourceKey = Exclude<AutomaticSource["_tag"], "EXTERNAL_PROVIDER"> | Provider
+export type MachineSourceKey = Exclude<MachineSource["_tag"], "EXTERNAL_PROVIDER"> | Provider
 
-export type SourceKey = PersonSource["_tag"] | AutomaticSourceKey
+export type SourceKey = PersonSource["_tag"] | MachineSourceKey
 
-export const automaticSourceKey = (source: AutomaticSource): AutomaticSourceKey =>
-  AutomaticSource.guards.EXTERNAL_PROVIDER(source) ? source.provider : source._tag
+export const machineSourceKey = (source: MachineSource): MachineSourceKey =>
+  MachineSource.guards.EXTERNAL_PROVIDER(source) ? source.provider : source._tag

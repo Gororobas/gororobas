@@ -6,8 +6,8 @@ import { defineProperty } from "../property.js"
 
 export const ContentChannelsProperty = defineProperty({
   id: "contentChannels",
-  value: Schema.Struct({ type: ContentChannelType, url: UrlAsString }),
-  subjectKinds: ["CONTENT_PRODUCER"],
+  valueSchema: Schema.Struct({ type: ContentChannelType, url: UrlAsString }),
+  kinds: ["CONTENT_PRODUCER"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

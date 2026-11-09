@@ -9,11 +9,11 @@ import { defineProperty } from "../property.js"
  */
 export const ActivePeriodProperty = defineProperty({
   id: "activePeriod",
-  value: Schema.Struct({
+  valueSchema: Schema.Struct({
     founded: Schema.optionalKey(PartialDate),
     dissolved: Schema.optionalKey(PartialDate),
   }),
-  subjectKinds: ["NOTEWORTHY_ENTITY"],
+  kinds: ["NOTEWORTHY_ENTITY"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

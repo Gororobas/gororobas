@@ -18,8 +18,8 @@ const Isbn = Schema.String.check(
 /** Today's `isbn10` and `isbn13`: one property, since a book's editions have many of both. */
 export const IsbnProperty = defineProperty({
   id: "isbn",
-  value: Isbn,
-  subjectKinds: ["BOOK"],
+  valueSchema: Isbn,
+  kinds: ["BOOK"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

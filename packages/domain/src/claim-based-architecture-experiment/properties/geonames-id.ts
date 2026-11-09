@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const GeonamesIdProperty = defineProperty({
   id: "geonamesId",
-  value: GeoNamesId,
-  subjectKinds: ["PLACE"],
+  valueSchema: GeoNamesId,
+  kinds: ["PLACE"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

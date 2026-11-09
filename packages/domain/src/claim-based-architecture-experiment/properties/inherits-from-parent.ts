@@ -8,8 +8,8 @@ import { defineProperty } from "../property.js"
  */
 export const InheritsFromParentProperty = defineProperty({
   id: "inheritsFromParent",
-  value: InheritableTrait,
-  subjectKinds: ["PLANT_CULTIVAR"],
+  valueSchema: InheritableTrait,
+  kinds: ["PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

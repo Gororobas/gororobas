@@ -1,3 +1,5 @@
+import { Option } from "effect"
+
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineProperty } from "../property.js"
 
@@ -8,10 +10,14 @@ import { defineProperty } from "../property.js"
  */
 export const PublicationDateProperty = defineProperty({
   id: "publicationDate",
-  value: PartialDate,
-  subjectKinds: ["BOOK"],
+  valueSchema: PartialDate,
+  kinds: ["BOOK", "RESOURCE"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON"],
+  sources: ["PERSON", "CONTENT_CHANNELS"],
+  extract: {
+    CONTENT_CHANNELS: (item) =>
+      Option.toArray(Option.fromNullishOr(item.publishedOn)).map((value) => ({ value })),
+  },
 })

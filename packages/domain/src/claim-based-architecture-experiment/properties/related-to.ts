@@ -12,11 +12,11 @@ import { defineProperty } from "../property.js"
  */
 export const RelatedToProperty = defineProperty({
   id: "relatedTo",
-  value: WikiArticleId,
-  subjectKinds: everyKind,
+  valueSchema: WikiArticleId,
+  kinds: everyKind,
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "ARTICLE_TEXT_REFERENCE", "ARTICLE_TEXT_INFERENCE"],
-  references: { kinds: everyKind, target: Option.some },
+  sources: ["PERSON", "ARTICLE_TEXT_ENTITY_REFERENCE", "ARTICLE_TEXT_INFERENCE"],
+  references: { targetKinds: everyKind, target: Option.some },
 })

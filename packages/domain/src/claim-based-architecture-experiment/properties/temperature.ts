@@ -6,13 +6,13 @@ import { makeRange } from "../values/range.js"
 
 export const TemperatureProperty = defineProperty({
   id: "temperature",
-  value: makeRange({
+  valueSchema: makeRange({
     bound: TemperatureInCelsius,
     isLessThanOrEqual: Temperature.isLessThanOrEqualTo,
     identifier: "TemperatureRange",
     title: "Temperature range",
   }),
-  subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
+  kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

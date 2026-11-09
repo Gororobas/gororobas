@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const EdiblePartsProperty = defineProperty({
   id: "edibleParts",
-  value: EdiblePlantPart,
-  subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
+  valueSchema: EdiblePlantPart,
+  kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const ReleaseDateProperty = defineProperty({
   id: "releaseDate",
-  value: PartialDate,
-  subjectKinds: ["FILM"],
+  valueSchema: PartialDate,
+  kinds: ["FILM"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

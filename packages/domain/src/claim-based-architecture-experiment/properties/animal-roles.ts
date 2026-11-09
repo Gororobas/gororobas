@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const AnimalRolesProperty = defineProperty({
   id: "animalRoles",
-  value: AnimalRole,
-  subjectKinds: ["ANIMAL"],
+  valueSchema: AnimalRole,
+  kinds: ["ANIMAL"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

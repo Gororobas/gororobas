@@ -1,3 +1,5 @@
+import { Option } from "effect"
+
 import { MediaAssetId } from "../../common/ids.js"
 import { everyKind } from "../kinds.js"
 import { defineProperty } from "../property.js"
@@ -10,13 +12,17 @@ import { defineProperty } from "../property.js"
  */
 export const ImagesProperty = defineProperty({
   id: "images",
-  value: MediaAssetId,
-  subjectKinds: everyKind,
+  valueSchema: MediaAssetId,
+  kinds: everyKind,
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "GBIF"],
+  sources: ["PERSON", "GBIF", "CONTENT_CHANNELS"],
   extract: {
     GBIF: (result) => result.photos.map(({ mediaAssetId }) => ({ value: mediaAssetId })),
+    CONTENT_CHANNELS: (item) =>
+      Option.toArray(Option.fromNullishOr(item.thumbnail)).map(({ mediaAssetId }) => ({
+        value: mediaAssetId,
+      })),
   },
 })

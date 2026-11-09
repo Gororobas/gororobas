@@ -5,8 +5,8 @@ import { defineProperty } from "../property.js"
 /** Today's `wiki_plant_taxonomy_group`. */
 export const TaxonomyGroupProperty = defineProperty({
   id: "taxonomyGroup",
-  value: Schema.NonEmptyString,
-  subjectKinds: ["PLANT"],
+  valueSchema: Schema.NonEmptyString,
+  kinds: ["PLANT"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

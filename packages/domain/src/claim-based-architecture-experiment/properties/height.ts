@@ -7,13 +7,13 @@ import { makeRange } from "../values/range.js"
 /** Today's `heightMin` and `heightMax`, one value so the invariant is the schema's. */
 export const HeightProperty = defineProperty({
   id: "height",
-  value: makeRange({
+  valueSchema: makeRange({
     bound: Centimeters,
     isLessThanOrEqual: Quantity.isLessThanOrEqualTo,
     identifier: "HeightRange",
     title: "Height range",
   }),
-  subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
+  kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

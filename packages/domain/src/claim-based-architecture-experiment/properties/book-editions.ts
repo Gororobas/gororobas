@@ -4,8 +4,8 @@ import { defineProperty } from "../property.js"
 /** Today's `wiki_book_editions`, as Google Books lists them. */
 export const BookEditionsProperty = defineProperty({
   id: "bookEditions",
-  value: BookEdition,
-  subjectKinds: ["BOOK"],
+  valueSchema: BookEdition,
+  kinds: ["BOOK"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

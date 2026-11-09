@@ -8,8 +8,8 @@ import { defineProperty } from "../property.js"
  */
 export const GbifTaxonIdProperty = defineProperty({
   id: "gbifTaxonId",
-  value: GbifTaxonId,
-  subjectKinds: ["PLANT"],
+  valueSchema: GbifTaxonId,
+  kinds: ["PLANT"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

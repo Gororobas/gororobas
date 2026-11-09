@@ -4,8 +4,8 @@ import { defineProperty } from "../property.js"
 /** Set on places the gazetteer created, which keeps their shape and hierarchy. */
 export const WhosOnFirstIdProperty = defineProperty({
   id: "whosOnFirstId",
-  value: WhosOnFirstId,
-  subjectKinds: ["PLACE"],
+  valueSchema: WhosOnFirstId,
+  kinds: ["PLACE"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

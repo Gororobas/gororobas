@@ -5,13 +5,13 @@ import { makeRange } from "../values/range.js"
 /** In days. */
 export const DevelopmentCycleProperty = defineProperty({
   id: "developmentCycle",
-  value: makeRange({
+  valueSchema: makeRange({
     bound: IntNonNegative,
     isLessThanOrEqual: (self, that) => self <= that,
     identifier: "DevelopmentCycleRange",
     title: "Development cycle range",
   }),
-  subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
+  kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

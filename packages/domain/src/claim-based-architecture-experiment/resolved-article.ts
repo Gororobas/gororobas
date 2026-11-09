@@ -8,14 +8,14 @@ import type { Property } from "./properties/index.js"
 import type { ResolvedValue } from "./resolution.js"
 
 type PropertiesOf<Kind extends ArticleKind> = Property extends infer P
-  ? P extends { readonly subjectKinds: ReadonlyArray<infer K> }
+  ? P extends { readonly kinds: ReadonlyArray<infer K> }
     ? Kind extends K
       ? P
       : never
     : never
   : never
 
-type ValueOf<P extends Property> = P["value"]["Type"]
+type ValueOf<P extends Property> = P["valueSchema"]["Type"]
 
 /**
  * Required universal properties always have a value on a published article (`keepsRequiredValue`

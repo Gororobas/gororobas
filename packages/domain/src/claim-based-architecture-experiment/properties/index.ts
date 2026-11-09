@@ -1,18 +1,19 @@
 import { ActivePeriodProperty } from "./active-period.js"
 import { AnimalRolesProperty } from "./animal-roles.js"
 import { AreasOfWorkProperty } from "./areas-of-work.js"
+import { AuthorsProperty } from "./authors.js"
 import { BasedInProperty } from "./based-in.js"
-import { BookAuthorsProperty } from "./book-authors.js"
 import { BookEditionsProperty } from "./book-editions.js"
 import { ContainedByPlaceProperty } from "./contained-by-place.js"
+import { ContentChannelItemProperty } from "./content-channel-item.js"
 import { ContentChannelsProperty } from "./content-channels.js"
 import { CountryOfOriginProperty } from "./country-of-origin.js"
 import { CreditLineProperty } from "./credit-line.js"
 import { CultivarOfProperty } from "./cultivar-of.js"
 import { DevelopmentCycleProperty } from "./development-cycle.js"
+import { DirectorsProperty } from "./directors.js"
 import { EdiblePartsProperty } from "./edible-parts.js"
 import { EditionLabelProperty } from "./edition-label.js"
-import { FilmDirectorsProperty } from "./film-directors.js"
 import { FilmGenresProperty } from "./film-genres.js"
 import { GbifTaxonIdProperty } from "./gbif-taxon-id.js"
 import { GeonamesIdProperty } from "./geonames-id.js"
@@ -57,18 +58,19 @@ export const properties = [
   ActivePeriodProperty,
   AnimalRolesProperty,
   AreasOfWorkProperty,
+  AuthorsProperty,
   BasedInProperty,
-  BookAuthorsProperty,
   BookEditionsProperty,
   ContainedByPlaceProperty,
+  ContentChannelItemProperty,
   ContentChannelsProperty,
   CountryOfOriginProperty,
   CreditLineProperty,
   CultivarOfProperty,
   DevelopmentCycleProperty,
+  DirectorsProperty,
   EdiblePartsProperty,
   EditionLabelProperty,
-  FilmDirectorsProperty,
   FilmGenresProperty,
   GbifTaxonIdProperty,
   GeonamesIdProperty,

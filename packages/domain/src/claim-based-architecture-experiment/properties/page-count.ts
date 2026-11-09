@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const PageCountProperty = defineProperty({
   id: "pageCount",
-  value: IntNonNegative,
-  subjectKinds: ["BOOK"],
+  valueSchema: IntNonNegative,
+  kinds: ["BOOK"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

@@ -7,8 +7,8 @@ import { defineProperty } from "../property.js"
 /** Today's `wiki_article_external_links`. */
 export const WikipediaPageProperty = defineProperty({
   id: "wikipediaPage",
-  value: UrlAsString,
-  subjectKinds: ["PLANT", "PLACE"],
+  valueSchema: UrlAsString,
+  kinds: ["PLANT", "PLACE"],
   scope: "LANGUAGE_SPECIFIC",
   cardinality: "ONE",
   presence: "OPTIONAL",

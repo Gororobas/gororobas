@@ -9,11 +9,11 @@ import { defineProperty } from "../property.js"
  */
 export const ContainedByPlaceProperty = defineProperty({
   id: "containedByPlace",
-  value: WikiArticleId,
-  subjectKinds: ["PLACE"],
+  valueSchema: WikiArticleId,
+  kinds: ["PLACE"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["WHOS_ON_FIRST", "PERSON"],
-  references: { kinds: ["PLACE"], target: Option.some },
+  references: { targetKinds: ["PLACE"], target: Option.some },
 })

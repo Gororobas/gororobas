@@ -3,10 +3,13 @@ import { defineProperty } from "../property.js"
 
 export const ResourceFormatProperty = defineProperty({
   id: "resourceFormat",
-  value: ResourceFormat,
-  subjectKinds: ["RESOURCE"],
+  valueSchema: ResourceFormat,
+  kinds: ["RESOURCE"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
-  sources: ["PERSON"],
+  sources: ["PERSON", "CONTENT_CHANNELS"],
+  extract: {
+    CONTENT_CHANNELS: (item) => [{ value: item.format }],
+  },
 })

@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const GoogleBooksVolumeIdProperty = defineProperty({
   id: "googleBooksVolumeId",
-  value: GoogleBooksVolumeId,
-  subjectKinds: ["BOOK"],
+  valueSchema: GoogleBooksVolumeId,
+  kinds: ["BOOK"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

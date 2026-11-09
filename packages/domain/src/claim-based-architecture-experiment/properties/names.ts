@@ -1,9 +1,10 @@
 import { Option, Schema } from "effect"
 
-import { GrammaticalGender, SupportedLanguage } from "../../common/enums.js"
+import { GrammaticalGender } from "../../common/enums.js"
 import { everyKind } from "../kinds.js"
 import { defineProperty } from "../property.js"
 import { FoldedName } from "../values/folded-name.js"
+import { supportedLanguageOf } from "../values/supported-language.js"
 
 /**
  * One of an article's names: today's `WikiArticleCommonName`. A different grammatical gender is a
@@ -24,31 +25,54 @@ export type Name = typeof Name.Type
  * A handle is minted from the first name people gave in a language (or the gazetteer's), never
  * from a machine's, and never replaced afterwards, so links keep working.
  *
- * Google Books asserts each edition's title in its language, so a book is named in every language
- * it was published in without a machine editing anything people wrote. Its names follow people's.
+ * Wikidata's labels and aliases, Google Books' edition titles and channels' item titles are each
+ * their source's claims, so an article is named in every language they know without a machine
+ * editing anything people wrote. They follow people's names, in source order.
  * Scientific names are their own property: they name a taxon and belong to no language.
  */
 export const NamesProperty = defineProperty({
   id: "names",
-  value: Name,
-  subjectKinds: everyKind,
+  valueSchema: Name,
+  kinds: everyKind,
   scope: "LANGUAGE_SPECIFIC",
   cardinality: "LIST",
   mergeStrategy: "ALL_SOURCES",
   presence: "REQUIRED",
-  sources: ["PERSON", "WHOS_ON_FIRST", "GOOGLE_BOOKS", "MACHINE_TRANSLATION"],
+  sources: [
+    "PERSON",
+    "WHOS_ON_FIRST",
+    "WIKIDATA",
+    "GOOGLE_BOOKS",
+    "CONTENT_CHANNELS",
+    "MACHINE_TRANSLATION",
+  ],
   extract: {
+    // The label first, then the aliases: Wikidata's order, kept as the claims' positions.
+    WIKIDATA: ({ entity }) =>
+      [...entity.labels, ...entity.aliases].flatMap(({ language, value }) =>
+        Option.toArray(supportedLanguageOf(language)).flatMap((supported) =>
+          Schema.is(Name.fields.name)(value)
+            ? [{ language: supported, value: Name.make({ name: value, grammaticalGender: null }) }]
+            : [],
+        ),
+      ),
     GOOGLE_BOOKS: (result) =>
       result.editions.flatMap((edition) =>
         Schema.is(Name.fields.name)(edition.title)
           ? edition.languages.flatMap((tag) =>
-              Option.toArray(
-                Option.liftPredicate(tag.slice(0, 2), Schema.is(SupportedLanguage)),
-              ).map((language) => ({
+              Option.toArray(supportedLanguageOf(tag)).map((language) => ({
                 language,
                 value: Name.make({ name: edition.title, grammaticalGender: null }),
               })),
             )
+          : [],
+      ),
+    CONTENT_CHANNELS: (item) =>
+      Option.toArray(
+        Option.flatMap(Option.fromNullishOr(item.language), supportedLanguageOf),
+      ).flatMap((language) =>
+        Schema.is(Name.fields.name)(item.title)
+          ? [{ language, value: Name.make({ name: item.title, grammaticalGender: null }) }]
           : [],
       ),
   },

@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const LifecyclesProperty = defineProperty({
   id: "lifecycles",
-  value: PlantLifecycle,
-  subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
+  valueSchema: PlantLifecycle,
+  kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

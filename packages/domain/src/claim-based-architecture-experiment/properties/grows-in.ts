@@ -9,14 +9,14 @@ import { defineProperty } from "../property.js"
  */
 export const GrowsInProperty = defineProperty({
   id: "growsIn",
-  value: Schema.Struct({
+  valueSchema: Schema.Struct({
     place: WikiArticleId,
     nativity: Schema.NullOr(Schema.Literals(["NATIVE", "INTRODUCED"])),
   }),
-  subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
+  kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "ARTICLE_TEXT_INFERENCE"],
-  references: { kinds: ["PLACE"], target: ({ place }) => Option.some(place) },
+  references: { targetKinds: ["PLACE"], target: ({ place }) => Option.some(place) },
 })

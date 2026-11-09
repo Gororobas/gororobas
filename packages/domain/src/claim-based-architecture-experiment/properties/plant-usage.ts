@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const PlantUsageProperty = defineProperty({
   id: "plantUsage",
-  value: PlantUsage,
-  subjectKinds: ["PLANT", "PLANT_CULTIVAR"],
+  valueSchema: PlantUsage,
+  kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

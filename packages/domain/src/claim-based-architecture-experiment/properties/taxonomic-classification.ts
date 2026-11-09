@@ -4,8 +4,8 @@ import { defineProperty } from "../property.js"
 /** Today's `wiki_plant_taxonomy_classification`: one value per rank, only from GBIF. */
 export const TaxonomicClassificationProperty = defineProperty({
   id: "taxonomicClassification",
-  value: GbifClassification,
-  subjectKinds: ["PLANT"],
+  valueSchema: GbifClassification,
+  kinds: ["PLANT"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

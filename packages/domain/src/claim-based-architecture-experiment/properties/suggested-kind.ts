@@ -4,8 +4,8 @@ import { FoldedName } from "../values/folded-name.js"
 /** What an uncategorized article might become; changing kind itself isn't a claim. */
 export const SuggestedKindProperty = defineProperty({
   id: "suggestedKind",
-  value: FoldedName,
-  subjectKinds: ["UNCATEGORIZED"],
+  valueSchema: FoldedName,
+  kinds: ["UNCATEGORIZED"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",

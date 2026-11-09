@@ -3,8 +3,8 @@ import { defineProperty } from "../property.js"
 
 export const ToolUsageProperty = defineProperty({
   id: "toolUsage",
-  value: ToolUsage,
-  subjectKinds: ["TOOL"],
+  valueSchema: ToolUsage,
+  kinds: ["TOOL"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

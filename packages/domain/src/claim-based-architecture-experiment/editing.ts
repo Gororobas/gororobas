@@ -13,7 +13,7 @@
 import { Array as EffectArray, Option, Schema } from "effect"
 
 import type { Claim, LanguageOf, PersonClaim, PropertyScope } from "./claims.js"
-import { type ResolutionSpec, liveAssertions } from "./resolution.js"
+import { type ResolutionSpec, claimedValues } from "./resolution.js"
 import type { ClaimId } from "./sources.js"
 import { type FractionalIndex, keyBetween } from "./values/fractional-index.js"
 
@@ -32,13 +32,13 @@ export type DraftDiff<Value> =
   /** Claims the form showed that no longer show: the form reloads before saving. */
   | { readonly _tag: "STALE"; readonly claimIds: ReadonlyArray<ClaimId> }
 
-interface ShownAssertion<Value, Scope extends PropertyScope> {
+interface ShownClaimedValue<Value, Scope extends PropertyScope> {
   readonly claim: PersonClaim<Value, Scope>
   readonly value: Value
 }
 
 /** The people's claims the form showed, if they all still show. */
-const shownAssertions = <Value, Scope extends PropertyScope>({
+const shownClaimedValues = <Value, Scope extends PropertyScope>({
   property,
   claims,
   language,
@@ -48,8 +48,8 @@ const shownAssertions = <Value, Scope extends PropertyScope>({
   readonly claims: ReadonlyArray<Claim<Value, Scope>>
   readonly language: LanguageOf<Scope>
   readonly shown: ReadonlyArray<ClaimId>
-}): Option.Option<ReadonlyArray<ShownAssertion<Value, Scope>>> => {
-  const visible = liveAssertions({ property, claims }).flatMap(({ claim, value }) =>
+}): Option.Option<ReadonlyArray<ShownClaimedValue<Value, Scope>>> => {
+  const visible = claimedValues({ property, claims }).flatMap(({ claim, value }) =>
     "change" in claim && claim.language === language && shown.includes(claim.id)
       ? [{ claim, value }]
       : [],
@@ -67,7 +67,7 @@ const staleClaims = <Value, Scope extends PropertyScope>({
   readonly claims: ReadonlyArray<Claim<Value, Scope>>
   readonly shown: ReadonlyArray<ClaimId>
 }): DraftDiff<Value> => {
-  const visible = liveAssertions({ property, claims }).map(({ claim }) => claim.id)
+  const visible = claimedValues({ property, claims }).map(({ claim }) => claim.id)
   return { _tag: "STALE", claimIds: shown.filter((claimId) => !visible.includes(claimId)) }
 }
 
@@ -86,9 +86,9 @@ export const diffOneDraft = <Value, Scope extends PropertyScope>({
   readonly draft: Option.Option<Value>
 }): DraftDiff<Value> => {
   const shownIds = Option.toArray(shown)
-  const equivalent = Schema.toEquivalence(property.value)
+  const isSameValue = Schema.toEquivalence(property.valueSchema)
 
-  return Option.match(shownAssertions({ property, claims, language, shown: shownIds }), {
+  return Option.match(shownClaimedValues({ property, claims, language, shown: shownIds }), {
     onNone: () => staleClaims({ property, claims, shown: shownIds }),
     onSome: ([current]) =>
       Option.match(draft, {
@@ -99,7 +99,7 @@ export const diffOneDraft = <Value, Scope extends PropertyScope>({
         onSome: (value) => ({
           _tag: "CHANGES",
           changes:
-            current !== undefined && equivalent(current.value, value)
+            current !== undefined && isSameValue(current.value, value)
               ? []
               : [
                   {
@@ -131,23 +131,23 @@ export const diffManyDraft = <Value, Scope extends PropertyScope>({
   readonly shown: ReadonlyArray<ClaimId>
   readonly draft: ReadonlyArray<Value>
 }): DraftDiff<Value> => {
-  const equivalent = Schema.toEquivalence(property.value)
+  const isSameValue = Schema.toEquivalence(property.valueSchema)
   const isList = property.cardinality === "LIST"
   const distinctDraft = draft.filter(
-    (value, index) => draft.findIndex((other) => equivalent(other, value)) === index,
+    (value, index) => draft.findIndex((other) => isSameValue(other, value)) === index,
   )
 
-  return Option.match(shownAssertions({ property, claims, language, shown }), {
+  return Option.match(shownClaimedValues({ property, claims, language, shown }), {
     onNone: () => staleClaims({ property, claims, shown }),
-    onSome: (assertions) => {
+    onSome: (shownValues) => {
       const matched = distinctDraft.map((value) => ({
         value,
-        match: assertions.find((assertion) => equivalent(assertion.value, value)),
+        match: shownValues.find((shown) => isSameValue(shown.value, value)),
       }))
 
-      const positionOf = (assertion: ShownAssertion<Value, Scope>) =>
-        "position" in assertion.claim.change
-          ? Option.fromNullishOr(assertion.claim.change.position)
+      const positionOf = (shown: ShownClaimedValue<Value, Scope>) =>
+        "position" in shown.claim.change
+          ? Option.fromNullishOr(shown.claim.change.position)
           : Option.none()
 
       /**
@@ -219,8 +219,8 @@ export const diffManyDraft = <Value, Scope extends PropertyScope>({
         },
       )
 
-      const retracted = assertions
-        .filter((assertion) => !distinctDraft.some((value) => equivalent(assertion.value, value)))
+      const retracted = shownValues
+        .filter((shown) => !distinctDraft.some((value) => isSameValue(shown.value, value)))
         .map(({ claim }): PersonChange<Value> => ({ _tag: "RETRACT", retracts: claim.id }))
 
       return { _tag: "CHANGES", changes: [...asserted, ...retracted] }

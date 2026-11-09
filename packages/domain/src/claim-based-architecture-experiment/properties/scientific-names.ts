@@ -11,8 +11,8 @@ import { FoldedName } from "../values/folded-name.js"
  */
 export const ScientificNamesProperty = defineProperty({
   id: "scientificNames",
-  value: FoldedName,
-  subjectKinds: ["PLANT", "PLANT_CULTIVAR", "ANIMAL"],
+  valueSchema: FoldedName,
+  kinds: ["PLANT", "PLANT_CULTIVAR", "ANIMAL"],
   scope: "UNIVERSAL",
   cardinality: "LIST",
   mergeStrategy: "FIRST_SOURCE_WITH_VALUES",

@@ -9,7 +9,7 @@ import type { NonEmptyReadonlyArray } from "effect/Array"
 import type { WikiArticleId } from "../common/ids.js"
 import { type LanguageOf, type PropertyScope, claimSchema } from "./claims.js"
 import type { ArticleKind } from "./kinds.js"
-import type { FetchedProvider, ProviderResults } from "./providers.js"
+import type { ExtractionContext, FetchedProvider, ProviderResults } from "./providers.js"
 import type { SourceKey } from "./sources.js"
 
 /**
@@ -30,8 +30,8 @@ interface PropertyBase<Id, Value, Encoded, Kind, Scope, Source, Presence> {
    * Invariants spanning fields go inside one value (`height` is a range), so evaluating claims one
    * by one can never accept half of an invariant.
    */
-  readonly value: Schema.Codec<Value, Encoded>
-  readonly subjectKinds: NonEmptyReadonlyArray<Kind>
+  readonly valueSchema: Schema.Codec<Value, Encoded>
+  readonly kinds: NonEmptyReadonlyArray<Kind>
   readonly scope: Scope
   /** Which sources may assert it, best first: resolution prefers values from earlier sources. */
   readonly sources: NonEmptyReadonlyArray<Source>
@@ -41,7 +41,7 @@ interface PropertyBase<Id, Value, Encoded, Kind, Scope, Source, Presence> {
    * written; the domain has no database to check it with.
    */
   readonly references?: {
-    readonly kinds: NonEmptyReadonlyArray<ArticleKind>
+    readonly targetKinds: NonEmptyReadonlyArray<ArticleKind>
     readonly target: (value: Value) => Option.Option<WikiArticleId>
   }
   /**
@@ -78,6 +78,7 @@ type ExtractFields<Source, Value, Scope extends PropertyScope> = [
       readonly extract: {
         readonly [P in Extract<Source, FetchedProvider>]: (
           result: ProviderResults[P],
+          context: ExtractionContext,
         ) => ReadonlyArray<Extracted<Value, Scope>>
       }
     }

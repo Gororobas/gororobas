@@ -10,15 +10,19 @@ import { defineProperty } from "../property.js"
  */
 export const MainImageProperty = defineProperty({
   id: "mainImage",
-  value: MediaAssetId,
-  subjectKinds: everyKind,
+  valueSchema: MediaAssetId,
+  kinds: everyKind,
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON", "GBIF"],
+  sources: ["PERSON", "GBIF", "CONTENT_CHANNELS"],
   extract: {
     GBIF: (result) =>
       Option.toArray(EffectArray.head(result.photos)).map(({ mediaAssetId }) => ({
+        value: mediaAssetId,
+      })),
+    CONTENT_CHANNELS: (item) =>
+      Option.toArray(Option.fromNullishOr(item.thumbnail)).map(({ mediaAssetId }) => ({
         value: mediaAssetId,
       })),
   },

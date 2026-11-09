@@ -6,11 +6,11 @@ import { defineProperty } from "../property.js"
 /** Today's `parentPlantId`. The plant must be published, checked on the server. */
 export const CultivarOfProperty = defineProperty({
   id: "cultivarOf",
-  value: WikiArticleId,
-  subjectKinds: ["PLANT_CULTIVAR"],
+  valueSchema: WikiArticleId,
+  kinds: ["PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
   sources: ["PERSON"],
-  references: { kinds: ["PLANT"], target: Option.some },
+  references: { targetKinds: ["PLANT"], target: Option.some },
 })
