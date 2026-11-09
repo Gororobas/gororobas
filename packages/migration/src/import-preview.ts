@@ -302,6 +302,7 @@ export const importPreview = ({
             category: null,
             descriptions: migrateMediaDescriptions(image.latest_source.label),
             ownerProfileId: image.ownerProfileId ?? ProfileId.make(importerId),
+            licenseUrl: null,
             createdAt: now,
             updatedAt: now,
           })

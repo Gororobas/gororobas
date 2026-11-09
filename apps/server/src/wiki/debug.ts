@@ -99,7 +99,7 @@ export const getWikiArticleDebug = Effect.fn("Wiki.getArticleDebug")(function* (
     externalLinks:
       yield* sql`SELECT * FROM wiki_article_external_links WHERE wiki_article_id = ${wikiArticleId}`,
     externalMedia:
-      yield* sql`SELECT * FROM wiki_article_external_media WHERE wiki_article_id = ${wikiArticleId}`,
+      yield* sql`SELECT link.*, origin.media_url, origin.source_url, asset.license_url, asset.moderation_status FROM wiki_article_external_media link JOIN media_assets asset ON asset.id = link.media_asset_id LEFT JOIN media_asset_imports origin ON origin.media_asset_id = link.media_asset_id WHERE link.wiki_article_id = ${wikiArticleId} ORDER BY link.provider, link.order_index`,
     taxonomyGroup:
       yield* sql`SELECT * FROM wiki_plant_taxonomy_group WHERE wiki_article_id = ${wikiArticleId}`,
     taxonomyClassification:

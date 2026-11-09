@@ -6,8 +6,8 @@ import {
   corner,
   details,
   hasCredits,
+  mediaAssetAttribution,
   popoverDrawerInputs,
-  uploadedMediaAttribution,
 } from "./view"
 
 export const MediaCredit = {
@@ -18,8 +18,8 @@ export const MediaCredit = {
   details,
   hasCredits,
   licenseName,
+  mediaAssetAttribution,
   popoverDrawerInputs,
-  uploadedMediaAttribution,
 }
 
 export type { MediaAttribution, MediaCredit as MediaCreditEntry, MediaDimensions } from "./view"

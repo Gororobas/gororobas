@@ -29,6 +29,7 @@ import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
 import { IdGenLive } from "../id-gen-live.js"
+import { MediaAssetsServiceLive } from "../media-assets/service.js"
 import { makeAppSql } from "../sql.js"
 import { buildExternalDataRequest } from "../wiki/external-data/inputs.js"
 import { ExternalDataReport, reportExternalData } from "../wiki/external-data/report.js"
@@ -244,6 +245,7 @@ const run = Command.make(
       Effect.provide(
         FetchArticleExternalDataLive.pipe(
           Layer.provideMerge(ExternalDataProvidersLive),
+          Layer.provideMerge(MediaAssetsServiceLive),
           Layer.provideMerge(WorkflowEngine.layerMemory),
         ),
       ),

@@ -1,6 +1,7 @@
 import { NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import {
+  MediaAssetImport,
   MediaAssetRow,
   ModerationEventRow,
   OrganizationInvitationRow,
@@ -52,12 +53,11 @@ const TABLES_WITHOUT_SEED_DATA = {
   auth_pending: "Pending sign-in flows are transient",
   auth_proofs: "Emailed codes are transient",
   auth_sessions: "Sessions start when an account signs in",
-  wiki_article_external_media:
-    "Synthetic provider data omits external images, which would not load",
 } satisfies Record<string, string>
 
 /** Read-side schemas each seeded table must decode with. */
 const ROW_SCHEMAS = {
+  media_asset_imports: MediaAssetImport,
   media_assets: MediaAssetRow,
   moderation_events: ModerationEventRow,
   organization_invitations: OrganizationInvitationRow,

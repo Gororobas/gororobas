@@ -50,7 +50,13 @@ import {
   legibleAttributes,
   legibleTranslations,
 } from "./seed-wiki-content.js"
-import { MEDIA_CATEGORIES, PUBLISHERS, REJECTION_REASONS } from "./vocabulary.js"
+import {
+  FIRST_NAMES,
+  MEDIA_CATEGORIES,
+  PUBLISHERS,
+  REJECTION_REASONS,
+  SURNAMES,
+} from "./vocabulary.js"
 
 const ArticleJson = Schema.toCodecJson(WikiArticleEditableData)
 const TranslationJson = Schema.toCodecJson(WikiArticleEditableTranslation)
@@ -490,13 +496,61 @@ export const seedBookmarks = (context: Pick<SeedContext, "people" | "articles">)
     return sum(counts)
   })
 
-const plantExternalData = (article: SeededArticle, wikidataId: string) =>
+const PHOTO_LICENSES = [
+  "http://creativecommons.org/licenses/by/4.0/",
+  "http://creativecommons.org/licenses/by-nc/4.0/",
+  "http://creativecommons.org/publicdomain/zero/1.0/",
+] as const
+
+/** Photos as GBIF lists them, mostly iNaturalist's. */
+const gbifPhotos = (count: number) =>
+  Effect.forEach(
+    EffectArray.makeBy(count, (index) => index),
+    () =>
+      Effect.gen(function* () {
+        const credits = [`${yield* pick(FIRST_NAMES)} ${yield* pick(SURNAMES)}`]
+
+        return {
+          mediaUrl: `https://inaturalist-open-data.s3.amazonaws.com/photos/${yield* digits(9)}/original.jpg`,
+          sourceUrl: `https://www.gbif.org/occurrence/${yield* digits(10)}`,
+          credits: (yield* chance(0.3))
+            ? [...credits, `${yield* pick(FIRST_NAMES)} ${yield* pick(SURNAMES)}`]
+            : credits,
+          licenseUrl: yield* pick(PHOTO_LICENSES),
+        }
+      }),
+    { concurrency: 1 },
+  )
+
+const plantExternalData = ({
+  context,
+  article,
+  wikidataId,
+}: {
+  context: Pick<SeedContext, "media">
+  article: SeededArticle
+  wikidataId: string
+}) =>
   Effect.gen(function* () {
     const plant = article.plant
     if (!plant) return undefined
 
     const [genus = plant.scientificName] = plant.scientificName.split(" ")
     const taxonId = digits(7)
+    const photos = yield* gbifPhotos(yield* Random.nextIntBetween(0, 3))
+
+    // As the fetch workflow does, photos are imported before projections reference them.
+    const importedPhotos = yield* Effect.forEach(
+      photos,
+      ({ mediaUrl, sourceUrl, credits, licenseUrl }) =>
+        context.media.createImported({
+          at: article.createdAt,
+          origin: { provider: "GBIF", mediaUrl, sourceUrl },
+          credits,
+          licenseUrl,
+        }),
+      { concurrency: 1 },
+    )
 
     return PlantExternalDataResult.make({
       kind: "PLANT",
@@ -526,8 +580,9 @@ const plantExternalData = (article: SeededArticle, wikidataId: string) =>
             { taxonId: yield* taxonId, scientificName: genus, taxonRank: "GENUS" },
             { taxonId: yield* taxonId, scientificName: plant.scientificName, taxonRank: "SPECIES" },
           ],
-          media: [],
+          photos,
         }),
+        gbifPhotos: importedPhotos,
       },
     })
   })
@@ -557,7 +612,7 @@ const bookExternalData = (article: SeededArticle, volumeId: string) =>
     })
   })
 
-const enrichArticle = (article: SeededArticle) =>
+const enrichArticle = (context: Pick<SeedContext, "media">, article: SeededArticle) =>
   Effect.gen(function* () {
     const wiki = yield* WikiArticlesRepository
     const row = yield* wiki.findById(article.id)
@@ -566,7 +621,12 @@ const enrichArticle = (article: SeededArticle) =>
     const request = buildExternalDataRequest(row.value)
 
     if (row.value.kind === "PLANT" && Option.isSome(row.value.attributes.wikidataId)) {
-      const result = yield* plantExternalData(article, row.value.attributes.wikidataId.value)
+      const result = yield* plantExternalData({
+        context,
+        article,
+        wikidataId: row.value.attributes.wikidataId.value,
+      })
+
       if (!result) return 0
       yield* persistPlant(request, result)
       return 1
@@ -585,11 +645,11 @@ const enrichArticle = (article: SeededArticle) =>
  * Provider data normally arrives through the enrichment workflow. Seeding persists
  * synthetic provider results through the same persisters, without network access.
  */
-export const seedExternalData = (context: Pick<SeedContext, "articles">) =>
+export const seedExternalData = (context: Pick<SeedContext, "articles" | "media">) =>
   Effect.map(
     Effect.forEach(
       context.articles.filter((article) => article.status === "PUBLISHED"),
-      enrichArticle,
+      (article) => enrichArticle(context, article),
       { concurrency: 1 },
     ),
     sum,

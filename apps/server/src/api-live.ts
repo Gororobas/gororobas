@@ -5,9 +5,7 @@ import { HttpApi, HttpApiBuilder } from "effect/http-api"
 
 import { Enrichment, EnrichmentSubmitterLive } from "./enrichment/enrichment.js"
 import { MediaAssetsApiLive } from "./media-assets/api-live.js"
-import { MediaAssetsRepository } from "./media-assets/repository.js"
-import { MediaAssetsService } from "./media-assets/service.js"
-import { MediaAssetsStorage } from "./media-assets/storage.js"
+import { MediaAssetsServiceLive } from "./media-assets/service.js"
 import { ModerationApiLive } from "./moderation/api-live.js"
 import { ModerationService } from "./moderation/service.js"
 import { OrganizationsApiLive } from "./organizations/api-live.js"
@@ -45,11 +43,6 @@ const ImplementedApi = HttpApi.make(GororobasApi.identifier).add(
   GororobasApi.groups.wiki,
 )
 
-const MediaServicesLive = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
-  Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
-  Layer.provideMerge(Layer.effect(MediaAssetsStorage, MediaAssetsStorage.make)),
-)
-
 const RepositoriesLive = Layer.mergeAll(
   Layer.effect(OrganizationsRepository, OrganizationsRepository.make),
   Layer.effect(PeopleRepository, PeopleRepository.make),
@@ -69,7 +62,7 @@ const ServicesLive = Layer.mergeAll(
     Layer.provideMerge(Layer.effect(PlacesService, PlacesService.make)),
   ),
 ).pipe(
-  Layer.provideMerge(MediaServicesLive),
+  Layer.provideMerge(MediaAssetsServiceLive),
   Layer.provideMerge(RepositoriesLive),
   Layer.provideMerge(
     Layer.effect(Enrichment, Enrichment.make).pipe(Layer.provideMerge(EnrichmentSubmitterLive)),

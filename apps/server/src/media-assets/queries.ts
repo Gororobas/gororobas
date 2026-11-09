@@ -1,5 +1,6 @@
 import {
   MediaAssetId,
+  MediaAssetImport,
   MediaAssetRow,
   ProfileRow,
   type Session,
@@ -39,12 +40,25 @@ export const findMediaAssetPublicationAccess = (session: Session) =>
       ),
   })
 
+/** Articles showing the media: in their own gallery, or as a provider's photo. */
 export const listMediaAssetWikiArticles = SqlSchema.findAll({
   Request: MediaAssetId,
   Result: WikiArticleMediaAssetRow,
   execute: (id) =>
     SqlClient.SqlClient.use(
-      (sql) => sql`SELECT * FROM wiki_article_media_assets WHERE media_asset_id = ${id}`,
+      (sql) => sql`
+      SELECT wiki_article_id, media_asset_id FROM wiki_article_media_assets WHERE media_asset_id = ${id}
+      UNION
+      SELECT wiki_article_id, media_asset_id FROM wiki_article_external_media WHERE media_asset_id = ${id}`,
+    ),
+})
+
+export const findMediaAssetImportByUrl = SqlSchema.findOneOption({
+  Request: MediaAssetImport.fields.mediaUrl,
+  Result: MediaAssetImport,
+  execute: (mediaUrl) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`SELECT * FROM media_asset_imports WHERE media_url = ${mediaUrl}`,
     ),
 })
 

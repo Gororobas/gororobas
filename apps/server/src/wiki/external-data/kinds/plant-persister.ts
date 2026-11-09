@@ -1,7 +1,8 @@
 import {
+  ExternalDataProvider,
   ExternalLink,
-  ExternalMedia,
   GbifPlantResult,
+  MediaAssetId,
   GbifClassification,
   WikiArticleId,
   type ExternalDataFetchRequest,
@@ -43,9 +44,12 @@ const insertTaxonomyClassification = SqlSchema.void({
 })
 
 const insertExternalMedia = SqlSchema.void({
-  Request: ExternalMedia.mapFields(
-    Struct.assign({ wikiArticleId: WikiArticleId, orderIndex: Schema.Int }),
-  ),
+  Request: Schema.Struct({
+    wikiArticleId: WikiArticleId,
+    provider: ExternalDataProvider,
+    orderIndex: Schema.Int,
+    mediaAssetId: MediaAssetId,
+  }),
   execute: (media) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
@@ -58,7 +62,7 @@ export const persistPlant = (request: ExternalDataFetchRequest, data: PlantExter
     request,
     Effect.gen(function* () {
       const wikiArticleId = request.wikiArticleId
-      const { wikidata, gbif } = data.attributes
+      const { wikidata, gbif, gbifPhotos } = data.attributes
 
       if (wikidata !== null) {
         yield* recordProviderObservation({
@@ -111,8 +115,9 @@ export const persistPlant = (request: ExternalDataFetchRequest, data: PlantExter
       )
 
       yield* Effect.forEach(
-        taxon.media,
-        (media, orderIndex) => insertExternalMedia({ wikiArticleId, orderIndex, ...media }),
+        gbifPhotos,
+        (mediaAssetId, orderIndex) =>
+          insertExternalMedia({ wikiArticleId, provider: "GBIF", orderIndex, mediaAssetId }),
         { discard: true, concurrency: 1 },
       )
 
@@ -120,7 +125,8 @@ export const persistPlant = (request: ExternalDataFetchRequest, data: PlantExter
         gbifTaxonId: taxon.gbifTaxonId,
         taxonomyGroup: taxon.taxonomyGroup,
         classification: taxon.classification.length,
-        media: taxon.media.length,
+        photos: taxon.photos.length,
+        importedPhotos: gbifPhotos.length,
       })
     }),
   )

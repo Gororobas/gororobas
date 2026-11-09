@@ -1,13 +1,13 @@
 import { Array as EffectArray, Option } from "effect"
 
 import { mediaCaption } from "../../../lib/media-caption"
-import { externalImageUrl, imageUrl } from "../../../media-urls"
+import { imageUrl } from "../../../media-urls"
 import { type MediaAttribution, MediaCredit, type MediaDimensions } from "../../../ui/media-credit"
 import type { Page } from "./shared"
 
 type PhotoWidth = 300 | 1280
 
-/** A photo of what the article is about, whether people uploaded it here or a provider has it. */
+/** A photo of what the article is about, whether people uploaded it here or a provider had it. */
 export type ArticlePhoto = Readonly<{
   key: string
   /** Its credit's popover and drawer, unique on the page. */
@@ -28,7 +28,13 @@ export const photoCreditId = (index: number) => `wiki-article-photo-credit-${ind
  */
 export const articlePhotos = (page: Page): ReadonlyArray<ArticlePhoto> =>
   [
-    ...page.mediaAssets.flatMap((media): ReadonlyArray<Omit<ArticlePhoto, "creditId">> =>
+    ...page.mediaAssets.map((media) => ({ media, maybeSourceUrl: Option.none<string>() })),
+    ...page.externalData.media.map(({ mediaAsset, sourceUrl }) => ({
+      media: mediaAsset,
+      maybeSourceUrl: Option.some(sourceUrl),
+    })),
+  ]
+    .flatMap(({ media, maybeSourceUrl }): ReadonlyArray<Omit<ArticlePhoto, "creditId">> =>
       media.format === "IMAGE"
         ? [
             {
@@ -37,7 +43,7 @@ export const articlePhotos = (page: Page): ReadonlyArray<ArticlePhoto> =>
               // Captions read in the language the article itself was served in.
               maybeCaption: mediaCaption({ media, language: page.language }),
               maybeCategory: Option.fromNullishOr(media.category),
-              attribution: MediaCredit.uploadedMediaAttribution(media),
+              attribution: MediaCredit.mediaAssetAttribution(media, maybeSourceUrl),
               maybeDimensions: Option.some({
                 width: media.metadata.originalWidth,
                 height: media.metadata.originalHeight,
@@ -45,29 +51,8 @@ export const articlePhotos = (page: Page): ReadonlyArray<ArticlePhoto> =>
             },
           ]
         : [],
-    ),
-    ...page.externalData.media.map((media): Omit<ArticlePhoto, "creditId"> => ({
-      key: media.mediaUrl,
-      src: (width) => externalImageUrl(media.mediaUrl, width),
-      maybeCaption: Option.none(),
-      maybeCategory: Option.none(),
-      attribution: {
-        credits: [
-          {
-            maybeProfile: Option.none(),
-            maybeLine: Option.some(media.creditLine),
-            maybeUrl: Option.none(),
-          },
-        ],
-        maybeLicenseUrl: Option.fromNullishOr(media.licenseUrl),
-        maybeSourceUrl: Option.some(media.sourceUrl),
-      },
-      maybeDimensions:
-        media.width === null || media.height === null
-          ? Option.none()
-          : Option.some({ width: media.width, height: media.height }),
-    })),
-  ].map((photo, index) => ({ ...photo, creditId: photoCreditId(index) }))
+    )
+    .map((photo, index) => ({ ...photo, creditId: photoCreditId(index) }))
 
 export const mainPhoto = (page: Page): Option.Option<ArticlePhoto> =>
   EffectArray.head(articlePhotos(page))

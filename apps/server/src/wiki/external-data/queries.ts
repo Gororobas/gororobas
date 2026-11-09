@@ -5,16 +5,21 @@ import {
   ExternalDataOutcomeTag,
   ExternalDataProvider,
   ExternalLink,
-  ExternalMedia,
+  type ExternalMediaAsset,
   GbifClassification,
   Handle,
+  MediaAssetId,
+  MediaAssetRow,
   Observation,
   WikiArticleId,
   WikiArticleKind,
+  UrlAsString,
   type WikiArticleExternalData,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Match, Option, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
+
+import { withMediaCredits } from "../../media-assets/credits.js"
 
 const ArticleId = Schema.Struct({ wikiArticleId: WikiArticleId })
 
@@ -60,18 +65,56 @@ const findClassification = SqlSchema.findAll({
     ),
 })
 
-const findExternalMedia = SqlSchema.findAll({
+const findExternalMediaAssets = SqlSchema.findAll({
   Request: ArticleId,
-  Result: ExternalMedia,
+  Result: MediaAssetRow,
   execute: ({ wikiArticleId }) =>
     SqlClient.SqlClient.use(
       (sql) => sql`
-        SELECT media_url, source_url, credit_line, license_url, width, height
-        FROM wiki_article_external_media
-        WHERE wiki_article_id = ${wikiArticleId}
-        ORDER BY order_index
+        SELECT asset.* FROM wiki_article_external_media link
+        JOIN media_assets asset ON asset.id = link.media_asset_id
+        WHERE link.wiki_article_id = ${wikiArticleId} AND asset.moderation_status <> 'CENSORED'
+        ORDER BY link.provider, link.order_index
       `,
     ),
+})
+
+const findExternalMediaOrigins = SqlSchema.findAll({
+  Request: ArticleId,
+  Result: Schema.Struct({
+    mediaAssetId: MediaAssetId,
+    provider: ExternalDataProvider,
+    sourceUrl: UrlAsString,
+  }),
+  execute: ({ wikiArticleId }) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`
+        SELECT link.media_asset_id, link.provider, origin.source_url
+        FROM wiki_article_external_media link
+        JOIN media_asset_imports origin ON origin.media_asset_id = link.media_asset_id
+        WHERE link.wiki_article_id = ${wikiArticleId}
+      `,
+    ),
+})
+
+/** Providers' photos, with whom to credit for each and the provider's page for it. */
+const findExternalMedia = Effect.fn(function* (request: typeof ArticleId.Type) {
+  const assets = yield* findExternalMediaAssets(request)
+  if (!EffectArray.isReadonlyArrayNonEmpty(assets)) return []
+
+  const [credited, origins] = yield* Effect.all(
+    [withMediaCredits(assets), findExternalMediaOrigins(request)],
+    { concurrency: 1 },
+  )
+
+  return credited.flatMap((mediaAsset): ReadonlyArray<ExternalMediaAsset> =>
+    EffectArray.fromOption(
+      Option.map(
+        EffectArray.findFirst(origins, (origin) => origin.mediaAssetId === mediaAsset.id),
+        (origin) => ({ provider: origin.provider, sourceUrl: origin.sourceUrl, mediaAsset }),
+      ),
+    ),
+  )
 })
 
 const findBookEditions = SqlSchema.findAll({

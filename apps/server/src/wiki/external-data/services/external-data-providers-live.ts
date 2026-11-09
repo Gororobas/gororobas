@@ -3,12 +3,12 @@ import { FetchHttpClient } from "effect/http"
 
 import { GbifLive } from "./gbif.js"
 import { GoogleBooksLive } from "./google-books.js"
-import { ImageDimensionsLive } from "./image-dimensions.js"
+import { ProviderPhotoDownloaderLive } from "./provider-photo-downloader.js"
 import { WikidataLive } from "./wikidata.js"
 
 export const ExternalDataProvidersLive = Layer.mergeAll(
   WikidataLive,
   GbifLive,
   GoogleBooksLive,
-  ImageDimensionsLive,
+  ProviderPhotoDownloaderLive,
 ).pipe(Layer.provide(FetchHttpClient.layer))

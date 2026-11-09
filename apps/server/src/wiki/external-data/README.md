@@ -9,14 +9,15 @@
   are written with the schema's JSON codec, `{ "_tag": "Success", "success": [...] }` or
   `{ "_tag": "Failure", "failure": {...} }`, which SQL filters with `json_extract` rely on.
 - `projections.ts`: the frontier guard every persister runs in, and clearing a provider's rows.
+- `photo-imports.ts`: downloads providers' photos into media assets (see "Photos" below).
 - `queries.ts`: reads. An article's page carries its external data (`findExternalData`, read by
-  the wiki's page query); provider photos come first in `wiki_article_external_media.order_index`
+  the wiki's page query); provider photos come in `wiki_article_external_media.order_index`
   order, and the first stands in for cards' and pages' main photo while the article has none.
 - `admin-dashboard.ts`: the observation log at `/external-data/observations`, for people with
   `content:moderate`. The web app shows it at `/dados-externos`.
 - `report.ts`: per-article summaries for the CLI and the debug page.
 
-Approved article edits submit `FetchArticleExternalData/v3`. Provider failures are non-fatal
+Approved article edits submit `FetchArticleExternalData/v4`. Provider failures are non-fatal
 and are recorded in `wiki_article_external_data_observations`, with the article frontier,
 inputs, timestamp, provider, and typed outcome. Successful observations retain the raw provider
 responses. Only a successful provider result replaces its own projections; failures and skipped
@@ -52,6 +53,22 @@ selections, external projections and observations, an `externalDataReport` (per 
 observations, failures, the latest outcome and error; and the stored row counts), bookmarks,
 references, and cultivars. It is
 denied in production. “Reload stored data” rereads the database; it does not submit a fetch.
+
+## Photos
+
+GBIF lists photos (mostly iNaturalist's) with credits and a license. Pages never link to them:
+after GBIF's activity succeeds, the `import-gbif-photos` activity downloads each one into a media
+asset, before anything persists, and the persister links those assets to the article in
+`wiki_article_external_media`. The asset has no owner, is credited and licensed as GBIF lists it,
+and is served at every `TransformedImageWidthBreakpoints` size like uploads.
+
+`media_asset_imports` records the file each asset was downloaded from, so a photo is downloaded
+once however many refreshes list it: refreshes link the existing asset again, and a censored photo
+stays censored. A refresh that no longer lists a photo removes its link, not the asset. Downloads
+are paced and retried like provider requests (`services/provider-photo-downloader.ts`), files are
+checked to be JPEG, PNG, WebP or GIF by their bytes, and a photo that fails to import is left out
+without failing the fetch; the next fetch tries it again. At most
+`MAX_IMPORTED_PHOTOS_PER_ARTICLE` (12) photos are imported per article.
 
 ## Visibility
 

@@ -35,7 +35,7 @@ export type MediaCredit = Readonly<{
 /** Who to credit for media, the terms it's shared under and where it was published. */
 export type MediaAttribution = Readonly<{
   credits: ReadonlyArray<MediaCredit>
-  /** The license a provider's media is shared under. */
+  /** The license the media is shared under, such as a provider's photo's. */
   maybeLicenseUrl: Option.Option<string>
   /** The provider's page for the media, such as a GBIF occurrence. */
   maybeSourceUrl: Option.Option<string>
@@ -43,15 +43,21 @@ export type MediaAttribution = Readonly<{
 
 export type MediaDimensions = Readonly<{ width: number; height: number }>
 
-/** Who to credit for media uploaded here: the people and lines its uploader named. */
-export const uploadedMediaAttribution = (media: CreditedMediaAssetRow): MediaAttribution => ({
+/**
+ * Who to credit for media: the people and lines its uploader named, or the provider listed for
+ * a photo imported from it, with its license and the provider's page for it.
+ */
+export const mediaAssetAttribution = (
+  media: CreditedMediaAssetRow,
+  maybeSourceUrl: Option.Option<string> = Option.none(),
+): MediaAttribution => ({
   credits: media.credits.map((credit) => ({
     maybeProfile: Option.fromNullishOr(credit.profile),
     maybeLine: Option.fromNullishOr(credit.creditLine),
     maybeUrl: Option.fromNullishOr(credit.creditUrl),
   })),
-  maybeLicenseUrl: Option.none(),
-  maybeSourceUrl: Option.none(),
+  maybeLicenseUrl: Option.fromNullishOr(media.licenseUrl),
+  maybeSourceUrl,
 })
 
 /** Whether there's anything to credit: media without credits or a license shows no badge. */

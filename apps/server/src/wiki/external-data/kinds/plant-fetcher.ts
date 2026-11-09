@@ -5,20 +5,21 @@ import {
   type WikiArticleEditableData,
   type WikiArticleProjectionRow,
   ExternalDataFetchError,
-  type ExternalMedia,
   GbifIdentifier,
+  MediaAssetId,
   GbifPlantResult,
   WikidataResult,
   PlantExternalDataResult,
   PlantExternalDataInputs,
+  type ProviderPhoto,
   UrlAsString,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Option, Predicate, Result, Schema } from "effect"
 import { Activity } from "effect/workflow"
 
+import { importProviderPhotos } from "../photo-imports.js"
 import { Gbif } from "../services/gbif.js"
 import type { GbifOccurrenceResult } from "../services/gbif.schema.js"
-import { ImageDimensions } from "../services/image-dimensions.js"
 import { Wikidata } from "../services/wikidata.js"
 
 export const fetchPlantGbif = Effect.fn(function* (
@@ -30,17 +31,6 @@ export const fetchPlantGbif = Effect.fn(function* (
   const taxonomy = yield* gbif.taxonMetadata({ kind: "taxon", id: taxonId })
 
   const images = yield* gbif.occurrences({ taxonId, limit: 20, mediaType: "StillImage" })
-  const imageDimensions = yield* ImageDimensions
-
-  const media = yield* Effect.forEach(
-    images.value.results.flatMap(occurrenceImages),
-    (image) =>
-      Effect.map(imageDimensions.probe(image.mediaUrl), (maybeDimensions) => ({
-        ...image,
-        ...Option.getOrElse(maybeDimensions, () => ({ width: null, height: null })),
-      })),
-    { concurrency: 4 },
-  )
 
   return GbifPlantResult.make({
     observations: [taxonomy.observation, images.observation],
@@ -51,7 +41,7 @@ export const fetchPlantGbif = Effect.fn(function* (
       scientificName: taxon.scientificName,
       taxonRank: taxon.taxonRank,
     })),
-    media,
+    photos: images.value.results.flatMap(occurrenceImages),
   })
 })
 
@@ -62,7 +52,7 @@ export const fetchPlantGbif = Effect.fn(function* (
  */
 export const occurrenceImages = (
   occurrence: typeof GbifOccurrenceResult.Type,
-): ReadonlyArray<Omit<ExternalMedia, "width" | "height">> =>
+): ReadonlyArray<ProviderPhoto> =>
   (occurrence.media ?? []).flatMap((media) => {
     const licenseUrl = [media.license, occurrence.license].find(
       (license) => license !== undefined && Schema.is(UrlAsString)(license),
@@ -91,9 +81,9 @@ export const occurrenceImages = (
       {
         mediaUrl: media.identifier,
         sourceUrl: `https://www.gbif.org/occurrence/${occurrence.key}`,
-        creditLine: EffectArray.isReadonlyArrayNonEmpty(authors)
-          ? authors.join(" · ")
-          : (publisher ?? ""),
+        credits: EffectArray.isReadonlyArrayNonEmpty(authors)
+          ? authors
+          : EffectArray.fromNullishOr(publisher),
         licenseUrl,
       },
     ]
@@ -155,7 +145,7 @@ export const fetchPlant = Effect.fn(function* (inputs: typeof PlantExternalDataI
   if (Option.isNone(inputs.wikidataId)) {
     return PlantExternalDataResult.make({
       kind: "PLANT",
-      attributes: { wikidata: null, gbif: null },
+      attributes: { wikidata: null, gbif: null, gbifPhotos: [] },
     })
   }
 
@@ -176,7 +166,20 @@ export const fetchPlant = Effect.fn(function* (inputs: typeof PlantExternalDataI
           execute: fetchPlantGbif(wikidata.success.gbifId, wikidata.success.taxonName),
         }).pipe(Activity.retry({ times: 2, while: (error) => error.retryable }), Effect.result)
 
-  return PlantExternalDataResult.make({ kind: "PLANT", attributes: { wikidata, gbif } })
+  // Downloaded before persisting, so projections only ever reference our own media.
+  const gbifPhotos =
+    gbif !== null && Result.isSuccess(gbif)
+      ? yield* Activity.make({
+          name: "import-gbif-photos",
+          success: Schema.Array(MediaAssetId),
+          execute: importProviderPhotos("GBIF", gbif.success.photos),
+        })
+      : []
+
+  return PlantExternalDataResult.make({
+    kind: "PLANT",
+    attributes: { wikidata, gbif, gbifPhotos },
+  })
 })
 
 export const plantToExternalDataInputs = (

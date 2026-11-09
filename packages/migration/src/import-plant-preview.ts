@@ -174,6 +174,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
           category: null,
           descriptions: migrateMediaDescriptions(photo.label),
           ownerProfileId: ProfileId.make(importerId),
+          licenseUrl: null,
           createdAt: now,
           updatedAt: now,
         })

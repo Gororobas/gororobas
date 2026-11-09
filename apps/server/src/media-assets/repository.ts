@@ -4,9 +4,11 @@ import {
   updateMediaAssetDescriptions,
   insertMediaAsset,
   insertMediaAssetCredit,
+  insertMediaAssetImport,
 } from "./mutations.js"
 import {
   findMediaAssetById,
+  findMediaAssetImportByUrl,
   findMediaAssetPublicationAccess,
   listMediaAssetWikiArticles,
   listMediaAssetProfiles,
@@ -23,7 +25,9 @@ export class MediaAssetsRepository extends Context.Service<MediaAssetsRepository
       listMediaAssetWikiArticles,
       listMediaAssetProfiles,
       insertMediaAssetCredit,
+      insertMediaAssetImport,
       findMediaAssetById,
+      findMediaAssetImportByUrl,
     }),
   },
 ) {}

@@ -1,7 +1,8 @@
 import { Schema } from "effect"
 
 import { UrlAsString } from "../../common/primitives.js"
-import { ExternalDataProvider, ExternalLink, ExternalMedia } from "./common.js"
+import { CreditedMediaAssetRow } from "../../media-assets/domain.js"
+import { ExternalDataProvider, ExternalLink } from "./common.js"
 import { BookEdition } from "./kinds/book-external-data.js"
 import { GbifClassification } from "./kinds/plant-external-data.js"
 
@@ -21,6 +22,15 @@ export const ExternalTaxonomy = Schema.Struct({
   classification: Schema.Array(GbifClassification),
 })
 
+/** A provider's photo, served from our media assets, with the provider's page for it. */
+export const ExternalMediaAsset = Schema.Struct({
+  provider: ExternalDataProvider,
+  sourceUrl: UrlAsString,
+  mediaAsset: CreditedMediaAssetRow,
+})
+
+export type ExternalMediaAsset = typeof ExternalMediaAsset.Type
+
 /**
  * What providers' latest successful fetches stored for an article. Every list is empty, and
  * taxonomy null, for what a kind doesn't fetch.
@@ -29,7 +39,8 @@ export const WikiArticleExternalData = Schema.Struct({
   attributions: Schema.Array(ExternalDataAttribution),
   wikipediaLinks: Schema.Array(ExternalLink),
   taxonomy: Schema.NullOr(ExternalTaxonomy),
-  media: Schema.Array(ExternalMedia),
+  /** In the provider's order; censored media is left out. */
+  media: Schema.Array(ExternalMediaAsset),
   bookEditions: Schema.Array(BookEdition),
 })
 

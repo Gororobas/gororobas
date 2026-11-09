@@ -3,7 +3,14 @@ import { Duration, Schema } from "effect"
 
 import { ModerationStatus } from "../common/enums.js"
 import { MediaAssetId, PersonId, ProfileId } from "../common/ids.js"
-import { Handle, IntNonNegative, PositiveInteger, TimestampedStruct } from "../common/primitives.js"
+import {
+  Handle,
+  IntNonNegative,
+  PositiveInteger,
+  TimestampedStruct,
+  UrlAsString,
+} from "../common/primitives.js"
+import { ExternalDataProvider } from "../wiki/external-data/common.js"
 import { MediaAssetDescriptions } from "./attachments.js"
 
 // JSON stores milliseconds; reject durations that cannot round-trip through that representation.
@@ -61,7 +68,10 @@ const coreMediaAssetRowFields = {
   category: Schema.NullOr(Schema.String),
   descriptions: Schema.fromJsonString(MediaAssetDescriptions),
   moderationStatus: ModerationStatus,
-  ownerProfileId: ProfileId,
+  /** Who uploaded it; null for media imported from a provider. */
+  ownerProfileId: Schema.NullOr(ProfileId),
+  /** The license it's shared under, such as a provider's CC BY photo. Null for uploads. */
+  licenseUrl: Schema.NullOr(UrlAsString),
 }
 
 export const MediaAssetRow = Schema.Union([
@@ -83,6 +93,20 @@ export const MediaAssetRow = Schema.Union([
 ]).pipe(Schema.toTaggedUnion("format"))
 
 export type MediaAssetRow = typeof MediaAssetRow.Type
+
+/**
+ * Where media imported from a provider was downloaded from. Each file is imported once, so
+ * refreshes reuse the asset, and moderation decisions about it stick.
+ */
+export const MediaAssetImport = Schema.Struct({
+  mediaAssetId: MediaAssetId,
+  provider: ExternalDataProvider,
+  mediaUrl: UrlAsString,
+  /** The provider's page for the media, such as a GBIF occurrence. */
+  sourceUrl: UrlAsString,
+})
+
+export type MediaAssetImport = typeof MediaAssetImport.Type
 
 export const MediaAssetCredit = Schema.Struct({
   creditLine: Schema.NullOr(Schema.String),

@@ -99,7 +99,7 @@ export const galleryPhotos = ({
               width: asset.metadata.originalWidth,
               height: asset.metadata.originalHeight,
             }),
-            attribution: MediaCredit.uploadedMediaAttribution(asset),
+            attribution: MediaCredit.mediaAssetAttribution(asset),
           },
         ]
       : [],

@@ -5,8 +5,9 @@ import {
   GbifTaxonId,
   WikidataId,
 } from "../../../common/external-identifiers.js"
+import { MediaAssetId } from "../../../common/ids.js"
 import { OptionalColumn } from "../../../common/primitives.js"
-import { ExternalLink, ExternalMedia, Observation } from "../common.js"
+import { ExternalLink, Observation, ProviderPhoto } from "../common.js"
 import { ExternalDataFetchError } from "../error.js"
 
 export const GbifIdentifier = Schema.Union([
@@ -37,7 +38,7 @@ export const GbifPlantResult = Schema.Struct({
   gbifTaxonId: GbifTaxonId,
   taxonomyGroup: Schema.NullOr(Schema.String),
   classification: Schema.Array(GbifClassification),
-  media: Schema.Array(ExternalMedia),
+  photos: Schema.Array(ProviderPhoto),
 })
 
 /**
@@ -54,6 +55,11 @@ export const PlantExternalDataResult = Schema.Struct({
   attributes: Schema.Struct({
     wikidata: Schema.NullOr(Schema.Result(WikidataResult, ExternalDataFetchError)),
     gbif: Schema.NullOr(Schema.Result(GbifPlantResult, ExternalDataFetchError)),
+    /**
+     * GBIF's photos as our media assets, in its order. Photos that couldn't be imported are left
+     * out; empty unless GBIF succeeded.
+     */
+    gbifPhotos: Schema.Array(MediaAssetId),
   }),
 })
 

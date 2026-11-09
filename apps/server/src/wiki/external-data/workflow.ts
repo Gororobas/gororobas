@@ -15,7 +15,7 @@ import { persistBook } from "./kinds/book-persister.js"
 import { fetchPlant } from "./kinds/plant-fetcher.js"
 import { persistPlant } from "./kinds/plant-persister.js"
 
-export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v3", {
+export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v4", {
   payload: ExternalDataFetchRequest.fields,
   success: Schema.Void,
   error: ExternalDataFetchError,

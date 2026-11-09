@@ -1,20 +1,24 @@
 import { Schema } from "effect"
 
-import { PositiveInteger, UrlAsString } from "../../common/primitives.js"
+import { UrlAsString } from "../../common/primitives.js"
 
 export const ExternalDataProvider = Schema.Literals(["WIKIDATA", "GBIF", "GOOGLE_BOOKS"])
 
-export const ExternalMedia = Schema.Struct({
-  creditLine: Schema.String,
-  licenseUrl: Schema.NullOr(UrlAsString),
+/**
+ * A photo a provider lists for what an article is about, before it's imported into our media
+ * assets. Only photos with a license are listed.
+ */
+export const ProviderPhoto = Schema.Struct({
+  /** The image file, such as an iNaturalist photo GBIF links to. Imports are unique per URL. */
   mediaUrl: UrlAsString,
+  /** The provider's page for the photo, such as a GBIF occurrence. */
   sourceUrl: UrlAsString,
-  /** As displayed, read from the image itself: providers don't list them. Null when unreadable. */
-  width: Schema.NullOr(PositiveInteger),
-  height: Schema.NullOr(PositiveInteger),
+  /** Whom to credit, in order: its authors, or else whoever published it. */
+  credits: Schema.Array(Schema.String),
+  licenseUrl: UrlAsString,
 })
 
-export type ExternalMedia = typeof ExternalMedia.Type
+export type ProviderPhoto = typeof ProviderPhoto.Type
 
 export const Observation = Schema.Struct({
   provider: ExternalDataProvider,

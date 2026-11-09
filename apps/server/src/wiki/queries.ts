@@ -1,7 +1,6 @@
 import {
   BookmarkState,
   CreditedMediaAssetRow,
-  UrlAsString,
   WikiArticleExternalData,
   PersonId,
   SupportedLanguage,
@@ -393,7 +392,6 @@ const QueriedCardRow = Schema.Struct({
   scientificNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.scientificNames),
   parentPlantName: OptionalColumn(Schema.fromJsonString(WikiArticleCommonName)),
   thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
-  externalThumbnailUrl: OptionalColumn(UrlAsString),
 })
 
 /** Cards of published articles, each in its translation that best matches `language`. */
@@ -408,10 +406,13 @@ const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql
     END AS parent_plant_name,
     (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
       ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
-    (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
-      WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id,
-    (SELECT e.media_url FROM wiki_article_external_media e WHERE e.wiki_article_id = a.id
-      ORDER BY e.order_index LIMIT 1) AS external_thumbnail_url
+    coalesce(
+      (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
+        WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED'),
+      (SELECT m.id FROM wiki_article_external_media e JOIN media_assets m ON m.id = e.media_asset_id
+        WHERE e.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED'
+        ORDER BY e.provider, e.order_index LIMIT 1)
+    ) AS thumbnail_media_asset_id
   FROM ${wikiArticleProjectionsWithStatus(sql)} a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
   WHERE a.status = 'PUBLISHED' AND t.language = (
     SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id

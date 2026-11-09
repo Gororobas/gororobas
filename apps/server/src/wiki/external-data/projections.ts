@@ -25,7 +25,8 @@ export const clearProviderExternalData = Effect.fn(function* (
     Match.when("GBIF", () =>
       Effect.all(
         [
-          sql`DELETE FROM wiki_article_external_media WHERE wiki_article_id = ${wikiArticleId}`,
+          // Only the links: the media stays, to be linked again if GBIF lists it again.
+          sql`DELETE FROM wiki_article_external_media WHERE wiki_article_id = ${wikiArticleId} AND provider = 'GBIF'`,
           sql`DELETE FROM wiki_plant_taxonomy_classification WHERE wiki_article_id = ${wikiArticleId}`,
           sql`DELETE FROM wiki_plant_taxonomy_group WHERE wiki_article_id = ${wikiArticleId}`,
         ],

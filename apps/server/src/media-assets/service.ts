@@ -1,5 +1,6 @@
 import {
   MediaAssetId,
+  type MediaAssetImport,
   MediaAssetRow,
   MediaAssetRequest,
   InvalidMediaAssetError,
@@ -13,11 +14,24 @@ import {
   type ModerationDecision,
   currentSession,
 } from "@gororobas/domain"
-import { Record, Context, DateTime, Effect, Option, Schema, Array as EffectArray } from "effect"
+import {
+  Record,
+  Context,
+  DateTime,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+  Array as EffectArray,
+} from "effect"
 import { SqlClient } from "effect/sql"
 
 import { moderateContent } from "../moderation/moderate-content.js"
-import { processMediaAsset, readMediaAssetMetadata } from "./processing.js"
+import {
+  detectImportableImageType,
+  processMediaAsset,
+  readMediaAssetMetadata,
+} from "./processing.js"
 import { MediaAssetsRepository } from "./repository.js"
 import { MediaAssetsStorage } from "./storage.js"
 
@@ -185,6 +199,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
                       ? { format: stored.metadata.format, metadata: stored.metadata }
                       : { format: stored.metadata.format, metadata: stored.metadata }),
                   ownerProfileId: ProfileId.make(session.personId),
+                  licenseUrl: null,
                   category: null,
                   descriptions: {},
                   moderationStatus: "APPROVED_BY_DEFAULT",
@@ -193,6 +208,75 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
                 })
 
                 yield* repository.insertMediaAsset(mediaAsset)
+
+                return mediaAsset
+              }).pipe(
+                (effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)),
+                Effect.onError(() => storage.remove(id).pipe(Effect.orDie)),
+              )
+            }),
+          )
+        })
+
+      /**
+       * Stores a provider's image as media no profile owns, credited and licensed as the provider
+       * lists it. Like uploads, it's approved by default and can be censored.
+       */
+      const importFromProvider = (input: {
+        file: Uint8Array
+        origin: Omit<MediaAssetImport, "mediaAssetId">
+        credits: ReadonlyArray<string>
+        licenseUrl: string
+      }) =>
+        Effect.gen(function* () {
+          const contentType = yield* detectImportableImageType(input.file).pipe(
+            Effect.mapError(
+              () => new InvalidMediaAssetError({ message: "File is not an importable image" }),
+            ),
+          )
+
+          const id = yield* IdGen.make(MediaAssetId)
+          const now = yield* DateTime.now
+
+          return yield* Effect.uninterruptibleMask(() =>
+            Effect.gen(function* () {
+              const stored = yield* prepare({ id, file: input.file, contentType })
+
+              return yield* Effect.gen(function* () {
+                if (stored.metadata.format !== "IMAGE") {
+                  return yield* new InvalidMediaAssetError({ message: "Imports must be images" })
+                }
+
+                const mediaAsset = yield* Schema.decodeEffect(Schema.toType(MediaAssetRow))({
+                  id,
+                  format: stored.metadata.format,
+                  metadata: stored.metadata,
+                  contentType: stored.contentType,
+                  byteSize: stored.byteSize,
+                  ownerProfileId: null,
+                  licenseUrl: input.licenseUrl,
+                  category: null,
+                  descriptions: {},
+                  moderationStatus: "APPROVED_BY_DEFAULT",
+                  createdAt: now,
+                  updatedAt: now,
+                })
+
+                yield* repository.insertMediaAsset(mediaAsset)
+                yield* repository.insertMediaAssetImport({ mediaAssetId: id, ...input.origin })
+
+                yield* Effect.forEach(
+                  input.credits,
+                  (creditLine, orderIndex) =>
+                    repository.insertMediaAssetCredit({
+                      mediaAssetId: id,
+                      orderIndex,
+                      creditLine,
+                      creditUrl: null,
+                      personId: null,
+                    }),
+                  { concurrency: 1, discard: true },
+                )
 
                 return mediaAsset
               }).pipe(
@@ -230,6 +314,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
 
       return {
         upload,
+        importFromProvider,
         getMediaForAttachment,
         moderate,
         prepare,
@@ -239,3 +324,12 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
     }),
   },
 ) {}
+
+/** The service with the repository and storage it runs on, for the API and workflows alike. */
+export const MediaAssetsServiceLive = Layer.effect(
+  MediaAssetsService,
+  MediaAssetsService.make,
+).pipe(
+  Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+  Layer.provideMerge(Layer.effect(MediaAssetsStorage, MediaAssetsStorage.make)),
+)

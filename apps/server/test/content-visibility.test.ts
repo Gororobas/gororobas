@@ -88,6 +88,7 @@ const insertPublicationImage = (input: {
       descriptions: {},
       moderationStatus: input.moderationStatus,
       ownerProfileId: input.ownerProfileId,
+      licenseUrl: null,
       createdAt: now,
       updatedAt: now,
     })

@@ -201,11 +201,22 @@ CREATE TABLE media_assets (
   moderation_status text NOT NULL, -- ModerationStatus
   created_at text NOT NULL,
   updated_at text NOT NULL,
-  owner_profile_id text NOT NULL,
+  owner_profile_id text, -- null for media imported from a provider (see media_asset_imports)
+  license_url text, -- the license it's shared under; null for uploads
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_media_assets_owner_profile_id ON media_assets (owner_profile_id);
+
+-- Where media imported from a provider was downloaded from. Each file is imported once: refreshes
+-- reuse its asset, so moderation decisions about it stick.
+CREATE TABLE media_asset_imports (
+  media_asset_id text NOT NULL PRIMARY KEY,
+  provider text NOT NULL, -- ExternalDataProvider
+  media_url text NOT NULL UNIQUE,
+  source_url text NOT NULL, -- the provider's page for the media
+  FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
+);
 
 CREATE TABLE media_asset_credits (
   media_asset_id text NOT NULL,
@@ -349,7 +360,7 @@ CREATE INDEX idx_wiki_article_relations_related ON wiki_article_relations (relat
 -- ================
 -- WIKI ARTICLE MEDIA UPLOADED IN THE APP
 -- ================
--- External source media lives in wiki_article_external_media.
+-- Providers' photos are linked through wiki_article_external_media.
 CREATE TABLE wiki_article_media_assets (
   wiki_article_id text NOT NULL,
   media_asset_id text NOT NULL,
@@ -593,19 +604,18 @@ CREATE TABLE wiki_plant_taxonomy_classification (
 
 CREATE INDEX idx_plant_classification ON wiki_plant_taxonomy_classification (taxon_rank, scientific_name);
 
--- Photos providers have of what an article is about. The first stands in for the article's own
--- main photo while it has none.
+-- Photos providers have of what an article is about, imported into media assets. The first stands
+-- in for the article's own main photo while it has none. A refresh replaces a provider's links;
+-- the assets stay, to be linked again if the provider lists them again.
 CREATE TABLE wiki_article_external_media (
   wiki_article_id text NOT NULL REFERENCES wiki_article_sources (id) ON DELETE CASCADE,
+  provider text NOT NULL, -- ExternalDataProvider
   order_index integer NOT NULL, -- the provider's order
-  media_url text NOT NULL,
-  source_url text NOT NULL,
-  credit_line text NOT NULL,
-  license_url text,
-  width integer,
-  height integer,
-  PRIMARY KEY (wiki_article_id, media_url)
+  media_asset_id text NOT NULL REFERENCES media_assets (id) ON DELETE CASCADE,
+  PRIMARY KEY (wiki_article_id, media_asset_id)
 );
+
+CREATE INDEX idx_wiki_article_external_media_media_asset_id ON wiki_article_external_media (media_asset_id);
 
 CREATE TABLE wiki_book_editions (
   wiki_article_id text NOT NULL REFERENCES wiki_article_sources (id) ON DELETE CASCADE,

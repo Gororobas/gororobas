@@ -24,6 +24,8 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **External data observation**: one provider's answer to one external data fetch for a wiki article, stored with the article frontier and inputs it was fetched for: the raw responses on success, the `ExternalDataFetchError` on failure (`wiki_article_external_data_observations`). Projections such as Wikipedia links, GBIF media and book editions are replaced only by successful observations.
 
+**Imported media**: a provider's photo downloaded into our own media assets by the external data fetch, so it's served at every size like uploads (`importProviderPhotos`, `apps/server/src/wiki/external-data/photo-imports.ts`). It has no owner profile, carries the provider's credits and license (`media_assets.license_url`), and `media_asset_imports` records the file it came from: each file is imported once, and refreshes link the same asset again. Articles link to it through `wiki_article_external_media`; a refresh that no longer lists it removes only the link. Like uploads, it's approved by default and can be censored.
+
 **External ID resolution**: proposing which provider record (a Wikidata item, a Google Books volume) an article is about when the article has no ID, with the evidence that found it (`ExternalIdResolution`, `apps/server/src/wiki/external-data/id-resolution.ts`). Resolution never edits articles; assigning the ID is an edit for a person to review.
 
 ## Places

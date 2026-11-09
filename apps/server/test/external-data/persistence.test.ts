@@ -2,27 +2,49 @@ import { assert, describe, expect, it } from "@effect/vitest"
 import {
   BookExternalDataResult,
   ExternalDataFetchError,
+  ExternalDataFetchRequest,
   GbifPlantResult,
+  IdGen,
   LoroDocFrontier,
+  MediaAssetId,
   PlantExternalDataResult,
+  type ProviderPhoto,
+  TransformedImageWidthBreakpoints,
   WikiArticleEditableData,
   WikidataResult,
 } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
-import { ConfigProvider, DateTime, Duration, Effect, Layer, Option, Result, Schema } from "effect"
+import {
+  ConfigProvider,
+  DateTime,
+  Duration,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Result,
+  Schema,
+} from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { HttpClient, HttpClientResponse } from "effect/http"
 import { SqlClient } from "effect/sql"
+import sharp from "sharp"
 
+import { withMediaCredits } from "../../src/media-assets/credits.js"
+import { MediaAssetsRepository } from "../../src/media-assets/repository.js"
+import { MediaAssetsService } from "../../src/media-assets/service.js"
+import { MediaAssetsStorage } from "../../src/media-assets/storage.js"
 import { getWikiArticleDebug } from "../../src/wiki/debug.js"
 import { buildExternalDataRequest } from "../../src/wiki/external-data/inputs.js"
 import { persistBook } from "../../src/wiki/external-data/kinds/book-persister.js"
 import { persistPlant } from "../../src/wiki/external-data/kinds/plant-persister.js"
+import { importProviderPhotos } from "../../src/wiki/external-data/photo-imports.js"
+import { findExternalData } from "../../src/wiki/external-data/queries.js"
 import { findArticlesDueForExternalData } from "../../src/wiki/external-data/refresh.js"
 import { ExternalDataReport, reportExternalData } from "../../src/wiki/external-data/report.js"
 import { GbifLive } from "../../src/wiki/external-data/services/gbif.js"
 import { GoogleBooksLive } from "../../src/wiki/external-data/services/google-books.js"
-import { ImageDimensionsLive } from "../../src/wiki/external-data/services/image-dimensions.js"
+import { ProviderPhotoDownloaderLive } from "../../src/wiki/external-data/services/provider-photo-downloader.js"
 import { WikidataLive } from "../../src/wiki/external-data/services/wikidata.js"
 import {
   FetchArticleExternalData,
@@ -83,21 +105,68 @@ const gbif = GbifPlantResult.make({
   gbifTaxonId: "4Y369",
   taxonomyGroup: "Angiosperms",
   classification: [{ taxonId: "6W", scientificName: "Solanaceae", taxonRank: "FAMILY" }],
-  media: [
+  photos: [
     {
       mediaUrl: "https://example.org/tomato.jpg",
       sourceUrl: "https://www.gbif.org/occurrence/1",
-      creditLine: "Photographer",
-      licenseUrl: null,
-      width: 1024,
-      height: 768,
+      credits: ["Photographer"],
+      licenseUrl: "http://creativecommons.org/licenses/by/4.0/",
     },
   ],
 })
 
-const successfulPlant = PlantExternalDataResult.make({
-  kind: "PLANT",
-  attributes: { wikidata: Result.succeed(wikidata), gbif: Result.succeed(gbif) },
+/** A provider's photo as the fetch workflow imports it, without its files. */
+const insertImportedPhoto = Effect.fn(function* (credits: ReadonlyArray<string> = []) {
+  const repository = yield* MediaAssetsRepository
+  const id = yield* IdGen.make(MediaAssetId)
+  const now = yield* DateTime.now
+
+  yield* repository.insertMediaAsset({
+    id,
+    format: "IMAGE",
+    metadata: { format: "IMAGE", originalWidth: 1024, originalHeight: 768 },
+    contentType: "image/jpeg",
+    byteSize: 1,
+    category: null,
+    descriptions: {},
+    moderationStatus: "APPROVED_BY_DEFAULT",
+    ownerProfileId: null,
+    licenseUrl: "http://creativecommons.org/licenses/by/4.0/",
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  yield* repository.insertMediaAssetImport({
+    mediaAssetId: id,
+    provider: "GBIF",
+    mediaUrl: `https://example.org/photos/${id}.jpg`,
+    sourceUrl: "https://www.gbif.org/occurrence/1",
+  })
+
+  yield* Effect.forEach(
+    credits,
+    (creditLine, orderIndex) =>
+      repository.insertMediaAssetCredit({
+        mediaAssetId: id,
+        orderIndex,
+        creditLine,
+        creditUrl: null,
+        personId: null,
+      }),
+    { concurrency: 1, discard: true },
+  )
+
+  return id
+})
+
+const successfulPlant = (gbifPhotos: ReadonlyArray<MediaAssetId>) =>
+  PlantExternalDataResult.make({
+    kind: "PLANT",
+    attributes: { wikidata: Result.succeed(wikidata), gbif: Result.succeed(gbif), gbifPhotos },
+  })
+
+const persistSuccessfulPlant = Effect.fn(function* (request: ExternalDataFetchRequest) {
+  yield* persistPlant(request, successfulPlant([yield* insertImportedPhoto()]))
 })
 
 describe("external data persistence", () => {
@@ -106,7 +175,7 @@ describe("external data persistence", () => {
       Effect.gen(function* () {
         const request = yield* createArticle()
         const sql = yield* SqlClient.SqlClient
-        yield* persistPlant(request, successfulPlant)
+        yield* persistSuccessfulPlant(request)
         const before =
           yield* sql`SELECT * FROM wiki_article_external_media WHERE wiki_article_id = ${request.wikiArticleId}`
 
@@ -118,6 +187,7 @@ describe("external data persistence", () => {
               wikidata:
                 failedProvider === "WIKIDATA" ? Result.fail(failure) : Result.succeed(wikidata),
               gbif: failedProvider === "WIKIDATA" ? null : Result.fail(failure),
+              gbifPhotos: [],
             },
           }),
         )
@@ -141,10 +211,15 @@ describe("external data persistence", () => {
   it.effect("reports what each provider stored and why the latest fetch failed", () =>
     Effect.gen(function* () {
       const request = yield* createArticle()
-      yield* persistPlant(request, successfulPlant)
+      yield* persistSuccessfulPlant(request)
+
       yield* persistPlant(request, {
         kind: "PLANT",
-        attributes: { wikidata: Result.succeed(wikidata), gbif: Result.fail(failure) },
+        attributes: {
+          wikidata: Result.succeed(wikidata),
+          gbif: Result.fail(failure),
+          gbifPhotos: [],
+        },
       })
 
       const [report] = yield* reportExternalData([request.wikiArticleId])
@@ -190,19 +265,38 @@ describe("external data persistence", () => {
     Effect.gen(function* () {
       const request = yield* createArticle()
       const sql = yield* SqlClient.SqlClient
-      yield* persistPlant(request, successfulPlant)
+      yield* persistSuccessfulPlant(request)
 
       yield* persistPlant(request, {
         kind: "PLANT",
         attributes: {
           wikidata: Result.succeed({ ...wikidata, wikipediaLinks: [] }),
-          gbif: Result.succeed({ ...gbif, media: [], classification: [] }),
+          gbif: Result.succeed({ ...gbif, photos: [], classification: [] }),
+          gbifPhotos: [],
         },
       })
 
       expect(yield* sql`SELECT * FROM wiki_article_external_media`).toEqual([])
       expect(yield* sql`SELECT * FROM wiki_article_external_links`).toEqual([])
       expect(yield* sql`SELECT * FROM wiki_plant_taxonomy_classification`).toEqual([])
+    }).pipe(Effect.provide(TestLayerWithServices)),
+  )
+
+  it.effect("unlinks photos a refresh no longer lists, keeping their media", () =>
+    Effect.gen(function* () {
+      const request = yield* createArticle()
+      const sql = yield* SqlClient.SqlClient
+      const [kept, dropped] = [yield* insertImportedPhoto(), yield* insertImportedPhoto()]
+
+      yield* persistPlant(request, successfulPlant([dropped, kept]))
+      yield* persistPlant(request, successfulPlant([kept]))
+
+      expect(
+        yield* sql`SELECT media_asset_id, order_index FROM wiki_article_external_media WHERE wiki_article_id = ${request.wikiArticleId}`,
+      ).toEqual([{ mediaAssetId: kept, orderIndex: 0 }])
+      expect(
+        yield* sql`SELECT id FROM media_assets WHERE ${sql.in("id", [kept, dropped])}`,
+      ).toHaveLength(2)
     }).pipe(Effect.provide(TestLayerWithServices)),
   )
 
@@ -259,14 +353,18 @@ describe("external data persistence", () => {
     Effect.gen(function* () {
       const request = yield* createArticle()
       const sql = yield* SqlClient.SqlClient
-      yield* persistPlant(request, successfulPlant)
+      yield* persistSuccessfulPlant(request)
       const observations = yield* sql`SELECT * FROM wiki_article_external_data_observations`
 
       yield* persistPlant(
         { ...request, articleCrdtFrontier: LoroDocFrontier.make([]) },
         {
           kind: "PLANT",
-          attributes: { wikidata: Result.succeed({ ...wikidata, wikipediaLinks: [] }), gbif: null },
+          attributes: {
+            wikidata: Result.succeed({ ...wikidata, wikipediaLinks: [] }),
+            gbif: null,
+            gbifPhotos: [],
+          },
         },
       )
 
@@ -285,7 +383,7 @@ describe("external data persistence", () => {
 
       yield* persistPlant(
         { ...request, inputs: { ...request.inputs, wikidataId: Option.some("Q1353278") } },
-        successfulPlant,
+        successfulPlant([yield* insertImportedPhoto()]),
       )
 
       expect(yield* sql`SELECT * FROM wiki_article_external_data_observations`).toEqual([])
@@ -309,14 +407,14 @@ describe("external data persistence", () => {
         expect(yield* due()).toEqual([
           { wikiArticleId: request.wikiArticleId, refreshGeneration: "initial" },
         ])
-        yield* persistPlant(request, successfulPlant)
+        yield* persistSuccessfulPlant(request)
         expect(yield* due()).toEqual([])
         const sql = yield* SqlClient.SqlClient
         yield* sql`UPDATE wiki_article_external_data_observations SET observed_at = ${DateTime.formatIso(DateTime.subtractDuration(now, Duration.days(15)))}`
         expect(yield* due()).toHaveLength(1)
         yield* persistPlant(request, {
           kind: "PLANT",
-          attributes: { wikidata: Result.fail(failure), gbif: null },
+          attributes: { wikidata: Result.fail(failure), gbif: null, gbifPhotos: [] },
         })
         yield* sql`DELETE FROM wiki_article_external_data_observations WHERE provider = 'GBIF'`
         expect(yield* due()).toEqual([])
@@ -366,6 +464,7 @@ describe("external data persistence", () => {
         attributes: {
           wikidata: Result.succeed({ ...wikidata, observation }),
           gbif: null,
+          gbifPhotos: [],
         },
       })
 
@@ -405,26 +504,20 @@ describe("external data persistence", () => {
         options: { runs: 20 },
         predicate: (creditLines) =>
           Effect.gen(function* () {
-            const media = creditLines.map((creditLine, index) => ({
-              ...gbif.media[0],
-              mediaUrl: `https://example.org/photo/${index}.jpg`,
-              creditLine,
-            }))
+            const gbifPhotos = yield* Effect.forEach(
+              creditLines,
+              (creditLine) => insertImportedPhoto([creditLine]),
+              { concurrency: 1 },
+            )
 
-            yield* persistPlant(request, {
-              kind: "PLANT",
-              attributes: {
-                wikidata: Result.succeed(wikidata),
-                gbif: Result.succeed({ ...gbif, media }),
-              },
-            })
+            yield* persistPlant(request, successfulPlant(gbifPhotos))
 
             const sql = yield* SqlClient.SqlClient
             const before =
               yield* sql`SELECT * FROM wiki_article_external_media WHERE wiki_article_id = ${request.wikiArticleId}`
             yield* persistPlant(request, {
               kind: "PLANT",
-              attributes: { wikidata: null, gbif: Result.fail(failure) },
+              attributes: { wikidata: null, gbif: Result.fail(failure), gbifPhotos: [] },
             })
             expect(
               yield* sql`SELECT * FROM wiki_article_external_media WHERE wiki_article_id = ${request.wikiArticleId}`,
@@ -442,7 +535,7 @@ const failedHttp = HttpClient.make((request) =>
 
 const workflowLayer = FetchArticleExternalDataLive.pipe(
   Layer.provide(
-    Layer.mergeAll(WikidataLive, GbifLive, GoogleBooksLive, ImageDimensionsLive).pipe(
+    Layer.mergeAll(WikidataLive, GbifLive, GoogleBooksLive, ProviderPhotoDownloaderLive).pipe(
       Layer.provide(Layer.succeed(HttpClient.HttpClient, failedHttp)),
     ),
   ),
@@ -468,5 +561,137 @@ describe("external data workflow", () => {
         yield* FetchArticleExternalData.execute(refresh)
         expect(yield* sql`SELECT * FROM wiki_article_external_data_observations`).toHaveLength(2)
       }).pipe(Effect.provide(workflowLayer)),
+  )
+})
+
+describe("provider photos", () => {
+  it.effect("are served to anyone once an article shows them, credited and licensed", () =>
+    Effect.gen(function* () {
+      const request = yield* createArticle()
+      const sql = yield* SqlClient.SqlClient
+      const media = yield* MediaAssetsService
+      const [shown, censored] = [
+        yield* insertImportedPhoto(["Ana", "Instituto"]),
+        yield* insertImportedPhoto(),
+      ]
+      const view = (id: MediaAssetId) =>
+        withSession(media.getRow(id), { type: "VISITOR" }).pipe(Effect.result)
+
+      expect(Result.isFailure(yield* view(shown))).toBe(true)
+
+      yield* persistPlant(request, successfulPlant([censored, shown]))
+      yield* sql`UPDATE media_assets SET moderation_status = 'CENSORED' WHERE id = ${censored}`
+
+      expect(Result.isSuccess(yield* view(shown))).toBe(true)
+      expect(Result.isFailure(yield* view(censored))).toBe(true)
+
+      const { media: photos } = yield* findExternalData(request.wikiArticleId)
+
+      expect(photos).toEqual([
+        {
+          provider: "GBIF",
+          sourceUrl: "https://www.gbif.org/occurrence/1",
+          mediaAsset: expect.objectContaining({
+            id: shown,
+            ownerProfileId: null,
+            licenseUrl: "http://creativecommons.org/licenses/by/4.0/",
+            credits: [
+              { profile: null, creditLine: "Ana", creditUrl: null },
+              { profile: null, creditLine: "Instituto", creditUrl: null },
+            ],
+          }),
+        },
+      ])
+    }).pipe(Effect.provide(TestLayerWithServices)),
+  )
+
+  it.live("are downloaded once, at every size, and skipped when they can't be imported", () =>
+    Effect.gen(function* () {
+      const png = new Uint8Array(
+        yield* Effect.tryPromise(() =>
+          sharp({ create: { width: 640, height: 480, channels: 3, background: "#6b8e23" } })
+            .png()
+            .toBuffer(),
+        ),
+      )
+
+      const requested: Array<string> = []
+
+      const http = HttpClient.make((request) =>
+        Effect.sync(() => {
+          requested.push(request.url)
+
+          return HttpClientResponse.fromWeb(
+            request,
+            request.url.endsWith("missing.jpg")
+              ? new Response("", { status: 404 })
+              : request.url.endsWith("page.jpg")
+                ? new Response("<html></html>", { status: 200 })
+                : new Response(png, { status: 200 }),
+          )
+        }),
+      )
+
+      const photo = (name: string): ProviderPhoto => ({
+        mediaUrl: `https://example.org/${name}`,
+        sourceUrl: `https://www.gbif.org/occurrence/${name}`,
+        credits: ["Ana"],
+        licenseUrl: "http://creativecommons.org/licenses/by/4.0/",
+      })
+
+      const photos = ["a.jpg", "missing.jpg", "page.jpg", "b.jpg"].map(photo)
+
+      const imported = yield* importProviderPhotos("GBIF", photos).pipe(
+        Effect.provide(ProviderPhotoDownloaderLive),
+        Effect.provideService(HttpClient.HttpClient, http),
+      )
+      expect(imported).toHaveLength(2)
+
+      const refreshed = yield* importProviderPhotos("GBIF", photos).pipe(
+        Effect.provide(ProviderPhotoDownloaderLive),
+        Effect.provideService(HttpClient.HttpClient, http),
+      )
+      expect(refreshed).toEqual(imported)
+      // Only the photos that failed are requested again.
+      expect(requested.filter((url) => url.endsWith("a.jpg"))).toHaveLength(1)
+      expect(requested.filter((url) => url.endsWith("missing.jpg"))).toHaveLength(2)
+
+      const repository = yield* MediaAssetsRepository
+
+      const assets = yield* Effect.forEach(
+        imported,
+        (id) => Effect.map(repository.findMediaAssetById(id), Option.getOrThrow),
+        { concurrency: 1 },
+      )
+
+      const [first] = yield* withMediaCredits(assets)
+
+      expect(first).toMatchObject({
+        format: "IMAGE",
+        contentType: "image/png",
+        ownerProfileId: null,
+        licenseUrl: "http://creativecommons.org/licenses/by/4.0/",
+        moderationStatus: "APPROVED_BY_DEFAULT",
+        credits: [{ profile: null, creditLine: "Ana", creditUrl: null }],
+      })
+
+      expect(
+        Option.map(
+          yield* repository.findMediaAssetImportByUrl("https://example.org/a.jpg"),
+          ({ mediaAssetId }) => mediaAssetId,
+        ),
+      ).toEqual(Option.some(first?.id))
+
+      const storage = yield* MediaAssetsStorage
+      const fileSystem = yield* FileSystem.FileSystem
+
+      const sizes = yield* Effect.forEach(
+        TransformedImageWidthBreakpoints.literals,
+        (width) => fileSystem.exists(storage.filePath(first?.id ?? imported[0], `${width}.avif`)),
+        { concurrency: 1 },
+      )
+
+      expect(sizes.every(Boolean)).toBe(true)
+    }).pipe(Effect.provide(TestLayerWithServices)),
   )
 })

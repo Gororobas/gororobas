@@ -3,6 +3,7 @@ import { Layer } from "effect"
 import { PublicationLinkInferenceWorkflowLayer } from "./link-inference/publication-link-inference-workflow.js"
 import { WikiArticleLinkInferenceWorkflowLayer } from "./link-inference/wiki-article-link-inference-workflow.js"
 import { MediaDeletionWorkflowLayer } from "./media-assets/media-deletion-workflow.js"
+import { MediaAssetsServiceLive } from "./media-assets/service.js"
 import { MediaAssetsStorage } from "./media-assets/storage.js"
 import { PublicationCommentTranslationWorkflowLayer } from "./translation/publication-comment-translation-workflow.js"
 import { PublicationTranslationWorkflowLayer } from "./translation/publication-translation-workflow.js"
@@ -21,6 +22,9 @@ export const WorkflowsLive = Layer.mergeAll(
   PublicationCommentTranslationWorkflowLayer,
   PublicationLinkInferenceWorkflowLayer.pipe(Layer.provide(WikiArticlesRepositoryLive)),
   WikiArticleLinkInferenceWorkflowLayer.pipe(Layer.provide(WikiArticlesRepositoryLive)),
-  FetchArticleExternalDataLive.pipe(Layer.provide(ExternalDataProvidersLive)),
+  FetchArticleExternalDataLive.pipe(
+    Layer.provide(ExternalDataProvidersLive),
+    Layer.provide(MediaAssetsServiceLive),
+  ),
   ExternalDataRefreshLive,
 )

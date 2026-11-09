@@ -319,6 +319,7 @@ export const insertImage = (
       descriptions: {},
       moderationStatus: "APPROVED_BY_DEFAULT",
       ownerProfileId,
+      licenseUrl: null,
       createdAt: now,
       updatedAt: now,
     })

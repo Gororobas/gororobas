@@ -10,7 +10,7 @@ import { wikiArticleUrl } from "../../app/route"
 import { type Translator, translatorFor } from "../../lib/translations"
 import { bookmarkVocabularies, wikiKindLabels } from "../../lib/vocabulary"
 import { nameParts, primaryName } from "../../lib/wiki-article-names"
-import { externalImageUrl, imageUrl } from "../../media-urls"
+import { imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import * as Icons from "../icons"
 import { iconSizeProperty } from "../icons/icon-size"
@@ -157,10 +157,7 @@ const bookmarkLabel = (config: WikiArticleRowConfig, i18n: Translator): Option.O
 
 /** The article's main photo, or a provider's while it has none. */
 const thumbnailSrc = (article: WikiArticleQueriedCardData): Option.Option<string> =>
-  Option.orElse(
-    Option.map(article.thumbnailMediaAssetId, (id) => imageUrl(id, 300)),
-    () => Option.map(article.externalThumbnailUrl, (url) => externalImageUrl(url, 300)),
-  )
+  Option.map(article.thumbnailMediaAssetId, (id) => imageUrl(id, 300))
 
 /** One article in a results grid. Without a photo, its kind's icon stands in. */
 const card = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Message>): Html => {

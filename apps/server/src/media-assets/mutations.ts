@@ -1,4 +1,4 @@
-import { MediaAssetCredit, MediaAssetRow } from "@gororobas/domain"
+import { MediaAssetCredit, MediaAssetImport, MediaAssetRow } from "@gororobas/domain"
 import { SqlClient, SqlSchema } from "effect/sql"
 
 export const insertMediaAsset = SqlSchema.void({
@@ -11,6 +11,12 @@ export const insertMediaAssetCredit = SqlSchema.void({
   Request: MediaAssetCredit,
   execute: (row) =>
     SqlClient.SqlClient.use((sql) => sql`INSERT INTO media_asset_credits ${sql.insert(row)}`),
+})
+
+export const insertMediaAssetImport = SqlSchema.void({
+  Request: MediaAssetImport,
+  execute: (row) =>
+    SqlClient.SqlClient.use((sql) => sql`INSERT INTO media_asset_imports ${sql.insert(row)}`),
 })
 
 export const updateMediaAssetDescriptions = SqlSchema.void({

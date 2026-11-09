@@ -2,13 +2,7 @@ import { Array as EffectArray, Match, Option, Schema } from "effect"
 
 import { SupportedLanguage, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { MediaAssetId, PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
-import {
-  Handle,
-  OptionalColumn,
-  TimestampColumn,
-  TimestampedStruct,
-  UrlAsString,
-} from "../common/primitives.js"
+import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { toSearchableText } from "../common/utils/strings.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { tiptapToText } from "../rich-text/tiptap-to-text.js"
@@ -135,9 +129,8 @@ export type WikiArticleQueriedPageRow = typeof WikiArticleQueriedPageRow.Type
 
 export const WikiArticleQueriedCardData = Schema.Struct({
   id: WikiArticleId,
+  /** The article's main photo, or a provider's while it has none. */
   thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
-  /** A provider's photo, for cards of articles without one of their own. */
-  externalThumbnailUrl: OptionalColumn(UrlAsString),
   handle: Handle,
   kind: WikiArticleKind,
   commonNames: Schema.Array(WikiArticleCommonName),

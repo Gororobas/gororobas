@@ -4,6 +4,7 @@ import {
   IntNonNegative,
   MediaAssetDescriptions,
   MediaAssetId,
+  type MediaAssetImport,
   ModerationStatus,
   type PersonId,
   type ProfileId,
@@ -161,6 +162,13 @@ export interface CreateMediaInput {
   readonly creditablePeople: ReadonlyArray<PersonId>
 }
 
+export interface CreateImportedMediaInput {
+  readonly at: number
+  readonly origin: Omit<MediaAssetImport, "mediaAssetId">
+  readonly credits: ReadonlyArray<string>
+  readonly licenseUrl: string
+}
+
 export const makeSeedMedia = (input: { poolSize: number; timeline: SeedTimeline }) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem
@@ -168,37 +176,48 @@ export const makeSeedMedia = (input: { poolSize: number; timeline: SeedTimeline 
     const storage = yield* MediaAssetsStorage
     const pool = yield* preparePool(input.poolSize)
 
+    /** A new asset served from a random pool entry, with its row's file metadata. */
+    const poolAsset = Effect.gen(function* () {
+      const entry = yield* pickOption(pool)
+      if (!entry) return yield* Effect.die("The seed media pool is empty")
+
+      const id = yield* IdGen.make(MediaAssetId)
+
+      // Reseeding with the same seed and anchor reproduces identifiers, and their links.
+      const link = path.join(storage.root, id)
+      if (!(yield* fileSystem.exists(link))) {
+        yield* fileSystem.symlink(path.join(POOL_DIRECTORY, entry.id), link)
+      }
+
+      return {
+        id,
+        format: "IMAGE" as const,
+        metadata: entry.metadata,
+        contentType: entry.contentType,
+        byteSize: entry.byteSize,
+      }
+    })
+
+    const moderationStatus = pickWeighted(ModerationStatus.literals, {
+      APPROVED_BY_DEFAULT: 90,
+      CENSORED: 4,
+      REAPPROVED_AFTER_CENSORING: 3,
+    })
+
     const create = ({ ownerProfileId, at, creditablePeople }: CreateMediaInput) =>
       input.timeline.at(at)(
         Effect.gen(function* () {
-          const entry = yield* pickOption(pool)
-          if (!entry) return yield* Effect.die("The seed media pool is empty")
-
-          const id = yield* IdGen.make(MediaAssetId)
+          const asset = yield* poolAsset
           const now = yield* DateTime.now
-
-          // Reseeding with the same seed and anchor reproduces identifiers, and their links.
-          const link = path.join(storage.root, id)
-          if (!(yield* fileSystem.exists(link))) {
-            yield* fileSystem.symlink(path.join(POOL_DIRECTORY, entry.id), link)
-          }
-
           const repository = yield* MediaAssetsRepository
 
           yield* repository.insertMediaAsset({
-            id,
-            format: "IMAGE",
-            metadata: entry.metadata,
-            contentType: entry.contentType,
-            byteSize: entry.byteSize,
+            ...asset,
             category: (yield* chance(0.6)) ? yield* pick(MEDIA_CATEGORIES) : null,
             descriptions: yield* mediaDescriptions,
-            moderationStatus: yield* pickWeighted(ModerationStatus.literals, {
-              APPROVED_BY_DEFAULT: 90,
-              CENSORED: 4,
-              REAPPROVED_AFTER_CENSORING: 3,
-            }),
+            moderationStatus: yield* moderationStatus,
             ownerProfileId,
+            licenseUrl: null,
             createdAt: now,
             updatedAt: now,
           })
@@ -212,7 +231,7 @@ export const makeSeedMedia = (input: { poolSize: number; timeline: SeedTimeline 
                   : undefined
 
                 yield* repository.insertMediaAssetCredit({
-                  mediaAssetId: id,
+                  mediaAssetId: asset.id,
                   orderIndex,
                   creditLine: person
                     ? null
@@ -224,11 +243,49 @@ export const makeSeedMedia = (input: { poolSize: number; timeline: SeedTimeline 
             { concurrency: 1, discard: true },
           )
 
-          return id
+          return asset.id
         }),
       )
 
-    return { create, poolSize: pool.length }
+    /** Media as the external data fetch imports a provider's photo: owned by no one, licensed. */
+    const createImported = ({ at, origin, credits, licenseUrl }: CreateImportedMediaInput) =>
+      input.timeline.at(at)(
+        Effect.gen(function* () {
+          const asset = yield* poolAsset
+          const now = yield* DateTime.now
+          const repository = yield* MediaAssetsRepository
+
+          yield* repository.insertMediaAsset({
+            ...asset,
+            category: null,
+            descriptions: MediaAssetDescriptions.make({}),
+            moderationStatus: yield* moderationStatus,
+            ownerProfileId: null,
+            licenseUrl,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          yield* repository.insertMediaAssetImport({ mediaAssetId: asset.id, ...origin })
+
+          yield* Effect.forEach(
+            credits,
+            (creditLine, orderIndex) =>
+              repository.insertMediaAssetCredit({
+                mediaAssetId: asset.id,
+                orderIndex,
+                creditLine,
+                creditUrl: null,
+                personId: null,
+              }),
+            { concurrency: 1, discard: true },
+          )
+
+          return asset.id
+        }),
+      )
+
+    return { create, createImported, poolSize: pool.length }
   })
 
 export type SeedMedia = Effect.Success<ReturnType<typeof makeSeedMedia>>

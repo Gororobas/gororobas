@@ -5,7 +5,7 @@ import {
   TransformedVideoHeightBreakpoints,
 } from "@gororobas/domain"
 import { registerMediabunnyServer } from "@mediabunny/server"
-import { Array as EffectArray, Effect, FileSystem, Schema, Path } from "effect"
+import { Array as EffectArray, Effect, FileSystem, Path, Record, Schema } from "effect"
 import {
   ALL_FORMATS,
   Conversion,
@@ -132,6 +132,32 @@ const transformImage = Effect.fn("MediaAssets.transformImage")(
         ),
       ),
     ),
+)
+
+const importableImageTypes = {
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+} as const
+
+/**
+ * The content type of a raster image downloaded from elsewhere, read from its bytes: servers'
+ * headers can be generic or wrong. Other files, SVG included, aren't imported.
+ */
+export const detectImportableImageType = Effect.fn("MediaAssets.detectImportableImageType")(
+  function* (bytes: Uint8Array) {
+    const { format } = yield* processingPromise(() => sharp(bytes).metadata())
+    const contentType = Record.toEntries(importableImageTypes).find(
+      ([type]) => type === format,
+    )?.[1]
+
+    if (contentType === undefined) {
+      return yield* new MediaAssetProcessingError({ cause: `Unsupported image format ${format}` })
+    }
+
+    return contentType
+  },
 )
 
 /** Derivatives are reproducible; the original file and its metadata remain unchanged. */
