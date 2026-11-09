@@ -5,7 +5,7 @@ import { defineProperty } from "../property.js"
 
 /**
  * New: an authored relation, with a qualifier as part of its value. Text inference reads it from
- * publications ("o mamão até que cresce bem no Cerrado"), shown with its quote and flaggable.
+ * publications ("o mamão até que cresce bem no Cerrado"), shown with its quote and disputable.
  */
 export const GrowsInProperty = defineProperty({
   id: "growsIn",
@@ -19,5 +19,4 @@ export const GrowsInProperty = defineProperty({
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON", "TEXT_INFERENCE"],
   references: { kinds: ["PLACE"], target: ({ place }) => Option.some(place) },
-  sameValue: (self, that) => self.place === that.place,
 })

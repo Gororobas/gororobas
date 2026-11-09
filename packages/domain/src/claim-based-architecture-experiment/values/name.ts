@@ -1,17 +1,15 @@
-import { type Equivalence, Schema } from "effect"
+import { Schema } from "effect"
 
 import { GrammaticalGender } from "../../common/enums.js"
-import { ValidName } from "../../common/primitives.js"
-import { toSearchableText } from "../../common/utils/strings.js"
+import { FoldedName } from "./folded-name.js"
 
-/** A label or alias: today's `WikiArticleCommonName`. */
+/**
+ * One of an article's names: today's `WikiArticleCommonName`. A different grammatical gender is a
+ * different value, so correcting it is a change.
+ */
 export const Name = Schema.Struct({
-  name: ValidName,
+  name: FoldedName,
   grammaticalGender: Schema.NullOr(GrammaticalGender),
 })
 
 export type Name = typeof Name.Type
-
-/** Google Books' "Futuro Ancestral" and a person's "futuro ancestral" attest one name, no matter the gender. */
-export const sameName: Equivalence.Equivalence<Name> = (self, that) =>
-  toSearchableText(self.name) === toSearchableText(that.name)

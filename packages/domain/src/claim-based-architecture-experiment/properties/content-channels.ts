@@ -12,5 +12,4 @@ export const ContentChannelsProperty = defineProperty({
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["PERSON"],
-  sameValue: (self, that) => self.url === that.url,
 })

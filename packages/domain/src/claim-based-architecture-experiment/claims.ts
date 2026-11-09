@@ -7,11 +7,16 @@
  *
  * A property's `Claim` schema only accepts the sources it lists, in its type too: `make` on a
  * people-only property won't take a provider source.
+ *
+ * A person's claim may only supersede or retract an older person's claim about the same article,
+ * property and language. The server checks it when the claim is written; resolution ignores
+ * references that break it, which is also what keeps them from forming cycles.
  */
 import { type DateTime, Schema } from "effect"
 
 import { ModerationStatus, SupportedLanguage } from "../common/enums.js"
 import { PersonId, WikiArticleId } from "../common/ids.js"
+import { IntNonNegative } from "../common/primitives.js"
 import {
   type AllowedAutomaticSource,
   type AllowedPersonSource,
@@ -73,7 +78,13 @@ interface ClaimBase<Scope extends PropertyScope> {
 export interface PersonClaim<Value, Scope extends PropertyScope> extends ClaimBase<Scope> {
   readonly source: PersonSource
   readonly change:
-    | { readonly _tag: "ASSERT"; readonly value: Value; readonly supersedes: ClaimId | null }
+    | {
+        readonly _tag: "ASSERT"
+        readonly value: Value
+        readonly supersedes: ClaimId | null
+        /** Where people put the value in a `LIST` property; null for every other cardinality. */
+        readonly position: number | null
+      }
     | { readonly _tag: "RETRACT"; readonly retracts: ClaimId }
   readonly evaluation: Evaluation
 }
@@ -102,6 +113,7 @@ export const claimSchema = <
   readonly id: Id
   readonly value: Schema.Codec<Value, Encoded>
   readonly scope: Scope
+  readonly cardinality: "ONE" | "SET" | "LIST"
   readonly sources: ReadonlyArray<Source>
 }) => {
   const lists = (key: SourceKey) => property.sources.some((source) => source === key)
@@ -148,8 +160,22 @@ export const claimSchema = <
           value: property.value,
           /** A claim by the same person or another this one replaces once approved. */
           supersedes: Schema.NullOr(ClaimId),
+          position: Schema.NullOr(IntNonNegative).check(
+            Schema.makeFilter(
+              (position) =>
+                (property.cardinality === "LIST") === (position !== null) ||
+                (property.cardinality === "LIST"
+                  ? `${property.id} is a list: its claims need a position`
+                  : `${property.id} isn't a list: its claims have no position`),
+              {
+                identifier: "ClaimPosition",
+                title: "Claim position",
+                description: "A position exactly when the property is a list.",
+              },
+            ),
+          ),
         }),
-        /** Removes a person's claim once approved. Machine claims are flagged instead. */
+        /** Removes a person's claim once approved. Machine claims are disputed instead. */
         Schema.TaggedStruct("RETRACT", { retracts: ClaimId }),
       ]),
       evaluation: Evaluation,

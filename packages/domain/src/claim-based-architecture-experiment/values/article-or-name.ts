@@ -1,7 +1,8 @@
-import { type Equivalence, Option, Schema } from "effect"
+import { Option, Schema } from "effect"
 
 import { WikiArticleId } from "../../common/ids.js"
-import { IntNonNegative, ValidName } from "../../common/primitives.js"
+import { IntNonNegative } from "../../common/primitives.js"
+import { FoldedName } from "./folded-name.js"
 
 /**
  * An article when there is one, a name until there is. Today authors, directors, genres and
@@ -10,7 +11,7 @@ import { IntNonNegative, ValidName } from "../../common/primitives.js"
  */
 export const ArticleOrName = Schema.TaggedUnion({
   ARTICLE: { wikiArticleId: WikiArticleId },
-  NAME: { name: ValidName },
+  NAME: { name: FoldedName },
 })
 
 export type ArticleOrName = typeof ArticleOrName.Type
@@ -18,11 +19,10 @@ export type ArticleOrName = typeof ArticleOrName.Type
 export const articleOf = (value: ArticleOrName): Option.Option<WikiArticleId> =>
   ArticleOrName.guards.ARTICLE(value) ? Option.some(value.wikiArticleId) : Option.none()
 
-/** Someone credited in order: a book's authors, a film's directors. */
+/**
+ * Someone credited in order: a book's authors, a film's directors. Position is part of the value,
+ * so reordering credits is a change.
+ */
 export const Credit = Schema.Struct({ credited: ArticleOrName, position: IntNonNegative })
 
 export type Credit = typeof Credit.Type
-
-/** The same person credited at another position is still one credit. */
-export const sameCredit: Equivalence.Equivalence<Credit> = (self, that) =>
-  Schema.toEquivalence(ArticleOrName)(self.credited, that.credited)

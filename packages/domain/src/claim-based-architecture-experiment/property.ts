@@ -3,7 +3,7 @@
  * resolution, extraction from providers, moderation, the edit diff and the article's TypeScript
  * shape all follow from it.
  */
-import type { Equivalence, Option, Schema } from "effect"
+import type { Option, Schema } from "effect"
 import type { NonEmptyReadonlyArray } from "effect/Array"
 
 import type { WikiArticleId } from "../common/ids.js"
@@ -12,13 +12,19 @@ import type { ArticleKind } from "./kinds.js"
 import type { FetchedProvider, ProviderResults } from "./providers.js"
 import type { SourceKey } from "./sources.js"
 
-export type PropertyCardinality = "ONE" | "SET"
+/**
+ * - `ONE`: a single value (a height, an identifier).
+ * - `SET`: values in no particular order (strata, ISBNs).
+ * - `LIST`: values in the order people put them (names: the first is the one most people
+ *   recognize). Values from other sources follow people's, in source order.
+ */
+export type PropertyCardinality = "ONE" | "SET" | "LIST"
 
 export type Extracted<Value, Scope extends PropertyScope> = Scope extends "UNIVERSAL"
   ? { readonly value: Value }
   : { readonly language: LanguageOf<Scope>; readonly value: Value }
 
-interface PropertyBase<Id, Value, Encoded, Kind, Scope, Source> {
+interface PropertyBase<Id, Value, Encoded, Kind, Scope, Source, Presence> {
   readonly id: Id
   /**
    * Invariants spanning fields go inside one value (`height` is a range), so evaluating claims one
@@ -39,20 +45,19 @@ interface PropertyBase<Id, Value, Encoded, Kind, Scope, Source> {
     readonly target: (value: Value) => Option.Option<WikiArticleId>
   }
   /**
-   * When two values are one value for readers, so their claims attest it together. Defaults to
-   * structural equality; names compare by their folded text, ignoring grammatical gender.
+   * `REQUIRED`: the article isn't published until it has a value (in some language), and no
+   * retraction or censoring may take its last one away (see `guards.ts`). Defaults to `OPTIONAL`.
+   *
+   * Two values are the same value when the value schema's equivalence says so
+   * (`Schema.toEquivalence`); schemas fold what readers don't distinguish, such as a name's case.
    */
-  readonly sameValue?: Equivalence.Equivalence<Value>
+  readonly presence?: Presence
 }
 
 export type PropertyPresence = "REQUIRED" | "OPTIONAL"
 
-type CardinalityFields<Cardinality, Presence> = Cardinality extends "ONE"
-  ? {
-      readonly cardinality: Cardinality
-      /** `REQUIRED`: the article isn't published until it has a value, in some language. */
-      readonly presence: Presence
-    }
+type CardinalityFields<Cardinality> = Cardinality extends "ONE"
+  ? { readonly cardinality: Cardinality }
   : {
       readonly cardinality: Cardinality
       /**
@@ -86,8 +91,8 @@ export type PropertyDefinition<
   Cardinality extends PropertyCardinality,
   Source extends SourceKey,
   Presence extends PropertyPresence,
-> = PropertyBase<Id, Value, Encoded, Kind, Scope, Source> &
-  CardinalityFields<Cardinality, Presence> &
+> = PropertyBase<Id, Value, Encoded, Kind, Scope, Source, Presence> &
+  CardinalityFields<Cardinality> &
   ExtractFields<Source, Value, Scope>
 
 export const defineProperty = <

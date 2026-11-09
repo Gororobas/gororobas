@@ -10,7 +10,6 @@ export const BookEditionsProperty = defineProperty({
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["GOOGLE_BOOKS"],
-  sameValue: (self, that) => self.externalId === that.externalId,
   extract: {
     GOOGLE_BOOKS: (result) => result.editions.map((value) => ({ value })),
   },

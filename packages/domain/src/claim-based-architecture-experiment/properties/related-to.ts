@@ -7,7 +7,7 @@ import { defineProperty } from "../property.js"
 /**
  * Today's `wiki_article_relations`: the weakest relation. People may assert it when they know two
  * articles relate but not how, reviewed like their other claims; legacy tags migrate as such
- * claims. Inferred ones are visible by default with a notice, and flaggable. A typed relation
+ * claims. Inferred ones are visible by default with a notice, and disputable. A typed relation
  * (`growsIn`) says more, and the edit form should offer one first.
  */
 export const RelatedToProperty = defineProperty({

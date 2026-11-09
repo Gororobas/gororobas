@@ -4,7 +4,7 @@
  *
  * - People's claims are reviewed: pending until someone with `content:moderate` evaluates them,
  *   like wiki revisions today.
- * - Machines' claims are automatic: visible by default with a notice, flaggable and censorable,
+ * - Machines' claims are automatic: visible by default with a notice, disputable and censorable,
  *   the moderation lifecycle publications already have. Providers, text inference, machine
  *   translation, references in article text.
  *
@@ -94,7 +94,7 @@ export type AllowedPersonSource<Source extends SourceKey> = "PERSON" extends Sou
 
 /**
  * What a property's `sources` lists, in resolution order. Providers count individually, so
- * `strata` can trust Syntropedia over people while `label` trusts people over Google Books.
+ * `strata` can trust Syntropedia over people while `names` trusts people over Google Books.
  */
 export type AutomaticSourceKey = Exclude<AutomaticSource["_tag"], "EXTERNAL_PROVIDER"> | Provider
 

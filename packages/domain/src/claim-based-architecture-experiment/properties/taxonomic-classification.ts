@@ -10,7 +10,6 @@ export const TaxonomicClassificationProperty = defineProperty({
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: ["GBIF"],
-  sameValue: (self, that) => self.taxonRank === that.taxonRank,
   extract: {
     GBIF: (result) => result.classification.map((value) => ({ value })),
   },

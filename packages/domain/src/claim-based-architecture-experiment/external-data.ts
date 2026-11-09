@@ -1,3 +1,4 @@
+import { GbifTaxonIdProperty } from "./properties/gbif-taxon-id.js"
 import { GoogleBooksVolumeIdProperty } from "./properties/google-books-volume-id.js"
 import type { Property } from "./properties/index.js"
 import { IsbnProperty } from "./properties/isbn.js"
@@ -16,5 +17,5 @@ import type { FetchedProvider } from "./providers.js"
 export const providerInputs = {
   GOOGLE_BOOKS: [GoogleBooksVolumeIdProperty, IsbnProperty],
   WIKIDATA: [WikidataIdProperty],
-  GBIF: [WikidataIdProperty],
+  GBIF: [GbifTaxonIdProperty, WikidataIdProperty],
 } as const satisfies { readonly [P in FetchedProvider]: ReadonlyArray<Property> }

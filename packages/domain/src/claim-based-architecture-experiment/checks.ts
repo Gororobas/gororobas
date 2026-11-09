@@ -3,10 +3,10 @@
  * and a property's claims only take the sources it lists. They compile only while that holds.
  */
 import type { Claim, ClaimOf } from "./claims.js"
-import type { GbifTaxonIdProperty } from "./properties/gbif-taxon-id.js"
 import type { HeightProperty } from "./properties/height.js"
-import type { LabelProperty } from "./properties/label.js"
+import type { NamesProperty } from "./properties/names.js"
 import type { ResourceUrlProperty } from "./properties/resource-url.js"
+import type { TaxonomicClassificationProperty } from "./properties/taxonomic-classification.js"
 import type { PersonSource } from "./sources.js"
 
 export const articleWideClaimsMatch = (
@@ -14,15 +14,15 @@ export const articleWideClaimsMatch = (
 ): Claim<typeof HeightProperty.value.Type, "UNIVERSAL"> => claim
 
 export const languageSpecificClaimsMatch = (
-  claim: ClaimOf<typeof LabelProperty>,
-): Claim<typeof LabelProperty.value.Type, "LANGUAGE_SPECIFIC"> => claim
+  claim: ClaimOf<typeof NamesProperty>,
+): Claim<typeof NamesProperty.value.Type, "LANGUAGE_SPECIFIC"> => claim
 
 /** `resourceUrl` lists only people, so every claim about it is a person's. */
 export const peopleOnlyClaimsComeFromPeople = (
   claim: ClaimOf<typeof ResourceUrlProperty>,
 ): PersonSource => claim.source
 
-/** `gbifTaxonId` lists only GBIF and Wikidata, so its claims name one of them. */
+/** `taxonomicClassification` lists only GBIF, so its claims are all GBIF's. */
 export const providerClaimsNameListedProviders = (
-  claim: ClaimOf<typeof GbifTaxonIdProperty>,
-): "GBIF" | "WIKIDATA" => claim.source.provider
+  claim: ClaimOf<typeof TaxonomicClassificationProperty>,
+): "GBIF" => claim.source.provider

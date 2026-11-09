@@ -1,5 +1,5 @@
 import { defineProperty } from "../property.js"
-import { Credit, articleOf, sameCredit } from "../values/article-or-name.js"
+import { Credit, articleOf } from "../values/article-or-name.js"
 
 /** Ordered by `position`, which is part of the value: order is a fact about the book. */
 export const BookAuthorsProperty = defineProperty({
@@ -14,5 +14,4 @@ export const BookAuthorsProperty = defineProperty({
     kinds: ["NOTEWORTHY_PERSON", "NOTEWORTHY_ENTITY", "CONTENT_PRODUCER"],
     target: ({ credited }) => articleOf(credited),
   },
-  sameValue: sameCredit,
 })

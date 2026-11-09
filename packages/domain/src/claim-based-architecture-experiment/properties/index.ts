@@ -1,5 +1,4 @@
 import { ActivePeriodProperty } from "./active-period.js"
-import { AliasesProperty } from "./aliases.js"
 import { AnimalRolesProperty } from "./animal-roles.js"
 import { AreasOfWorkProperty } from "./areas-of-work.js"
 import { BasedInProperty } from "./based-in.js"
@@ -23,11 +22,11 @@ import { HeightProperty } from "./height.js"
 import { ImagesProperty } from "./images.js"
 import { InheritsFromParentProperty } from "./inherits-from-parent.js"
 import { IsbnProperty } from "./isbn.js"
-import { LabelProperty } from "./label.js"
 import { LanguagesProperty } from "./languages.js"
 import { LifecyclesProperty } from "./lifecycles.js"
 import { LifespanProperty } from "./lifespan.js"
 import { MainImageProperty } from "./main-image.js"
+import { NamesProperty } from "./names.js"
 import { OccupationsProperty } from "./occupations.js"
 import { OrganizationTypeProperty } from "./organization-type.js"
 import { OriginProperty } from "./origin.js"
@@ -56,7 +55,6 @@ import { WikipediaPageProperty } from "./wikipedia-page.js"
 /** Every property, the whole registry. Kinds have the properties that list them. */
 export const properties = [
   ActivePeriodProperty,
-  AliasesProperty,
   AnimalRolesProperty,
   AreasOfWorkProperty,
   BasedInProperty,
@@ -80,11 +78,11 @@ export const properties = [
   ImagesProperty,
   InheritsFromParentProperty,
   IsbnProperty,
-  LabelProperty,
   LanguagesProperty,
   LifecyclesProperty,
   LifespanProperty,
   MainImageProperty,
+  NamesProperty,
   OccupationsProperty,
   OrganizationTypeProperty,
   OriginProperty,
