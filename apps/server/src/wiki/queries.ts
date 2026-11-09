@@ -27,6 +27,7 @@ import {
   WikiArticleBookmarker,
   WikiArticleContributor,
   WhosOnFirstId,
+  WikidataId,
   toSearchableText,
 } from "@gororobas/domain"
 import { Handle } from "@gororobas/domain"
@@ -45,6 +46,18 @@ import { orderByLanguagePreference } from "../db/language-preference.js"
 import { withMediaCredits } from "../media-assets/credits.js"
 import { latestPublicProfileLocationJson } from "../profiles/location-sql.js"
 import { findExternalData } from "./external-data/queries.js"
+
+export const findWikidataIdOwner = SqlSchema.findOneOption({
+  Request: Schema.Struct({ wikidataId: WikidataId, wikiArticleId: WikiArticleId }),
+  Result: Schema.Struct({ wikiArticleId: WikiArticleId }),
+  execute: ({ wikidataId, wikiArticleId }) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT id AS wiki_article_id FROM wiki_article_projections
+    WHERE json_extract(attributes, '$.wikidataId') = ${wikidataId} AND id != ${wikiArticleId}
+  `,
+    ),
+})
 
 /**
  * Article projections with their status, which only `wiki_article_sources` stores: approval and

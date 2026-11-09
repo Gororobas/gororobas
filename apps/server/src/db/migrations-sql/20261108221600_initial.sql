@@ -282,6 +282,8 @@ CREATE TABLE `wiki_article_projections` (
 );
 -- Create index "idx_wiki_article_projections_id_kind" to table: "wiki_article_projections"
 CREATE UNIQUE INDEX `idx_wiki_article_projections_id_kind` ON `wiki_article_projections` (`id`, `kind`);
+-- Create index "idx_wiki_article_projections_wikidata_id" to table: "wiki_article_projections"
+CREATE UNIQUE INDEX `idx_wiki_article_projections_wikidata_id` ON `wiki_article_projections` ((json_extract (attributes, '$.wikidataId')));
 -- Create index "idx_wiki_article_projections_kind" to table: "wiki_article_projections"
 CREATE INDEX `idx_wiki_article_projections_kind` ON `wiki_article_projections` (`kind`);
 -- Create "wiki_article_translations" table

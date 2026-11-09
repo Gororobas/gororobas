@@ -7,7 +7,7 @@ export const gelVegetableWikidataIds = Schema.decodeSync(Schema.Record(Schema.St
   abacaxi: "Q1493", // Ananas comosus
   "abacaxi-do-cerrado": "Q3509883", // Ananas ananassoides
   abobora: "Q7229863", // Cucurbita pepo
-  abobrinha: "Q7229863", // Cucurbita pepo
+  abobrinha: "Q7533", // Zucchini
   "acafrao-da-terra": "Q42562", // Curcuma longa
   acai: "Q33943", // Euterpe oleracea
   acerola: "Q15362022", // Malpighia emarginata; identity confirmed by the owner.
@@ -60,7 +60,6 @@ export const gelVegetableWikidataIds = Schema.decodeSync(Schema.Record(Schema.St
   balsamo: "Q9047598", // Myroxylon peruiferum
   bambu: "Q670887", // Bambusoideae
   banana: "Q8666090", // Musa
-  "banana-da-terra": "Q8666090", // Musa
   "banha-de-galinha": "Q15483944", // Swartzia langsdorffii
   baoba: "Q157991", // Adansonia
   barbatimao: "Q7625599", // Stryphnodendron adstringens
@@ -330,7 +329,7 @@ export const gelVegetableWikidataIds = Schema.decodeSync(Schema.Record(Schema.St
   "noz-peca": "Q333877", // Carya illinoinensis
   oiti: "Q6542992", // Licania rigida
   "ora-pro-nobis": "Q134422", // Pereskia aculeata
-  "orelha-de-macaco": "Q2719035", // Enterolobium contortisiliquum
+  "orelha-de-macaco": "Q10273105",
   paineira: "Q15367363", // Eriotheca gracilipes
   "paineira-do-cerrado": "Q1031120", // Ceiba speciosa
   "palma-forrageira": "Q144412", // Opuntia ficus-indica
@@ -409,7 +408,7 @@ export const gelVegetableWikidataIds = Schema.decodeSync(Schema.Record(Schema.St
   taiuva: "Q168042", // Maclura tinctoria
   tamanqueiro: "Q15339025", // Aegiphila integrifolia
   tamarindo: "Q80235", // Tamarindus indica
-  tamboril: "Q2719035", // Enterolobium contortisiliquum
+  tamboril: "Q10378018",
   tangerina: "Q125337", // Citrus reticulata
   tapereba: "Q794969", // Spondias mombin
   tapicuru: "Q15321993", // Callisthene major

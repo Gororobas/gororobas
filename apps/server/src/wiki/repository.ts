@@ -24,6 +24,7 @@ import {
   WikiArticleRevisionId,
   WikiArticleRevisionNotFoundError,
   WikiArticleRevisionRow,
+  WikiArticleWikidataIdTakenError,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Array as EffectArray, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
@@ -80,6 +81,7 @@ import {
   findPageByHandleAndKind,
   findRevisionById,
   findWikiArticleBySearchableName,
+  findWikidataIdOwner,
   listWikiArticleAliases,
 } from "./queries.js"
 
@@ -197,6 +199,25 @@ const persistArticleProjection = (input: {
 }) =>
   Effect.gen(function* () {
     const existing = yield* findDatabaseRowById(input.wikiArticleId)
+
+    if ("wikidataId" in input.sourceData.attributes) {
+      const wikidataId = input.sourceData.attributes.wikidataId
+
+      if (Option.isSome(wikidataId)) {
+        const owner = yield* findWikidataIdOwner({
+          wikidataId: wikidataId.value,
+          wikiArticleId: input.wikiArticleId,
+        })
+
+        if (Option.isSome(owner)) {
+          return yield* new WikiArticleWikidataIdTakenError({
+            wikidataId: wikidataId.value,
+            wikiArticleId: owner.value.wikiArticleId,
+          })
+        }
+      }
+    }
+
     const now = yield* DateTime.now
     const createdAt = Option.match(existing, {
       onNone: () => now,
@@ -366,7 +387,10 @@ const createWikiArticle = (
   options: { id?: WikiArticleId; isPendingApproval?: boolean } = {},
 ) => insertWikiArticle({ ...input, commit: HumanCommit.make({ personId: createdById }) }, options)
 
-const createRevision = (input: CreateWikiArticleRevisionInput) =>
+const createRevision = <E = never, R = never>(
+  input: CreateWikiArticleRevisionInput,
+  validate?: (data: WikiArticleEditableData) => Effect.Effect<void, E, R>,
+) =>
   SqlClient.SqlClient.use((sql) =>
     Effect.gen(function* () {
       const article = yield* findSourceRowById(input.wikiArticleId).pipe(
@@ -385,6 +409,7 @@ const createRevision = (input: CreateWikiArticleRevisionInput) =>
       })
 
       yield* assertCultivarParentIsPublishedPlant(applied.data)
+      if (validate !== undefined) yield* validate(applied.data)
 
       const revisionId = yield* IdGen.make(WikiArticleRevisionId)
       const now = yield* DateTime.now

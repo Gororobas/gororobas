@@ -283,6 +283,8 @@ CREATE TABLE wiki_article_projections (
 
 CREATE UNIQUE INDEX idx_wiki_article_projections_id_kind ON wiki_article_projections (id, kind);
 
+CREATE UNIQUE INDEX idx_wiki_article_projections_wikidata_id ON wiki_article_projections (json_extract (attributes, '$.wikidataId'));
+
 CREATE INDEX idx_wiki_article_projections_kind ON wiki_article_projections (kind);
 
 -- Per-language queryable projection of contributor-editable CRDT data.

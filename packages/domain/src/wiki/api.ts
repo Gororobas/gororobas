@@ -31,6 +31,7 @@ import {
   WikiArticleRevisionAlreadyEvaluatedError,
   WikiArticleRevisionNotFoundError,
   WikiArticleNotFoundError,
+  WikiArticleWikidataIdTakenError,
 } from "./errors.js"
 import { ExternalDataFetchError } from "./external-data/error.js"
 import {
@@ -104,6 +105,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
         UnauthorizedError,
         InvalidMediaAssetError,
         MediaNotFoundError,
+        WikiArticleWikidataIdTakenError,
       ],
       payload: CreateWikiArticlePayload,
     }),
@@ -129,6 +131,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
         WikiArticleNotFoundError,
         WikiArticleRevisionNotFoundError,
         WikiArticleRevisionAlreadyEvaluatedError,
+        WikiArticleWikidataIdTakenError,
         InvalidCrdtUpdateError,
         UnauthorizedError,
         InvalidMediaAssetError,

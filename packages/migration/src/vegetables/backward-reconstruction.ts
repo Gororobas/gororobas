@@ -1,4 +1,9 @@
-import { MediaAssetId, WikiArticleId, WikiPlantArticle } from "@gororobas/domain"
+import {
+  MediaAssetId,
+  WikiArticleId,
+  WikiPlantArticle,
+  WikiPlantCultivarArticle,
+} from "@gororobas/domain"
 import { Effect, Array as EffectArray, Option, Order, Predicate, Schema } from "effect"
 import { revertChangeset, type Changeset, type IChange } from "json-diff-ts"
 
@@ -17,8 +22,12 @@ export type GelVegetableEdit = typeof GelVegetableEdit.Type
 
 export const VegetableHistoryEntryForMigration = Schema.Struct({
   ...GelVegetableEdit.fields,
-  article: WikiPlantArticle.EditableArticle,
+  article: Schema.Union([
+    WikiPlantArticle.EditableArticle,
+    WikiPlantCultivarArticle.EditableArticle,
+  ]),
 })
+
 export type VegetableHistoryEntryForMigration = typeof VegetableHistoryEntryForMigration.Type
 
 export const VegetableDataForMigration = Schema.Struct({

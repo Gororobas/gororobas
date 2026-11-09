@@ -5,6 +5,7 @@ import { UnauthorizedError } from "../authorization/session.js"
 import { ProfileLocationId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { GazetteerPlaceNotFoundError } from "../places/errors.js"
+import { WikiArticleWikidataIdTakenError } from "../wiki/errors.js"
 import { ProfilePageData, ProfileSearchParams, ProfileCardData } from "./domain.js"
 import {
   InvalidProfileLocationDatesError,
@@ -79,7 +80,12 @@ export class ProfilesApiGroup extends HttpApiGroup.make("profiles")
   .add(
     HttpApiEndpoint.post("addMyLocation", "/people/me/locations", {
       success: ProfileLocationData,
-      error: [GazetteerPlaceNotFoundError, InvalidProfileLocationDatesError, UnauthorizedError],
+      error: [
+        GazetteerPlaceNotFoundError,
+        InvalidProfileLocationDatesError,
+        UnauthorizedError,
+        WikiArticleWikidataIdTakenError,
+      ],
       payload: ProfileLocationPayload,
     }),
   )
@@ -88,6 +94,7 @@ export class ProfilesApiGroup extends HttpApiGroup.make("profiles")
       success: ProfileLocationData,
       error: [
         GazetteerPlaceNotFoundError,
+        WikiArticleWikidataIdTakenError,
         InvalidProfileLocationDatesError,
         ProfileLocationNotFoundError,
         UnauthorizedError,

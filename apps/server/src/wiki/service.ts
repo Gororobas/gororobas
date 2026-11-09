@@ -115,11 +115,20 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
             (yield* repository.listWikiArticleMedia(id)).map((asset) => asset.id),
           )
 
-          return yield* repository.createRevision({
-            ...input,
-            wikiArticleId: id,
-            createdById: session.personId,
-          })
+          return yield* repository.createRevision(
+            { ...input, wikiArticleId: id, createdById: session.personId },
+            (article) =>
+              Effect.gen(function* () {
+                if (article.kind !== "PLACE" || Option.isNone(article.attributes.whosOnFirstId)) {
+                  return
+                }
+                const record = yield* gazetteer.findRecord(article.attributes.whosOnFirstId.value)
+                if (Option.isNone(record)) {
+                  // @todo can we make this error more precise?
+                  return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+                }
+              }),
+          )
         })
 
       /** The repository validates the approved state in its own transaction, so enrichment reads it committed. */

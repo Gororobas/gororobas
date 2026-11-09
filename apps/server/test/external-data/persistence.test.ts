@@ -397,39 +397,41 @@ describe("external data persistence", () => {
   )
 
   it.effect("preserves arbitrary media collections after a failed refresh", () =>
-    assertPropertyEffect({
-      arbitrary: Arbitrary.schema(Schema.Array(Schema.String)),
-      options: { runs: 20 },
-      predicate: (creditLines) =>
-        Effect.gen(function* () {
-          const request = yield* createArticle()
+    Effect.gen(function* () {
+      const request = yield* createArticle()
 
-          const media = creditLines.map((creditLine, index) => ({
-            ...gbif.media[0],
-            mediaUrl: `https://example.org/photo/${index}.jpg`,
-            creditLine,
-          }))
+      yield* assertPropertyEffect({
+        arbitrary: Arbitrary.schema(Schema.Array(Schema.String)),
+        options: { runs: 20 },
+        predicate: (creditLines) =>
+          Effect.gen(function* () {
+            const media = creditLines.map((creditLine, index) => ({
+              ...gbif.media[0],
+              mediaUrl: `https://example.org/photo/${index}.jpg`,
+              creditLine,
+            }))
 
-          yield* persistPlant(request, {
-            kind: "PLANT",
-            attributes: {
-              wikidata: Result.succeed(wikidata),
-              gbif: Result.succeed({ ...gbif, media }),
-            },
-          })
+            yield* persistPlant(request, {
+              kind: "PLANT",
+              attributes: {
+                wikidata: Result.succeed(wikidata),
+                gbif: Result.succeed({ ...gbif, media }),
+              },
+            })
 
-          const sql = yield* SqlClient.SqlClient
-          const before =
-            yield* sql`SELECT * FROM wiki_article_external_media WHERE wiki_article_id = ${request.wikiArticleId}`
-          yield* persistPlant(request, {
-            kind: "PLANT",
-            attributes: { wikidata: null, gbif: Result.fail(failure) },
-          })
-          expect(
-            yield* sql`SELECT * FROM wiki_article_external_media WHERE wiki_article_id = ${request.wikiArticleId}`,
-          ).toEqual(before)
-          return true
-        }),
+            const sql = yield* SqlClient.SqlClient
+            const before =
+              yield* sql`SELECT * FROM wiki_article_external_media WHERE wiki_article_id = ${request.wikiArticleId}`
+            yield* persistPlant(request, {
+              kind: "PLANT",
+              attributes: { wikidata: null, gbif: Result.fail(failure) },
+            })
+            expect(
+              yield* sql`SELECT * FROM wiki_article_external_media WHERE wiki_article_id = ${request.wikiArticleId}`,
+            ).toEqual(before)
+            return true
+          }),
+      })
     }).pipe(Effect.provide(TestLayerWithServices)),
   )
 })

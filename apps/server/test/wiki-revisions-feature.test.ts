@@ -9,6 +9,7 @@ import {
   SessionContext,
   SupportedLanguage,
   WikiArticleCrdt,
+  WikiArticleEditableData,
   WikiArticleId,
   WikiArticleRevisionId,
   WikiArticleRevisionRow,
@@ -42,12 +43,50 @@ import {
   textToRichTextDocument,
   withPerson,
 } from "./feature-test-helpers.js"
-import { withSession } from "./test-helpers.js"
+import { seedPerson, withSession } from "./test-helpers.js"
 
 const WikiTestLayer = Layer.effect(WikiArticlesService, WikiArticlesService.make).pipe(
   Layer.provideMerge(PeopleFeatureTestLayer),
   Layer.provideMerge(WorkflowEngine.layerMemory),
 )
+
+it.effect("validates place revision IDs against the gazetteer", () =>
+  Effect.gen(function* () {
+    const { person } = yield* seedPerson("ADMIN")
+    const repository = yield* WikiArticlesRepository
+    const service = yield* WikiArticlesService
+
+    const article = yield* Schema.decodeEffect(WikiArticleEditableData)({
+      kind: "PLACE",
+      attributes: {},
+      translations: { en: { commonNames: [{ id: "placename001", name: "A place" }] } },
+    })
+
+    const id = yield* repository.createWikiArticle({
+      wikiArticle: article,
+      createdById: person.id,
+      status: "PUBLISHED",
+    })
+
+    const source = Option.getOrThrow(yield* repository.findSourceRowById(id))
+    const current = snapshotToLoroDoc(source.crdtSnapshot)
+
+    const update = (value: string) => {
+      const edited = current.fork()
+      edited.getMap("attributes").set("whosOnFirstId", value)
+      edited.commit()
+      return LoroDocUpdate.make(edited.export({ mode: "update", from: current.version() }))
+    }
+
+    const error = yield* withPerson(
+      service.createRevision(id, { crdtUpdate: update("999999999999") }),
+      person.id,
+    ).pipe(Effect.flip)
+    expect(error).toMatchObject({ _tag: "InvalidCrdtUpdateError", reason: "SchemaValidation" })
+    yield* withPerson(service.createRevision(id, { crdtUpdate: update("85632519") }), person.id)
+  }).pipe(Effect.provide(WikiTestLayer)),
+)
+
 const WikiBackground = Schema.Struct({
   ...PeopleBackground.fields,
   articles: Schema.Record(Schema.String, WikiArticleId),

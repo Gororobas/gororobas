@@ -13,6 +13,7 @@ import {
   SystemCommit,
   WhosOnFirstId,
   WikiArticleId,
+  WikiArticleWikidataIdTakenError,
   WikidataId,
 } from "@gororobas/domain"
 import { Context, Array as EffectArray, Effect, Option, Schema } from "effect"
@@ -100,7 +101,10 @@ export class PlacesService extends Context.Service<PlacesService>()("PlacesServi
       id: WhosOnFirstId,
     ): Effect.Effect<
       WikiArticleId,
-      GazetteerPlaceNotFoundError | Schema.SchemaError | SqlError.SqlError,
+      | GazetteerPlaceNotFoundError
+      | Schema.SchemaError
+      | SqlError.SqlError
+      | WikiArticleWikidataIdTakenError,
       IdGen
     > =>
       Effect.gen(function* () {

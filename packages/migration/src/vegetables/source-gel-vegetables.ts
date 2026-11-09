@@ -1,7 +1,14 @@
-import { MediaAssetId, ProfileId, WikiArticleId, WikiPlantArticle } from "@gororobas/domain"
+import {
+  MediaAssetId,
+  ProfileId,
+  WikiArticleId,
+  WikiPlantArticle,
+  WikiPlantCultivarArticle,
+} from "@gororobas/domain"
 import { Effect, Array as EffectArray, FileSystem, Option, Path, Record, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
+import { IngestionError } from "../ingestion-error.js"
 import { migrateRichText } from "../migrate-rich-text.js"
 import { archiveGelResult } from "../preview-exports.js"
 import { GelVegetableWithEditSuggestions } from "../schemas/gel/entities.js"
@@ -17,6 +24,7 @@ import {
   gelVegetableNamesToCrdtList,
   gelVegetableToPlantEditableAttributes,
 } from "./gel-vegetable-to-wiki-plant-article.js"
+import { plantAttributesToCultivar } from "./gel-vegetable-to-wiki-plant-cultivar-article.js"
 import { gelVegetableWikidataIds } from "./gel-vegetable-wikidata-ids.js"
 
 const vegetablesQuery = `
@@ -111,12 +119,31 @@ export const sourceGelVegetables = Effect.gen(function* () {
   )
 
   const vegetablesDirectory = path.join(import.meta.dirname, "..", "..", "debug", "vegetables")
+  const cultivarsDirectory = path.join(import.meta.dirname, "..", "..", "debug", "cultivars")
   yield* fs.makeDirectory(vegetablesDirectory, { recursive: true })
+  yield* fs.makeDirectory(cultivarsDirectory, { recursive: true })
 
   yield* Effect.forEach(
     EffectArray.getSuccesses(historyResults),
     ({ source, history, edit_suggestions }) =>
       Effect.gen(function* () {
+        const parentPlantId =
+          source.handle === "banana-da-terra"
+            ? yield* Effect.gen(function* () {
+                const banana = vegetables.find((vegetable) => vegetable.handle === "banana")
+
+                if (!banana) {
+                  return yield* new IngestionError({
+                    message: "Banana parent is missing for banana-da-terra",
+                  })
+                }
+
+                return yield* context
+                  .resolveId(banana.id, "WikiArticle")
+                  .pipe(Effect.flatMap(Schema.decodeEffect(WikiArticleId)))
+              })
+            : undefined
+
         const historyEntries = yield* Effect.forEach(
           history,
           (historyEntry) =>
@@ -125,27 +152,41 @@ export const sourceGelVegetables = Effect.gen(function* () {
                 Schema.NullishOr(GelTiptapDocument),
               )(historyEntry.state.content)
               const content = originalContent ? yield* migrateRichText(originalContent) : null
+              const attributes = gelVegetableToPlantEditableAttributes(
+                historyEntry.state,
+                source.handle,
+              )
+              const commonNames = gelVegetableNamesToCrdtList(
+                historyEntry.state.names,
+                historyEntry.state.gender,
+              )
+
+              const article =
+                parentPlantId === undefined
+                  ? WikiPlantArticle.EditableArticle.make({
+                      kind: "PLANT",
+                      attributes: {
+                        ...attributes,
+                        // Use the current handle across history, including states before a rename.
+                        wikidataId: Record.get(gelVegetableWikidataIds, source.handle),
+                      },
+                      translations: {
+                        pt: {
+                          commonNames,
+                          origin: Option.fromNullishOr(historyEntry.state.origin),
+                          content: Option.fromNullishOr(content),
+                        },
+                      },
+                    })
+                  : WikiPlantCultivarArticle.EditableArticle.make({
+                      kind: "PLANT_CULTIVAR",
+                      attributes: plantAttributesToCultivar(attributes, parentPlantId),
+                      translations: { pt: { commonNames, content: Option.fromNullishOr(content) } },
+                    })
 
               return VegetableHistoryEntryForMigration.make({
                 ...historyEntry,
-                article: WikiPlantArticle.EditableArticle.make({
-                  kind: "PLANT",
-                  attributes: {
-                    ...gelVegetableToPlantEditableAttributes(historyEntry.state, source.handle),
-                    // Use the current handle across history, including states before a rename.
-                    wikidataId: Record.get(gelVegetableWikidataIds, source.handle),
-                  },
-                  translations: {
-                    pt: {
-                      commonNames: gelVegetableNamesToCrdtList(
-                        historyEntry.state.names,
-                        historyEntry.state.gender,
-                      ),
-                      origin: Option.fromNullishOr(historyEntry.state.origin),
-                      content: Option.fromNullishOr(content),
-                    },
-                  },
-                }),
+                article,
               })
             }),
           { concurrency: 1 },
@@ -212,7 +253,14 @@ export const sourceGelVegetables = Effect.gen(function* () {
         const encoded = yield* Schema.encodeEffect(
           Schema.fromJsonString(VegetableDataForMigration, { space: 2 }),
         )(data)
-        yield* fs.writeFileString(path.join(vegetablesDirectory, `${source.handle}.json`), encoded)
+
+        yield* fs.writeFileString(
+          path.join(
+            parentPlantId === undefined ? vegetablesDirectory : cultivarsDirectory,
+            `${source.handle}.json`,
+          ),
+          encoded,
+        )
       }),
     { concurrency: 1 },
   )

@@ -24,6 +24,64 @@ const plant = Schema.decodeSync(WikiArticleEditableData)({
 
 const TestEnvironment = Layer.mergeAll(WorkflowEngine.layerMemory, TestLayer)
 
+it.effect("rejects a Wikidata ID already assigned to another kind when approving a revision", () =>
+  Effect.gen(function* () {
+    const { person } = yield* seedPerson("ADMIN")
+    const repository = yield* WikiArticlesRepository.make
+
+    const place = yield* Schema.decodeEffect(WikiArticleEditableData)({
+      kind: "PLACE",
+      attributes: { wikidataId: "Q7533" },
+      translations: { pt: { commonNames: [{ id: "placename001", name: "Place" }] } },
+    })
+
+    const placeId = yield* repository.createWikiArticle({
+      wikiArticle: place,
+      createdById: person.id,
+      status: "PUBLISHED",
+    })
+
+    const plantId = yield* repository.createWikiArticle({
+      wikiArticle: plant,
+      createdById: person.id,
+      status: "PUBLISHED",
+    })
+
+    const source = Option.getOrThrow(yield* repository.findSourceRowById(plantId))
+    const current = snapshotToLoroDoc(source.crdtSnapshot)
+    const edited = current.fork()
+    edited.getMap("attributes").set("wikidataId", "Q7533")
+    edited.commit()
+
+    const revisionId = yield* repository.createRevision({
+      wikiArticleId: plantId,
+      createdById: person.id,
+      crdtUpdate: LoroDocUpdate.make(edited.export({ mode: "update", from: current.version() })),
+    })
+
+    const error = yield* repository
+      .evaluateRevision({ revisionId, evaluatedById: person.id, evaluation: "APPROVED" })
+      .pipe(Effect.flip)
+
+    expect(error).toMatchObject({
+      _tag: "WikiArticleWikidataIdTakenError",
+      wikiArticleId: placeId,
+      wikidataId: "Q7533",
+    })
+
+    expect(
+      (yield* repository.findRevisionById(revisionId)).pipe(Option.getOrThrow).evaluation,
+    ).toBe("PENDING")
+
+    const sql = yield* SqlClient.SqlClient
+    const constraint =
+      yield* sql`UPDATE wiki_article_projections SET attributes = json_set(attributes, '$.wikidataId', 'Q7533') WHERE id = ${plantId}`.pipe(
+        Effect.flip,
+      )
+    expect(constraint._tag).toBe("SqlError")
+  }).pipe(Effect.provide(TestEnvironment)),
+)
+
 it("requires at least one translation when creating an article", () => {
   expect(
     Option.isNone(

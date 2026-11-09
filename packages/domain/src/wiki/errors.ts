@@ -1,6 +1,7 @@
 /** Wiki article-related errors. */
 import { Schema } from "effect"
 
+import { WikidataId } from "../common/external-identifiers.js"
 import { ExternalDataObservationId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { WikiArticleKind } from "./wiki-article.js"
@@ -24,6 +25,12 @@ export class WikiArticleRevisionNotFoundError extends Schema.TaggedError<WikiArt
 export class WikiArticleRevisionAlreadyEvaluatedError extends Schema.TaggedError<WikiArticleRevisionAlreadyEvaluatedError>()(
   "WikiArticleRevisionAlreadyEvaluatedError",
   { id: WikiArticleRevisionId },
+  { httpApiStatus: 409 },
+) {}
+
+export class WikiArticleWikidataIdTakenError extends Schema.TaggedError<WikiArticleWikidataIdTakenError>()(
+  "WikiArticleWikidataIdTakenError",
+  { wikidataId: WikidataId, wikiArticleId: WikiArticleId },
   { httpApiStatus: 409 },
 ) {}
 
