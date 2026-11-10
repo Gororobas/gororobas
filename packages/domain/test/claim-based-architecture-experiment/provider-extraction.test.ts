@@ -5,15 +5,18 @@ import * as Arbitrary from "effect/Arbitrary"
 import { extractArticle } from "../../src/claim-based-architecture-experiment/article-extraction.js"
 import type { ExtractionContext } from "../../src/claim-based-architecture-experiment/extraction.js"
 import { articleToJsonLd } from "../../src/claim-based-architecture-experiment/json-ld.js"
+import { DatePublishedProperty } from "../../src/claim-based-architecture-experiment/properties/date-published.js"
 import { GbifTaxonIdProperty } from "../../src/claim-based-architecture-experiment/properties/gbif-taxon-id.js"
 import { properties } from "../../src/claim-based-architecture-experiment/properties/index.js"
 import { Name } from "../../src/claim-based-architecture-experiment/properties/names.js"
-import { PublicationDateProperty } from "../../src/claim-based-architecture-experiment/properties/publication-date.js"
 import type { PropertyExtraction } from "../../src/claim-based-architecture-experiment/property.js"
+import { GbifResultWithImportedPhotos } from "../../src/claim-based-architecture-experiment/providers/index.js"
+import { WhosOnFirstPlace } from "../../src/claim-based-architecture-experiment/providers/whos-on-first.js"
 import {
   WikidataEntity,
   type WikidataStatement,
 } from "../../src/claim-based-architecture-experiment/providers/wikidata.js"
+import { GbifTaxonId, WhosOnFirstId, WikidataId } from "../../src/common/external-identifiers.js"
 import { MediaAssetId, WikiArticleId } from "../../src/common/ids.js"
 import { PartialDate } from "../../src/common/utils/dates.js"
 import { assertPropertyEffect } from "../../src/testing.js"
@@ -38,11 +41,17 @@ const referenced = Schema.decodeSync(
 const entity = (wikidataId: string) => Option.getOrThrow(Option.fromNullishOr(entities[wikidataId]))
 
 const rachelCarson = WikiArticleId.make("0190a000-0000-7000-8000-000000000001")
+const boyaca = WikiArticleId.make("0190a000-0000-7000-8000-000000000002")
 
-/** We have an article for Rachel Carson; everything else is looked up in the fixtures. */
+/**
+ * We have articles for Rachel Carson and for Boyacá (but not for Colombia); everything else is
+ * looked up in the fixtures.
+ */
 const context: ExtractionContext = {
   articleWithWikidataId: (wikidataId) =>
     Option.fromNullishOr({ Q100948: rachelCarson }[wikidataId]),
+  articleWithWhosOnFirstId: (whosOnFirstId) =>
+    whosOnFirstId === "85682059" ? Option.some(boyaca) : Option.none(),
   labelOf: (wikidataId, language) => Option.fromNullishOr(referenced[wikidataId]?.labels[language]),
   languageTagOf: (wikidataId) => Option.fromNullishOr(referenced[wikidataId]?.languageTag),
   importedFile: () => Option.some(MediaAssetId.make("0190a000-0000-7000-8000-0000000000aa")),
@@ -109,9 +118,9 @@ const withClaims = (claims: WikidataEntity["claims"]): WikidataEntity => ({
   claims,
 })
 
-const publicationDateFrom = (claims: WikidataEntity["claims"]) =>
+const datePublishedFrom = (claims: WikidataEntity["claims"]) =>
   Option.getOrThrow(
-    PublicationDateProperty.extractFrom(
+    DatePublishedProperty.extractFrom(
       { provider: "WIKIDATA", result: withClaims(claims) },
       context,
     ),
@@ -128,7 +137,7 @@ describe("extraction from Wikidata", () => {
     expect(extractionOf(silentSpring, "publisher").values).toEqual([
       { language: null, value: { _tag: "NAME", name: "Houghton Mifflin Harcourt" } },
     ])
-    expect(extractionOf(silentSpring, "languages").values).toEqual([
+    expect(extractionOf(silentSpring, "inLanguage").values).toEqual([
       { language: null, value: "en-US" },
     ])
   })
@@ -175,7 +184,7 @@ describe("extraction from Wikidata", () => {
 
   it("never guesses: ambiguous, unsupported and unknown values become issues", () => {
     expect(
-      publicationDateFrom({
+      datePublishedFrom({
         P577: [
           statement({
             id: "a",
@@ -192,7 +201,7 @@ describe("extraction from Wikidata", () => {
     ).toMatchObject({ values: [], issues: [{ _tag: "AMBIGUOUS", language: null, count: 2 }] })
 
     expect(
-      publicationDateFrom({
+      datePublishedFrom({
         P577: [
           statement({
             id: "a",
@@ -204,7 +213,7 @@ describe("extraction from Wikidata", () => {
     ).toMatchObject({ values: [], issues: [{ _tag: "UNSUPPORTED_TIME", detail: "precision 8" }] })
 
     expect(
-      publicationDateFrom({
+      datePublishedFrom({
         P577: [
           statement({
             id: "a",
@@ -216,7 +225,7 @@ describe("extraction from Wikidata", () => {
     ).toMatchObject({ issues: [{ _tag: "UNSUPPORTED_TIME" }] })
 
     expect(
-      publicationDateFrom({
+      datePublishedFrom({
         P577: [
           statement({
             id: "a",
@@ -233,7 +242,7 @@ describe("extraction from Wikidata", () => {
     ).toMatchObject({ values: [], issues: [{ _tag: "UNKNOWN_VALUE" }] })
 
     expect(
-      publicationDateFrom({
+      datePublishedFrom({
         P577: [
           statement({
             id: "a",
@@ -246,7 +255,7 @@ describe("extraction from Wikidata", () => {
 
     // Upstream changed the property's datatype.
     expect(
-      publicationDateFrom({
+      datePublishedFrom({
         P577: [
           statement({
             id: "a",
@@ -296,6 +305,79 @@ describe("extraction from Wikidata", () => {
   })
 })
 
+describe("extraction from Who's On First", () => {
+  const villaDeLeyva = WhosOnFirstPlace.make({
+    id: WhosOnFirstId.make("421178521"),
+    placeKind: "MUNICIPALITY",
+    names: [
+      { language: "es", name: "Villa de Leiva", isPreferred: false, isAlias: false },
+      { language: "es", name: "Villa de Leyva", isPreferred: true, isAlias: false },
+      { language: null, name: "Sachica", isPreferred: false, isAlias: true },
+    ],
+    wikidataId: WikidataId.make("Q1525127"),
+    geonamesId: null,
+    ancestorIds: [WhosOnFirstId.make("85682059"), WhosOnFirstId.make("85632519")],
+  })
+
+  const fromGazetteer = (place: WhosOnFirstPlace) =>
+    extractArticle({ input: { provider: "WHOS_ON_FIRST", result: place }, kind: "PLACE", context })
+
+  it("creates a place's article from its record: its ID, kind, names, concordances and parent", () => {
+    const extraction = fromGazetteer(villaDeLeyva)
+    const valuesOf = (propertyId: string) =>
+      extractionOf(extraction, propertyId).values.map(({ value }) => value)
+
+    expect(valuesOf("whosOnFirstId")).toEqual(["421178521"])
+    expect(valuesOf("placeKind")).toEqual(["MUNICIPALITY"])
+    // The preferred name first; the town it contains isn't one of its names.
+    expect(namesIn(extractionOf(extraction, "names"), "es")).toEqual([
+      "Villa de Leyva",
+      "Villa de Leiva",
+    ])
+    expect(valuesOf("wikidataId")).toEqual(["Q1525127"])
+    expect(valuesOf("geonamesId")).toEqual([])
+    // Only its state, not the country its state is in.
+    expect(valuesOf("containedInPlace")).toEqual([boyaca])
+  })
+
+  it("reports a parent without an article instead of leaving the place unplaced silently", () => {
+    const boyacaRecord = WhosOnFirstPlace.make({
+      ...villaDeLeyva,
+      id: WhosOnFirstId.make("85682059"),
+      placeKind: "STATE",
+      ancestorIds: [WhosOnFirstId.make("85632519")],
+    })
+
+    expect(extractionOf(fromGazetteer(boyacaRecord), "containedInPlace")).toEqual({
+      propertyId: "containedInPlace",
+      values: [],
+      issues: [{ _tag: "UNMATCHED_PLACE", whosOnFirstId: "85632519" }],
+    })
+  })
+})
+
+describe("extraction from GBIF", () => {
+  it("reads nothing from a taxon outside the article's kingdom", () => {
+    const honeyBee = GbifResultWithImportedPhotos.make({
+      observations: [],
+      gbifTaxonId: GbifTaxonId.make("4RJ6X"),
+      taxonomyGroup: null,
+      classification: [
+        { taxonId: "1", scientificName: "Animalia", taxonRank: "KINGDOM" },
+        { taxonId: "1341976", scientificName: "Apis mellifera", taxonRank: "SPECIES" },
+      ],
+      photos: [],
+    })
+
+    expect(
+      extractArticle({ input: { provider: "GBIF", result: honeyBee }, kind: "PLANT", context }),
+    ).toEqual({
+      issues: [{ _tag: "NOT_OF_KIND", expected: ["Plantae"], found: ["Animalia"] }],
+      properties: [],
+    })
+  })
+})
+
 describe("JSON-LD", () => {
   it("publishes a book with its author as a link and its identifiers as sameAs", () => {
     const silentSpring = fromWikidata(entity("Q591623"), "BOOK")
@@ -322,7 +404,7 @@ describe("JSON-LD", () => {
         ),
         { propertyId: "wikidataId", values: ["Q591623"] },
         // A value of the wrong type (a stale projection) is left out, not published.
-        { propertyId: "pageCount", values: ["297"] },
+        { propertyId: "numberOfPages", values: ["297"] },
       ],
     })
 
@@ -381,7 +463,7 @@ describe("extraction, for any statements", () => {
       arbitrary: Arbitrary.schema(RandomStatements),
       predicate: (specs) =>
         Effect.sync(() => {
-          const extraction = publicationDateFrom({
+          const extraction = datePublishedFrom({
             P577: specs.map((spec, index) =>
               statement({
                 id: `s${index}`,

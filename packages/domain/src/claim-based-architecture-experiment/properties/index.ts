@@ -6,14 +6,15 @@ import { AuthorsProperty } from "./authors.js"
 import { BasedInProperty } from "./based-in.js"
 import { BookEditionsProperty } from "./book-editions.js"
 import { ClimateZonesProperty } from "./climate-zones.js"
-import { ContainedByPlaceProperty } from "./contained-by-place.js"
+import { ContainedInPlaceProperty } from "./contained-in-place.js"
 import { ContentChannelItemProperty } from "./content-channel-item.js"
 import { ContentChannelsProperty } from "./content-channels.js"
 import { CountryOfOriginProperty } from "./country-of-origin.js"
-import { CreditLineProperty } from "./credit-line.js"
+import { CreditTextProperty } from "./credit-text.js"
 import { CrownDiameterProperty } from "./crown-diameter.js"
 import { CrownShapeProperty } from "./crown-shape.js"
 import { CultivarOfProperty } from "./cultivar-of.js"
+import { DatePublishedProperty } from "./date-published.js"
 import { DevelopmentCycleProperty } from "./development-cycle.js"
 import { DirectorsProperty } from "./directors.js"
 import { EdiblePartsProperty } from "./edible-parts.js"
@@ -27,23 +28,22 @@ import { GrowthFormProperty } from "./growth-form.js"
 import { GrowthRateProperty } from "./growth-rate.js"
 import { HeightProperty } from "./height.js"
 import { ImagesProperty } from "./images.js"
+import { InLanguageProperty } from "./in-language.js"
 import { InheritsFromParentProperty } from "./inherits-from-parent.js"
 import { IsbnProperty } from "./isbn.js"
-import { LanguagesProperty } from "./languages.js"
 import { LeafPersistenceProperty } from "./leaf-persistence.js"
 import { LifecyclesProperty } from "./lifecycles.js"
 import { LifespanProperty } from "./lifespan.js"
 import { MainImageProperty } from "./main-image.js"
 import { NamesProperty } from "./names.js"
+import { NumberOfPagesProperty } from "./number-of-pages.js"
 import { OccupationsProperty } from "./occupations.js"
 import { OrganizationTypeProperty } from "./organization-type.js"
 import { OriginProperty } from "./origin.js"
-import { PageCountProperty } from "./page-count.js"
 import { PlaceKindProperty } from "./place-kind.js"
 import { PlantUsageProperty } from "./plant-usage.js"
 import { PlantingMethodsProperty } from "./planting-methods.js"
 import { PruningResponseProperty } from "./pruning-response.js"
-import { PublicationDateProperty } from "./publication-date.js"
 import { PublisherProperty } from "./publisher.js"
 import { RelatedToProperty } from "./related-to.js"
 import { ResourceFormatProperty } from "./resource-format.js"
@@ -74,11 +74,11 @@ export const properties = [
   BasedInProperty,
   BookEditionsProperty,
   ClimateZonesProperty,
-  ContainedByPlaceProperty,
+  ContainedInPlaceProperty,
   ContentChannelItemProperty,
   ContentChannelsProperty,
   CountryOfOriginProperty,
-  CreditLineProperty,
+  CreditTextProperty,
   CrownDiameterProperty,
   CrownShapeProperty,
   CultivarOfProperty,
@@ -97,7 +97,7 @@ export const properties = [
   ImagesProperty,
   InheritsFromParentProperty,
   IsbnProperty,
-  LanguagesProperty,
+  InLanguageProperty,
   LeafPersistenceProperty,
   LifecyclesProperty,
   LifespanProperty,
@@ -106,12 +106,12 @@ export const properties = [
   OccupationsProperty,
   OrganizationTypeProperty,
   OriginProperty,
-  PageCountProperty,
+  NumberOfPagesProperty,
   PlaceKindProperty,
   PlantUsageProperty,
   PlantingMethodsProperty,
   PruningResponseProperty,
-  PublicationDateProperty,
+  DatePublishedProperty,
   PublisherProperty,
   RelatedToProperty,
   ResourceFormatProperty,

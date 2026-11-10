@@ -8,11 +8,14 @@ import { ExternalDataProvider, ProviderPhoto } from "../../wiki/external-data/co
 import { BookEdition, BookResult } from "../../wiki/external-data/kinds/book-external-data.js"
 import { GbifPlantResult } from "../../wiki/external-data/kinds/plant-external-data.js"
 import type { SyntropediaPlant } from "./syntropedia.js"
+import type { WhosOnFirstPlace } from "./whos-on-first.js"
 import type { WikidataEntity } from "./wikidata.js"
 
 export const Provider = Schema.Literals([
   ...ExternalDataProvider.literals,
-  /** Writes claims when the gazetteer creates places, not through an extractor. */
+  /**
+   * The gazetteer's places, read from its own database rather than fetched (`whos-on-first.ts`).
+   */
   "WHOS_ON_FIRST",
   /**
    * Forests4Farming's catalogue of plants for syntropic agroforestry: a source we'd trust more than
@@ -88,6 +91,7 @@ export interface ProviderResults {
   readonly GBIF: GbifResultWithImportedPhotos
   readonly CONTENT_CHANNELS: ContentChannelItem
   readonly SYNTROPEDIA: SyntropediaPlant
+  readonly WHOS_ON_FIRST: WhosOnFirstPlace
 }
 
 export type FetchedProvider = keyof ProviderResults

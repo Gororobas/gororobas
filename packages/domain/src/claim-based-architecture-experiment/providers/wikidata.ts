@@ -31,23 +31,48 @@ export const WikidataPropertyId = Schema.String.check(Schema.isPattern(/^P[1-9][
 
 export type WikidataPropertyId = typeof WikidataPropertyId.Type
 
-/** The Wikidata properties our extractors read, by ID: IDs are stable, labels drift. */
+/**
+ * The Wikidata properties our extractors read, by ID: IDs are stable, labels drift.
+ *
+ * Each means exactly what the property reading it means, unless its comment gives SKOS's match
+ * strength (as `schemaOrg`'s `match` does): `NARROWER` (narrowMatch) when Wikidata's says less than
+ * ours, so its values are some of ours but never all of them; `CLOSE` (closeMatch) when they
+ * nearly mean the same, with how they differ.
+ */
 export const WikidataProperty = {
   AUTHOR: WikidataPropertyId.make("P50"),
+  /** With DATE_OF_DEATH, one `lifespan`: neither is claimed alone. */
   DATE_OF_BIRTH: WikidataPropertyId.make("P569"),
   DATE_OF_DEATH: WikidataPropertyId.make("P570"),
+  /** A qualifier, mapped to nothing: statements with one are no longer current. */
   END_TIME: WikidataPropertyId.make("P582"),
   /**
    * GBIF taxon ID since 2026. It replaced P846, which holds GBIF *Backbone* species IDs: another
    * identifier scheme GBIF must resolve into a taxon ID, so P846 is never read as one.
    */
   GBIF_TAXON_ID: WikidataPropertyId.make("P14607"),
+  /** Mapped to no property: the item's classes decide whether it's about the article's kind. */
   INSTANCE_OF: WikidataPropertyId.make("P31"),
   LANGUAGE_OF_WORK: WikidataPropertyId.make("P407"),
   OFFICIAL_WEBSITE: WikidataPropertyId.make("P856"),
+  /**
+   * `NARROWER` than `inLanguage`: a film's original language, without the languages it was
+   * dubbed or released in. Films state it here rather than in LANGUAGE_OF_WORK.
+   */
+  ORIGINAL_LANGUAGE_OF_FILM: WikidataPropertyId.make("P364"),
+  /**
+   * `CLOSE` to `datePublished` for films: they have one statement per country they were released
+   * in (qualified by P291), and a `ONE` property reports those as ambiguous instead of guessing
+   * the first release.
+   */
   PUBLICATION_DATE: WikidataPropertyId.make("P577"),
   PUBLISHER: WikidataPropertyId.make("P123"),
+  /** `NARROWER` than `names`: what a taxon is commonly called, beside the item's labels and aliases. */
   TAXON_COMMON_NAME: WikidataPropertyId.make("P1843"),
+  /**
+   * `NARROWER` than `scientificNames`: the taxon's accepted name, without the synonyms GBIF and
+   * people add.
+   */
   TAXON_NAME: WikidataPropertyId.make("P225"),
 } as const
 
@@ -335,7 +360,7 @@ export const Wikidata = {
       }),
     ),
 
-  /** An item that must be one of our articles: relations like `containedByPlace`. */
+  /** An item that must be one of our articles: relations like `containedInPlace`. */
   article: (
     statement: WikidataStatement,
     context: ExtractionContext,

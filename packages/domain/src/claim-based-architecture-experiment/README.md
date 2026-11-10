@@ -218,11 +218,11 @@ Editors belong to value shapes, not properties: about a dozen components cover a
 | Single choice | `organizationType`, `placeKind`, `growthForm`, `successionalGroup`… |
 | Chip set of choices | `strata`, `edibleParts`, `toolUsage`… |
 | Range: two inputs, one schema message | `height`, `crownDiameter`, `temperature`, `developmentCycle` |
-| Partial dates, single or paired | `publicationDate`, `lifespan`, `activePeriod` |
+| Partial dates, single or paired | `datePublished`, `lifespan`, `activePeriod` |
 | Ordered names per language | `names` |
 | Article or name picker | `publisher`, `basedIn`, `genres`… |
 | Ordered credits | `authors`, `directors` |
-| Relation, with qualifier fields when it has any | `growsIn`, `containedByPlace`, `cultivarOf`, `relatedTo` |
+| Relation, with qualifier fields when it has any | `growsIn`, `containedInPlace`, `cultivarOf`, `relatedTo` |
 | Media asset picker | `images`, `mainImage` |
 
 The web app keeps a registry with an entry per `PropertyId`: title, description, section, and an
@@ -257,7 +257,7 @@ language.
 
 - **Is a BOOK a work or an edition?** Today's attributes describe one edition (publisher, date,
   pages, edition label), while Google Books returns many (`bookEditions`).
-- **Free text with no language.** `occupations`, `editionLabel` and `creditLine` are written in
+- **Free text with no language.** `occupations`, `editionLabel` and `creditText` are written in
   some language but stored per article. Each should either become `LANGUAGE_SPECIFIC` or point to
   CONCEPT articles.
 - **Changing an article's kind.** Kind stays on the article row, not as a claim, since it decides

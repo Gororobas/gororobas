@@ -6,7 +6,7 @@
 import type { Option, Result } from "effect"
 
 import type { SupportedLanguage } from "../common/enums.js"
-import type { WikidataId } from "../common/external-identifiers.js"
+import type { WhosOnFirstId, WikidataId } from "../common/external-identifiers.js"
 import type { MediaAssetId, WikiArticleId } from "../common/ids.js"
 import type { PropertyScope } from "./claims.js"
 
@@ -33,6 +33,7 @@ export type ExtractionIssue =
   | { readonly _tag: "UNSUPPORTED_TIME"; readonly detail: string }
   | { readonly _tag: "UNKNOWN_UNIT"; readonly unit: string }
   | { readonly _tag: "UNMATCHED_ITEM"; readonly wikidataId: WikidataId }
+  | { readonly _tag: "UNMATCHED_PLACE"; readonly whosOnFirstId: WhosOnFirstId }
   | { readonly _tag: "NOT_IMPORTED"; readonly fileName: string }
   | { readonly _tag: "UNSUPPORTED_LANGUAGE"; readonly language: string }
   /** The provider says there's a value but not which (Wikidata's `somevalue`). */
@@ -59,11 +60,12 @@ export type Extraction<Value, Scope extends PropertyScope> = Result.Result<
 
 /**
  * What extraction may look up, loaded in one batch before extracting so `extract` stays pure:
- * our articles by Wikidata ID, the labels and language tags of the items a result points at, and
+ * our articles by Wikidata or Who's On First ID, the labels and language tags of the items a result points at, and
  * the provider files already imported as media assets.
  */
 export interface ExtractionContext {
   readonly articleWithWikidataId: (wikidataId: WikidataId) => Option.Option<WikiArticleId>
+  readonly articleWithWhosOnFirstId: (whosOnFirstId: WhosOnFirstId) => Option.Option<WikiArticleId>
   readonly labelOf: (wikidataId: WikidataId, language: SupportedLanguage) => Option.Option<string>
   /** The item's IETF tag (P305): Q7976 American English is `en-US`. */
   readonly languageTagOf: (wikidataId: WikidataId) => Option.Option<string>

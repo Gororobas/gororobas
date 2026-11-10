@@ -1,8 +1,9 @@
 import { IntNonNegative } from "../../common/primitives.js"
 import { defineProperty } from "../property.js"
 
-export const PageCountProperty = defineProperty({
-  id: "pageCount",
+/** Today's book `pageCount`. Named as schema.org and Wikidata (P1104) name it. */
+export const NumberOfPagesProperty = defineProperty({
+  id: "numberOfPages",
   valueSchema: IntNonNegative,
   kinds: ["BOOK"],
   scope: "UNIVERSAL",

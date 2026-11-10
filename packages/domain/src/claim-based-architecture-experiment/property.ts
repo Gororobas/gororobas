@@ -195,6 +195,10 @@ export const defineProperty = <
           sources.flatMap((source) =>
             Predicate.isTagged(source, "SYNTROPEDIA") ? [source.extract(result, context)] : [],
           ),
+        WHOS_ON_FIRST: ({ result }) =>
+          sources.flatMap((source) =>
+            Predicate.isTagged(source, "WHOS_ON_FIRST") ? [source.extract(result, context)] : [],
+          ),
       }),
     )
 

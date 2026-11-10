@@ -6,15 +6,15 @@ import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 import { partialDateToIso } from "../schema-org.js"
 
 /**
- * When a work came out: a book, a resource, a film (today's `releaseDate`). Wikidata's P577 and
- * schema.org's `datePublished` both name it this way for every kind of work.
+ * When a work came out: a book, a resource, a film (today's `publicationDate` and `releaseDate`),
+ * named as schema.org names it for every kind of work.
  *
  * Today's book attributes describe one edition (publisher, date, pages, edition label), while
  * Google Books returns many (`bookEditions`). Deciding whether a BOOK article is a work or an
  * edition would decide whether these stay, or move into `bookEditions` as people-authored values.
  */
-export const PublicationDateProperty = defineProperty({
-  id: "publicationDate",
+export const DatePublishedProperty = defineProperty({
+  id: "datePublished",
   valueSchema: PartialDate,
   kinds: ["BOOK", "RESOURCE", "FILM"],
   scope: "UNIVERSAL",

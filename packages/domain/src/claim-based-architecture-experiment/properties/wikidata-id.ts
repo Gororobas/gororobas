@@ -14,7 +14,12 @@ export const WikidataIdProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: (source) => [source.person(), source.whosOnFirst()],
+  sources: (source) => [
+    source.person(),
+    source.whosOnFirst({
+      extract: (place) => (place.wikidataId === null ? [] : [source.found(place.wikidataId)]),
+    }),
+  ],
   schemaOrg: {
     match: "EXACT",
     encode: (id) => ({ sameAs: `https://www.wikidata.org/wiki/${id}` }),

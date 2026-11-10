@@ -8,5 +8,8 @@ export const PlaceKindProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: (source) => [source.whosOnFirst(), source.person()],
+  sources: (source) => [
+    source.whosOnFirst({ extract: (place) => [source.found(place.placeKind)] }),
+    source.person(),
+  ],
 })

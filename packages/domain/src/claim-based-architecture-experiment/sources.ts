@@ -17,7 +17,7 @@ export interface PersonSource {
   readonly _tag: "PERSON"
 }
 
-/** A provider we fetch, with how this property reads its result. */
+/** A provider we fetch or look up, with how this property reads its result. */
 export interface FetchedProviderSource<
   Provider extends FetchedProvider,
   Value,
@@ -28,11 +28,6 @@ export interface FetchedProviderSource<
     result: ProviderResults[Provider],
     context: ExtractionContext,
   ) => ReadonlyArray<Extraction<Value, Scope>>
-}
-
-/** A provider that writes claims itself: the gazetteer when it creates places. */
-export interface WritingProviderSource<Provider extends "WHOS_ON_FIRST"> {
-  readonly _tag: Provider
 }
 
 export interface ArticleTextInferenceSource {
@@ -56,7 +51,7 @@ export type SourceDefinition<Value, Scope extends PropertyScope> =
   | FetchedProviderSource<"GOOGLE_BOOKS", Value, Scope>
   | FetchedProviderSource<"CONTENT_CHANNELS", Value, Scope>
   | FetchedProviderSource<"SYNTROPEDIA", Value, Scope>
-  | WritingProviderSource<"WHOS_ON_FIRST">
+  | FetchedProviderSource<"WHOS_ON_FIRST", Value, Scope>
   | ArticleTextInferenceSource
   | MachineTranslationSource
   | ArticleTextEntityReferenceSource
@@ -83,7 +78,9 @@ export interface SourceBuilder<Value, Scope extends PropertyScope> {
   readonly syntropedia: (
     config: ExtractOf<"SYNTROPEDIA", Value, Scope>,
   ) => FetchedProviderSource<"SYNTROPEDIA", Value, Scope>
-  readonly whosOnFirst: () => WritingProviderSource<"WHOS_ON_FIRST">
+  readonly whosOnFirst: (
+    config: ExtractOf<"WHOS_ON_FIRST", Value, Scope>,
+  ) => FetchedProviderSource<"WHOS_ON_FIRST", Value, Scope>
   readonly articleTextInference: (config?: {
     readonly claimsPerText?: number
   }) => ArticleTextInferenceSource
@@ -110,7 +107,7 @@ export const makeSourceBuilder = <Value, Scope extends PropertyScope>(): SourceB
   googleBooks: ({ extract }) => ({ _tag: "GOOGLE_BOOKS", extract }),
   contentChannels: ({ extract }) => ({ _tag: "CONTENT_CHANNELS", extract }),
   syntropedia: ({ extract }) => ({ _tag: "SYNTROPEDIA", extract }),
-  whosOnFirst: () => ({ _tag: "WHOS_ON_FIRST" }),
+  whosOnFirst: ({ extract }) => ({ _tag: "WHOS_ON_FIRST", extract }),
   articleTextInference: (config) => ({
     _tag: "ARTICLE_TEXT_INFERENCE",
     claimsPerText: config?.claimsPerText ?? DEFAULT_CLAIMS_PER_TEXT,

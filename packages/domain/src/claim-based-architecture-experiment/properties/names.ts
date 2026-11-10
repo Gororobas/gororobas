@@ -5,6 +5,7 @@ import { toSearchableText } from "../../common/utils/strings.js"
 import { everyKind } from "../kinds.js"
 import { defineProperty } from "../property.js"
 import { Syntropedia } from "../providers/syntropedia.js"
+import { WhosOnFirst } from "../providers/whos-on-first.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 import { FoldedName } from "../values/folded-name.js"
 import { supportedLanguageOf } from "../values/supported-language.js"
@@ -28,7 +29,7 @@ export type Name = typeof Name.Type
  * A handle is minted from the first name people gave in a language (or the gazetteer's), never
  * from a machine's, and never replaced afterwards, so links keep working.
  *
- * Wikidata's labels and aliases, Syntropedia's names, Google Books' edition titles and channels' item titles are each
+ * The gazetteer's names, Wikidata's labels and aliases, Syntropedia's names, Google Books' edition titles and channels' item titles are each
  * their source's claims, so an article is named in every language they know without a machine
  * editing anything people wrote. They follow people's names, in source order.
  * Scientific names are their own property: they name a taxon and belong to no language.
@@ -43,7 +44,19 @@ export const NamesProperty = defineProperty({
   presence: "REQUIRED",
   sources: (source) => [
     source.person(),
-    source.whosOnFirst(),
+    source.whosOnFirst({
+      extract: (place) =>
+        WhosOnFirst.names(place).flatMap(({ language, value }) =>
+          Schema.is(FoldedName)(value)
+            ? [
+                source.found({
+                  language,
+                  value: Name.make({ name: value, grammaticalGender: null }),
+                }),
+              ]
+            : [],
+        ),
+    }),
     source.wikidata({
       /**
        * The label, then the aliases, then taxon common names (P1843): Wikidata's order, kept as
