@@ -1,9 +1,8 @@
 import { Array as EffectArray, Option, Result, Schema } from "effect"
 
-import { PartialDate } from "../../common/utils/dates.js"
+import { PartialDate, partialDateToIso } from "../../common/utils/dates.js"
 import { defineProperty } from "../property.js"
 import { Wikidata, WikidataProperty, type WikidataPropertyId } from "../providers/wikidata.js"
-import { partialDateToIso } from "../schema-org.js"
 
 /** Today's `birthDate` and `deathDate`. See `activePeriod` on ordering partial dates. */
 export const LifespanProperty = defineProperty({

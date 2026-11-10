@@ -3,7 +3,7 @@
  * values and their attestations: claims, statuses and evidence stay behind this module.
  *
  * It's a pure function of the claims, so it doesn't depend on their order, and stored projections
- * can always be rebuilt from it. Cultivars inherit at read time (`resolveCultivarTrait`), so a
+ * can always be rebuilt from it. Cultivars inherit at read time (`resolveInheritedTrait`), so a
  * plant's change never has to be copied into its cultivars.
  *
  * A **claimed value** is a value with the visible claim stating it: what's left of a claim once
@@ -25,14 +25,14 @@ import {
 } from "./claims.js"
 import type { Dispute } from "./disputes.js"
 import type { Endorsement } from "./endorsements.js"
-import { type ClaimId, MachineProvenance, type SourceKey } from "./provenance.js"
+import { type ClaimId, MachineProvenance, type ProvenanceSourceKey } from "./provenance.js"
 import type { FractionalIndex } from "./values/fractional-index.js"
 
 /** Who stands behind a value, as readers see it: enough for a badge, a link and a dispute button. */
 export interface Attestation {
   readonly claimId: ClaimId
   /** The source of the claim attesting it. */
-  readonly sourceKey: SourceKey
+  readonly sourceKey: ProvenanceSourceKey
 }
 
 /** How many people did something, with a few of them to show as avatars. */
@@ -61,7 +61,7 @@ export interface ResolvedValue<Value> {
 /** The part of a property resolution reads. */
 export interface ResolutionSpec<Value> {
   readonly valueSchema: Schema.Schema<Value>
-  readonly sourceKeys: ReadonlyArray<SourceKey>
+  readonly sourceKeys: ReadonlyArray<ProvenanceSourceKey>
   readonly cardinality: "ONE" | "SET" | "LIST"
   /** For `SET` and `LIST`; `ALL_SOURCES` when absent. */
   readonly mergeStrategy?: "ALL_SOURCES" | "FIRST_SOURCE_WITH_VALUES"
@@ -402,48 +402,48 @@ export const hasAnyValue = <Value, Scope extends PropertyScope>({
   )
 
 /**
- * A cultivar's trait as its page shows it: today's `CultivarProperty` (`Unknown | Inherit | Value`),
- * derived from claims rather than stored. The plant's values come along in every case, so the page
- * can show them beside the cultivar's, or for context when the cultivar's are unknown.
- *
- * @TODO can this be more generic? I'm assuming we'll eventually have other inheritance relationships between articles beyond cultivars
+ * A trait of an article that can inherit from a parent article, as its page shows it: today's
+ * `CultivarProperty` (`Unknown | Inherit | Value`), derived from claims rather than stored. The
+ * parent's values come along in every case, so the page can show them beside the article's own,
+ * or for context when the article's are unknown. Cultivars inherit from their plant; any future
+ * parent-child relationship between articles can use the same shape.
  */
-export type CultivarTrait<Value> =
-  /** The cultivar lists the trait in `inheritsFromParent`: the plant's values are its values. */
+export type InheritedTrait<Value> =
+  /** The article lists the trait in `inheritsFromParent`: the parent's values are its values. */
   | {
       readonly _tag: "INHERITED"
-      readonly plantId: WikiArticleId
+      readonly parentId: WikiArticleId
       readonly values: ReadonlyArray<ResolvedValue<Value>>
     }
-  /** The cultivar has values of its own. */
+  /** The article has values of its own. */
   | {
       readonly _tag: "OWN"
       readonly values: NonEmptyReadonlyArray<ResolvedValue<Value>>
-      readonly plantValues: ReadonlyArray<ResolvedValue<Value>>
+      readonly parentValues: ReadonlyArray<ResolvedValue<Value>>
     }
-  /** Neither: unknown for the cultivar, never filled in from the plant. */
-  | { readonly _tag: "UNKNOWN"; readonly plantValues: ReadonlyArray<ResolvedValue<Value>> }
+  /** Neither: unknown for the article, never filled in from the parent. */
+  | { readonly _tag: "UNKNOWN"; readonly parentValues: ReadonlyArray<ResolvedValue<Value>> }
 
 /**
- * Runs when the cultivar is read, so the plant's changes show without copying anything. Inheriting
+ * Runs when the article is read, so the parent's changes show without copying anything. Inheriting
  * and having values of its own are different statements: the edit form offers one or the other,
- * and choosing to inherit retracts the cultivar's own claims. Should both exist anyway, inheriting
+ * and choosing to inherit retracts the article's own claims. Should both exist anyway, inheriting
  * wins, since it's the explicit choice.
  */
-export const resolveCultivarTrait = <Value>({
-  cultivarValues,
-  plantValues,
-  plantId,
-  inheritsFromPlant,
+export const resolveInheritedTrait = <Value>({
+  ownValues,
+  parentValues,
+  parentId,
+  inheritsFromParent,
 }: {
-  readonly cultivarValues: ReadonlyArray<ResolvedValue<Value>>
-  readonly plantValues: ReadonlyArray<ResolvedValue<Value>>
-  readonly plantId: WikiArticleId
-  readonly inheritsFromPlant: boolean
-}): CultivarTrait<Value> =>
-  inheritsFromPlant
-    ? { _tag: "INHERITED", plantId, values: plantValues }
-    : EffectArray.match(cultivarValues, {
-        onEmpty: (): CultivarTrait<Value> => ({ _tag: "UNKNOWN", plantValues }),
-        onNonEmpty: (values): CultivarTrait<Value> => ({ _tag: "OWN", values, plantValues }),
+  readonly ownValues: ReadonlyArray<ResolvedValue<Value>>
+  readonly parentValues: ReadonlyArray<ResolvedValue<Value>>
+  readonly parentId: WikiArticleId
+  readonly inheritsFromParent: boolean
+}): InheritedTrait<Value> =>
+  inheritsFromParent
+    ? { _tag: "INHERITED", parentId, values: parentValues }
+    : EffectArray.match(ownValues, {
+        onEmpty: (): InheritedTrait<Value> => ({ _tag: "UNKNOWN", parentValues }),
+        onNonEmpty: (values): InheritedTrait<Value> => ({ _tag: "OWN", values, parentValues }),
       })

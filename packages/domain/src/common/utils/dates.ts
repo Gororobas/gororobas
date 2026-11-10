@@ -105,3 +105,17 @@ export const PartialDate = PartialDateEncoded.pipe(
 )
 
 export type PartialDate = typeof PartialDate.Type
+
+const pad = (value: number, length: number) => String(value).padStart(length, "0")
+
+/** ISO 8601 at the date's own precision: `1962`, `1962-09`, `1962-09-27`. */
+export const partialDateToIso = (date: {
+  readonly year: number
+  readonly month?: number
+  readonly day?: number
+}): string =>
+  [
+    pad(date.year, 4),
+    ...(date.month === undefined ? [] : [pad(date.month, 2)]),
+    ...(date.day === undefined ? [] : [pad(date.day, 2)]),
+  ].join("-")

@@ -404,7 +404,7 @@ describe("JSON-LD", () => {
         ),
         { propertyId: "wikidataId", values: ["Q591623"] },
         // A value of the wrong type (a stale projection) is left out, not published.
-        { propertyId: "numberOfPages", values: ["297"] },
+        { propertyId: "isbn", values: [297] },
       ],
     })
 

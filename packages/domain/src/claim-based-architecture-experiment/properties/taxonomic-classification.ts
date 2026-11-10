@@ -1,11 +1,11 @@
 import { GbifClassification } from "../../wiki/external-data/kinds/plant-external-data.js"
 import { defineProperty } from "../property.js"
 
-/** Today's `wiki_plant_taxonomy_classification`: one value per rank, only from GBIF. */
+/** Today's `wiki_plant_taxonomy_classification`, now for animals too: one value per rank, only from GBIF. */
 export const TaxonomicClassificationProperty = defineProperty({
   id: "taxonomicClassification",
   valueSchema: GbifClassification,
-  kinds: ["PLANT"],
+  kinds: ["PLANT", "ANIMAL"],
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",

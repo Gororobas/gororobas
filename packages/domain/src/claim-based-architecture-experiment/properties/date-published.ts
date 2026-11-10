@@ -1,9 +1,8 @@
 import { Option, Result } from "effect"
 
-import { PartialDate } from "../../common/utils/dates.js"
+import { PartialDate, partialDateToIso } from "../../common/utils/dates.js"
 import { defineProperty } from "../property.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
-import { partialDateToIso } from "../schema-org.js"
 
 /**
  * When a work came out: a book, a resource, a film (today's `publicationDate` and `releaseDate`),

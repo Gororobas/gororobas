@@ -12,7 +12,7 @@ import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 export const GbifTaxonIdProperty = defineProperty({
   id: "gbifTaxonId",
   valueSchema: GbifTaxonId,
-  kinds: ["PLANT"],
+  kinds: ["PLANT", "ANIMAL"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   sources: (source) => [

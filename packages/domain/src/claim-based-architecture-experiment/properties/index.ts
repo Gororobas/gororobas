@@ -36,7 +36,6 @@ import { LifecyclesProperty } from "./lifecycles.js"
 import { LifespanProperty } from "./lifespan.js"
 import { MainImageProperty } from "./main-image.js"
 import { NamesProperty } from "./names.js"
-import { NumberOfPagesProperty } from "./number-of-pages.js"
 import { OccupationsProperty } from "./occupations.js"
 import { OrganizationTypeProperty } from "./organization-type.js"
 import { OriginProperty } from "./origin.js"
@@ -106,7 +105,6 @@ export const properties = [
   OccupationsProperty,
   OrganizationTypeProperty,
   OriginProperty,
-  NumberOfPagesProperty,
   PlaceKindProperty,
   PlantUsageProperty,
   PlantingMethodsProperty,

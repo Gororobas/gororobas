@@ -2,11 +2,11 @@ import { Option, Schema } from "effect"
 
 import { defineProperty } from "../property.js"
 
-/** Today's `wiki_plant_taxonomy_group`. */
+/** Today's `wiki_plant_taxonomy_group`, now for animals too. */
 export const TaxonomyGroupProperty = defineProperty({
   id: "taxonomyGroup",
   valueSchema: Schema.NonEmptyString,
-  kinds: ["PLANT"],
+  kinds: ["PLANT", "ANIMAL"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   sources: (source) => [

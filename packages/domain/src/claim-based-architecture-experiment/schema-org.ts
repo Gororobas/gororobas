@@ -56,19 +56,3 @@ export const schemaOrgTypeByKind = {
   CONCEPT: "DefinedTerm",
   UNCATEGORIZED: "Thing",
 } as const satisfies { readonly [Kind in ArticleKind]: string }
-
-const pad = (value: number, length: number) => String(value).padStart(length, "0")
-
-/** ISO 8601 at the date's own precision: `1962`, `1962-09`, `1962-09-27`.
- * @todo move to utils/dates.ts
- */
-export const partialDateToIso = (date: {
-  readonly year: number
-  readonly month?: number
-  readonly day?: number
-}): string =>
-  [
-    pad(date.year, 4),
-    ...(date.month === undefined ? [] : [pad(date.month, 2)]),
-    ...(date.day === undefined ? [] : [pad(date.day, 2)]),
-  ].join("-")

@@ -256,7 +256,7 @@ language.
 ## Open questions
 
 - **Is a BOOK a work or an edition?** Today's attributes describe one edition (publisher, date,
-  pages, edition label), while Google Books returns many (`bookEditions`).
+  edition label), while Google Books returns many (`bookEditions`, each with its own page count).
 - **Free text with no language.** `occupations`, `editionLabel` and `creditText` are written in
   some language but stored per article. Each should either become `LANGUAGE_SPECIFIC` or point to
   CONCEPT articles.

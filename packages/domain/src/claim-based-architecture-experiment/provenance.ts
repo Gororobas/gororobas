@@ -1,6 +1,6 @@
 /**
  * A claim's provenance: who asserted it, and the evidence they had (W3C PROV's term for it). It
- * names one of the property's sources (a `SourceKey`) and records what that source read, so it's
+ * names one of the property's sources (a `ProvenanceSourceKey`) and records what that source read, so it's
  * the record of where the data came from, not the source's definition. It decides the claim's
  * lifecycle (see `claims.ts`):
  *
@@ -82,7 +82,7 @@ export const MachineProvenance = Schema.TaggedUnion({
 export type MachineProvenance = typeof MachineProvenance.Type
 
 /** The machine provenances a property's sources allow: providers narrowed to those listed. */
-export type AllowedMachineProvenance<Source extends SourceKey> =
+export type AllowedMachineProvenance<Source extends ProvenanceSourceKey> =
   | Extract<MachineProvenance, { readonly _tag: Extract<Source, MachineProvenance["_tag"]> }>
   | ([Extract<Source, Provider>] extends [never]
       ? never
@@ -90,7 +90,7 @@ export type AllowedMachineProvenance<Source extends SourceKey> =
           readonly provider: Extract<Source, Provider>
         })
 
-export type AllowedPersonProvenance<Source extends SourceKey> = "PERSON" extends Source
+export type AllowedPersonProvenance<Source extends ProvenanceSourceKey> = "PERSON" extends Source
   ? PersonProvenance
   : never
 
@@ -102,8 +102,7 @@ export type MachineProvenanceKey =
   | Exclude<MachineProvenance["_tag"], "EXTERNAL_PROVIDER">
   | Provider
 
-// @todo rename to ProvenanceSourceKey
-export type SourceKey = PersonProvenance["_tag"] | MachineProvenanceKey
+export type ProvenanceSourceKey = PersonProvenance["_tag"] | MachineProvenanceKey
 
 export const sourceKeyOfMachineProvenance = (
   provenance: MachineProvenance,

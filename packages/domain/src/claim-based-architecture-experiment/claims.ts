@@ -22,7 +22,7 @@ import {
   MachineProvenance,
   ClaimId,
   PersonProvenance,
-  type SourceKey,
+  type ProvenanceSourceKey,
   sourceKeyOfMachineProvenance,
 } from "./provenance.js"
 import { FractionalIndex } from "./values/fractional-index.js"
@@ -113,7 +113,7 @@ export const claimSchema = <
   Value,
   Encoded,
   Scope extends PropertyScope,
-  AvailableSource extends SourceKey,
+  AvailableSource extends ProvenanceSourceKey,
 >(property: {
   readonly id: Id
   readonly valueSchema: Schema.Codec<Value, Encoded>
@@ -121,7 +121,8 @@ export const claimSchema = <
   readonly cardinality: "ONE" | "SET" | "LIST"
   readonly sourceKeys: ReadonlyArray<AvailableSource>
 }) => {
-  const lists = (key: SourceKey) => property.sourceKeys.some((sourceKey) => sourceKey === key)
+  const lists = (key: ProvenanceSourceKey) =>
+    property.sourceKeys.some((sourceKey) => sourceKey === key)
 
   const annotations = {
     identifier: "ClaimFromListedSource",
@@ -154,12 +155,12 @@ export const claimSchema = <
   /** A position exactly when the property is a list. */
   const position = Schema.NullOr(FractionalIndex).check(
     Schema.makeFilter(
-      (candidate) =>
-        // @todo clearer check below, this code is quite confusing. Do an early return if cardinality !== LIST
-        (property.cardinality === "LIST") === (candidate !== null) ||
-        (property.cardinality === "LIST"
-          ? `${property.id} is a list: its claims need a position`
-          : `${property.id} isn't a list: its claims have no position`),
+      (candidate) => {
+        if (property.cardinality !== "LIST") {
+          return candidate === null || `${property.id} isn't a list: its claims have no position`
+        }
+        return candidate !== null || `${property.id} is a list: its claims need a position`
+      },
       {
         identifier: "ClaimPosition",
         title: "Claim position",
@@ -210,7 +211,7 @@ export type ClaimOf<Property extends { readonly Claim: Schema.Top }> = Exclude<
 
 export const getClaimSourceKey = <Value, Scope extends PropertyScope>(
   claim: Claim<Value, Scope>,
-): SourceKey =>
+): ProvenanceSourceKey =>
   "moderationStatus" in claim
     ? sourceKeyOfMachineProvenance(claim.provenance)
     : claim.provenance._tag
