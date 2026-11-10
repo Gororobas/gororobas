@@ -380,6 +380,10 @@ msgid "Biennial"
 msgstr "Bienal"
 
 #: src/lib/vocabulary.ts
+msgid "Biocontrol"
+msgstr "Controle biológico"
+
+#: src/lib/vocabulary.ts
 msgid "Biome"
 msgstr "Bioma"
 
@@ -906,6 +910,10 @@ msgstr "Duração do plantio até a morte ou colheita"
 msgid "Fruit"
 msgstr "Fruto"
 
+#: src/lib/vocabulary.ts
+msgid "Fuel"
+msgstr "Combustível"
+
 #: src/ui/rich-text/view.ts
 msgid "Gallery"
 msgstr "Galeria"
@@ -1172,6 +1180,10 @@ msgstr "Na enciclopédia"
 msgid "includes {0}"
 msgstr "inclui {0}"
 
+#: src/lib/vocabulary.ts
+msgid "Industrial material"
+msgstr "Material industrial"
+
 #: src/blocks/wiki-article/view/attribution.ts
 msgid "Information on published editions, from the Google Books catalog."
 msgstr "Informações das edições publicadas, segundo o catálogo do Google Livros."
@@ -1264,6 +1276,10 @@ msgstr "Idiomas"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Latest observation: {0}"
 msgstr "Última observação: {0}"
+
+#: src/lib/vocabulary.ts
+msgid "Layering"
+msgstr "Alporquia"
 
 #: src/lib/vocabulary.ts
 msgid "Leaf"
@@ -1392,6 +1408,10 @@ msgid "Main uses"
 msgstr "Principais usos"
 
 #: src/lib/vocabulary.ts
+msgid "Making a branch grow roots while it's still attached to the plant, by burying its tip or wrapping a wounded stretch of it in moist soil (air layering), then cutting it off as a new plant. Used for lychee, jabuticaba and many shrubs."
+msgstr "Fazer um galho criar raízes enquanto ainda está preso à planta, enterrando sua ponta ou envolvendo um trecho ferido dele em terra úmida (alporquia aérea), e depois cortá-lo como uma nova planta. Usada para lichia, jabuticaba e muitos arbustos."
+
+#: src/lib/vocabulary.ts
 msgid "Measurement"
 msgstr "Medição"
 
@@ -1456,6 +1476,10 @@ msgstr "Novo lugar no itinerário"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Newer"
 msgstr "Mais recentes"
+
+#: src/lib/vocabulary.ts
+msgid "Nitrogen fixation"
+msgstr "Fixação de nitrogênio"
 
 #: src/blocks/wiki-article/view/external-data.ts
 msgid "No article in {readerLanguageName} yet"
@@ -1553,6 +1577,10 @@ msgstr "Nada salvo por aqui ainda"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Observation"
 msgstr "Observação"
+
+#: src/lib/vocabulary.ts
+msgid "Offset"
+msgstr "Rebento"
 
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Older"
@@ -1751,6 +1779,10 @@ msgstr "Métodos de plantio e propagação"
 #: src/lib/vocabulary.ts
 msgid "Planting it"
 msgstr "Plantando"
+
+#: src/lib/vocabulary.ts
+msgid "Planting the plantlets a plant produces by itself: suckers from its base or roots, runners along the ground, or bulbils. Strawberries, pineapples and bananas spread this way."
+msgstr "Plantar as mudinhas que a planta produz sozinha: rebentos da base ou das raízes, estolões que correm pelo chão ou bulbilhos. Morangos, abacaxis e bananeiras se espalham assim."
 
 #: src/lib/vocabulary.ts
 msgid "Plants"

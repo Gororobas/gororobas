@@ -9,6 +9,6 @@ export const AreasOfWorkProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "ARTICLE_TEXT_INFERENCE"],
+  sources: (source) => [source.person(), source.articleTextInference()],
   references: { targetKinds: ["CONCEPT"], target: articleOf },
 })

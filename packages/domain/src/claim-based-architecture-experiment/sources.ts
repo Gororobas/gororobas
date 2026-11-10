@@ -1,108 +1,122 @@
 /**
- * A claim's provenance: who asserted it, and the evidence they had (W3C PROV's term for it). It
- * names one of the property's sources (a `SourceKey`) and records what that source read, so it's
- * the record of where the data came from, not the source's definition. It decides the claim's
- * lifecycle (see `claims.ts`):
+ * Who may assert a property, and how. A property's `sources` builds the list with a
+ * `SourceBuilder`, best-ranked first: the order is resolution's ranking. The builder is typed by
+ * the property's value and scope, so a source that extracts the wrong type, or a language for a
+ * universal property, doesn't compile.
  *
- * - People's claims are reviewed: pending until someone with `content:moderate` evaluates them,
- *   like wiki revisions today.
- * - Machines' claims are automatic: visible by default with a notice, disputable and censorable,
- *   the moderation lifecycle publications already have. Providers, text inference, machine
- *   translation, references in article text.
- *
- * Machines never propose for review. When a machine's answer is too risky to show, the property
- * leaves that source out of its `sources`. When a machine helps a person decide (a Wikidata search
- * box in the form), the person's choice is the claim.
+ * A source definition says how a source asserts values; a claim's provenance (`provenance.ts`)
+ * records which source asserted one, with its evidence.
  */
-import { Schema } from "effect"
+import { Result } from "effect"
 
-import { SupportedLanguage } from "../common/enums.js"
-import {
-  ExternalDataObservationId,
-  PersonId,
-  PublicationId,
-  TiptapNodeId,
-  WikiArticleId,
-} from "../common/ids.js"
-import { LanguageModelInfo } from "../links/domain.js"
-import { Provider } from "./providers.js"
+import type { PropertyScope } from "./claims.js"
+import type { Extracted, Extraction, ExtractionContext, ExtractionIssue } from "./extraction.js"
+import type { FetchedProvider, ProviderResults } from "./providers/index.js"
 
-export const ClaimId = Schema.String.pipe(Schema.brand("ClaimId"))
-export type ClaimId = typeof ClaimId.Type
+export interface PersonSource {
+  readonly _tag: "PERSON"
+}
 
-export const ChangesetId = Schema.String.pipe(Schema.brand("ChangesetId"))
-export type ChangesetId = typeof ChangesetId.Type
+/** A provider we fetch, with how this property reads its result. */
+export interface FetchedProviderSource<
+  Provider extends FetchedProvider,
+  Value,
+  Scope extends PropertyScope,
+> {
+  readonly _tag: Provider
+  readonly extract: (
+    result: ProviderResults[Provider],
+    context: ExtractionContext,
+  ) => ReadonlyArray<Extraction<Value, Scope>>
+}
 
-/** A node in some text: where a quote was found or a reference placed. */
-export const TextLocation = Schema.TaggedUnion({
-  ARTICLE_TEXT: { wikiArticleId: WikiArticleId, language: SupportedLanguage, nodeId: TiptapNodeId },
-  PUBLICATION: { publicationId: PublicationId, nodeId: TiptapNodeId },
-})
+/** A provider that writes claims itself: the gazetteer when it creates places. */
+export interface WritingProviderSource<Provider extends "WHOS_ON_FIRST"> {
+  readonly _tag: Provider
+}
 
-export type TextLocation = typeof TextLocation.Type
+export interface ArticleTextInferenceSource {
+  readonly _tag: "ARTICLE_TEXT_INFERENCE"
+  /** At most this many claims of the property from one text, the most confident first. */
+  readonly claimsPerText: number
+}
 
-export const PersonProvenance = Schema.TaggedStruct("PERSON", {
-  changesetId: ChangesetId,
+export interface MachineTranslationSource {
+  readonly _tag: "MACHINE_TRANSLATION"
+}
+
+export interface ArticleTextEntityReferenceSource {
+  readonly _tag: "ARTICLE_TEXT_ENTITY_REFERENCE"
+}
+
+export type SourceDefinition<Value, Scope extends PropertyScope> =
+  | PersonSource
+  | FetchedProviderSource<"WIKIDATA", Value, Scope>
+  | FetchedProviderSource<"GBIF", Value, Scope>
+  | FetchedProviderSource<"GOOGLE_BOOKS", Value, Scope>
+  | FetchedProviderSource<"CONTENT_CHANNELS", Value, Scope>
+  | FetchedProviderSource<"SYNTROPEDIA", Value, Scope>
+  | WritingProviderSource<"WHOS_ON_FIRST">
+  | ArticleTextInferenceSource
+  | MachineTranslationSource
+  | ArticleTextEntityReferenceSource
+
+type ExtractOf<Provider extends FetchedProvider, Value, Scope extends PropertyScope> = Pick<
+  FetchedProviderSource<Provider, Value, Scope>,
+  "extract"
+>
+
+export interface SourceBuilder<Value, Scope extends PropertyScope> {
+  readonly person: () => PersonSource
+  readonly wikidata: (
+    config: ExtractOf<"WIKIDATA", Value, Scope>,
+  ) => FetchedProviderSource<"WIKIDATA", Value, Scope>
+  readonly gbif: (
+    config: ExtractOf<"GBIF", Value, Scope>,
+  ) => FetchedProviderSource<"GBIF", Value, Scope>
+  readonly googleBooks: (
+    config: ExtractOf<"GOOGLE_BOOKS", Value, Scope>,
+  ) => FetchedProviderSource<"GOOGLE_BOOKS", Value, Scope>
+  readonly contentChannels: (
+    config: ExtractOf<"CONTENT_CHANNELS", Value, Scope>,
+  ) => FetchedProviderSource<"CONTENT_CHANNELS", Value, Scope>
+  readonly syntropedia: (
+    config: ExtractOf<"SYNTROPEDIA", Value, Scope>,
+  ) => FetchedProviderSource<"SYNTROPEDIA", Value, Scope>
+  readonly whosOnFirst: () => WritingProviderSource<"WHOS_ON_FIRST">
+  readonly articleTextInference: (config?: {
+    readonly claimsPerText?: number
+  }) => ArticleTextInferenceSource
+  readonly machineTranslation: () => MachineTranslationSource
+  readonly articleTextEntityReference: () => ArticleTextEntityReferenceSource
   /**
-   * Null once the author deletes their account (the claim outlives them), or for legacy edits
-   * Gel didn't record an author for.
+   * A value `extract` found: the value itself for a universal property, `{ language, value }` for
+   * a language-specific one.
    */
-  authorId: Schema.NullOr(PersonId),
+  readonly found: (extracted: Extracted<Value, Scope>) => Extraction<Value, Scope>
+  readonly issue: (issue: ExtractionIssue) => Extraction<Value, Scope>
+}
+
+/** Typed facts or links from one text, before the property says otherwise (the plan's budgets). */
+const DEFAULT_CLAIMS_PER_TEXT = 20
+
+export const makeSourceBuilder = <Value, Scope extends PropertyScope>(): SourceBuilder<
+  Value,
+  Scope
+> => ({
+  person: () => ({ _tag: "PERSON" }),
+  wikidata: ({ extract }) => ({ _tag: "WIKIDATA", extract }),
+  gbif: ({ extract }) => ({ _tag: "GBIF", extract }),
+  googleBooks: ({ extract }) => ({ _tag: "GOOGLE_BOOKS", extract }),
+  contentChannels: ({ extract }) => ({ _tag: "CONTENT_CHANNELS", extract }),
+  syntropedia: ({ extract }) => ({ _tag: "SYNTROPEDIA", extract }),
+  whosOnFirst: () => ({ _tag: "WHOS_ON_FIRST" }),
+  articleTextInference: (config) => ({
+    _tag: "ARTICLE_TEXT_INFERENCE",
+    claimsPerText: config?.claimsPerText ?? DEFAULT_CLAIMS_PER_TEXT,
+  }),
+  machineTranslation: () => ({ _tag: "MACHINE_TRANSLATION" }),
+  articleTextEntityReference: () => ({ _tag: "ARTICLE_TEXT_ENTITY_REFERENCE" }),
+  found: (extracted) => Result.succeed(extracted),
+  issue: (issue) => Result.fail(issue),
 })
-
-export type PersonProvenance = typeof PersonProvenance.Type
-
-export const MachineProvenance = Schema.TaggedUnion({
-  EXTERNAL_PROVIDER: {
-    provider: Provider,
-    /** The raw response stays in the observation log, so claims stay small. */
-    observationId: ExternalDataObservationId,
-  },
-  MACHINE_TRANSLATION: { model: LanguageModelInfo, translatedFrom: ClaimId },
-  /**
-   * A model reading text: today's link inference (`MENTION` and `INFERENCE`), and the typed facts
-   * it can read alongside links ("o mamão cresce bem no Cerrado" → `growsIn`). Which properties
-   * accept it is each property's choice.
-   */
-  ARTICLE_TEXT_INFERENCE: {
-    model: Schema.NullOr(LanguageModelInfo),
-    version: Schema.String,
-    location: TextLocation,
-    quote: Schema.NonEmptyString,
-    /** Absent when the text names the article, so the quote is the evidence. */
-    rationale: Schema.NullOr(Schema.NonEmptyString),
-  },
-  /**
-   * An `entityReference` node a person placed in article text: replaced whenever that text
-   * changes, never reviewed on its own, since the text revision was. Today's `ENTITY_REFERENCE`.
-   */
-  ARTICLE_TEXT_ENTITY_REFERENCE: { location: TextLocation },
-})
-
-export type MachineProvenance = typeof MachineProvenance.Type
-
-/** The machine sources a property lists, as source values: providers narrowed to those listed. */
-export type AllowedMachineProvenance<Source extends SourceKey> =
-  | Extract<MachineProvenance, { readonly _tag: Extract<Source, MachineProvenance["_tag"]> }>
-  | ([Extract<Source, Provider>] extends [never]
-      ? never
-      : Extract<MachineProvenance, { readonly _tag: "EXTERNAL_PROVIDER" }> & {
-          readonly provider: Extract<Source, Provider>
-        })
-
-export type AllowedPersonProvenance<Source extends SourceKey> = "PERSON" extends Source
-  ? PersonProvenance
-  : never
-
-/**
- * What a property's `sources` lists, in resolution order. Providers count individually, so
- * `strata` can trust Syntropedia over people while `names` trusts people over Google Books.
- */
-export type MachineProvenanceKey =
-  | Exclude<MachineProvenance["_tag"], "EXTERNAL_PROVIDER">
-  | Provider
-
-export type SourceKey = PersonProvenance["_tag"] | MachineProvenanceKey
-
-export const sourceKeyOfMachineProvenance = (source: MachineProvenance): MachineProvenanceKey =>
-  MachineProvenance.guards.EXTERNAL_PROVIDER(source) ? source.provider : source._tag

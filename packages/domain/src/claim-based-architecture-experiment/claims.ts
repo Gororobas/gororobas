@@ -24,7 +24,7 @@ import {
   PersonProvenance,
   type SourceKey,
   sourceKeyOfMachineProvenance,
-} from "./sources.js"
+} from "./provenance.js"
 import { FractionalIndex } from "./values/fractional-index.js"
 
 /** A verdict on something people submitted: a claim or an article text revision. */
@@ -113,15 +113,15 @@ export const claimSchema = <
   Value,
   Encoded,
   Scope extends PropertyScope,
-  Source extends SourceKey,
+  AvailableSource extends SourceKey,
 >(property: {
   readonly id: Id
   readonly valueSchema: Schema.Codec<Value, Encoded>
   readonly scope: Scope
   readonly cardinality: "ONE" | "SET" | "LIST"
-  readonly sources: ReadonlyArray<Source>
+  readonly sourceKeys: ReadonlyArray<AvailableSource>
 }) => {
-  const lists = (key: SourceKey) => property.sources.some((source) => source === key)
+  const lists = (key: SourceKey) => property.sourceKeys.some((sourceKey) => sourceKey === key)
 
   const annotations = {
     identifier: "ClaimFromListedSource",
@@ -130,21 +130,23 @@ export const claimSchema = <
   }
 
   /**
-   * Narrowed on the source rather than on the claim, whose type doesn't resolve while generic.
-   * A property listing no person (or no machine) leaves that claim shape with a `never` source:
+   * Narrowed on the provenance rather than on the claim, whose type doesn't resolve while
+   * generic. A property listing no person (or no machine) leaves that claim shape with a `never`
+   * provenance:
    * it can't be made or decoded, and `ClaimOf` drops it.
    */
   const personProvenance = PersonProvenance.pipe(
     Schema.refine(
-      (source): source is AllowedPersonProvenance<Source> => lists(source._tag),
+      (provenance): provenance is AllowedPersonProvenance<AvailableSource> =>
+        lists(provenance._tag),
       annotations,
     ),
   )
 
   const machineProvenance = MachineProvenance.pipe(
     Schema.refine(
-      (source): source is AllowedMachineProvenance<Source> =>
-        lists(sourceKeyOfMachineProvenance(source)),
+      (provenance): provenance is AllowedMachineProvenance<AvailableSource> =>
+        lists(sourceKeyOfMachineProvenance(provenance)),
       annotations,
     ),
   )
@@ -203,7 +205,7 @@ export const claimSchema = <
 /** A property's claims, without the shape its sources rule out. */
 export type ClaimOf<Property extends { readonly Claim: Schema.Top }> = Exclude<
   Property["Claim"]["Type"],
-  { readonly source: never }
+  { readonly provenance: never }
 >
 
 export const getClaimSourceKey = <Value, Scope extends PropertyScope>(

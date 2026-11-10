@@ -9,8 +9,7 @@ export const TaxonomicClassificationProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["GBIF"],
-  extract: {
-    GBIF: (result) => result.classification.map((value) => ({ value })),
-  },
+  sources: (source) => [
+    source.gbif({ extract: (result) => result.classification.map(source.found) }),
+  ],
 })

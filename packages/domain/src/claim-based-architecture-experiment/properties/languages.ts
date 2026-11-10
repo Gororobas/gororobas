@@ -1,6 +1,7 @@
-import { Schema } from "effect"
+import { Result, Schema } from "effect"
 
 import { defineProperty } from "../property.js"
+import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 
 /** BCP 47 tags, not `SupportedLanguage`: works exist in languages Gororobas isn't written in. */
 export const LanguageTag = Schema.String.check(
@@ -15,12 +16,25 @@ export const LanguagesProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "GOOGLE_BOOKS"],
-  extract: {
-    GOOGLE_BOOKS: (result) =>
-      result.editions
-        .flatMap((edition) => edition.languages)
-        .filter(Schema.is(LanguageTag))
-        .map((value) => ({ value })),
-  },
+  sources: (source) => [
+    source.person(),
+    source.wikidata({
+      // Language items as their IETF tag (P305): American English (Q7976) is `en-US`.
+      extract: (entity, context) =>
+        Wikidata.statements(entity, WikidataProperty.LANGUAGE_OF_WORK).map((statement) =>
+          Result.flatMap(
+            Wikidata.languageTag(statement, { context, schema: LanguageTag }),
+            source.found,
+          ),
+        ),
+    }),
+    source.googleBooks({
+      extract: (result) =>
+        result.editions
+          .flatMap((edition) => edition.languages)
+          .filter(Schema.is(LanguageTag))
+          .map(source.found),
+    }),
+  ],
+  schemaOrg: { match: "EXACT", encode: (tag) => ({ inLanguage: tag }) },
 })

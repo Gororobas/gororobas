@@ -8,5 +8,6 @@ export const GeonamesIdProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON", "WHOS_ON_FIRST"],
+  sources: (source) => [source.person(), source.whosOnFirst()],
+  schemaOrg: { match: "EXACT", encode: (id) => ({ sameAs: `https://www.geonames.org/${id}` }) },
 })

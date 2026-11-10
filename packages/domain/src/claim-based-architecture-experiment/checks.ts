@@ -7,7 +7,7 @@ import type { CultivarOfProperty } from "./properties/cultivar-of.js"
 import type { HeightProperty } from "./properties/height.js"
 import type { NamesProperty } from "./properties/names.js"
 import type { TaxonomicClassificationProperty } from "./properties/taxonomic-classification.js"
-import type { PersonProvenance } from "./sources.js"
+import type { PersonProvenance } from "./provenance.js"
 
 export const articleWideClaimsMatch = (
   claim: ClaimOf<typeof HeightProperty>,

@@ -9,12 +9,12 @@ export const TaxonomyGroupProperty = defineProperty({
   kinds: ["PLANT"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
-  presence: "OPTIONAL",
-  sources: ["GBIF"],
-  extract: {
-    GBIF: (result) =>
-      Option.toArray(
-        Option.liftPredicate(result.taxonomyGroup ?? "", Schema.is(Schema.NonEmptyString)),
-      ).map((value) => ({ value })),
-  },
+  sources: (source) => [
+    source.gbif({
+      extract: (result) =>
+        Option.toArray(
+          Option.liftPredicate(result.taxonomyGroup ?? "", Schema.is(Schema.NonEmptyString)),
+        ).map(source.found),
+    }),
+  ],
 })

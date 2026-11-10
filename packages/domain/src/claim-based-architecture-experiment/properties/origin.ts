@@ -9,5 +9,5 @@ export const OriginProperty = defineProperty({
   scope: "LANGUAGE_SPECIFIC",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON", "MACHINE_TRANSLATION"],
+  sources: (source) => [source.person(), source.machineTranslation()],
 })

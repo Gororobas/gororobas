@@ -3,8 +3,8 @@
  * the write to the article's claims in memory, checks, and only then commits.
  */
 import type { Claim, PropertyScope } from "./claims.js"
+import type { ClaimId } from "./provenance.js"
 import { type ResolutionSpec, hasAnyValue } from "./resolution.js"
-import type { ClaimId } from "./sources.js"
 
 /**
  * A required property never loses its last value: approving a retraction, censoring a claim or

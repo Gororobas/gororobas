@@ -17,12 +17,20 @@ export const ImagesProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "GBIF", "CONTENT_CHANNELS"],
-  extract: {
-    GBIF: (result) => result.photos.map(({ mediaAssetId }) => ({ value: mediaAssetId })),
-    CONTENT_CHANNELS: (item) =>
-      Option.toArray(Option.fromNullishOr(item.thumbnail)).map(({ mediaAssetId }) => ({
-        value: mediaAssetId,
-      })),
+  sources: (source) => [
+    source.person(),
+    source.gbif({
+      extract: (result) => result.photos.map(({ mediaAssetId }) => source.found(mediaAssetId)),
+    }),
+    source.contentChannels({
+      extract: (item) =>
+        Option.toArray(Option.fromNullishOr(item.thumbnail)).map(({ mediaAssetId }) =>
+          source.found(mediaAssetId),
+        ),
+    }),
+  ],
+  schemaOrg: {
+    match: "EXACT",
+    encode: (mediaAssetId, { context }) => ({ image: context.mediaUrl(mediaAssetId) }),
   },
 })

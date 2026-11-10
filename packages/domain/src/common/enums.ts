@@ -142,6 +142,80 @@ export const EdiblePlantPart = Schema.Literals([
 
 export type EdiblePlantPart = typeof EdiblePlantPart.Type
 
+/** A plant's habit, as botanists classify it. */
+export const GrowthForm = Schema.Literals(["TREE", "SHRUB", "HERB", "VINE", "GRAMINOID"])
+export type GrowthForm = typeof GrowthForm.Type
+
+/** How fast a plant grows compared to others of its growth form. */
+export const GrowthRate = Schema.Literals(["SLOW", "MODERATE", "FAST"])
+export type GrowthRate = typeof GrowthRate.Type
+
+/** How well a plant recovers from pruning, which syntropic management relies on. */
+export const PruningResponse = Schema.Literals(["GOOD", "MODERATE", "POOR", "INTOLERANT"])
+export type PruningResponse = typeof PruningResponse.Type
+
+/**
+ * When a plant lives in natural succession, as syntropic agriculture groups them: placentas
+ * prepare the ground, secondaries follow, and climax species close the cycle. Ordered by lifespan.
+ */
+export const SuccessionalGroup = Schema.Literals([
+  "PLACENTA_1", // Live up to ~6 months
+  "PLACENTA_2", // Up to ~2 years
+  "SECONDARY_1", // Up to ~10–15 years
+  "SECONDARY_2", // Up to ~25–50 years
+  "CLIMAX", // Up to centuries
+])
+
+export type SuccessionalGroup = typeof SuccessionalGroup.Type
+
+/** Whether a plant keeps its leaves through the year. */
+export const LeafPersistence = Schema.Literals(["EVERGREEN", "SEMI_DECIDUOUS", "DECIDUOUS"])
+export type LeafPersistence = typeof LeafPersistence.Type
+
+/** How seeds survive drying and cold storage, which decides how seed banks keep them. */
+export const SeedStorageBehavior = Schema.Literals([
+  "ORTHODOX", // Survive drying and freezing for years
+  "INTERMEDIATE", // Survive some drying, but not freezing
+  "RECALCITRANT", // Die when dried: sown fresh
+])
+
+export type SeedStorageBehavior = typeof SeedStorageBehavior.Type
+
+export const CrownShape = Schema.Literals([
+  "ROUNDED",
+  "SPREADING",
+  "UMBRELLA",
+  "CONICAL",
+  "IRREGULAR",
+])
+
+export type CrownShape = typeof CrownShape.Type
+
+/** Broad climates a plant occurs in. Specific places a plant grows in are `growsIn` relations.
+ * @todo review and possibly expand
+ */
+export const ClimateZone = Schema.Literals([
+  "TROPICAL",
+  "SUBTROPICAL",
+  "MEDITERRANEAN",
+  "TEMPERATE",
+  "SEMI_ARID",
+  "ARID",
+])
+
+export type ClimateZone = typeof ClimateZone.Type
+
+/**
+ * What a tree does for the plants around it in an agroforest, as Syntropedia classifies trees.
+ * @TODO Merge this into PlantUsage and merge NURSE and MOTHER together
+ */
+export const AgroforestryRole = Schema.Literals([
+  "MOTHER_TREE", // Trees of rapid growth, deep roots, good pruning response and easy management
+  "NURSE_TREE", // Trees of rapid growth who act as initial facilitators for mother trees. The mothers of mother trees, per se.
+])
+
+export type AgroforestryRole = typeof AgroforestryRole.Type
+
 export const PlantLifecycle = Schema.Literals(["SEMIANNUAL", "ANNUAL", "BIENNIAL", "PERENNIAL"])
 export type PlantLifecycle = typeof PlantLifecycle.Type
 
@@ -155,6 +229,10 @@ export const PlantUsage = Schema.Literals([
   "ORNAMENTAL",
   "RITUALISTIC",
   "ECOSYSTEM_SERVICE",
+  "FUEL", // Firewood and charcoal
+  "INDUSTRIAL_MATERIAL", // Fibers, resins, dyes, latex, tannins
+  "NITROGEN_FIXATION",
+  "BIOCONTROL", // Repelling or controlling pests and diseases
 ])
 
 export type PlantUsage = typeof PlantUsage.Type
@@ -168,6 +246,9 @@ export const PlantingMethod = Schema.Literals([
   "GRAFT",
   "BULB",
   "DIVISION",
+  // @TODO review LAYERING and OFFSET, I still don't understand either
+  "LAYERING", // Rooting a branch while it's still attached to the plant: tip and air layering
+  "OFFSET", // Suckers, runners and bulbils: plantlets the plant produces by itself
 ])
 
 export type PlantingMethod = typeof PlantingMethod.Type

@@ -2,7 +2,7 @@ import { Schema } from "effect"
 
 import { PersonId } from "../common/ids.js"
 import { TimestampColumn } from "../common/primitives.js"
-import { ClaimId } from "./sources.js"
+import { ClaimId } from "./provenance.js"
 
 /**
  * A person endorsing a claim someone or something else made, "aye, looks right to me":

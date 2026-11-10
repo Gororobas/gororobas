@@ -9,5 +9,5 @@ export const OrganizationTypeProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
-  sources: ["PERSON"],
+  sources: (source) => [source.person()],
 })

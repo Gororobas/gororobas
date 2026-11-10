@@ -9,8 +9,8 @@ export const ResourceUrlProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
-  sources: ["PERSON", "CONTENT_CHANNELS"],
-  extract: {
-    CONTENT_CHANNELS: (item) => [{ value: item.url }],
-  },
+  sources: (source) => [
+    source.person(),
+    source.contentChannels({ extract: (item) => [source.found(item.url)] }),
+  ],
 })

@@ -2,7 +2,7 @@ import { Schema } from "effect"
 
 import { ModerationEventId, PersonId } from "../common/ids.js"
 import { NonEmptyTrimmedString, TimestampColumn } from "../common/primitives.js"
-import { ClaimId } from "./sources.js"
+import { ClaimId } from "./provenance.js"
 
 /**
  * A community member saying a machine's claim is wrong, and why. It never censors anything: it

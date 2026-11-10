@@ -1,5 +1,6 @@
 import { PlantUsage } from "../../common/enums.js"
 import { defineProperty } from "../property.js"
+import { Syntropedia } from "../providers/syntropedia.js"
 
 export const PlantUsageProperty = defineProperty({
   id: "plantUsage",
@@ -8,5 +9,8 @@ export const PlantUsageProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON"],
+  sources: (source) => [
+    source.person(),
+    source.syntropedia({ extract: (plant) => Syntropedia.plantUsages(plant).map(source.found) }),
+  ],
 })

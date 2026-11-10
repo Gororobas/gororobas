@@ -380,6 +380,10 @@ msgid "Biennial"
 msgstr "Bienal"
 
 #: src/lib/vocabulary.ts
+msgid "Biocontrol"
+msgstr "Control biológico"
+
+#: src/lib/vocabulary.ts
 msgid "Biome"
 msgstr "Bioma"
 
@@ -906,6 +910,10 @@ msgstr "Del plantío hasta su muerte o cosecha"
 msgid "Fruit"
 msgstr "Fruto"
 
+#: src/lib/vocabulary.ts
+msgid "Fuel"
+msgstr "Combustible"
+
 #: src/ui/rich-text/view.ts
 msgid "Gallery"
 msgstr "Galería"
@@ -1172,6 +1180,10 @@ msgstr "En la enciclopedia"
 msgid "includes {0}"
 msgstr "incluye {0}"
 
+#: src/lib/vocabulary.ts
+msgid "Industrial material"
+msgstr "Material industrial"
+
 #: src/blocks/wiki-article/view/attribution.ts
 msgid "Information on published editions, from the Google Books catalog."
 msgstr "Información de las ediciones publicadas, según el catálogo de Google Libros."
@@ -1264,6 +1276,10 @@ msgstr "Idiomas"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Latest observation: {0}"
 msgstr "Última observación: {0}"
+
+#: src/lib/vocabulary.ts
+msgid "Layering"
+msgstr "Acodo"
 
 #: src/lib/vocabulary.ts
 msgid "Leaf"
@@ -1392,6 +1408,10 @@ msgid "Main uses"
 msgstr "Usos principales"
 
 #: src/lib/vocabulary.ts
+msgid "Making a branch grow roots while it's still attached to the plant, by burying its tip or wrapping a wounded stretch of it in moist soil (air layering), then cutting it off as a new plant. Used for lychee, jabuticaba and many shrubs."
+msgstr "Hacer que una rama eche raíces mientras sigue unida a la planta, enterrando su punta o envolviendo un tramo herido en tierra húmeda (acodo aéreo), y luego cortarla como una nueva planta. Se usa para el lichi, la jabuticaba y muchos arbustos."
+
+#: src/lib/vocabulary.ts
 msgid "Measurement"
 msgstr "Medición"
 
@@ -1456,6 +1476,10 @@ msgstr "Nuevo lugar en el itinerario"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Newer"
 msgstr "Más recientes"
+
+#: src/lib/vocabulary.ts
+msgid "Nitrogen fixation"
+msgstr "Fijación de nitrógeno"
 
 #: src/blocks/wiki-article/view/external-data.ts
 msgid "No article in {readerLanguageName} yet"
@@ -1553,6 +1577,10 @@ msgstr "Aún no hay nada guardado aquí"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Observation"
 msgstr "Observación"
+
+#: src/lib/vocabulary.ts
+msgid "Offset"
+msgstr "Hijuelo"
 
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Older"
@@ -1751,6 +1779,10 @@ msgstr "Métodos de siembra y propagación"
 #: src/lib/vocabulary.ts
 msgid "Planting it"
 msgstr "Plantándola"
+
+#: src/lib/vocabulary.ts
+msgid "Planting the plantlets a plant produces by itself: suckers from its base or roots, runners along the ground, or bulbils. Strawberries, pineapples and bananas spread this way."
+msgstr "Plantar las plántulas que la planta produce por sí sola: hijuelos de su base o raíces, estolones que corren por el suelo o bulbillos. Las fresas, las piñas y los bananos se propagan así."
 
 #: src/lib/vocabulary.ts
 msgid "Plants"

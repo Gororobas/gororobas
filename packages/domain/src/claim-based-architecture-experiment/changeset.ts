@@ -2,7 +2,7 @@ import { Schema } from "effect"
 
 import { PersonId, WikiArticleId } from "../common/ids.js"
 import { NonEmptyTrimmedString } from "../common/primitives.js"
-import { ChangesetId } from "./sources.js"
+import { ChangesetId } from "./provenance.js"
 
 /**
  * What one person submits at once to one article: claims and article text revisions, with an

@@ -69,6 +69,10 @@ export const plantUsageLabels: Labels<PlantUsage> = {
   ORNAMENTAL: msg`Ornamental`,
   RITUALISTIC: msg`Ritual`,
   ECOSYSTEM_SERVICE: msg`Ecosystem service`,
+  FUEL: msg`Fuel`,
+  INDUSTRIAL_MATERIAL: msg`Industrial material`,
+  NITROGEN_FIXATION: msg`Nitrogen fixation`,
+  BIOCONTROL: msg`Biocontrol`,
 }
 
 export const ediblePartLabels: Labels<EdiblePlantPart> = {
@@ -126,6 +130,8 @@ export const plantingMethodExplainers: Labels<PlantingMethod> = {
   GRAFT: msg`A technique that joins parts of two different plants to combine desirable traits. One part (the scion) is inserted into another plant (the rootstock) so they grow together. Much of the commercial production of many fruit trees is done this way (cacao, citrus, mulberries, etc.).`,
   BULB: msg`Bulbs are short underground stems wrapped in fleshy leaves, like onions and garlic. We plant the whole bulb or its cloves, and each grows into a new plant.`,
   DIVISION: msg`Splitting a clump into parts that each have roots and shoots, each growing into a new plant. Common for grasses, herbs such as lemon balm and many ornamentals.`,
+  LAYERING: msg`Making a branch grow roots while it's still attached to the plant, by burying its tip or wrapping a wounded stretch of it in moist soil (air layering), then cutting it off as a new plant. Used for lychee, jabuticaba and many shrubs.`,
+  OFFSET: msg`Planting the plantlets a plant produces by itself: suckers from its base or roots, runners along the ground, or bulbils. Strawberries, pineapples and bananas spread this way.`,
 }
 
 export const plantingMethodLabels: Labels<PlantingMethod> = {
@@ -137,6 +143,8 @@ export const plantingMethodLabels: Labels<PlantingMethod> = {
   GRAFT: msg`Graft`,
   BULB: msg`Bulb`,
   DIVISION: msg`Division`,
+  LAYERING: msg`Layering`,
+  OFFSET: msg`Offset`,
 }
 
 export const animalRoleLabels: Labels<AnimalRole> = {

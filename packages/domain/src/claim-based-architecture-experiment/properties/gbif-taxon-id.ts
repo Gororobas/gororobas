@@ -1,5 +1,8 @@
+import { Result } from "effect"
+
 import { GbifTaxonId } from "../../common/external-identifiers.js"
 import { defineProperty } from "../property.js"
+import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 
 /**
  * People, GBIF and Wikidata can all assert it. A person's ID ranks first and lets GBIF be fetched
@@ -12,10 +15,18 @@ export const GbifTaxonIdProperty = defineProperty({
   kinds: ["PLANT"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
-  presence: "OPTIONAL",
-  sources: ["PERSON", "GBIF", "WIKIDATA"],
-  extract: {
-    GBIF: (result) => [{ value: result.gbifTaxonId }],
-    WIKIDATA: (result) => (result.gbifId?.kind === "taxon" ? [{ value: result.gbifId.id }] : []),
+  sources: (source) => [
+    source.person(),
+    source.gbif({ extract: (result) => [source.found(result.gbifTaxonId)] }),
+    source.wikidata({
+      extract: (entity) =>
+        Wikidata.statements(entity, WikidataProperty.GBIF_TAXON_ID).map((statement) =>
+          Result.flatMap(Wikidata.externalId(statement, GbifTaxonId), source.found),
+        ),
+    }),
+  ],
+  schemaOrg: {
+    match: "EXACT",
+    encode: (taxonId) => ({ sameAs: `https://www.gbif.org/species/${taxonId}` }),
   },
 })

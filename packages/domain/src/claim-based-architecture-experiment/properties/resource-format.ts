@@ -8,8 +8,8 @@ export const ResourceFormatProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
-  sources: ["PERSON", "CONTENT_CHANNELS"],
-  extract: {
-    CONTENT_CHANNELS: (item) => [{ value: item.format }],
-  },
+  sources: (source) => [
+    source.person(),
+    source.contentChannels({ extract: (item) => [source.found(item.format)] }),
+  ],
 })

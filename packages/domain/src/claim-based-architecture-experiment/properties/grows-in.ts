@@ -17,6 +17,6 @@ export const GrowsInProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "ARTICLE_TEXT_INFERENCE"],
+  sources: (source) => [source.person(), source.articleTextInference()],
   references: { targetKinds: ["PLACE"], target: ({ place }) => Option.some(place) },
 })

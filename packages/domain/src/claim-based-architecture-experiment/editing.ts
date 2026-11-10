@@ -13,8 +13,8 @@
 import { Array as EffectArray, Option, Schema } from "effect"
 
 import type { Claim, LanguageOf, PersonClaim, PropertyScope } from "./claims.js"
+import type { ClaimId } from "./provenance.js"
 import { type ResolutionSpec, claimedValues } from "./resolution.js"
-import type { ClaimId } from "./sources.js"
 import { type FractionalIndex, keyBetween } from "./values/fractional-index.js"
 
 export type PersonChange<Value> =

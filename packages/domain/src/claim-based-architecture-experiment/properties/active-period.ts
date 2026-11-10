@@ -17,5 +17,5 @@ export const ActivePeriodProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON"],
+  sources: (source) => [source.person()],
 })

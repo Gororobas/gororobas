@@ -14,6 +14,10 @@ export const ContainedByPlaceProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["WHOS_ON_FIRST", "PERSON"],
+  sources: (source) => [source.whosOnFirst(), source.person()],
   references: { targetKinds: ["PLACE"], target: Option.some },
+  schemaOrg: {
+    match: "EXACT",
+    encode: (place, { context }) => ({ containedInPlace: { "@id": context.articleUrl(place) } }),
+  },
 })

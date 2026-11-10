@@ -19,9 +19,10 @@ export const ContentChannelItemProperty = defineProperty({
   kinds: ["RESOURCE"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
-  presence: "OPTIONAL",
-  sources: ["CONTENT_CHANNELS", "PERSON"],
-  extract: {
-    CONTENT_CHANNELS: ({ channelType, externalId }) => [{ value: { channelType, externalId } }],
-  },
+  sources: (source) => [
+    source.contentChannels({
+      extract: ({ channelType, externalId }) => [source.found({ channelType, externalId })],
+    }),
+    source.person(),
+  ],
 })

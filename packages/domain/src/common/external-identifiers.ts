@@ -24,6 +24,12 @@ export type GbifTaxonId = typeof GbifTaxonId.Type
 export const GbifDeprecatedSpeciesId = Schema.String.check(Schema.isPattern(/^[0-9]+$/))
 export type GbifDeprecatedSpeciesId = typeof GbifDeprecatedSpeciesId.Type
 
+/** Syntropedia's plant IDs are integers; they travel as strings, as other identifiers do. */
+export const SyntropediaPlantId = Schema.String.check(Schema.isPattern(/^[1-9][0-9]*$/)).pipe(
+  Schema.brand("SyntropediaPlantId"),
+)
+export type SyntropediaPlantId = typeof SyntropediaPlantId.Type
+
 export const GoogleBooksVolumeId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]+$/))
 export type GoogleBooksVolumeId = typeof GoogleBooksVolumeId.Type
 

@@ -131,6 +131,13 @@ export default defineConfig({
       ),
     },
     {
+      // Pasted into a browser's devtools console, where there's no Effect to import.
+      files: ["apps/server/scripts/syntropedia/dump-indexed-db.js"],
+      rules: Object.fromEntries(
+        Object.keys(effect.configs.recommended.rules).map((rule) => [rule, "off" as const]),
+      ),
+    },
+    {
       files: ["apps/server/src/db/migrations-effect/**"],
       rules: {
         "unicorn/filename-case": "off",

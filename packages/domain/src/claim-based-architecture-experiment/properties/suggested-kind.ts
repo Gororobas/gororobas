@@ -9,5 +9,5 @@ export const SuggestedKindProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON"],
+  sources: (source) => [source.person()],
 })

@@ -36,6 +36,17 @@ export const InheritableTrait = Schema.Literals([
   "plantingMethods",
   "strata",
   "plantUsage",
+  "growthForm",
+  "growthRate",
+  "pruningResponse",
+  "successionalGroup",
+  "leafPersistence",
+  "crownDiameter",
+  "crownShape",
+  "climateZones",
+  "agroforestryRoles",
+  "seedDormancy",
+  "seedStorageBehavior",
 ])
 
 export type InheritableTrait = typeof InheritableTrait.Type

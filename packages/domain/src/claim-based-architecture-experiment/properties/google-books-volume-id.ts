@@ -8,5 +8,9 @@ export const GoogleBooksVolumeIdProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON"],
+  sources: (source) => [source.person()],
+  schemaOrg: {
+    match: "EXACT",
+    encode: (id) => ({ sameAs: `https://books.google.com/books?id=${id}` }),
+  },
 })

@@ -11,6 +11,6 @@ export const CultivarOfProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "REQUIRED",
-  sources: ["PERSON"],
+  sources: (source) => [source.person()],
   references: { targetKinds: ["PLANT"], target: Option.some },
 })

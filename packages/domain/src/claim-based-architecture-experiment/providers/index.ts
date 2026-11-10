@@ -1,19 +1,23 @@
-import { type Option, Schema } from "effect"
+import { Schema } from "effect"
 
-import { ContentChannelType, ResourceFormat } from "../common/enums.js"
-import { WikidataId } from "../common/external-identifiers.js"
-import { MediaAssetId, WikiArticleId } from "../common/ids.js"
-import { NonEmptyTrimmedString, UrlAsString } from "../common/primitives.js"
-import { PartialDate } from "../common/utils/dates.js"
-import { ExternalDataProvider, ProviderPhoto } from "../wiki/external-data/common.js"
-import { BookEdition, BookResult } from "../wiki/external-data/kinds/book-external-data.js"
-import { GbifPlantResult, WikidataResult } from "../wiki/external-data/kinds/plant-external-data.js"
+import { ContentChannelType, ResourceFormat } from "../../common/enums.js"
+import { MediaAssetId, WikiArticleId } from "../../common/ids.js"
+import { NonEmptyTrimmedString, UrlAsString } from "../../common/primitives.js"
+import { PartialDate } from "../../common/utils/dates.js"
+import { ExternalDataProvider, ProviderPhoto } from "../../wiki/external-data/common.js"
+import { BookEdition, BookResult } from "../../wiki/external-data/kinds/book-external-data.js"
+import { GbifPlantResult } from "../../wiki/external-data/kinds/plant-external-data.js"
+import type { SyntropediaPlant } from "./syntropedia.js"
+import type { WikidataEntity } from "./wikidata.js"
 
 export const Provider = Schema.Literals([
   ...ExternalDataProvider.literals,
   /** Writes claims when the gazetteer creates places, not through an extractor. */
   "WHOS_ON_FIRST",
-  /** Hypothetical: a source we'd trust more than ourselves on strata. */
+  /**
+   * Forests4Farming's catalogue of plants for syntropic agroforestry: a source we'd trust more than
+   * ourselves on strata and succession. Read from a dump until it has an API (`syntropedia.ts`).
+   */
   "SYNTROPEDIA",
   /**
    * Content producers' channels (YouTube, podcast and RSS feeds…), read by a scraping workflow
@@ -41,29 +45,20 @@ export const GbifResultWithImportedPhotos = Schema.Struct({
   ...GbifPlantResult.fields,
   photos: Schema.Array(ImportedPhoto),
 })
+export type GbifResultWithImportedPhotos = typeof GbifResultWithImportedPhotos.Type
 
 /**
- * Results today's fetchers don't return yet, and would for these properties: Wikidata's labels,
- * aliases and authors (P50), Google Books' authors per edition. Typed here so extractors can be.
+ * Results today's fetchers don't return yet: Google Books' authors per edition. Typed here so
+ * extractors can be.
  */
-export const WikidataEntity = Schema.Struct({
-  labels: Schema.Array(Schema.Struct({ language: Schema.String, value: NonEmptyTrimmedString })),
-  aliases: Schema.Array(Schema.Struct({ language: Schema.String, value: NonEmptyTrimmedString })),
-  /** In Wikidata's order, with each item's label for when we have no article for it. */
-  authors: Schema.Array(Schema.Struct({ wikidataId: WikidataId, label: NonEmptyTrimmedString })),
-})
-
-export const WikidataResultWithEntity = Schema.Struct({
-  ...WikidataResult.fields,
-  entity: WikidataEntity,
-})
-
 export const GoogleBooksResultWithAuthors = Schema.Struct({
   ...BookResult.fields,
   editions: Schema.Array(
     Schema.Struct({ ...BookEdition.fields, authors: Schema.Array(NonEmptyTrimmedString) }),
   ),
 })
+
+export type GoogleBooksResultWithAuthors = typeof GoogleBooksResultWithAuthors.Type
 
 /** One item a content producer's channel lists: a video, an episode, a post. */
 export const ContentChannelItem = Schema.Struct({
@@ -88,19 +83,19 @@ export type ContentChannelItem = typeof ContentChannelItem.Type
  * must say how to extract its values from this result (see `PropertyDefinition`).
  */
 export interface ProviderResults {
-  readonly GOOGLE_BOOKS: typeof GoogleBooksResultWithAuthors.Type
-  readonly WIKIDATA: typeof WikidataResultWithEntity.Type
-  readonly GBIF: typeof GbifResultWithImportedPhotos.Type
+  readonly GOOGLE_BOOKS: GoogleBooksResultWithAuthors
+  readonly WIKIDATA: WikidataEntity
+  readonly GBIF: GbifResultWithImportedPhotos
   readonly CONTENT_CHANNELS: ContentChannelItem
+  readonly SYNTROPEDIA: SyntropediaPlant
 }
 
 export type FetchedProvider = keyof ProviderResults
 
-/**
- * What extraction may look up: our articles for the identifiers a result points at, loaded before
- * extracting, so extractors stay pure. A Wikidata author we have an article for becomes a link to
- * it; one we don't stays a name.
- */
-export interface ExtractionContext {
-  readonly articleWithWikidataId: (wikidataId: WikidataId) => Option.Option<WikiArticleId>
-}
+/** A provider's result, tagged by the provider: what extraction reads. */
+export type ProviderInput = {
+  readonly [Provider in FetchedProvider]: {
+    readonly provider: Provider
+    readonly result: ProviderResults[Provider]
+  }
+}[FetchedProvider]

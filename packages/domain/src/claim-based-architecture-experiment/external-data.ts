@@ -4,8 +4,9 @@ import { GbifTaxonIdProperty } from "./properties/gbif-taxon-id.js"
 import { GoogleBooksVolumeIdProperty } from "./properties/google-books-volume-id.js"
 import type { Property } from "./properties/index.js"
 import { IsbnProperty } from "./properties/isbn.js"
+import { SyntropediaPlantIdProperty } from "./properties/syntropedia-plant-id.js"
 import { WikidataIdProperty } from "./properties/wikidata-id.js"
-import type { FetchedProvider } from "./providers.js"
+import type { FetchedProvider } from "./providers/index.js"
 
 /**
  * Which identifiers each provider is fetched by: a change to one of their resolved values requests
@@ -22,4 +23,5 @@ export const providerInputs = {
   GBIF: [GbifTaxonIdProperty, WikidataIdProperty],
   // A producer's channels, as people approved them, and the item a scraped resource is.
   CONTENT_CHANNELS: [ContentChannelsProperty, ContentChannelItemProperty],
+  SYNTROPEDIA: [SyntropediaPlantIdProperty],
 } as const satisfies { readonly [P in FetchedProvider]: ReadonlyArray<Property> }

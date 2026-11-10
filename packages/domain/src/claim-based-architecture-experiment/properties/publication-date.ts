@@ -1,9 +1,14 @@
-import { Option } from "effect"
+import { Option, Result } from "effect"
 
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineProperty } from "../property.js"
+import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
+import { partialDateToIso } from "../schema-org.js"
 
 /**
+ * When a work came out: a book, a resource, a film (today's `releaseDate`). Wikidata's P577 and
+ * schema.org's `datePublished` both name it this way for every kind of work.
+ *
  * Today's book attributes describe one edition (publisher, date, pages, edition label), while
  * Google Books returns many (`bookEditions`). Deciding whether a BOOK article is a work or an
  * edition would decide whether these stay, or move into `bookEditions` as people-authored values.
@@ -11,13 +16,20 @@ import { defineProperty } from "../property.js"
 export const PublicationDateProperty = defineProperty({
   id: "publicationDate",
   valueSchema: PartialDate,
-  kinds: ["BOOK", "RESOURCE"],
+  kinds: ["BOOK", "RESOURCE", "FILM"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
-  presence: "OPTIONAL",
-  sources: ["PERSON", "CONTENT_CHANNELS"],
-  extract: {
-    CONTENT_CHANNELS: (item) =>
-      Option.toArray(Option.fromNullishOr(item.publishedOn)).map((value) => ({ value })),
-  },
+  sources: (source) => [
+    source.person(),
+    source.wikidata({
+      extract: (entity) =>
+        Wikidata.statements(entity, WikidataProperty.PUBLICATION_DATE).map((statement) =>
+          Result.flatMap(Wikidata.time(statement), source.found),
+        ),
+    }),
+    source.contentChannels({
+      extract: (item) => Option.toArray(Option.fromNullishOr(item.publishedOn)).map(source.found),
+    }),
+  ],
+  schemaOrg: { match: "EXACT", encode: (date) => ({ datePublished: partialDateToIso(date) }) },
 })

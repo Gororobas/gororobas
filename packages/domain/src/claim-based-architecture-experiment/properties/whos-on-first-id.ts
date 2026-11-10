@@ -9,5 +9,9 @@ export const WhosOnFirstIdProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["WHOS_ON_FIRST", "PERSON"],
+  sources: (source) => [source.whosOnFirst(), source.person()],
+  schemaOrg: {
+    match: "EXACT",
+    encode: (id) => ({ sameAs: `https://spelunker.whosonfirst.org/id/${id}` }),
+  },
 })

@@ -14,16 +14,19 @@ export const MainImageProperty = defineProperty({
   kinds: everyKind,
   scope: "UNIVERSAL",
   cardinality: "ONE",
-  presence: "OPTIONAL",
-  sources: ["PERSON", "GBIF", "CONTENT_CHANNELS"],
-  extract: {
-    GBIF: (result) =>
-      Option.toArray(EffectArray.head(result.photos)).map(({ mediaAssetId }) => ({
-        value: mediaAssetId,
-      })),
-    CONTENT_CHANNELS: (item) =>
-      Option.toArray(Option.fromNullishOr(item.thumbnail)).map(({ mediaAssetId }) => ({
-        value: mediaAssetId,
-      })),
-  },
+  sources: (source) => [
+    source.person(),
+    source.gbif({
+      extract: (result) =>
+        Option.toArray(EffectArray.head(result.photos)).map(({ mediaAssetId }) =>
+          source.found(mediaAssetId),
+        ),
+    }),
+    source.contentChannels({
+      extract: (item) =>
+        Option.toArray(Option.fromNullishOr(item.thumbnail)).map(({ mediaAssetId }) =>
+          source.found(mediaAssetId),
+        ),
+    }),
+  ],
 })

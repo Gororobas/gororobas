@@ -8,5 +8,5 @@ export const AnimalRolesProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON"],
+  sources: (source) => [source.person()],
 })

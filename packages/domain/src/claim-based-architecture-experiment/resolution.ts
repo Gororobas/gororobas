@@ -25,13 +25,14 @@ import {
 } from "./claims.js"
 import type { Dispute } from "./disputes.js"
 import type { Endorsement } from "./endorsements.js"
-import { type ClaimId, MachineProvenance, type SourceKey } from "./sources.js"
+import { type ClaimId, MachineProvenance, type SourceKey } from "./provenance.js"
 import type { FractionalIndex } from "./values/fractional-index.js"
 
 /** Who stands behind a value, as readers see it: enough for a badge, a link and a dispute button. */
 export interface Attestation {
   readonly claimId: ClaimId
-  readonly source: SourceKey
+  /** The source of the claim attesting it. */
+  readonly sourceKey: SourceKey
 }
 
 /** How many people did something, with a few of them to show as avatars. */
@@ -60,7 +61,7 @@ export interface ResolvedValue<Value> {
 /** The part of a property resolution reads. */
 export interface ResolutionSpec<Value> {
   readonly valueSchema: Schema.Schema<Value>
-  readonly sources: ReadonlyArray<SourceKey>
+  readonly sourceKeys: ReadonlyArray<SourceKey>
   readonly cardinality: "ONE" | "SET" | "LIST"
   /** For `SET` and `LIST`; `ALL_SOURCES` when absent. */
   readonly mergeStrategy?: "ALL_SOURCES" | "FIRST_SOURCE_WITH_VALUES"
@@ -207,11 +208,11 @@ export const claimedValues = <Value, Scope extends PropertyScope>({
   property,
   claims,
 }: {
-  readonly property: Pick<ResolutionSpec<Value>, "sources">
+  readonly property: Pick<ResolutionSpec<Value>, "sourceKeys">
   readonly claims: ReadonlyArray<Claim<Value, Scope>>
 }): ReadonlyArray<ClaimedValue<Value, Scope>> =>
   visibleClaims(claims).flatMap((claim) =>
-    property.sources.includes(getClaimSourceKey(claim))
+    property.sourceKeys.includes(getClaimSourceKey(claim))
       ? Option.toArray(Option.map(valueOfClaim(claim), (value) => ({ claim, value })))
       : [],
   )
@@ -270,7 +271,7 @@ export const resolve = <Value, Scope extends PropertyScope>({
 }): ReadonlyArray<ResolvedValue<Value>> => {
   const isSameValue = Schema.toEquivalence(property.valueSchema)
   const sourceRankOf = (claim: Claim<Value, Scope>) =>
-    property.sources.indexOf(getClaimSourceKey(claim))
+    property.sourceKeys.indexOf(getClaimSourceKey(claim))
 
   // Best-ranked source first, then the source's own order in a list, then newest: never the
   // order claims came in.
@@ -378,7 +379,7 @@ export const resolve = <Value, Scope extends PropertyScope>({
     value: group.value,
     attestations: EffectArray.map(group.claims, (claim) => ({
       claimId: claim.id,
-      source: getClaimSourceKey(claim),
+      sourceKey: getClaimSourceKey(claim),
     })),
     endorsedBy: endorsedBy(group),
     disputedBy: disputedBy(group),

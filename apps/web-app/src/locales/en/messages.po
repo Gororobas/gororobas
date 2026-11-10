@@ -386,6 +386,10 @@ msgid "Biennial"
 msgstr "Biennial"
 
 #: src/lib/vocabulary.ts
+msgid "Biocontrol"
+msgstr "Biocontrol"
+
+#: src/lib/vocabulary.ts
 msgid "Biome"
 msgstr "Biome"
 
@@ -912,6 +916,10 @@ msgstr "From planting until it dies or is harvested"
 msgid "Fruit"
 msgstr "Fruit"
 
+#: src/lib/vocabulary.ts
+msgid "Fuel"
+msgstr "Fuel"
+
 #: src/ui/rich-text/view.ts
 msgid "Gallery"
 msgstr "Gallery"
@@ -1178,6 +1186,10 @@ msgstr "In the encyclopedia"
 msgid "includes {0}"
 msgstr "includes {0}"
 
+#: src/lib/vocabulary.ts
+msgid "Industrial material"
+msgstr "Industrial material"
+
 #: src/blocks/wiki-article/view/attribution.ts
 msgid "Information on published editions, from the Google Books catalog."
 msgstr "Information on published editions, from the Google Books catalog."
@@ -1270,6 +1282,10 @@ msgstr "Languages"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Latest observation: {0}"
 msgstr "Latest observation: {0}"
+
+#: src/lib/vocabulary.ts
+msgid "Layering"
+msgstr "Layering"
 
 #: src/lib/vocabulary.ts
 msgid "Leaf"
@@ -1398,6 +1414,10 @@ msgid "Main uses"
 msgstr "Main uses"
 
 #: src/lib/vocabulary.ts
+msgid "Making a branch grow roots while it's still attached to the plant, by burying its tip or wrapping a wounded stretch of it in moist soil (air layering), then cutting it off as a new plant. Used for lychee, jabuticaba and many shrubs."
+msgstr "Making a branch grow roots while it's still attached to the plant, by burying its tip or wrapping a wounded stretch of it in moist soil (air layering), then cutting it off as a new plant. Used for lychee, jabuticaba and many shrubs."
+
+#: src/lib/vocabulary.ts
 msgid "Measurement"
 msgstr "Measurement"
 
@@ -1462,6 +1482,10 @@ msgstr "New place in the itinerary"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Newer"
 msgstr "Newer"
+
+#: src/lib/vocabulary.ts
+msgid "Nitrogen fixation"
+msgstr "Nitrogen fixation"
 
 #: src/blocks/wiki-article/view/external-data.ts
 msgid "No article in {readerLanguageName} yet"
@@ -1559,6 +1583,10 @@ msgstr "Nothing saved here yet"
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Observation"
 msgstr "Observation"
+
+#: src/lib/vocabulary.ts
+msgid "Offset"
+msgstr "Offset"
 
 #: src/blocks/external-data-admin-dashboard/external-data-admin-dashboard.ts
 msgid "Older"
@@ -1757,6 +1785,10 @@ msgstr "Planting and propagation methods"
 #: src/lib/vocabulary.ts
 msgid "Planting it"
 msgstr "Planting it"
+
+#: src/lib/vocabulary.ts
+msgid "Planting the plantlets a plant produces by itself: suckers from its base or roots, runners along the ground, or bulbils. Strawberries, pineapples and bananas spread this way."
+msgstr "Planting the plantlets a plant produces by itself: suckers from its base or roots, runners along the ground, or bulbils. Strawberries, pineapples and bananas spread this way."
 
 #: src/lib/vocabulary.ts
 msgid "Plants"

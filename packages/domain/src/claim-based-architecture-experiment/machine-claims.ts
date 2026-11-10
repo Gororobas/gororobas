@@ -5,8 +5,8 @@
 import { Array as EffectArray, Option, Schema } from "effect"
 
 import type { MachineClaim, LanguageOf, PropertyScope } from "./claims.js"
+import { MachineProvenance, type ClaimId, TextLocation } from "./provenance.js"
 import type { ResolutionSpec } from "./resolution.js"
-import { MachineProvenance, type ClaimId, TextLocation } from "./sources.js"
 import { type FractionalIndex, keyBetween } from "./values/fractional-index.js"
 
 const locationKey = (location: TextLocation) =>
@@ -18,8 +18,8 @@ const locationKey = (location: TextLocation) =>
  * What a machine claim rests on: a provider's record for the article, a node in some text, the
  * claim a translation translates. Two claims share evidence when a re-run read the same thing.
  */
-export const evidenceKey = (source: MachineProvenance): string =>
-  MachineProvenance.match(source, {
+export const evidenceKey = (provenance: MachineProvenance): string =>
+  MachineProvenance.match(provenance, {
     EXTERNAL_PROVIDER: ({ provider }) => `provider:${provider}`,
     ARTICLE_TEXT_INFERENCE: ({ location }) => locationKey(location),
     ARTICLE_TEXT_ENTITY_REFERENCE: ({ location }) => locationKey(location),
@@ -39,7 +39,7 @@ export interface ExtractedValue<Value, Scope extends PropertyScope> {
  *
  * It holds across model and workflow versions. A moderator censors a value because it's wrong for
  * that evidence, and a newer model reading the same text into the same value is just as wrong. The
- * version stays in the claim's source, so a moderator can still reapprove a run's censored claims.
+ * version stays in the claim's provenance, so a moderator can still reapprove a run's censored claims.
  */
 export const isAllowedToAssert = <Value, Scope extends PropertyScope>({
   valueSchema,

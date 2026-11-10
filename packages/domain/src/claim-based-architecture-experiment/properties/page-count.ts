@@ -8,5 +8,6 @@ export const PageCountProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   presence: "OPTIONAL",
-  sources: ["PERSON"],
+  sources: (source) => [source.person()],
+  schemaOrg: { match: "EXACT", encode: (pages) => ({ numberOfPages: pages }) },
 })

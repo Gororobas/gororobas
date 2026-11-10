@@ -17,7 +17,8 @@
     "test:external": "vitest run --config vitest.external.config.ts",
     "coverage": "vitest --coverage",
     "migrate": "npx tsx scripts/migrate.ts",
-    "gazetteer:build": "tsx scripts/build-gazetteer.ts"
+    "gazetteer:build": "tsx scripts/build-gazetteer.ts",
+    "syntropedia:normalize": "tsx scripts/syntropedia/normalize.ts"
   },
   "dependencies": {
     "@effect/ai-openai-compat": "catalog:",

@@ -23,12 +23,15 @@ export const IsbnProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["PERSON", "GOOGLE_BOOKS"],
-  extract: {
-    GOOGLE_BOOKS: (result) =>
-      result.editions
-        .flatMap((edition) => edition.isbn)
-        .filter(Schema.is(Isbn))
-        .map((value) => ({ value })),
-  },
+  sources: (source) => [
+    source.person(),
+    source.googleBooks({
+      extract: (result) =>
+        result.editions
+          .flatMap((edition) => edition.isbn)
+          .filter(Schema.is(Isbn))
+          .map(source.found),
+    }),
+  ],
+  schemaOrg: { match: "EXACT", encode: (isbn) => ({ isbn }) },
 })

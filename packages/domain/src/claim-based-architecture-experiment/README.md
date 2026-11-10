@@ -55,17 +55,41 @@ Machines never propose for review. Two cases looked like they needed it, and nei
   A property that shouldn't take a machine's reading at all leaves `ARTICLE_TEXT_INFERENCE` out of its
   sources.
 
-**Properties list their sources, best first.** It's one field: which sources may assert the
-property, and the order resolution prefers them in. Restricting is common: identifiers never come
-from text inference, providers never assert `growsIn`, only GBIF classifies taxa. Three
-guarantees follow from the list:
+**Properties list their sources, best first.** `sources` builds the list with a typed builder
+(`sources.ts`), and the order is resolution's ranking. Restricting is common: identifiers never
+come from text inference, providers never assert `growsIn`, only GBIF classifies taxa. Each
+provider a property lists says how to read it, in plain code over the provider's result
+(`providers/wikidata.ts` has Wikidata's readers, `providers/syntropedia.ts` Syntropedia's):
 
-- **Types:** listing a fetched provider requires an extractor for it, typed against that
-  provider's result.
-- **Claim types:** a property's `Claim` only takes the sources it lists. `resourceUrl`'s claims
-  are all a person's, and `gbifTaxonId`'s name GBIF or Wikidata (`checks.ts`; `ClaimOf` drops the
-  claim shape a property's sources rule out).
-- **Runtime:** a claim from an unlisted source doesn't decode.
+```ts
+sources: (source) => [
+  source.person(),
+  source.wikidata({
+    extract: (entity, context) =>
+      Wikidata.statements(entity, WikidataProperty.AUTHOR).map((statement) =>
+        Result.flatMap(Wikidata.articleOrName(statement, { context, language: "pt" }), source.found),
+      ),
+  }),
+  source.articleTextInference(),
+]
+```
+
+Guarantees that follow:
+
+- **Types:** `extract` returns the property's value type, and `source.found` takes a language
+  only for language-specific properties.
+- **Claim types:** a property's `Claim` only takes the sources it lists. `cultivarOf`'s claims
+  are all a person's (`checks.ts`; `ClaimOf` drops the claim shape a property's sources rule out).
+- **Runtime:** a claim from an unlisted source doesn't decode, and every extracted value is checked
+  against the value schema, deduplicated, and reported as ambiguous when a `ONE` property gets
+  several in one language.
+
+A source definition says how a source asserts values; a claim's **provenance** records which
+source asserted it, with its evidence.
+
+**Properties publish as schema.org** (`schemaOrg`, with SKOS's match strengths), which
+`json-ld.ts` turns into an article page's JSON-LD. Properties without a match are agroecology's own
+knowledge: strata, planting methods, edible parts.
 
 **Changesets stay.** Grouping by author and evaluation can't replace them. Two edits made days
 apart would merge, a group would split as its parts get evaluated, and deleted authors would all
@@ -185,18 +209,18 @@ The API follows the same three interfaces:
 
 ## Editing UX and code
 
-Editors belong to value shapes, not properties: about a dozen components cover all 54 properties.
+Editors belong to value shapes, not properties: about a dozen components cover all 65 properties.
 
 | Editor | Properties |
 | --- | --- |
 | Identifier input | `wikidataId`, `googleBooksVolumeId`, `gbifTaxonId`… |
 | URL | `website`, `resourceUrl` |
-| Single choice | `organizationType`, `placeKind`, `resourceFormat` |
+| Single choice | `organizationType`, `placeKind`, `growthForm`, `successionalGroup`… |
 | Chip set of choices | `strata`, `edibleParts`, `toolUsage`… |
-| Range: two inputs, one schema message | `height`, `temperature`, `developmentCycle` |
+| Range: two inputs, one schema message | `height`, `crownDiameter`, `temperature`, `developmentCycle` |
 | Partial dates, single or paired | `publicationDate`, `lifespan`, `activePeriod` |
 | Ordered names per language | `names` |
-| Article or name picker | `publisher`, `basedIn`, `filmGenres`… |
+| Article or name picker | `publisher`, `basedIn`, `genres`… |
 | Ordered credits | `authors`, `directors` |
 | Relation, with qualifier fields when it has any | `growsIn`, `containedByPlace`, `cultivarOf`, `relatedTo` |
 | Media asset picker | `images`, `mainImage` |

@@ -9,8 +9,7 @@ export const BookEditionsProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: ["GOOGLE_BOOKS"],
-  extract: {
-    GOOGLE_BOOKS: (result) => result.editions.map((value) => ({ value })),
-  },
+  sources: (source) => [
+    source.googleBooks({ extract: (result) => result.editions.map(source.found) }),
+  ],
 })
