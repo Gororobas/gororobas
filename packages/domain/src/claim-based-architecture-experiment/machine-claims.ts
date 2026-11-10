@@ -6,7 +6,7 @@ import { Array as EffectArray, Option, Schema } from "effect"
 
 import type { MachineClaim, LanguageOf, PropertyScope } from "./claims.js"
 import type { ResolutionSpec } from "./resolution.js"
-import { MachineSource, type ClaimId, TextLocation } from "./sources.js"
+import { MachineProvenance, type ClaimId, TextLocation } from "./sources.js"
 import { type FractionalIndex, keyBetween } from "./values/fractional-index.js"
 
 const locationKey = (location: TextLocation) =>
@@ -18,8 +18,8 @@ const locationKey = (location: TextLocation) =>
  * What a machine claim rests on: a provider's record for the article, a node in some text, the
  * claim a translation translates. Two claims share evidence when a re-run read the same thing.
  */
-export const evidenceKey = (source: MachineSource): string =>
-  MachineSource.match(source, {
+export const evidenceKey = (source: MachineProvenance): string =>
+  MachineProvenance.match(source, {
     EXTERNAL_PROVIDER: ({ provider }) => `provider:${provider}`,
     ARTICLE_TEXT_INFERENCE: ({ location }) => locationKey(location),
     ARTICLE_TEXT_ENTITY_REFERENCE: ({ location }) => locationKey(location),
@@ -49,7 +49,7 @@ export const isAllowedToAssert = <Value, Scope extends PropertyScope>({
   readonly valueSchema: Schema.Schema<Value>
   /** The source's claims of the property about the article. */
   readonly existingClaims: ReadonlyArray<MachineClaim<Value, Scope>>
-  readonly candidate: ExtractedValue<Value, Scope> & { readonly source: MachineSource }
+  readonly candidate: ExtractedValue<Value, Scope> & { readonly provenance: MachineProvenance }
 }) => {
   const isSameValue = Schema.toEquivalence(valueSchema)
 
@@ -57,7 +57,7 @@ export const isAllowedToAssert = <Value, Scope extends PropertyScope>({
     (claim) =>
       claim.moderationStatus === "CENSORED" &&
       claim.language === candidate.language &&
-      evidenceKey(claim.source) === evidenceKey(candidate.source) &&
+      evidenceKey(claim.provenance) === evidenceKey(candidate.provenance) &&
       isSameValue(claim.value, candidate.value),
   )
 }

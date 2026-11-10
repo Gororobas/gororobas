@@ -12,7 +12,8 @@ relation.
 | **Property** | The definition of one kind of fact: `isbn`, `height`, `growsIn` (`defineProperty`). |
 | **Claim** | One source asserting one value of one property about one article. |
 | **Value** | What a claim asserts. Qualifiers are fields of the value (`growsIn` → `{ place, nativity }`). |
-| **Source** | Who asserted it, carrying their evidence. People's claims are *reviewed*; machines' are *automatic* (`MachineSource`: providers, text inference, machine translation, references in article text). |
+| **Source** | Who may assert a property: people, a provider, text inference… A property lists its sources in rank order. |
+| **Provenance** | Where one claim came from: its source, and the evidence it had (`PersonProvenance`, `MachineProvenance`). People's claims are *reviewed*; machines' are *automatic*. |
 | **Evaluation** | A moderator's verdict on something people submitted: a claim or a text revision. |
 | **Moderation status** | Where a machine claim or machine translation stands: visible by default, censorable. |
 | **Dispute** | A community member saying a machine claim is wrong. It never censors anything: it puts the claim in the moderation queue, where a moderator decides. |

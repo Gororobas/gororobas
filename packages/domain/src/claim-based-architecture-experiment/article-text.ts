@@ -14,7 +14,7 @@ import { WikiArticleId } from "../common/ids.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { LanguageModelInfo } from "../links/domain.js"
 import { Evaluation } from "./claims.js"
-import { PersonSource } from "./sources.js"
+import { PersonProvenance } from "./sources.js"
 
 export const ArticleTextRevisionId = Schema.String.pipe(Schema.brand("ArticleTextRevisionId"))
 
@@ -40,7 +40,7 @@ const revisionFields = {
  * machine translations are visible by default and censorable.
  */
 export const ArticleTextRevision = Schema.Union([
-  Schema.Struct({ ...revisionFields, source: PersonSource, evaluation: Evaluation }),
+  Schema.Struct({ ...revisionFields, source: PersonProvenance, evaluation: Evaluation }),
   Schema.Struct({
     ...revisionFields,
     source: Schema.TaggedStruct("MACHINE_TRANSLATION", {

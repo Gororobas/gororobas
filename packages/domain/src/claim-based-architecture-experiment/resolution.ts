@@ -20,12 +20,12 @@ import {
   type LanguageOf,
   type PersonClaim,
   type PropertyScope,
-  claimSourceKey,
+  getClaimSourceKey,
   isVisibleModerationStatus,
 } from "./claims.js"
 import type { Dispute } from "./disputes.js"
 import type { Endorsement } from "./endorsements.js"
-import { type ClaimId, MachineSource, type SourceKey } from "./sources.js"
+import { type ClaimId, MachineProvenance, type SourceKey } from "./sources.js"
 import type { FractionalIndex } from "./values/fractional-index.js"
 
 /** Who stands behind a value, as readers see it: enough for a badge, a link and a dispute button. */
@@ -179,11 +179,11 @@ const visibleClaims = <Value, Scope extends PropertyScope>(
   return claimsStatingValues.filter(
     (claim) =>
       isPersonClaim(claim) ||
-      !MachineSource.guards.MACHINE_TRANSLATION(claim.source) ||
+      !MachineProvenance.guards.MACHINE_TRANSLATION(claim.provenance) ||
       claimsStatingValues.some(
         (other) =>
-          MachineSource.guards.MACHINE_TRANSLATION(claim.source) &&
-          other.id === claim.source.translatedFrom,
+          MachineProvenance.guards.MACHINE_TRANSLATION(claim.provenance) &&
+          other.id === claim.provenance.translatedFrom,
       ),
   )
 }
@@ -211,7 +211,7 @@ export const claimedValues = <Value, Scope extends PropertyScope>({
   readonly claims: ReadonlyArray<Claim<Value, Scope>>
 }): ReadonlyArray<ClaimedValue<Value, Scope>> =>
   visibleClaims(claims).flatMap((claim) =>
-    property.sources.includes(claimSourceKey(claim))
+    property.sources.includes(getClaimSourceKey(claim))
       ? Option.toArray(Option.map(valueOfClaim(claim), (value) => ({ claim, value })))
       : [],
   )
@@ -270,7 +270,7 @@ export const resolve = <Value, Scope extends PropertyScope>({
 }): ReadonlyArray<ResolvedValue<Value>> => {
   const isSameValue = Schema.toEquivalence(property.valueSchema)
   const sourceRankOf = (claim: Claim<Value, Scope>) =>
-    property.sources.indexOf(claimSourceKey(claim))
+    property.sources.indexOf(getClaimSourceKey(claim))
 
   // Best-ranked source first, then the source's own order in a list, then newest: never the
   // order claims came in.
@@ -355,8 +355,8 @@ export const resolve = <Value, Scope extends PropertyScope>({
   const endorsedBy = (group: ValueGroup<Value, Scope>) =>
     summarizePeople([
       ...group.claims.flatMap((claim): ReadonlyArray<PersonAct> =>
-        isPersonClaim(claim) && claim.source.authorId !== null
-          ? [{ personId: claim.source.authorId, at: claim.createdAt }]
+        isPersonClaim(claim) && claim.provenance.authorId !== null
+          ? [{ personId: claim.provenance.authorId, at: claim.createdAt }]
           : [],
       ),
       ...endorsements
@@ -378,7 +378,7 @@ export const resolve = <Value, Scope extends PropertyScope>({
     value: group.value,
     attestations: EffectArray.map(group.claims, (claim) => ({
       claimId: claim.id,
-      source: claimSourceKey(claim),
+      source: getClaimSourceKey(claim),
     })),
     endorsedBy: endorsedBy(group),
     disputedBy: disputedBy(group),

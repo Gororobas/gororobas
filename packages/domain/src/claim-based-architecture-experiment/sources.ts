@@ -1,6 +1,8 @@
 /**
- * Who asserted a claim, and the evidence they had. The source decides the claim's lifecycle (see
- * `claims.ts`):
+ * A claim's provenance: who asserted it, and the evidence they had (W3C PROV's term for it). It
+ * names one of the property's sources (a `SourceKey`) and records what that source read, so it's
+ * the record of where the data came from, not the source's definition. It decides the claim's
+ * lifecycle (see `claims.ts`):
  *
  * - People's claims are reviewed: pending until someone with `content:moderate` evaluates them,
  *   like wiki revisions today.
@@ -39,7 +41,7 @@ export const TextLocation = Schema.TaggedUnion({
 
 export type TextLocation = typeof TextLocation.Type
 
-export const PersonSource = Schema.TaggedStruct("PERSON", {
+export const PersonProvenance = Schema.TaggedStruct("PERSON", {
   changesetId: ChangesetId,
   /**
    * Null once the author deletes their account (the claim outlives them), or for legacy edits
@@ -48,9 +50,9 @@ export const PersonSource = Schema.TaggedStruct("PERSON", {
   authorId: Schema.NullOr(PersonId),
 })
 
-export type PersonSource = typeof PersonSource.Type
+export type PersonProvenance = typeof PersonProvenance.Type
 
-export const MachineSource = Schema.TaggedUnion({
+export const MachineProvenance = Schema.TaggedUnion({
   EXTERNAL_PROVIDER: {
     provider: Provider,
     /** The raw response stays in the observation log, so claims stay small. */
@@ -77,28 +79,30 @@ export const MachineSource = Schema.TaggedUnion({
   ARTICLE_TEXT_ENTITY_REFERENCE: { location: TextLocation },
 })
 
-export type MachineSource = typeof MachineSource.Type
+export type MachineProvenance = typeof MachineProvenance.Type
 
 /** The machine sources a property lists, as source values: providers narrowed to those listed. */
-export type AllowedMachineSource<Source extends SourceKey> =
-  | Extract<MachineSource, { readonly _tag: Extract<Source, MachineSource["_tag"]> }>
+export type AllowedMachineProvenance<Source extends SourceKey> =
+  | Extract<MachineProvenance, { readonly _tag: Extract<Source, MachineProvenance["_tag"]> }>
   | ([Extract<Source, Provider>] extends [never]
       ? never
-      : Extract<MachineSource, { readonly _tag: "EXTERNAL_PROVIDER" }> & {
+      : Extract<MachineProvenance, { readonly _tag: "EXTERNAL_PROVIDER" }> & {
           readonly provider: Extract<Source, Provider>
         })
 
-export type AllowedPersonSource<Source extends SourceKey> = "PERSON" extends Source
-  ? PersonSource
+export type AllowedPersonProvenance<Source extends SourceKey> = "PERSON" extends Source
+  ? PersonProvenance
   : never
 
 /**
  * What a property's `sources` lists, in resolution order. Providers count individually, so
  * `strata` can trust Syntropedia over people while `names` trusts people over Google Books.
  */
-export type MachineSourceKey = Exclude<MachineSource["_tag"], "EXTERNAL_PROVIDER"> | Provider
+export type MachineProvenanceKey =
+  | Exclude<MachineProvenance["_tag"], "EXTERNAL_PROVIDER">
+  | Provider
 
-export type SourceKey = PersonSource["_tag"] | MachineSourceKey
+export type SourceKey = PersonProvenance["_tag"] | MachineProvenanceKey
 
-export const machineSourceKey = (source: MachineSource): MachineSourceKey =>
-  MachineSource.guards.EXTERNAL_PROVIDER(source) ? source.provider : source._tag
+export const sourceKeyOfMachineProvenance = (source: MachineProvenance): MachineProvenanceKey =>
+  MachineProvenance.guards.EXTERNAL_PROVIDER(source) ? source.provider : source._tag

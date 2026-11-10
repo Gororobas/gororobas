@@ -17,13 +17,13 @@ import { type DateTime, Schema } from "effect"
 import { ModerationStatus, SupportedLanguage } from "../common/enums.js"
 import { PersonId, WikiArticleId } from "../common/ids.js"
 import {
-  type AllowedMachineSource,
-  type AllowedPersonSource,
-  MachineSource,
+  type AllowedMachineProvenance,
+  type AllowedPersonProvenance,
+  MachineProvenance,
   ClaimId,
-  PersonSource,
+  PersonProvenance,
   type SourceKey,
-  machineSourceKey,
+  sourceKeyOfMachineProvenance,
 } from "./sources.js"
 import { FractionalIndex } from "./values/fractional-index.js"
 
@@ -76,7 +76,7 @@ interface ClaimBase<Scope extends PropertyScope> {
 }
 
 export interface PersonClaim<Value, Scope extends PropertyScope> extends ClaimBase<Scope> {
-  readonly source: PersonSource
+  readonly provenance: PersonProvenance
   readonly change:
     | {
         readonly _tag: "ASSERT"
@@ -90,7 +90,7 @@ export interface PersonClaim<Value, Scope extends PropertyScope> extends ClaimBa
 }
 
 export interface MachineClaim<Value, Scope extends PropertyScope> extends ClaimBase<Scope> {
-  readonly source: MachineSource
+  readonly provenance: MachineProvenance
   readonly value: Value
   /**
    * In a `LIST` property, the order the source gave (Wikidata's label before its aliases, Google
@@ -134,16 +134,17 @@ export const claimSchema = <
    * A property listing no person (or no machine) leaves that claim shape with a `never` source:
    * it can't be made or decoded, and `ClaimOf` drops it.
    */
-  const personSource = PersonSource.pipe(
+  const personProvenance = PersonProvenance.pipe(
     Schema.refine(
-      (source): source is AllowedPersonSource<Source> => lists(source._tag),
+      (source): source is AllowedPersonProvenance<Source> => lists(source._tag),
       annotations,
     ),
   )
 
-  const machineSource = MachineSource.pipe(
+  const machineProvenance = MachineProvenance.pipe(
     Schema.refine(
-      (source): source is AllowedMachineSource<Source> => lists(machineSourceKey(source)),
+      (source): source is AllowedMachineProvenance<Source> =>
+        lists(sourceKeyOfMachineProvenance(source)),
       annotations,
     ),
   )
@@ -176,7 +177,7 @@ export const claimSchema = <
   return Schema.Union([
     Schema.Struct({
       ...common,
-      source: personSource,
+      provenance: personProvenance,
       change: Schema.Union([
         Schema.TaggedStruct("ASSERT", {
           value: property.valueSchema,
@@ -191,7 +192,7 @@ export const claimSchema = <
     }),
     Schema.Struct({
       ...common,
-      source: machineSource,
+      provenance: machineProvenance,
       value: property.valueSchema,
       position,
       moderationStatus: ModerationStatus,
@@ -205,6 +206,9 @@ export type ClaimOf<Property extends { readonly Claim: Schema.Top }> = Exclude<
   { readonly source: never }
 >
 
-export const claimSourceKey = <Value, Scope extends PropertyScope>(
+export const getClaimSourceKey = <Value, Scope extends PropertyScope>(
   claim: Claim<Value, Scope>,
-): SourceKey => ("moderationStatus" in claim ? machineSourceKey(claim.source) : claim.source._tag)
+): SourceKey =>
+  "moderationStatus" in claim
+    ? sourceKeyOfMachineProvenance(claim.provenance)
+    : claim.provenance._tag
