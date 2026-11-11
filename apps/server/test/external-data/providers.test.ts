@@ -385,7 +385,7 @@ describe("external data providers", () => {
     let attempts = 0
 
     return Effect.gen(function* () {
-      const http = yield* makeProviderHttp("GBIF", "https://example.org")
+      const http = yield* makeProviderHttp({ provider: "GBIF", baseUrl: "https://example.org" })
       const result = yield* http
         .get("/invalid", Schema.Struct({ count: Schema.Finite }))
         .pipe(Effect.result)
@@ -418,7 +418,7 @@ describe("external data providers", () => {
     )
 
     return Effect.gen(function* () {
-      const http = yield* makeProviderHttp("GBIF", "https://example.org")
+      const http = yield* makeProviderHttp({ provider: "GBIF", baseUrl: "https://example.org" })
       const first = yield* http.get("/first", Schema.Struct({})).pipe(Effect.forkChild)
       yield* http.get("/second", Schema.Struct({}))
       yield* Fiber.join(first)
@@ -689,7 +689,10 @@ describe("provider error reporting", () => {
       ],
       (httpClient) =>
         Effect.gen(function* () {
-          const http = yield* makeProviderHttp("GOOGLE_BOOKS", "https://example.org")
+          const http = yield* makeProviderHttp({
+            provider: "GOOGLE_BOOKS",
+            baseUrl: "https://example.org",
+          })
           const error = yield* http
             .get("/books/volume_1?key=secret-api-key", Schema.Struct({ title: Schema.String }))
             .pipe(Effect.flip)

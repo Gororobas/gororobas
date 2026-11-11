@@ -1,14 +1,20 @@
-import { ExternalDataFetchError, type ExternalDataProvider } from "@gororobas/domain"
+import { ExternalDataFetchError } from "@gororobas/domain"
 import { Config, DateTime, Effect, Option, Schema, Semaphore } from "effect"
 import { HttpClient, HttpClientResponse, HttpClientError } from "effect/http"
 
 const MAX_SCHEMA_ISSUE_LENGTH = 500
 
 /** One shared instance per provider layer; the permit includes a cooldown after every attempt. */
-export const makeProviderHttp = Effect.fn(function* (
-  provider: typeof ExternalDataProvider.Type,
-  baseUrl: string,
-) {
+export const makeProviderHttp = Effect.fn(function* <Provider extends string>({
+  provider,
+  baseUrl,
+  headers,
+}: {
+  readonly provider: Provider
+  readonly baseUrl: string
+  /** Sent with every request, such as an API's bearer token. */
+  readonly headers?: Readonly<Record<string, string>>
+}) {
   const client = yield* HttpClient.HttpClient
   const semaphore = yield* Semaphore.make(1)
   const userAgent = yield* Config.String("EXTERNAL_DATA_USER_AGENT").pipe(
@@ -24,7 +30,7 @@ export const makeProviderHttp = Effect.fn(function* (
     return Effect.gen(function* () {
       const response = yield* client
         .get(`${baseUrl}${path}`, {
-          headers: { "User-Agent": userAgent },
+          headers: { ...headers, "User-Agent": userAgent },
         })
         .pipe(
           Effect.timeout("30 seconds"),

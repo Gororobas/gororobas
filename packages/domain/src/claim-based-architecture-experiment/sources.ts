@@ -51,6 +51,7 @@ export type SourceDefinition<Value, Scope extends PropertyScope> =
   | FetchedProviderSource<"GOOGLE_BOOKS", Value, Scope>
   | FetchedProviderSource<"CONTENT_CHANNELS", Value, Scope>
   | FetchedProviderSource<"SYNTROPEDIA", Value, Scope>
+  | FetchedProviderSource<"TMDB", Value, Scope>
   | FetchedProviderSource<"WHOS_ON_FIRST", Value, Scope>
   | ArticleTextInferenceSource
   | MachineTranslationSource
@@ -78,6 +79,9 @@ export interface SourceBuilder<Value, Scope extends PropertyScope> {
   readonly syntropedia: (
     config: ExtractOf<"SYNTROPEDIA", Value, Scope>,
   ) => FetchedProviderSource<"SYNTROPEDIA", Value, Scope>
+  readonly tmdb: (
+    config: ExtractOf<"TMDB", Value, Scope>,
+  ) => FetchedProviderSource<"TMDB", Value, Scope>
   readonly whosOnFirst: (
     config: ExtractOf<"WHOS_ON_FIRST", Value, Scope>,
   ) => FetchedProviderSource<"WHOS_ON_FIRST", Value, Scope>
@@ -107,6 +111,7 @@ export const makeSourceBuilder = <Value, Scope extends PropertyScope>(): SourceB
   googleBooks: ({ extract }) => ({ _tag: "GOOGLE_BOOKS", extract }),
   contentChannels: ({ extract }) => ({ _tag: "CONTENT_CHANNELS", extract }),
   syntropedia: ({ extract }) => ({ _tag: "SYNTROPEDIA", extract }),
+  tmdb: ({ extract }) => ({ _tag: "TMDB", extract }),
   whosOnFirst: ({ extract }) => ({ _tag: "WHOS_ON_FIRST", extract }),
   articleTextInference: (config) => ({
     _tag: "ARTICLE_TEXT_INFERENCE",

@@ -8,6 +8,7 @@ import { ExternalDataProvider, ProviderPhoto } from "../../wiki/external-data/co
 import { BookEdition, BookResult } from "../../wiki/external-data/kinds/book-external-data.js"
 import { GbifPlantResult } from "../../wiki/external-data/kinds/plant-external-data.js"
 import type { SyntropediaPlant } from "./syntropedia.js"
+import type { TmdbWork } from "./tmdb.js"
 import type { WhosOnFirstPlace } from "./whos-on-first.js"
 import type { WikidataEntity } from "./wikidata.js"
 
@@ -22,6 +23,8 @@ export const Provider = Schema.Literals([
    * ourselves on strata and succession. Read from a dump until it has an API (`syntropedia.ts`).
    */
   "SYNTROPEDIA",
+  /** The Movie Database: films and series, fetched by `tmdbId` (`tmdb.ts`). */
+  "TMDB",
   /**
    * Content producers' channels (YouTube, podcast and RSS feeds…), read by a scraping workflow
    * that creates a RESOURCE article per item. Not built yet; see the implementation plan.
@@ -91,6 +94,7 @@ export interface ProviderResults {
   readonly GBIF: GbifResultWithImportedPhotos
   readonly CONTENT_CHANNELS: ContentChannelItem
   readonly SYNTROPEDIA: SyntropediaPlant
+  readonly TMDB: TmdbWork
   readonly WHOS_ON_FIRST: WhosOnFirstPlace
 }
 

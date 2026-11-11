@@ -1,7 +1,9 @@
 import { ActivePeriodProperty } from "./active-period.js"
+import { ActorsProperty } from "./actors.js"
 import { AgroforestryRolesProperty } from "./agroforestry-roles.js"
 import { AnimalRolesProperty } from "./animal-roles.js"
 import { AreasOfWorkProperty } from "./areas-of-work.js"
+import { AudiovisualFormatProperty } from "./audiovisual-format.js"
 import { AuthorsProperty } from "./authors.js"
 import { BasedInProperty } from "./based-in.js"
 import { BookEditionsProperty } from "./book-editions.js"
@@ -28,6 +30,7 @@ import { GrowthFormProperty } from "./growth-form.js"
 import { GrowthRateProperty } from "./growth-rate.js"
 import { HeightProperty } from "./height.js"
 import { ImagesProperty } from "./images.js"
+import { ImdbIdProperty } from "./imdb-id.js"
 import { InLanguageProperty } from "./in-language.js"
 import { InheritsFromParentProperty } from "./inherits-from-parent.js"
 import { IsbnProperty } from "./isbn.js"
@@ -36,17 +39,21 @@ import { LifecyclesProperty } from "./lifecycles.js"
 import { LifespanProperty } from "./lifespan.js"
 import { MainImageProperty } from "./main-image.js"
 import { NamesProperty } from "./names.js"
+import { NumberOfEpisodesProperty } from "./number-of-episodes.js"
+import { NumberOfSeasonsProperty } from "./number-of-seasons.js"
 import { OccupationsProperty } from "./occupations.js"
 import { OrganizationTypeProperty } from "./organization-type.js"
 import { OriginProperty } from "./origin.js"
 import { PlaceKindProperty } from "./place-kind.js"
 import { PlantUsageProperty } from "./plant-usage.js"
 import { PlantingMethodsProperty } from "./planting-methods.js"
+import { ProductionCompaniesProperty } from "./production-companies.js"
 import { PruningResponseProperty } from "./pruning-response.js"
 import { PublisherProperty } from "./publisher.js"
 import { RelatedToProperty } from "./related-to.js"
 import { ResourceFormatProperty } from "./resource-format.js"
 import { ResourceUrlProperty } from "./resource-url.js"
+import { RuntimeProperty } from "./runtime.js"
 import { ScientificNamesProperty } from "./scientific-names.js"
 import { SeedDormancyProperty } from "./seed-dormancy.js"
 import { SeedStorageBehaviorProperty } from "./seed-storage-behavior.js"
@@ -57,6 +64,7 @@ import { SyntropediaPlantIdProperty } from "./syntropedia-plant-id.js"
 import { TaxonomicClassificationProperty } from "./taxonomic-classification.js"
 import { TaxonomyGroupProperty } from "./taxonomy-group.js"
 import { TemperatureProperty } from "./temperature.js"
+import { TmdbIdProperty } from "./tmdb-id.js"
 import { ToolUsageProperty } from "./tool-usage.js"
 import { WebsiteProperty } from "./website.js"
 import { WhosOnFirstIdProperty } from "./whos-on-first-id.js"
@@ -66,9 +74,11 @@ import { WikipediaPageProperty } from "./wikipedia-page.js"
 /** Every property, the whole registry. Kinds have the properties that list them. */
 export const properties = [
   ActivePeriodProperty,
+  ActorsProperty,
   AgroforestryRolesProperty,
   AnimalRolesProperty,
   AreasOfWorkProperty,
+  AudiovisualFormatProperty,
   AuthorsProperty,
   BasedInProperty,
   BookEditionsProperty,
@@ -94,6 +104,7 @@ export const properties = [
   GrowthRateProperty,
   HeightProperty,
   ImagesProperty,
+  ImdbIdProperty,
   InheritsFromParentProperty,
   IsbnProperty,
   InLanguageProperty,
@@ -102,6 +113,8 @@ export const properties = [
   LifespanProperty,
   MainImageProperty,
   NamesProperty,
+  NumberOfEpisodesProperty,
+  NumberOfSeasonsProperty,
   OccupationsProperty,
   OrganizationTypeProperty,
   OriginProperty,
@@ -110,10 +123,12 @@ export const properties = [
   PlantingMethodsProperty,
   PruningResponseProperty,
   DatePublishedProperty,
+  ProductionCompaniesProperty,
   PublisherProperty,
   RelatedToProperty,
   ResourceFormatProperty,
   ResourceUrlProperty,
+  RuntimeProperty,
   ScientificNamesProperty,
   SeedDormancyProperty,
   SeedStorageBehaviorProperty,
@@ -124,6 +139,7 @@ export const properties = [
   TaxonomicClassificationProperty,
   TaxonomyGroupProperty,
   TemperatureProperty,
+  TmdbIdProperty,
   ToolUsageProperty,
   WebsiteProperty,
   WhosOnFirstIdProperty,

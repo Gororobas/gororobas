@@ -24,6 +24,7 @@ import type { ExtractionContext, ExtractionIssue } from "../extraction.js"
 import type { ArticleKind } from "../kinds.js"
 import { ArticleOrName } from "../values/article-or-name.js"
 import { supportedLanguageOf } from "../values/supported-language.js"
+import { throughSchema } from "./through-schema.js"
 
 export const WikidataPropertyId = Schema.String.check(Schema.isPattern(/^P[1-9][0-9]*$/)).pipe(
   Schema.brand("WikidataPropertyId"),
@@ -200,18 +201,6 @@ const dataValueOf = (
 
   return Result.succeed(snak.datavalue)
 }
-
-/** Our schema decides what's valid; Wikidata's value is its encoded side. */
-const throughSchema = <A, E>(
-  schema: Schema.Codec<A, E>,
-  // oxlint-disable-next-line effect/no-unknown-parameters -- Wikidata's values are typed by Wikidata, not by our schemas: this is where they're parsed.
-  input: unknown,
-): Result.Result<A, ExtractionIssue> =>
-  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- see `input`.
-  Result.mapError(Schema.decodeUnknownResult(schema)(input), (error) => ({
-    _tag: "INVALID_VALUE" as const,
-    detail: error.message,
-  }))
 
 const narrowed = <A>({
   dataValue,

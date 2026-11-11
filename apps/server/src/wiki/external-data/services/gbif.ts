@@ -8,7 +8,7 @@ import { TaxonMetadata, SpeciesMatch, GbifOccurrences } from "./gbif.schema.js"
 const CALENDAR_OF_LIFE_CHECKLIST_KEY = "7ddf754f-d193-4cc9-b351-99906754a03b"
 
 export const makeGbif = Effect.gen(function* () {
-  const http = yield* makeProviderHttp("GBIF", "https://api.gbif.org")
+  const http = yield* makeProviderHttp({ provider: "GBIF", baseUrl: "https://api.gbif.org" })
 
   const speciesMatch = (query: string) =>
     Effect.map(

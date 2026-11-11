@@ -59,7 +59,8 @@ Machines never propose for review. Two cases looked like they needed it, and nei
 (`sources.ts`), and the order is resolution's ranking. Restricting is common: identifiers never
 come from text inference, providers never assert `growsIn`, only GBIF classifies taxa. Each
 provider a property lists says how to read it, in plain code over the provider's result
-(`providers/wikidata.ts` has Wikidata's readers, `providers/syntropedia.ts` Syntropedia's):
+(`providers/wikidata.ts` has Wikidata's readers, `providers/syntropedia.ts` Syntropedia's,
+`providers/tmdb.ts` TMDB's):
 
 ```ts
 sources: (source) => [

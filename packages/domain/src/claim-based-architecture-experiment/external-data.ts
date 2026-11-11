@@ -5,6 +5,7 @@ import { GoogleBooksVolumeIdProperty } from "./properties/google-books-volume-id
 import type { Property } from "./properties/index.js"
 import { IsbnProperty } from "./properties/isbn.js"
 import { SyntropediaPlantIdProperty } from "./properties/syntropedia-plant-id.js"
+import { TmdbIdProperty } from "./properties/tmdb-id.js"
 import { WhosOnFirstIdProperty } from "./properties/whos-on-first-id.js"
 import { WikidataIdProperty } from "./properties/wikidata-id.js"
 import type { FetchedProvider } from "./providers/index.js"
@@ -25,5 +26,6 @@ export const providerInputs = {
   // A producer's channels, as people approved them, and the item a scraped resource is.
   CONTENT_CHANNELS: [ContentChannelsProperty, ContentChannelItemProperty],
   SYNTROPEDIA: [SyntropediaPlantIdProperty],
+  TMDB: [TmdbIdProperty],
   WHOS_ON_FIRST: [WhosOnFirstIdProperty],
 } as const satisfies { readonly [P in FetchedProvider]: ReadonlyArray<Property> }

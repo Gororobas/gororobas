@@ -2,6 +2,7 @@ import { Option, Result } from "effect"
 
 import { PartialDate, partialDateToIso } from "../../common/utils/dates.js"
 import { defineProperty } from "../property.js"
+import { Tmdb } from "../providers/tmdb.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 
 /**
@@ -19,6 +20,9 @@ export const DatePublishedProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "ONE",
   sources: (source) => [
+    source.tmdb({
+      extract: (work) => Tmdb.releaseDates(work).map(Result.flatMap(source.found)),
+    }),
     source.person(),
     source.wikidata({
       extract: (entity) =>

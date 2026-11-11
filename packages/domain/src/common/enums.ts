@@ -312,3 +312,6 @@ export const ResourceFormat = Schema.Literals([
 ])
 
 export const MediaAssetFormat = Schema.Literals(["VIDEO", "AUDIO", "IMAGE"])
+
+export const AudiovisualFormat = Schema.Literals(["FILM", "SERIES"])
+export type AudiovisualFormat = typeof AudiovisualFormat.Type

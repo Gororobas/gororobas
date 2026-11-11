@@ -1,6 +1,7 @@
 import { Option, Result, Schema } from "effect"
 
 import { defineProperty } from "../property.js"
+import { Tmdb } from "../providers/tmdb.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 
 /** BCP 47 tags, not `SupportedLanguage`: works exist in languages Gororobas isn't written in. */
@@ -22,18 +23,8 @@ export const InLanguageProperty = defineProperty({
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
   sources: (source) => [
-    source.person(),
-    source.wikidata({
-      // Language items as their IETF tag (P305): American English (Q7976) is `en-US`.
-      extract: (entity, context) =>
-        [WikidataProperty.LANGUAGE_OF_WORK, WikidataProperty.ORIGINAL_LANGUAGE_OF_FILM]
-          .flatMap((property) => Wikidata.statements(entity, property))
-          .map((statement) =>
-            Result.flatMap(
-              Wikidata.languageTag(statement, { context, schema: LanguageTag }),
-              source.found,
-            ),
-          ),
+    source.tmdb({
+      extract: (work) => Tmdb.languageTags(work).filter(Schema.is(LanguageTag)).map(source.found),
     }),
     source.googleBooks({
       extract: (result) =>
@@ -49,6 +40,19 @@ export const InLanguageProperty = defineProperty({
           .map((tag) => tag.replace(/^[A-Za-z]+/, (subtag) => subtag.toLowerCase()))
           .filter(Schema.is(LanguageTag))
           .map(source.found),
+    }),
+    source.person(),
+    source.wikidata({
+      // Language items as their IETF tag (P305): American English (Q7976) is `en-US`.
+      extract: (entity, context) =>
+        [WikidataProperty.LANGUAGE_OF_WORK, WikidataProperty.ORIGINAL_LANGUAGE_OF_FILM]
+          .flatMap((property) => Wikidata.statements(entity, property))
+          .map((statement) =>
+            Result.flatMap(
+              Wikidata.languageTag(statement, { context, schema: LanguageTag }),
+              source.found,
+            ),
+          ),
     }),
   ],
   schemaOrg: { match: "EXACT", encode: (tag) => ({ inLanguage: tag }) },

@@ -5,7 +5,10 @@ import { makeProviderHttp } from "../../../common/generic-http-service.js"
 import { WikidataResponse, WikidataSearchResponse } from "./wikidata.schema.js"
 
 export const makeWikidata = Effect.gen(function* () {
-  const http = yield* makeProviderHttp("WIKIDATA", "https://www.wikidata.org")
+  const http = yield* makeProviderHttp({
+    provider: "WIKIDATA",
+    baseUrl: "https://www.wikidata.org",
+  })
 
   return {
     entity: Effect.fn(function* (id: WikidataId) {

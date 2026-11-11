@@ -24,6 +24,7 @@ export interface ArticleExtraction {
  * by an identifier that could be any kind of thing need checking: a Wikidata ID people picked,
  * and the GBIF taxon a Wikidata ID leads to. The others only hold their kind's records, looked up
  * by their own IDs.
+ * @todo I still haven't understood this
  */
 const checkSubject = (input: ProviderInput, kind: ArticleKind): Option.Option<ExtractionIssue> =>
   Match.value(input).pipe(
@@ -36,6 +37,8 @@ const checkSubject = (input: ProviderInput, kind: ArticleKind): Option.Option<Ex
       CONTENT_CHANNELS: () => Option.none(),
       // Plants for syntropic agroforestry.
       SYNTROPEDIA: () => Option.none(),
+      // Movies and series, which are what FILM articles are about.
+      TMDB: () => Option.none(),
       // Gazetteer places.
       WHOS_ON_FIRST: () => Option.none(),
     }),

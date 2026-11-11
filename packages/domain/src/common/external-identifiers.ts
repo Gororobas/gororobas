@@ -42,3 +42,15 @@ export const SpotifyResourceId = Schema.String.check(Schema.isPattern(/^[a-zA-Z0
   Schema.brand("SpotifyResourceId"),
 )
 export type SpotifyResourceId = typeof SpotifyResourceId.Type
+
+/** TMDB's IDs are integers, numbered separately for movies and series; they travel as strings, as other identifiers do. */
+export const TmdbId = Schema.String.check(Schema.isPattern(/^[1-9][0-9]*$/)).pipe(
+  Schema.brand("TmdbId"),
+)
+export type TmdbId = typeof TmdbId.Type
+
+/** IMDb's title IDs (`tt0133093`): films, series and episodes. */
+export const ImdbTitleId = Schema.String.check(Schema.isPattern(/^tt[0-9]{7,}$/)).pipe(
+  Schema.brand("ImdbTitleId"),
+)
+export type ImdbTitleId = typeof ImdbTitleId.Type

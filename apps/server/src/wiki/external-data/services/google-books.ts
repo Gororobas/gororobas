@@ -5,7 +5,10 @@ import { makeProviderHttp } from "../../../common/generic-http-service.js"
 import { GoogleBooksSearch, GoogleBooksVolume } from "./google-books.schema.js"
 
 export const makeGoogleBooks = Effect.gen(function* () {
-  const http = yield* makeProviderHttp("GOOGLE_BOOKS", "https://www.googleapis.com")
+  const http = yield* makeProviderHttp({
+    provider: "GOOGLE_BOOKS",
+    baseUrl: "https://www.googleapis.com",
+  })
   const apiKey = yield* Config.Redacted("GOOGLE_BOOKS_API_KEY").pipe(Config.option)
   const key = Option.match(apiKey, {
     onNone: () => "",

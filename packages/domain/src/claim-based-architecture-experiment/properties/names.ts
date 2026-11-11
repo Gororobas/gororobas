@@ -5,6 +5,7 @@ import { toSearchableText } from "../../common/utils/strings.js"
 import { everyKind } from "../kinds.js"
 import { defineProperty } from "../property.js"
 import { Syntropedia } from "../providers/syntropedia.js"
+import { Tmdb } from "../providers/tmdb.js"
 import { WhosOnFirst } from "../providers/whos-on-first.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 import { FoldedName } from "../values/folded-name.js"
@@ -29,7 +30,7 @@ export type Name = typeof Name.Type
  * A handle is minted from the first name people gave in a language (or the gazetteer's), never
  * from a machine's, and never replaced afterwards, so links keep working.
  *
- * The gazetteer's names, Wikidata's labels and aliases, Syntropedia's names, Google Books' edition titles and channels' item titles are each
+ * The gazetteer's names, Wikidata's labels and aliases, Syntropedia's names, TMDB's titles, Google Books' edition titles and channels' item titles are each
  * their source's claims, so an article is named in every language they know without a machine
  * editing anything people wrote. They follow people's names, in source order.
  * Scientific names are their own property: they name a taxon and belong to no language.
@@ -99,6 +100,19 @@ export const NamesProperty = defineProperty({
     source.syntropedia({
       extract: (plant) =>
         Syntropedia.names(plant).flatMap(({ language, value }) =>
+          Schema.is(FoldedName)(value)
+            ? [
+                source.found({
+                  language,
+                  value: Name.make({ name: value, grammaticalGender: null }),
+                }),
+              ]
+            : [],
+        ),
+    }),
+    source.tmdb({
+      extract: (work) =>
+        Tmdb.titles(work).flatMap(({ language, value }) =>
           Schema.is(FoldedName)(value)
             ? [
                 source.found({

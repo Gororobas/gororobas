@@ -1,4 +1,7 @@
+import { Result } from "effect"
+
 import { defineProperty } from "../property.js"
+import { Tmdb } from "../providers/tmdb.js"
 import { ArticleOrName, articleOf } from "../values/article-or-name.js"
 import { articleOrNameToJsonLd } from "../values/article-or-name.js"
 
@@ -10,7 +13,14 @@ export const GenresProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "SET",
   mergeStrategy: "ALL_SOURCES",
-  sources: (source) => [source.person()],
+  sources: (source) => [
+    source.person(),
+    // Named in Portuguese: TMDB's genres are localized, and this property has no language.
+    source.tmdb({
+      extract: (work) =>
+        Tmdb.genres(work).map((name) => Result.flatMap(Tmdb.name(name), source.found)),
+    }),
+  ],
   references: { targetKinds: ["CONCEPT"], target: articleOf },
   schemaOrg: {
     match: "EXACT",

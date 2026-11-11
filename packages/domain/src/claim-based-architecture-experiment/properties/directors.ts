@@ -1,4 +1,7 @@
+import { Result } from "effect"
+
 import { defineProperty } from "../property.js"
+import { Tmdb } from "../providers/tmdb.js"
 import { ArticleOrName, articleOf, articleOrNameToJsonLd } from "../values/article-or-name.js"
 
 /**
@@ -11,7 +14,14 @@ export const DirectorsProperty = defineProperty({
   scope: "UNIVERSAL",
   cardinality: "LIST",
   mergeStrategy: "ALL_SOURCES",
-  sources: (source) => [source.person(), source.articleTextInference()],
+  sources: (source) => [
+    source.tmdb({
+      extract: (work) =>
+        Tmdb.directors(work).map((name) => Result.flatMap(Tmdb.name(name), source.found)),
+    }),
+    source.person(),
+    source.articleTextInference(),
+  ],
   references: {
     targetKinds: ["NOTEWORTHY_PERSON", "NOTEWORTHY_ENTITY", "CONTENT_PRODUCER"],
     target: articleOf,
