@@ -7,13 +7,16 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.design-sync.json",
     "format": "oxfmt",
     "test": "vitest run",
     "lint": "oxlint src",
     "gen-icons": "bun src/ui/icons/reicon-cli.ts && pnpm run format",
     "i18n:extract": "lingui extract --clean",
-    "i18n:check": "lingui check sync --clean && lingui check missing"
+    "i18n:check": "lingui check sync --clean && lingui check missing",
+    "design:check": "tsx src/design-sync/cli.ts check",
+    "design:variables": "tsx src/design-sync/cli.ts variables",
+    "design:acknowledge": "tsx src/design-sync/cli.ts acknowledge"
   },
   "dependencies": {
     "@effect/platform-browser": "catalog:",

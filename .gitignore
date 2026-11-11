@@ -28,7 +28,6 @@ workflows.db
 workflows.db-shm
 workflows.db-wal
 
-design
 skills-lock.json
 .residuality
 apps/client-prototypes

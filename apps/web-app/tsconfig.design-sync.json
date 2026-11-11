@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2023", "DOM"],
+    "tsBuildInfoFile": ".tsbuildinfo/design-sync-type-check.tsbuildinfo"
+  },
+  "include": ["src/design-sync/**/*"],
+  "exclude": []
+}

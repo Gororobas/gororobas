@@ -113,6 +113,15 @@ When you add a table, column or wiki kind, extend the seed in `apps/server/src/s
 - Publications, publication comments and media assets share one moderation lifecycle (`packages/domain/src/moderation/`): approved by default, censored or reapproved by people with `content:moderate`. While censored, content is hidden from every reader except its authors, and media leaves the galleries it's attached to.
 - `GET /moderation/queue` lists pending reviews (newcomers awaiting approval, wiki revisions awaiting evaluation), oldest first and unassigned.
 
+## Design file (`design/explorations.pen`)
+
+The web app is canonical; the design file follows it. Edit the `.pen` only through the Pencil MCP tools (it's plain JSON on disk, but the app owns the file while it's open). `pnpm --filter @gororobas/web-app design:check` runs in `pnpm run check` and fails when they drift:
+
+- **Variables**: every color role (per tone, light and dark, e.g. `tone/primary/action/background`) and primitive scale (`space/4`, `font-size/xl`, `measure/wide`) derived from `apps/web-app/src/ui/theme` must exist in the file with the same value. After changing the theme, run `pnpm --filter @gororobas/web-app design:variables` and paste the printed `SetVariables(...)` into Pencil's `execute`.
+- **Mirrors** (`design/design-sync.json`): UI kit components are reusable frames named `ui/<folder>` (variants as `ui/<folder>/<variant>`), article-specific ones `wiki-article/<name>`, and the screens are top-level frames. Each entry records the hash of the web-app sources it draws. When a source changes, update the frame to match the web app, then run `pnpm --filter @gororobas/web-app design:acknowledge <penNode>` (or `--all`) to re-record the hash.
+- **New `ui/` folders** must either get a component in the design file and a `mirrors` entry, or be listed under `notYetMirrored`. Remove them from that list as you draw them.
+- Use variables (`$tone/...`, `$space/...`) in the design, not literal colors, and compose screens from `ui/*` instances, so token and component changes propagate.
+
 ## Ensuring quality
 
 ⚠️ **CRITICAL**: always run the following to ensure your contribution is correct:

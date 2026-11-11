@@ -109,6 +109,17 @@ export default defineConfig({
     },
 
     {
+      // Build-time tooling that reads JSON files and the theme's plain data; it never runs in the app.
+      files: ["apps/web-app/src/design-sync/**"],
+      rules: {
+        ...Object.fromEntries(
+          Object.keys(effect.configs.recommended.rules).map((rule) => [rule, "off" as const]),
+        ),
+        "custom-lint-rules/no-node-apis": "off",
+      },
+    },
+
+    {
       files: ["packages/migration/**"],
       rules: { "custom-lint-rules/no-schema-decode-unknown": "off" },
     },

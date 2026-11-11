@@ -19,5 +19,6 @@
     "customConditions": ["@pleat/source"],
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/design-sync/cli.ts"]
 }

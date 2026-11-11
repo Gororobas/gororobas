@@ -1,0 +1,166 @@
+{
+  "mirrors": [
+    {
+      "penNode": "ui/app-button",
+      "source": "ui/app-button",
+      "sourceHash": "9bb092a39f2601bb",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/chip",
+      "source": "ui/chip",
+      "sourceHash": "13df001e81ee028e",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/thumbnail",
+      "source": "ui/thumbnail",
+      "sourceHash": "8162202fb81ceb40",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/untranslated-notice",
+      "source": "ui/untranslated-notice",
+      "sourceHash": "00e7fca04da15000",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/tab-navigation",
+      "source": "ui/tab-navigation",
+      "sourceHash": "456a553bd0912c8f",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/profile-row",
+      "source": "ui/profile-row",
+      "sourceHash": "73896ad69fe23ff3",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/provider-mark",
+      "source": "ui/provider-mark",
+      "sourceHash": "d06ee9ab8c1dfe5c",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/section-card",
+      "source": "ui/section-card",
+      "sourceHash": "7d74cf00f3a65f2d",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/empty-state",
+      "source": "ui/empty-state",
+      "sourceHash": "a5be4813d80eb5e3",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/app-shell",
+      "source": "ui/app-shell",
+      "sourceHash": "724f278c85295439",
+      "kind": "component"
+    },
+    {
+      "penNode": "ui/publication-card",
+      "source": "ui/publication-card",
+      "sourceHash": "079d2696680ab143",
+      "kind": "component"
+    },
+    {
+      "penNode": "wiki-article/overview-fact",
+      "source": "blocks/wiki-article/view/overview",
+      "sourceHash": "3d643916b38f17bd",
+      "kind": "component"
+    },
+    {
+      "penNode": "wiki-article/bookmark-picker",
+      "source": "blocks/wiki-article/view/bookmark-picker.ts",
+      "sourceHash": "a28df744aecadb0c",
+      "kind": "component"
+    },
+    {
+      "penNode": "wiki-article/classification-popover",
+      "source": "blocks/wiki-article/view/classification.ts",
+      "sourceHash": "6818cc30bf88b645",
+      "kind": "component"
+    },
+    {
+      "penNode": "Artigo · Planta (Cenoura) · Sobre · mobile",
+      "source": "blocks/wiki-article/view",
+      "sourceHash": "261fff838ade8b03",
+      "kind": "screen"
+    },
+    {
+      "penNode": "Artigo · Livro (A Queda do Céu) · Sobre · mobile",
+      "source": "blocks/wiki-article/view",
+      "sourceHash": "261fff838ade8b03",
+      "kind": "screen"
+    },
+    {
+      "penNode": "Artigo · Fotos (aba) · mobile",
+      "source": "blocks/wiki-article/view",
+      "sourceHash": "261fff838ade8b03",
+      "kind": "screen"
+    },
+    {
+      "penNode": "Artigo · Contribuições (aba) · mobile",
+      "source": "blocks/wiki-article/view",
+      "sourceHash": "261fff838ade8b03",
+      "kind": "screen"
+    },
+    {
+      "penNode": "Artigo · Publicações (aba) · mobile",
+      "source": "blocks/wiki-article/view",
+      "sourceHash": "261fff838ade8b03",
+      "kind": "screen"
+    },
+    {
+      "penNode": "Artigo · Cabeçalho · variações e classificação aberta · mobile",
+      "source": "blocks/wiki-article/view",
+      "sourceHash": "261fff838ade8b03",
+      "kind": "screen"
+    },
+    {
+      "penNode": "Artigo · Estado · Não encontrado · mobile",
+      "source": "blocks/wiki-article/view/view.ts",
+      "sourceHash": "dd391e57f0d37e0d",
+      "kind": "screen"
+    },
+    {
+      "penNode": "Artigo · Estado · Erro ao carregar · mobile",
+      "source": "blocks/wiki-article/view/view.ts",
+      "sourceHash": "dd391e57f0d37e0d",
+      "kind": "screen"
+    },
+    {
+      "penNode": "Artigo · Estado · Carregando · mobile",
+      "source": "blocks/wiki-article/view/view.ts",
+      "sourceHash": "dd391e57f0d37e0d",
+      "kind": "screen"
+    }
+  ],
+  "notYetMirrored": [
+    "app-card",
+    "app-dialog",
+    "app-drawer",
+    "app-field",
+    "app-input",
+    "app-popover",
+    "choice-row",
+    "drawer",
+    "filter-chips",
+    "icons",
+    "loading-state",
+    "media-credit",
+    "mysterious-author",
+    "option-cards",
+    "photo-gallery",
+    "place-outline",
+    "popover-drawer",
+    "profile-avatar",
+    "rich-text",
+    "section-heading",
+    "section-with-heading",
+    "wiki-article-row"
+  ]
+}

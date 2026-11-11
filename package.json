@@ -19,7 +19,7 @@
     "check-test-inventory": "tsx scripts/check-test-inventory.ts",
     "coverage": "pnpm exec vitest --coverage",
     "check-translations": "pnpm --filter @gororobas/web-app i18n:check",
-    "check": "pnpm run format:check && pnpm run type-check && pnpm run lint:check && pnpm run test && pnpm run check-bdd && pnpm run check-test-inventory && pnpm run check-translations",
+    "check": "pnpm run format:check && pnpm run type-check && pnpm run lint:check && pnpm run test && pnpm run check-bdd && pnpm run check-test-inventory && pnpm run check-translations && pnpm --filter @gororobas/web-app design:check",
     "fix": "pnpm run lint && pnpm --filter @gororobas/web-app i18n:extract && pnpm run format",
     "quality-gates": "pnpm run fix && pnpm run check"
   },
