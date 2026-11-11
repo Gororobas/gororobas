@@ -1,3 +1,5 @@
+import { Schema } from "effect"
+
 import type { DesignVariable } from "./design-tokens"
 import { colorToHex } from "./oklch"
 
@@ -10,37 +12,52 @@ import { colorToHex } from "./oklch"
  *   Each records the hash of its source when the design last matched it, so changing the source
  *   fails the check until someone updates the design and runs `design:acknowledge`.
  */
-export type Mirror = Readonly<{
+export const Mirror = Schema.Struct({
   /** Name of the node in the design file. Components are reusable frames named `ui/<folder>`. */
-  penNode: string
+  penNode: Schema.String,
   /** Path from `apps/web-app/src` to the folder whose sources the node draws. */
-  source: string
+  source: Schema.String,
   /** Hash of the source when the design last matched it. */
-  sourceHash: string
-  kind: "component" | "screen"
-}>
+  sourceHash: Schema.String,
+  kind: Schema.Literals(["component", "screen"]),
+})
 
-export type SyncLedger = Readonly<{
-  mirrors: ReadonlyArray<Mirror>
+export type Mirror = typeof Mirror.Type
+
+export const SyncLedger = Schema.Struct({
+  mirrors: Schema.Array(Mirror),
   /** UI kit folders that exist in the web app but aren't drawn yet. New folders must land here or in `mirrors`. */
-  notYetMirrored: ReadonlyArray<string>
-}>
+  notYetMirrored: Schema.Array(Schema.String),
+})
 
-export type PenNode = Readonly<{
-  name?: string
-  reusable?: boolean
-  children?: ReadonlyArray<PenNode>
-}>
+export type SyncLedger = typeof SyncLedger.Type
 
-export type PenVariable = Readonly<{
-  type: string
-  value: unknown
-}>
+export interface PenNode {
+  readonly name?: string
+  readonly reusable?: boolean
+  readonly children?: ReadonlyArray<PenNode>
+}
 
-export type PenDocument = Readonly<{
-  variables?: Readonly<Record<string, PenVariable>>
-  children?: ReadonlyArray<PenNode>
-}>
+/** Only what the check reads: nodes carry many more properties, which decoding drops. */
+export const PenNode = Schema.Struct({
+  name: Schema.optionalKey(Schema.String),
+  reusable: Schema.optionalKey(Schema.Boolean),
+  children: Schema.optionalKey(Schema.Array(Schema.suspend((): Schema.Codec<PenNode> => PenNode))),
+})
+
+export const PenVariable = Schema.Struct({
+  type: Schema.String,
+  value: Schema.Unknown,
+})
+
+export type PenVariable = typeof PenVariable.Type
+
+export const PenDocument = Schema.Struct({
+  variables: Schema.optionalKey(Schema.Record(Schema.String, PenVariable)),
+  children: Schema.optionalKey(Schema.Array(PenNode)),
+})
+
+export type PenDocument = typeof PenDocument.Type
 
 export type CheckInputs = Readonly<{
   pen: PenDocument
