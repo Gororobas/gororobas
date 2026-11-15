@@ -1,16 +1,21 @@
+import { Option } from "effect"
+
 import { ClimateZone } from "../../common/enums.js"
-import { defineProperty } from "../property.js"
+import { NonEmptySet, nonEmptySetOf } from "../../common/sets.js"
+import { defineSituatedProperty } from "../property.js"
 
 /** Syntropedia's "bioma de ocorrência", which names climates rather than biomes. */
-export const ClimateZonesProperty = defineProperty({
+export const ClimateZonesProperty = defineSituatedProperty({
   id: "climateZones",
-  valueSchema: ClimateZone,
+  valueSchema: NonEmptySet(ClimateZone),
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
-  cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
-  sources: (source) => [
-    source.person(),
-    source.syntropedia({ extract: (plant) => plant.climateZones.map(source.found) }),
-  ],
+  sources: (source) => ({
+    person: source.person({ inferable: true }),
+    syntropedia: source.syntropedia({
+      extract: (plant) => Option.toArray(nonEmptySetOf(plant.climateZones)).map(source.found),
+    }),
+  }),
+  summary: (summarize) => summarize.eachMember(ClimateZone),
+  inheritance: { through: ["cultivarOf"], mode: "ALONGSIDE" },
 })

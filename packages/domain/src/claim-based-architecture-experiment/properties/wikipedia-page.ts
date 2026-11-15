@@ -1,11 +1,11 @@
 import { Schema } from "effect"
 
 import { UrlAsString } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Wikidata } from "../providers/wikidata.js"
 
-/** Today's `wiki_article_external_links`: Wikidata's sitelinks. */
-export const WikipediaPageProperty = defineProperty({
+/** Wikidata's sitelinks. */
+export const WikipediaPageProperty = defineCanonicalProperty({
   id: "wikipediaPage",
   valueSchema: UrlAsString,
   kinds: ["PLANT", "PLACE"],

@@ -7,7 +7,7 @@ import { toSearchableText } from "../../common/utils/strings.js"
  * A name compared the way people read it: "Futuro Ancestral" and "futuro ancestral" are the same
  * value, so their claims attest it together. Readers see the best-ranked claim's spelling.
  */
-export const FoldedName = ValidName.pipe(
+export const NameWithNormalizedEquivalence = ValidName.pipe(
   Schema.overrideToEquivalence(
     () => (self, that) => toSearchableText(self) === toSearchableText(that),
   ),

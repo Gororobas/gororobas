@@ -1,12 +1,11 @@
 import { SyntropediaPlantId } from "../../common/external-identifiers.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
 /**
- * Identifiers drive every fetch, so no machine guesses them: people match a plant to Syntropedia's,
- * and a backfill by scientific name would be reviewed by a person who then asserts the results.
+ * Identifiers drive every fetch, so no machine guesses them: people match a plant to Syntropedia's.
  * Syntropedia has no page per plant, so there's no `sameAs` to publish.
  */
-export const SyntropediaPlantIdProperty = defineProperty({
+export const SyntropediaPlantIdProperty = defineCanonicalProperty({
   id: "syntropediaPlantId",
   valueSchema: SyntropediaPlantId,
   kinds: ["PLANT"],

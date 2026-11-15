@@ -1,11 +1,11 @@
 import { Option } from "effect"
 
 import { PositiveInteger } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Tmdb } from "../providers/tmdb.js"
 
 /** Series only. */
-export const NumberOfSeasonsProperty = defineProperty({
+export const NumberOfSeasonsProperty = defineCanonicalProperty({
   id: "numberOfSeasons",
   valueSchema: PositiveInteger,
   kinds: ["FILM"],

@@ -1,9 +1,9 @@
 /**
  * What a source's `extract` returns, and what it may look up while extracting. `extract` is plain
  * code reading a provider's result (see `providers/`); the property checks and orders what it
- * returns (`defineProperty`).
+ * returns (`defineCanonicalProperty`, `defineSituatedProperty`).
  */
-import type { Option, Result } from "effect"
+import { Result, Schema, type Option } from "effect"
 
 import type { SupportedLanguage } from "../common/enums.js"
 import type { WhosOnFirstId, WikidataId } from "../common/external-identifiers.js"
@@ -71,3 +71,18 @@ export interface ExtractionContext {
   readonly languageTagOf: (wikidataId: WikidataId) => Option.Option<string>
   readonly importedFile: (fileName: string) => Option.Option<MediaAssetId>
 }
+
+/**
+ * Our schema decides what's valid; a provider's value is its encoded side. This is where
+ * providers' loosely typed values (strings, numbers) become ours, or an `INVALID_VALUE` issue.
+ */
+export const decodeExtractedValue = <A, E>(
+  schema: Schema.Codec<A, E>,
+  // oxlint-disable-next-line effect/no-unknown-parameters -- Providers' values are typed by the provider, not by our schemas: this is where they're parsed.
+  input: unknown,
+): Result.Result<A, ExtractionIssue> =>
+  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- see `input`.
+  Result.mapError(Schema.decodeUnknownResult(schema)(input), (error) => ({
+    _tag: "INVALID_VALUE" as const,
+    detail: error.message,
+  }))

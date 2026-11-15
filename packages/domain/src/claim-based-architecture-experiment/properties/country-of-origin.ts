@@ -1,18 +1,16 @@
 import { Result } from "effect"
 
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Tmdb } from "../providers/tmdb.js"
 import { ArticleOrName, articleOf, articleOrNameToJsonLd } from "../values/article-or-name.js"
 
-/** Today's film `country`, free text. */
-export const CountryOfOriginProperty = defineProperty({
+export const CountryOfOriginProperty = defineCanonicalProperty({
   id: "countryOfOrigin",
   valueSchema: ArticleOrName,
   kinds: ["FILM"],
   // @TODO countryOfOrigin must be language-specific due to its translations
   scope: "UNIVERSAL",
   cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
   sources: (source) => [
     // Named in Portuguese until TMDB's ISO codes can match our PLACE articles.
     source.tmdb({

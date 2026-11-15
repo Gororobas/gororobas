@@ -3,12 +3,12 @@ import * as Length from "effect-units/Length"
 import * as Quantity from "effect-units/Quantity"
 
 import { Centimeters } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
+import { makeRange } from "../../common/range.js"
+import { defineSituatedProperty } from "../property.js"
 import { Syntropedia } from "../providers/syntropedia.js"
-import { makeRange } from "../values/range.js"
 
-/** Today's `heightMin` and `heightMax`, one value so the invariant is the schema's. */
-export const HeightProperty = defineProperty({
+/** One value, so the invariant is the schema's. */
+export const HeightProperty = defineSituatedProperty({
   id: "height",
   valueSchema: makeRange({
     bound: Centimeters,
@@ -18,14 +18,14 @@ export const HeightProperty = defineProperty({
   }),
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
-  cardinality: "ONE",
-  presence: "OPTIONAL",
-  sources: (source) => [
-    source.person(),
-    source.syntropedia({
+  sources: (source) => ({
+    person: source.person({ inferable: true }),
+    syntropedia: source.syntropedia({
       extract: (plant) => Syntropedia.height(plant).pipe(Option.toArray).map(source.found),
     }),
-  ],
+  }),
+  summary: (summarize) => summarize.range(Length.inCentimeters),
+  inheritance: { through: ["cultivarOf"], mode: "ALONGSIDE" },
   schemaOrg: {
     // One value of ours is a range; schema.org's `height` is a single quantity or a range of one.
     match: "CLOSE",

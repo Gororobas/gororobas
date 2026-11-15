@@ -1,10 +1,10 @@
 import { Option } from "effect"
 
 import { WikiArticleId } from "../../common/ids.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-/** Today's `parentPlantId`. The plant must be published, checked on the server. */
-export const CultivarOfProperty = defineProperty({
+/** The plant must be published, checked on the server. */
+export const CultivarOfProperty = defineCanonicalProperty({
   id: "cultivarOf",
   valueSchema: WikiArticleId,
   kinds: ["PLANT_CULTIVAR"],

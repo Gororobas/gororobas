@@ -1,4 +1,5 @@
-import { DateTime, Effect, Option, Schema, SchemaGetter, SchemaIssue } from "effect"
+// @todo remove `/utils` folder, keep under `common`'s root
+import { DateTime, Effect, Match, Option, Order, Schema, SchemaGetter, SchemaIssue } from "effect"
 
 export const nowAsIso = Effect.gen(function* () {
   const now = yield* DateTime.now
@@ -32,6 +33,11 @@ const partialDateDayFields = {
   day: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 31 })),
 }
 
+const daysInMonth = (year: number, month: number): number => {
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+  return month === 2 ? (leapYear ? 29 : 28) : [4, 6, 9, 11].includes(month) ? 30 : 31
+}
+
 const PartialDateDecoded = Schema.Union([
   Schema.Struct({ ...partialDateYearFields, precision: Schema.Literal("year") }),
   Schema.Struct({ ...partialDateMonthFields, precision: Schema.Literal("month") }),
@@ -46,10 +52,7 @@ const PartialDateDecoded = Schema.Union([
   Schema.makeFilter(
     (date) => {
       if (!("day" in date)) return true
-      const leapYear = date.year % 4 === 0 && (date.year % 100 !== 0 || date.year % 400 === 0)
-      const daysInMonth =
-        date.month === 2 ? (leapYear ? 29 : 28) : [4, 6, 9, 11].includes(date.month) ? 30 : 31
-      return date.day <= daysInMonth || "must be a valid calendar date"
+      return date.day <= daysInMonth(date.year, date.month) || "must be a valid calendar date"
     },
     {
       identifier: "PartialDateCalendarDate",
@@ -66,7 +69,10 @@ export const PartialDateEncoded = Schema.String.check(Schema.isPattern(partialDa
 )
 export type PartialDateEncoded = typeof PartialDateEncoded.Type
 
-/** Open Evnt partial date: a timezone-qualified string decoded at its stated precision. */
+/**
+ * Open Evnt partial date: a timezone-qualified string decoded at its stated precision.
+ * @link https://evnt.directory/spec/open-evnt-partialdate.html
+ */
 export const PartialDate = PartialDateEncoded.pipe(
   Schema.decodeTo(PartialDateDecoded, {
     decode: SchemaGetter.transformEffect<typeof PartialDateDecoded.Type, string>((input) => {
@@ -105,6 +111,70 @@ export const PartialDate = PartialDateEncoded.pipe(
 )
 
 export type PartialDate = typeof PartialDate.Type
+
+/**
+ * Epoch milliseconds of a wall-clock time in the date's timezone. "compatible" reads skipped times
+ * with the offset from before the change and repeated ones as the first, as the spec requires.
+ * Overflowing fields roll over (day 32 is the next month's 1st), which `partialDateEnd` relies on.
+ */
+const wallClockInstant = ({
+  timezone,
+  year,
+  month = 1,
+  day = 1,
+  hour = 0,
+  minute = 0,
+}: {
+  readonly timezone: string
+  readonly year: number
+  readonly month?: number
+  readonly day?: number
+  readonly hour?: number
+  readonly minute?: number
+}): number =>
+  DateTime.toEpochMillis(
+    DateTime.makeZonedUnsafe(
+      { year, month, day, hour, minute, second: 0, millisecond: 0 },
+      { timeZone: timezone, adjustForTimeZone: true, disambiguation: "compatible" },
+    ),
+  )
+
+/** The first instant after the period a date covers; a time ends at the instant it starts. */
+const partialDateEnd = (date: PartialDate): number =>
+  Match.value(date).pipe(
+    Match.discriminatorsExhaustive("precision")({
+      year: ({ timezone, year }) => wallClockInstant({ timezone, year: year + 1 }),
+      month: ({ timezone, year, month }) => wallClockInstant({ timezone, year, month: month + 1 }),
+      day: ({ timezone, year, month, day }) =>
+        wallClockInstant({ timezone, year, month, day: day + 1 }),
+      time: wallClockInstant,
+    }),
+  )
+
+const precisionRank = { time: 0, day: 1, month: 2, year: 3 } as const
+
+/**
+ * Sort order from the spec: by the instant each period starts, in its own timezone, and the finer
+ * precision first when two start together (`2025-01-01[UTC]` before `2025[UTC]`).
+ * @link https://evnt.directory/spec/open-evnt-partialdate.html#_3-2-order
+ */
+export const PartialDateOrder: Order.Order<PartialDate> = Order.combine(
+  Order.mapInput<number, PartialDate>(Order.Number, wallClockInstant),
+  Order.mapInput(Order.Number, (date: PartialDate) => precisionRank[date.precision]),
+)
+
+/**
+ * Whether a period starting at `start` and ending at `end` is in order, per the spec: `start`'s
+ * period begins before `end`'s ends, or both begin together, so "September 1962 to 1962" is in
+ * order. This isn't `PartialDateOrder`: overlapping periods are each "not after" the other, and
+ * the relation isn't transitive (Sep 1962 ≤ 1962 ≤ Mar 1962, but not Sep ≤ Mar), so no `Order`
+ * can express it.
+ * @link https://evnt.directory/spec/open-evnt-partialdate.html#_3-2-order
+ */
+export const isPartialDateNotAfter = (start: PartialDate, end: PartialDate): boolean => {
+  const startInstant = wallClockInstant(start)
+  return startInstant < partialDateEnd(end) || startInstant === wallClockInstant(end)
+}
 
 const pad = (value: number, length: number) => String(value).padStart(length, "0")
 

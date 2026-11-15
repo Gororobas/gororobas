@@ -1446,6 +1446,10 @@ msgid "More actions for {title}"
 msgstr "Más acciones para {title}"
 
 #: src/lib/vocabulary.ts
+msgid "Mother tree"
+msgstr "Árbol madre"
+
+#: src/lib/vocabulary.ts
 msgid "Municipality"
 msgstr "Municipio"
 

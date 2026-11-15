@@ -1,15 +1,18 @@
 import { GbifClassification } from "../../wiki/external-data/kinds/plant-external-data.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-/** Today's `wiki_plant_taxonomy_classification`, now for animals too: one value per rank, only from GBIF. */
-export const TaxonomicClassificationProperty = defineProperty({
+/**
+ * One value per rank, only from GBIF. It's also where scientific names come from: the most specific rank's name (a species, or
+ * a genus for taxa like Musa). Cultivars have no GBIF taxon, so they show their plant's.
+ */
+export const TaxonomicClassificationProperty = defineCanonicalProperty({
   id: "taxonomicClassification",
   valueSchema: GbifClassification,
-  kinds: ["PLANT", "ANIMAL"],
+  kinds: ["PLANT", "PLANT_CULTIVAR", "ANIMAL"],
   scope: "UNIVERSAL",
   cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
   sources: (source) => [
     source.gbif({ extract: (result) => result.classification.map(source.found) }),
   ],
+  inheritance: { through: ["cultivarOf"], mode: "ALONGSIDE" },
 })

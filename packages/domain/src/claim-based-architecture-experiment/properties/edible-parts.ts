@@ -1,12 +1,13 @@
 import { EdiblePlantPart } from "../../common/enums.js"
-import { defineProperty } from "../property.js"
+import { NonEmptySet } from "../../common/sets.js"
+import { defineSituatedProperty } from "../property.js"
 
-export const EdiblePartsProperty = defineProperty({
+export const EdiblePartsProperty = defineSituatedProperty({
   id: "edibleParts",
-  valueSchema: EdiblePlantPart,
+  valueSchema: NonEmptySet(EdiblePlantPart),
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
-  cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
-  sources: (source) => [source.person()],
+  sources: (source) => ({ person: source.person({ inferable: true }) }),
+  summary: (summarize) => summarize.eachMember(EdiblePlantPart),
+  inheritance: { through: ["cultivarOf"], mode: "ALONGSIDE" },
 })

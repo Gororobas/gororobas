@@ -1,15 +1,18 @@
-import { Array as EffectArray, Option, Result, Schema } from "effect"
+import { Array as EffectArray, Option, Result } from "effect"
 
-import { PartialDate, partialDateToIso } from "../../common/utils/dates.js"
-import { defineProperty } from "../property.js"
+import { makeRange } from "../../common/range.js"
+import { PartialDate, isPartialDateNotAfter, partialDateToIso } from "../../common/utils/dates.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Wikidata, WikidataProperty, type WikidataPropertyId } from "../providers/wikidata.js"
 
-/** Today's `birthDate` and `deathDate`. See `activePeriod` on ordering partial dates. */
-export const LifespanProperty = defineProperty({
+export const LifespanProperty = defineCanonicalProperty({
   id: "lifespan",
-  valueSchema: Schema.Struct({
-    born: Schema.optionalKey(PartialDate),
-    died: Schema.optionalKey(PartialDate),
+  valueSchema: makeRange({
+    bound: PartialDate,
+    keys: { min: "born", max: "died" },
+    isLessThanOrEqual: isPartialDateNotAfter,
+    identifier: "Lifespan",
+    title: "Lifespan",
   }),
   kinds: ["NOTEWORTHY_PERSON"],
   scope: "UNIVERSAL",

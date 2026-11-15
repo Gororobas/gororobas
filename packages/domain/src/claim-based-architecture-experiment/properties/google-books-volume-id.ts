@@ -1,7 +1,7 @@
 import { GoogleBooksVolumeId } from "../../common/external-identifiers.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-export const GoogleBooksVolumeIdProperty = defineProperty({
+export const GoogleBooksVolumeIdProperty = defineCanonicalProperty({
   id: "googleBooksVolumeId",
   valueSchema: GoogleBooksVolumeId,
   kinds: ["BOOK"],

@@ -1,4 +1,4 @@
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { TmdbWorkId, tmdbUrl } from "../providers/tmdb.js"
 
 /**
@@ -6,7 +6,7 @@ import { TmdbWorkId, tmdbUrl } from "../providers/tmdb.js"
  * form's search (`Tmdb.search`), and their choice is the claim. A movie and a series can share
  * a number, so the value carries its media type.
  */
-export const TmdbIdProperty = defineProperty({
+export const TmdbIdProperty = defineCanonicalProperty({
   id: "tmdbId",
   valueSchema: TmdbWorkId,
   kinds: ["FILM"],

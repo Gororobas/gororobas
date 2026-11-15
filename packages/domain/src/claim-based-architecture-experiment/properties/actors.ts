@@ -1,6 +1,6 @@
 import { Result } from "effect"
 
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Tmdb } from "../providers/tmdb.js"
 import { ArticleOrName, articleOf, articleOrNameToJsonLd } from "../values/article-or-name.js"
 
@@ -8,13 +8,12 @@ import { ArticleOrName, articleOf, articleOrNameToJsonLd } from "../values/artic
  * Who acts in a work, in billing order: a role property like `directors`. TMDB names the top
  * billed (`Tmdb.cast`), as names until people link them to articles.
  */
-export const ActorsProperty = defineProperty({
+export const ActorsProperty = defineCanonicalProperty({
   id: "actors",
   valueSchema: ArticleOrName,
   kinds: ["FILM"],
   scope: "UNIVERSAL",
   cardinality: "LIST",
-  mergeStrategy: "ALL_SOURCES",
   sources: (source) => [
     source.tmdb({
       extract: (work) =>

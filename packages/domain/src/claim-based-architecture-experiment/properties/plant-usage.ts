@@ -1,16 +1,22 @@
+import { Option } from "effect"
+
 import { PlantUsage } from "../../common/enums.js"
-import { defineProperty } from "../property.js"
+import { NonEmptySet, nonEmptySetOf } from "../../common/sets.js"
+import { defineSituatedProperty } from "../property.js"
 import { Syntropedia } from "../providers/syntropedia.js"
 
-export const PlantUsageProperty = defineProperty({
+export const PlantUsageProperty = defineSituatedProperty({
   id: "plantUsage",
-  valueSchema: PlantUsage,
+  valueSchema: NonEmptySet(PlantUsage),
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
-  cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
-  sources: (source) => [
-    source.person(),
-    source.syntropedia({ extract: (plant) => Syntropedia.plantUsages(plant).map(source.found) }),
-  ],
+  sources: (source) => ({
+    person: source.person({ inferable: true }),
+    syntropedia: source.syntropedia({
+      extract: (plant) =>
+        Option.toArray(nonEmptySetOf(Syntropedia.plantUsages(plant))).map(source.found),
+    }),
+  }),
+  summary: (summarize) => summarize.eachMember(PlantUsage),
+  inheritance: { through: ["cultivarOf"], mode: "ALONGSIDE" },
 })

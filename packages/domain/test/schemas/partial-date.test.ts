@@ -1,8 +1,12 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Schema } from "effect"
+import { Order, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 
-import { PartialDate } from "../../src/common/utils/dates.js"
+import {
+  PartialDate,
+  PartialDateOrder,
+  isPartialDateNotAfter,
+} from "../../src/common/utils/dates.js"
 import { assertProperty } from "../../src/testing.js"
 
 const decode = Schema.decodeSync(PartialDate)
@@ -112,5 +116,51 @@ describe("PartialDate", () => {
     invalid.forEach((value) =>
       expect(() => Schema.encodeUnknownSync(PartialDate)(value)).toThrow(/must|Expected|Missing/),
     )
+  })
+})
+
+describe("PartialDate order", () => {
+  const isNotAfter = (start: string, end: string) =>
+    isPartialDateNotAfter(decode(start), decode(end))
+  const compare = (self: string, that: string) => PartialDateOrder(decode(self), decode(that))
+
+  it("follows the spec's 'not after' examples, including coarser ends", () => {
+    expect(isNotAfter("2025-11-12[Europe/London]", "2025-11-12T18:00[Europe/London]")).toBe(true)
+    expect(isNotAfter("2025-11-12T10:00[Europe/London]", "2025-11-12[Europe/London]")).toBe(true)
+    expect(isNotAfter("1962-09[UTC]", "1962[UTC]")).toBe(true)
+    expect(isNotAfter("1962-12-31[UTC]", "1962[UTC]")).toBe(true)
+    expect(isNotAfter("1963[UTC]", "1962[UTC]")).toBe(false)
+    expect(isNotAfter("2025-11-12T10:00[UTC]", "2025-11-12T09:59[UTC]")).toBe(false)
+    expect(isNotAfter("2025-11-12T10:00[UTC]", "2025-11-12T10:00[UTC]")).toBe(true)
+    // 01:00 in Kathmandu (+05:45) is the previous day in UTC.
+    expect(isNotAfter("2025-11-12T01:00[Asia/Kathmandu]", "2025-11-11[UTC]")).toBe(true)
+    expect(isNotAfter("2025-11-12T10:00[Asia/Kathmandu]", "2025-11-12T05:00[UTC]")).toBe(true)
+    expect(isNotAfter("2025-11-12T11:00[Asia/Kathmandu]", "2025-11-12T05:00[UTC]")).toBe(false)
+  })
+
+  it("sorts by start instant, finer precision first on ties", () => {
+    expect(compare("2025-01-01[UTC]", "2025[UTC]")).toBe(-1)
+    expect(compare("2025-01-01T00:00[UTC]", "2025-01-01[UTC]")).toBe(-1)
+    expect(compare("2025-11-12T09:00[UTC]", "2025-11-12T10:00[UTC]")).toBe(-1)
+    expect(compare("2025[UTC]", "2025-09[UTC]")).toBe(-1)
+    expect(compare("2025-11-12T10:00[Europe/London]", "2025-11-12T10:00[Europe/Vilnius]")).toBe(1)
+  })
+
+  it("reads skipped times with the offset from before the clock change", () => {
+    // Vilnius skips 03:00–04:00 on 2026-03-29, so 03:30 is 04:30 local, i.e. 01:30 UTC.
+    expect(compare("2026-03-29T03:30[Europe/Vilnius]", "2026-03-29T01:30[UTC]")).toBe(0)
+  })
+
+  it("is 'not after' whenever the order sorts it first, and reflexive", () => {
+    assertProperty({
+      arbitrary: Arbitrary.schema(Schema.Tuple([PartialDate, PartialDate])),
+      predicate: ([self, that]) => {
+        // Sorting first implies "not after"; the converse fails only for coarser, overlapping ends.
+        const sortsFirst = Order.isLessThanOrEqualTo(PartialDateOrder)(self, that)
+        expect(!sortsFirst || isPartialDateNotAfter(self, that)).toBe(true)
+        expect(isPartialDateNotAfter(self, self)).toBe(true)
+        return true
+      },
+    })
   })
 })

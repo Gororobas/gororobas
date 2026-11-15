@@ -1,6 +1,6 @@
 import { Option, Result, Schema } from "effect"
 
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Tmdb } from "../providers/tmdb.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 
@@ -12,16 +12,14 @@ export const LanguageTag = Schema.String.check(
 /**
  * The languages a work's content is in: what a book is written in, what a film's people speak,
  * what a video or a podcast episode is narrated in. Named as schema.org names it: `languages`
- * alone didn't say whether it was the work's or its subject's. Today's book `language` and film
- * `languages`.
+ * alone didn't say whether it was the work's or its subject's.
  */
-export const InLanguageProperty = defineProperty({
+export const InLanguageProperty = defineCanonicalProperty({
   id: "inLanguage",
   valueSchema: LanguageTag,
   kinds: ["BOOK", "FILM", "RESOURCE"],
   scope: "UNIVERSAL",
   cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
   sources: (source) => [
     source.tmdb({
       extract: (work) => Tmdb.languageTags(work).filter(Schema.is(LanguageTag)).map(source.found),

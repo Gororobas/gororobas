@@ -1,48 +1,40 @@
 /**
- * The one rule turning an article's claims into what readers see. Readers only ever see resolved
- * values and their attestations: claims, statuses and evidence stay behind this module.
+ * The one rule turning a canonical property's claims into what readers see: the best-ranked
+ * source's values win (situated properties are tallied instead, in `situated-summary.ts`).
+ * Readers only ever see resolved values and their attestations: claims, statuses and evidence
+ * stay behind this module.
  *
  * It's a pure function of the claims, so it doesn't depend on their order, and stored projections
- * can always be rebuilt from it. Cultivars inherit at read time (`resolveInheritedTrait`), so a
- * plant's change never has to be copied into its cultivars.
+ * can always be rebuilt from it.
  *
  * A **claimed value** is a value with the visible claim stating it: what's left of a claim once
  * approval, moderation, supersession and retraction have been applied.
  */
-import { Array as EffectArray, DateTime, Option, Order, Schema } from "effect"
+import { Array as EffectArray, Option, Order, Schema } from "effect"
 import type { NonEmptyReadonlyArray } from "effect/Array"
 
-import { PersonId, type WikiArticleId } from "../common/ids.js"
-import { IntNonNegative } from "../common/primitives.js"
+import { groupByEquivalentKey } from "../common/arrays.js"
 import {
-  type Claim,
+  type CanonicalClaim,
   Evaluation,
   type LanguageOf,
-  type PersonClaim,
+  type CanonicalPersonClaim,
+  type PeopleSummary,
   type PropertyScope,
   getClaimSourceKey,
   isVisibleModerationStatus,
+  oldestClaimFirst,
+  summarizeAuthors,
 } from "./claims.js"
-import type { Dispute } from "./disputes.js"
-import type { Endorsement } from "./endorsements.js"
 import { type ClaimId, MachineProvenance, type ProvenanceSourceKey } from "./provenance.js"
 import type { FractionalIndex } from "./values/fractional-index.js"
 
-/** Who stands behind a value, as readers see it: enough for a badge, a link and a dispute button. */
+/** Who stands behind a value, as readers see it: enough for a badge, a link and a report button. */
 export interface Attestation {
   readonly claimId: ClaimId
   /** The source of the claim attesting it. */
   readonly sourceKey: ProvenanceSourceKey
 }
-
-/** How many people did something, with a few of them to show as avatars. */
-export const PeopleSummary = Schema.Struct({
-  totalCount: IntNonNegative,
-  /** The most recent ones, at most three. */
-  samplePeopleIds: Schema.Array(PersonId).check(Schema.isMaxLength(3)),
-})
-
-export type PeopleSummary = typeof PeopleSummary.Type
 
 export interface ResolvedValue<Value> {
   /** As the best-ranked claim spells it, when equivalent values differ ("Milho" and "milho"). */
@@ -50,12 +42,10 @@ export interface ResolvedValue<Value> {
   /** Best-ranked first. */
   readonly attestations: NonEmptyReadonlyArray<Attestation>
   /**
-   * The people standing behind the value: authors of its approved claims and people endorsing any
-   * of its claims, each counted once. "Cenoura, estrato alto: 7 pessoas endossam."
+   * The people who proposed the value, in approved claims, each counted once. Agreeing with a
+   * value is proposing it too: "GBIF e 4 pessoas".
    */
-  readonly endorsedBy: PeopleSummary
-  /** The people disputing any of its claims, while their disputes are open. */
-  readonly disputedBy: PeopleSummary
+  readonly claimedBy: PeopleSummary
 }
 
 /** The part of a property resolution reads. */
@@ -63,55 +53,41 @@ export interface ResolutionSpec<Value> {
   readonly valueSchema: Schema.Schema<Value>
   readonly sourceKeys: ReadonlyArray<ProvenanceSourceKey>
   readonly cardinality: "ONE" | "SET" | "LIST"
-  /** For `SET` and `LIST`; `ALL_SOURCES` when absent. */
-  readonly mergeStrategy?: "ALL_SOURCES" | "FIRST_SOURCE_WITH_VALUES"
 }
 
 /** A value with the visible claim stating it. */
 export interface ClaimedValue<Value, Scope extends PropertyScope> {
-  readonly claim: Claim<Value, Scope>
+  readonly claim: CanonicalClaim<Value, Scope>
   readonly value: Value
 }
 
 const isPersonClaim = <Value, Scope extends PropertyScope>(
-  claim: Claim<Value, Scope>,
-): claim is PersonClaim<Value, Scope> => "change" in claim
+  claim: CanonicalClaim<Value, Scope>,
+): claim is CanonicalPersonClaim<Value, Scope> => "change" in claim
 
 /**
  * Approved, or visible by default: in effect before supersessions and retractions are applied.
  * Pending, rejected and censored claims never take part.
  */
-const isApprovedOrVisible = <Value, Scope extends PropertyScope>(claim: Claim<Value, Scope>) =>
+const isApprovedOrVisible = <Value, Scope extends PropertyScope>(
+  claim: CanonicalClaim<Value, Scope>,
+) =>
   isPersonClaim(claim)
     ? Evaluation.guards.APPROVED(claim.evaluation)
     : isVisibleModerationStatus(claim.moderationStatus)
 
-/**
- * Oldest first, and claims created in the same millisecond by ID, so any two claims compare the
- * same way wherever they're sorted.
- */
-const chronologicalOrder = <Value, Scope extends PropertyScope>(): Order.Order<
-  Claim<Value, Scope>
-> =>
-  Order.combine(
-    Order.mapInput(Order.Number, (claim: Claim<Value, Scope>) =>
-      DateTime.toEpochMillis(claim.createdAt),
-    ),
-    Order.mapInput(Order.String, (claim: Claim<Value, Scope>) => claim.id),
-  )
-
 const isCreatedBefore = <Value, Scope extends PropertyScope>(
-  claim: Claim<Value, Scope>,
-  other: Claim<Value, Scope>,
-) => chronologicalOrder<Value, Scope>()(claim, other) === -1
+  claim: CanonicalClaim<Value, Scope>,
+  other: CanonicalClaim<Value, Scope>,
+) => oldestClaimFirst(claim, other) === -1
 
 /**
  * Whether a person's claim may supersede or retract `target`: an older person's claim about the
- * same article, property and language. Machine claims are disputed, never retracted.
+ * same article, property and language. Machine claims are reported, never retracted.
  */
 const canSupersedeOrRetract = <Value, Scope extends PropertyScope>(
-  personClaim: PersonClaim<Value, Scope>,
-  target: Claim<Value, Scope>,
+  personClaim: CanonicalPersonClaim<Value, Scope>,
+  target: CanonicalClaim<Value, Scope>,
 ) =>
   isPersonClaim(target) &&
   target.articleId === personClaim.articleId &&
@@ -122,14 +98,17 @@ const canSupersedeOrRetract = <Value, Scope extends PropertyScope>(
 /**
  * The claims whose values readers may see. Claims are walked newest first, so a retraction is
  * settled before the claims it points at: retracting a claim that superseded another brings the
- * other back, which is what reverting a changeset (retracting its claims) relies on.
+ * other back, which is what reverting a person's proposals (retracting them) relies on.
  */
 const visibleClaims = <Value, Scope extends PropertyScope>(
-  claims: ReadonlyArray<Claim<Value, Scope>>,
-): ReadonlyArray<Claim<Value, Scope>> => {
-  const newestFirst = EffectArray.sort(claims, Order.flip(chronologicalOrder<Value, Scope>()))
+  claims: ReadonlyArray<CanonicalClaim<Value, Scope>>,
+): ReadonlyArray<CanonicalClaim<Value, Scope>> => {
+  const newestFirst = EffectArray.sort(claims, Order.flip(oldestClaimFirst))
 
-  const referencedClaimId = (personClaim: PersonClaim<Value, Scope>, targetId: ClaimId | null) =>
+  const referencedClaimId = (
+    personClaim: CanonicalPersonClaim<Value, Scope>,
+    targetId: ClaimId | null,
+  ) =>
     EffectArray.findFirst(
       claims,
       (target) => target.id === targetId && canSupersedeOrRetract(personClaim, target),
@@ -191,7 +170,7 @@ const visibleClaims = <Value, Scope extends PropertyScope>(
 
 /** The value a claim states, if it states one: retractions don't. */
 export const valueOfClaim = <Value, Scope extends PropertyScope>(
-  claim: Claim<Value, Scope>,
+  claim: CanonicalClaim<Value, Scope>,
 ): Option.Option<Value> =>
   isPersonClaim(claim)
     ? "value" in claim.change
@@ -209,7 +188,7 @@ export const claimedValues = <Value, Scope extends PropertyScope>({
   claims,
 }: {
   readonly property: Pick<ResolutionSpec<Value>, "sourceKeys">
-  readonly claims: ReadonlyArray<Claim<Value, Scope>>
+  readonly claims: ReadonlyArray<CanonicalClaim<Value, Scope>>
 }): ReadonlyArray<ClaimedValue<Value, Scope>> =>
   visibleClaims(claims).flatMap((claim) =>
     property.sourceKeys.includes(getClaimSourceKey(claim))
@@ -219,7 +198,7 @@ export const claimedValues = <Value, Scope extends PropertyScope>({
 
 /** A claim's position in a `LIST` property: people's among people's, a source's among its own. */
 const positionOfClaim = <Value, Scope extends PropertyScope>(
-  claim: Claim<Value, Scope>,
+  claim: CanonicalClaim<Value, Scope>,
 ): Option.Option<FractionalIndex> =>
   isPersonClaim(claim)
     ? "position" in claim.change
@@ -230,60 +209,34 @@ const positionOfClaim = <Value, Scope extends PropertyScope>(
 /** Equivalent values, with every claim stating them, best-ranked first. */
 interface ValueGroup<Value, Scope extends PropertyScope> {
   readonly value: Value
-  readonly claims: NonEmptyReadonlyArray<Claim<Value, Scope>>
-}
-
-interface PersonAct {
-  readonly personId: PersonId | null
-  readonly at: DateTime.Utc
-}
-
-/** Distinct people, with the three most recent to show. Acts by deleted accounts still count. */
-const summarizePeople = (acts: ReadonlyArray<PersonAct>): PeopleSummary => {
-  const mostRecentFirst = EffectArray.sort(
-    acts,
-    Order.flip(Order.mapInput(Order.Number, (act: PersonAct) => DateTime.toEpochMillis(act.at))),
-  )
-  const knownPeople = EffectArray.dedupe(
-    mostRecentFirst.flatMap(({ personId }) => (personId === null ? [] : [personId])),
-  )
-  const actsByDeletedAccounts = acts.filter(({ personId }) => personId === null)
-
-  return {
-    totalCount: knownPeople.length + actsByDeletedAccounts.length,
-    samplePeopleIds: knownPeople.slice(0, 3),
-  }
+  readonly claims: NonEmptyReadonlyArray<CanonicalClaim<Value, Scope>>
 }
 
 export const resolve = <Value, Scope extends PropertyScope>({
   property,
   claims,
   language,
-  endorsements = [],
-  disputes = [],
 }: {
   readonly property: ResolutionSpec<Value>
   /** Every claim of the property about the article, in every language. */
-  readonly claims: ReadonlyArray<Claim<Value, Scope>>
+  readonly claims: ReadonlyArray<CanonicalClaim<Value, Scope>>
   readonly language: LanguageOf<Scope>
-  readonly endorsements?: ReadonlyArray<Endorsement>
-  readonly disputes?: ReadonlyArray<Dispute>
 }): ReadonlyArray<ResolvedValue<Value>> => {
   const isSameValue = Schema.toEquivalence(property.valueSchema)
-  const sourceRankOf = (claim: Claim<Value, Scope>) =>
+  const sourceRankOf = (claim: CanonicalClaim<Value, Scope>) =>
     property.sourceKeys.indexOf(getClaimSourceKey(claim))
 
   // Best-ranked source first, then the source's own order in a list, then newest: never the
   // order claims came in.
   const rankThenNewestOrder = Order.combineAll([
     Order.mapInput(Order.Number, sourceRankOf),
-    Order.mapInput(Order.Boolean, (claim: Claim<Value, Scope>) =>
+    Order.mapInput(Order.Boolean, (claim: CanonicalClaim<Value, Scope>) =>
       Option.isNone(positionOfClaim(claim)),
     ),
-    Order.mapInput(Order.String, (claim: Claim<Value, Scope>) =>
+    Order.mapInput(Order.String, (claim: CanonicalClaim<Value, Scope>) =>
       Option.getOrElse(positionOfClaim(claim), () => ""),
     ),
-    Order.flip(chronologicalOrder<Value, Scope>()),
+    Order.flip(oldestClaimFirst),
   ])
 
   const claimedValuesInLanguage = EffectArray.sort(
@@ -292,22 +245,14 @@ export const resolve = <Value, Scope extends PropertyScope>({
   )
 
   // Sorted, so each group's first claim is its best-ranked, and its spelling the one shown.
-  const valueGroups = EffectArray.reduce(
-    claimedValuesInLanguage,
-    EffectArray.empty<ValueGroup<Value, Scope>>(),
-    (groups, { claim, value }) =>
-      EffectArray.findFirstIndex(groups, (group) => isSameValue(group.value, value)).pipe(
-        Option.flatMap((index) =>
-          EffectArray.modify(groups, index, (group) => ({
-            ...group,
-            claims: EffectArray.append(group.claims, claim),
-          })),
-        ),
-        Option.getOrElse(() =>
-          EffectArray.append(groups, { value, claims: EffectArray.of(claim) }),
-        ),
-      ),
-  )
+  const valueGroups = groupByEquivalentKey({
+    items: claimedValuesInLanguage,
+    keyOf: ({ value }) => value,
+    isEquivalent: isSameValue,
+  }).map(({ key, items }): ValueGroup<Value, Scope> => ({
+    value: key,
+    claims: EffectArray.map(items, ({ claim }) => claim),
+  }))
 
   // People order a list; values only other sources state follow, in source order.
   const peoplePositionOf = (group: ValueGroup<Value, Scope>) =>
@@ -335,45 +280,7 @@ export const resolve = <Value, Scope extends PropertyScope>({
     ]),
   )
 
-  const bestSourceRankOf = (group: ValueGroup<Value, Scope>) => sourceRankOf(group.claims[0])
-
-  const shownGroups =
-    property.cardinality === "ONE"
-      ? orderedGroups.slice(0, 1)
-      : (property.mergeStrategy ?? "ALL_SOURCES") === "ALL_SOURCES"
-        ? orderedGroups
-        : EffectArray.head(orderedGroups).pipe(
-            Option.map(bestSourceRankOf),
-            Option.match({
-              onNone: () => [],
-              onSome: (bestRank) =>
-                orderedGroups.filter((group) => bestSourceRankOf(group) === bestRank),
-            }),
-          )
-
-  const claimIdsOf = (group: ValueGroup<Value, Scope>) => group.claims.map((claim) => claim.id)
-
-  const endorsedBy = (group: ValueGroup<Value, Scope>) =>
-    summarizePeople([
-      ...group.claims.flatMap((claim): ReadonlyArray<PersonAct> =>
-        isPersonClaim(claim) && claim.provenance.authorId !== null
-          ? [{ personId: claim.provenance.authorId, at: claim.createdAt }]
-          : [],
-      ),
-      ...endorsements
-        .filter((endorsement) => claimIdsOf(group).includes(endorsement.claimId))
-        .map((endorsement) => ({ personId: endorsement.personId, at: endorsement.createdAt })),
-    ])
-
-  const disputedBy = (group: ValueGroup<Value, Scope>) =>
-    summarizePeople(
-      disputes
-        .filter(
-          (dispute) =>
-            dispute.settledByEventId === null && claimIdsOf(group).includes(dispute.claimId),
-        )
-        .map((dispute) => ({ personId: dispute.personId, at: dispute.createdAt })),
-    )
+  const shownGroups = property.cardinality === "ONE" ? orderedGroups.slice(0, 1) : orderedGroups
 
   return shownGroups.map((group) => ({
     value: group.value,
@@ -381,8 +288,9 @@ export const resolve = <Value, Scope extends PropertyScope>({
       claimId: claim.id,
       sourceKey: getClaimSourceKey(claim),
     })),
-    endorsedBy: endorsedBy(group),
-    disputedBy: disputedBy(group),
+    claimedBy: summarizeAuthors(
+      group.claims.filter(isPersonClaim).filter((claim) => claim.provenance.authorId !== null),
+    ),
   }))
 }
 
@@ -395,55 +303,8 @@ export const hasAnyValue = <Value, Scope extends PropertyScope>({
   claims,
 }: {
   readonly property: ResolutionSpec<Value>
-  readonly claims: ReadonlyArray<Claim<Value, Scope>>
+  readonly claims: ReadonlyArray<CanonicalClaim<Value, Scope>>
 }) =>
   EffectArray.dedupe(claims.map((claim) => claim.language)).some((language) =>
     EffectArray.isReadonlyArrayNonEmpty(resolve({ property, claims, language })),
   )
-
-/**
- * A trait of an article that can inherit from a parent article, as its page shows it: today's
- * `CultivarProperty` (`Unknown | Inherit | Value`), derived from claims rather than stored. The
- * parent's values come along in every case, so the page can show them beside the article's own,
- * or for context when the article's are unknown. Cultivars inherit from their plant; any future
- * parent-child relationship between articles can use the same shape.
- */
-export type InheritedTrait<Value> =
-  /** The article lists the trait in `inheritsFromParent`: the parent's values are its values. */
-  | {
-      readonly _tag: "INHERITED"
-      readonly parentId: WikiArticleId
-      readonly values: ReadonlyArray<ResolvedValue<Value>>
-    }
-  /** The article has values of its own. */
-  | {
-      readonly _tag: "OWN"
-      readonly values: NonEmptyReadonlyArray<ResolvedValue<Value>>
-      readonly parentValues: ReadonlyArray<ResolvedValue<Value>>
-    }
-  /** Neither: unknown for the article, never filled in from the parent. */
-  | { readonly _tag: "UNKNOWN"; readonly parentValues: ReadonlyArray<ResolvedValue<Value>> }
-
-/**
- * Runs when the article is read, so the parent's changes show without copying anything. Inheriting
- * and having values of its own are different statements: the edit form offers one or the other,
- * and choosing to inherit retracts the article's own claims. Should both exist anyway, inheriting
- * wins, since it's the explicit choice.
- */
-export const resolveInheritedTrait = <Value>({
-  ownValues,
-  parentValues,
-  parentId,
-  inheritsFromParent,
-}: {
-  readonly ownValues: ReadonlyArray<ResolvedValue<Value>>
-  readonly parentValues: ReadonlyArray<ResolvedValue<Value>>
-  readonly parentId: WikiArticleId
-  readonly inheritsFromParent: boolean
-}): InheritedTrait<Value> =>
-  inheritsFromParent
-    ? { _tag: "INHERITED", parentId, values: parentValues }
-    : EffectArray.match(ownValues, {
-        onEmpty: (): InheritedTrait<Value> => ({ _tag: "UNKNOWN", parentValues }),
-        onNonEmpty: (values): InheritedTrait<Value> => ({ _tag: "OWN", values, parentValues }),
-      })

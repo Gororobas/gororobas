@@ -21,10 +21,10 @@ import { WikidataId } from "../../common/external-identifiers.js"
 import type { MediaAssetId, WikiArticleId } from "../../common/ids.js"
 import { PartialDate } from "../../common/utils/dates.js"
 import type { ExtractionContext, ExtractionIssue } from "../extraction.js"
+import { decodeExtractedValue } from "../extraction.js"
 import type { ArticleKind } from "../kinds.js"
 import { ArticleOrName } from "../values/article-or-name.js"
 import { supportedLanguageOf } from "../values/supported-language.js"
-import { throughSchema } from "./through-schema.js"
 
 export const WikidataPropertyId = Schema.String.check(Schema.isPattern(/^P[1-9][0-9]*$/)).pipe(
   Schema.brand("WikidataPropertyId"),
@@ -71,8 +71,8 @@ export const WikidataProperty = {
   /** `NARROWER` than `names`: what a taxon is commonly called, beside the item's labels and aliases. */
   TAXON_COMMON_NAME: WikidataPropertyId.make("P1843"),
   /**
-   * `NARROWER` than `scientificNames`: the taxon's accepted name, without the synonyms GBIF and
-   * people add.
+   * The taxon's accepted name. Not a source of scientific names (GBIF's `taxonomicClassification`
+   * is): read only so `names` can leave out labels equal to it.
    */
   TAXON_NAME: WikidataPropertyId.make("P225"),
 } as const
@@ -222,7 +222,7 @@ const text =
       Result.flatMap((dataValue) =>
         narrowed({ dataValue, schema: StringDataValue, expected: "a string" }),
       ),
-      Result.flatMap(({ value }) => throughSchema(schema, value)),
+      Result.flatMap(({ value }) => decodeExtractedValue(schema, value)),
     )
 
 const item = (statement: WikidataStatement): Result.Result<WikidataId, ExtractionIssue> =>
@@ -273,7 +273,7 @@ const time = (statement: WikidataStatement): Result.Result<PartialDate, Extracti
             detail: `precision ${String(value.precision)}`,
           } as const),
         onSome: (entry) =>
-          throughSchema(PartialDate, `${parts.slice(0, entry.parts).join("-")}[UTC]`),
+          decodeExtractedValue(PartialDate, `${parts.slice(0, entry.parts).join("-")}[UTC]`),
       })
     }),
   )
@@ -343,7 +343,7 @@ export const Wikidata = {
             ),
             {
               onNone: () => Result.fail({ _tag: "UNMATCHED_ITEM", wikidataId } as const),
-              onSome: (name) => throughSchema(ArticleOrName, { _tag: "NAME", name }),
+              onSome: (name) => decodeExtractedValue(ArticleOrName, { _tag: "NAME", name }),
             },
           ),
       }),
@@ -372,7 +372,7 @@ export const Wikidata = {
     Result.flatMap(item(statement), (wikidataId) =>
       Option.match(context.languageTagOf(wikidataId), {
         onNone: () => Result.fail({ _tag: "UNMATCHED_ITEM", wikidataId } as const),
-        onSome: (tag) => throughSchema(schema, tag),
+        onSome: (tag) => decodeExtractedValue(schema, tag),
       }),
     ),
 
@@ -390,7 +390,7 @@ export const Wikidata = {
           onNone: () =>
             Result.fail({ _tag: "UNSUPPORTED_LANGUAGE", language: value.language } as const),
           onSome: (language) =>
-            Result.map(throughSchema(schema, value.text), (decoded) => ({
+            Result.map(decodeExtractedValue(schema, value.text), (decoded) => ({
               language,
               value: decoded,
             })),

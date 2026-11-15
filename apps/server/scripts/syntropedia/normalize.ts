@@ -18,7 +18,6 @@ import {
   type SyntropediaTestedSite,
 } from "@gororobas/domain/claim-based-architecture-experiment/providers/syntropedia"
 import type {
-  AgroforestryRole,
   AgroforestryStratum,
   ClimateZone,
   CrownShape,
@@ -211,12 +210,12 @@ const PROPAGATION_METHODS = {
 } as const satisfies Record<string, SyntropediaPropagationMethod>
 
 const AGROFORESTRY_ROLES = {
-  "nurse tree": ["NURSE_TREE"],
+  "nurse tree": ["MOTHER_TREE"],
   "mother tree": ["MOTHER_TREE"],
-  "nurse + mother tree": ["NURSE_TREE", "MOTHER_TREE"],
+  "nurse + mother tree": ["MOTHER_TREE"],
   // Syntropedia's filter offers "false" for trees with neither role.
   false: [],
-} as const satisfies Record<string, ReadonlyArray<AgroforestryRole>>
+} as const satisfies Record<string, ReadonlyArray<"MOTHER_TREE">>
 
 const SYNONYM_PATTERN = /syn\. scientific name:\s*([^.;\n]+)\.?/gi
 
@@ -306,7 +305,7 @@ const normalizePlant = (asset: RawAsset, report: (issue: Issue) => void): Syntro
         location.lat === null || location.lng === null
           ? null
           : { latitude: location.lat, longitude: location.lng },
-      roles:
+      usages:
         role === null
           ? []
           : EffectArray.flatten(

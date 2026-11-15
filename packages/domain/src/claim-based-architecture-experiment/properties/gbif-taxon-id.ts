@@ -1,7 +1,7 @@
 import { Result } from "effect"
 
 import { GbifTaxonId } from "../../common/external-identifiers.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 
 /**
@@ -9,7 +9,7 @@ import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
  * without Wikidata, so a change in how Wikidata models GBIF IDs can't cut plants off from GBIF.
  * When sources disagree (an outdated Wikidata entry), resolution shows the best-ranked.
  */
-export const GbifTaxonIdProperty = defineProperty({
+export const GbifTaxonIdProperty = defineCanonicalProperty({
   id: "gbifTaxonId",
   valueSchema: GbifTaxonId,
   kinds: ["PLANT", "ANIMAL"],

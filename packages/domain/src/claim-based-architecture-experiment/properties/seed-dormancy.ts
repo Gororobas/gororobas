@@ -1,19 +1,24 @@
 import { Option, Schema } from "effect"
 
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-/** Whether the seeds need treatment (scarification, stratification…) before they germinate. */
-export const SeedDormancyProperty = defineProperty({
+/**
+ * Whether the seeds need treatment (scarification, stratification…) before they germinate.
+ *
+ * A botanical fact: Syntropedia's answer is canonical over people's proposals.
+ */
+export const SeedDormancyProperty = defineCanonicalProperty({
   id: "seedDormancy",
   valueSchema: Schema.Boolean,
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   sources: (source) => [
-    source.person(),
     source.syntropedia({
       extract: (plant) =>
         Option.toArray(Option.fromNullishOr(plant.seedDormancy)).map(source.found),
     }),
+    source.person(),
   ],
+  inheritance: { through: ["cultivarOf"], mode: "BY_CHOICE" },
 })

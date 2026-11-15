@@ -1,10 +1,10 @@
 import { Result } from "effect"
 
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 import { ArticleOrName, articleOf, articleOrNameToJsonLd } from "../values/article-or-name.js"
 
-export const PublisherProperty = defineProperty({
+export const PublisherProperty = defineCanonicalProperty({
   id: "publisher",
   valueSchema: ArticleOrName,
   kinds: ["BOOK"],
@@ -22,7 +22,6 @@ export const PublisherProperty = defineProperty({
           ),
         ),
     }),
-    source.articleTextInference(),
   ],
   references: { targetKinds: ["NOTEWORTHY_ENTITY"], target: articleOf },
   schemaOrg: {

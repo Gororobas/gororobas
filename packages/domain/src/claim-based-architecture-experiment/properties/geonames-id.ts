@@ -1,7 +1,7 @@
 import { GeoNamesId } from "../../common/external-identifiers.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-export const GeonamesIdProperty = defineProperty({
+export const GeonamesIdProperty = defineCanonicalProperty({
   id: "geonamesId",
   valueSchema: GeoNamesId,
   kinds: ["PLACE"],

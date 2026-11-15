@@ -1,7 +1,7 @@
 import { ResourceFormat } from "../../common/enums.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-export const ResourceFormatProperty = defineProperty({
+export const ResourceFormatProperty = defineCanonicalProperty({
   id: "resourceFormat",
   valueSchema: ResourceFormat,
   kinds: ["RESOURCE"],

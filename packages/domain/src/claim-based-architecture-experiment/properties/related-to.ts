@@ -2,25 +2,19 @@ import { Option } from "effect"
 
 import { WikiArticleId } from "../../common/ids.js"
 import { everyKind } from "../kinds.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
 /**
- * Today's `wiki_article_relations`: the weakest relation. People may assert it when they know two
- * articles relate but not how, reviewed like their other claims; legacy tags migrate as such
- * claims. Inferred ones are visible by default with a notice, and disputable. A typed relation
- * (`growsIn`) says more, and the edit form should offer one first.
+ * The weakest relation. People may assert it when they know two articles relate but not how,
+ * evaluated like their other proposals. Entity references people place in article text assert it
+ * too. It's never inferred: a contributor who knows how two articles relate says so explicitly.
  */
-export const RelatedToProperty = defineProperty({
+export const RelatedToProperty = defineCanonicalProperty({
   id: "relatedTo",
   valueSchema: WikiArticleId,
   kinds: everyKind,
   scope: "UNIVERSAL",
   cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
-  sources: (source) => [
-    source.person(),
-    source.articleTextEntityReference(),
-    source.articleTextInference(),
-  ],
+  sources: (source) => [source.person(), source.articleTextEntityReference()],
   references: { targetKinds: everyKind, target: Option.some },
 })

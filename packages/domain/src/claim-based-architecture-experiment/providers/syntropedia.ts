@@ -12,7 +12,6 @@ import { Array as EffectArray, Option, Record, Schema } from "effect"
 import * as Length from "effect-units/Length"
 
 import {
-  AgroforestryRole,
   AgroforestryStratum,
   ClimateZone,
   CrownShape,
@@ -28,7 +27,7 @@ import {
 } from "../../common/enums.js"
 import { SyntropediaPlantId } from "../../common/external-identifiers.js"
 import { NonEmptyTrimmedString, UrlAsString } from "../../common/primitives.js"
-import { makeRange } from "../values/range.js"
+import { makeRange } from "../../common/range.js"
 import { supportedLanguageOf } from "../values/supported-language.js"
 
 /**
@@ -95,7 +94,7 @@ export const SyntropediaTestedSite = Schema.Struct({
       longitude: Schema.Finite.check(Schema.isBetween({ minimum: -180, maximum: 180 })),
     }),
   ),
-  roles: Schema.Array(AgroforestryRole),
+  usages: Schema.Array(Schema.Literals(["MOTHER_TREE"])),
 })
 
 export type SyntropediaTestedSite = typeof SyntropediaTestedSite.Type
@@ -196,23 +195,16 @@ export const Syntropedia = {
       ),
     ),
 
-  /** The accepted name first, then the synonyms its comments list. */
-  scientificNames: (plant: SyntropediaPlant): ReadonlyArray<string> => [
-    plant.scientificName,
-    ...plant.scientificNameSynonyms,
-  ],
-
   plantUsages: (plant: SyntropediaPlant): ReadonlyArray<PlantUsage> =>
-    EffectArray.dedupe(plant.functions.flatMap((name) => USAGES_BY_FUNCTION[name])),
+    EffectArray.dedupe([
+      ...plant.functions.flatMap((name) => USAGES_BY_FUNCTION[name]),
+      ...plant.testedSites.flatMap(({ usages }) => usages),
+    ]),
 
   plantingMethods: (plant: SyntropediaPlant): ReadonlyArray<PlantingMethod> =>
     EffectArray.dedupe(
       plant.propagationMethods.flatMap((method) => PLANTING_METHODS_BY_PROPAGATION[method]),
     ),
-
-  /** Roles are per tested site in Syntropedia; a role in any site is the plant's. */
-  agroforestryRoles: (plant: SyntropediaPlant): ReadonlyArray<AgroforestryRole> =>
-    EffectArray.dedupe(plant.testedSites.flatMap(({ roles }) => roles)),
 
   height: (plant: SyntropediaPlant) =>
     Option.fromNullishOr(plant.heightInMeters).pipe(Option.map(toCentimeters)),

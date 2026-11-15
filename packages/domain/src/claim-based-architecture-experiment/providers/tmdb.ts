@@ -20,9 +20,9 @@ import type { SupportedLanguage } from "../../common/enums.js"
 import { ImdbTitleId, TmdbId, WikidataId } from "../../common/external-identifiers.js"
 import { PartialDate } from "../../common/utils/dates.js"
 import type { ExtractionIssue } from "../extraction.js"
+import { decodeExtractedValue } from "../extraction.js"
 import { ArticleOrName } from "../values/article-or-name.js"
 import { supportedLanguageOf } from "../values/supported-language.js"
-import { throughSchema } from "./through-schema.js"
 
 export const TmdbMediaType = Schema.Literals(["movie", "tv"])
 export type TmdbMediaType = typeof TmdbMediaType.Type
@@ -37,8 +37,6 @@ export const TMDB_BASE_LANGUAGE = "pt-BR"
 const nullableText = Schema.optionalKey(Schema.NullOr(Schema.String))
 
 const TmdbGenre = Schema.Struct({ id: Schema.Int, name: Schema.String })
-
-const TmdbCompany = Schema.Struct({ id: Schema.Int, name: Schema.String })
 
 const TmdbCountry = Schema.Struct({ code: Schema.String, name: Schema.String }).pipe(
   Schema.encodeKeys({ code: "iso_3166_1" }),
@@ -85,7 +83,6 @@ const workFields = {
   originalLanguage: Schema.String,
   homepage: nullableText,
   genres: Schema.Array(TmdbGenre),
-  productionCompanies: Schema.Array(TmdbCompany),
   productionCountries: Schema.Array(TmdbCountry),
   spokenLanguages: Schema.Array(TmdbSpokenLanguage),
   externalIds: TmdbExternalIds,
@@ -94,7 +91,6 @@ const workFields = {
 
 const workKeys = {
   originalLanguage: "original_language",
-  productionCompanies: "production_companies",
   productionCountries: "production_countries",
   spokenLanguages: "spoken_languages",
   externalIds: "external_ids",
@@ -295,7 +291,7 @@ export const Tmdb = {
   releaseDates: (work: TmdbWork): ReadonlyArray<Result.Result<PartialDate, ExtractionIssue>> =>
     Option.toArray(
       present(work.mediaType === "movie" ? work.details.releaseDate : work.details.firstAirDate),
-    ).map((date) => throughSchema(PartialDate, `${date}[UTC]`)),
+    ).map((date) => decodeExtractedValue(PartialDate, `${date}[UTC]`)),
 
   /** Movies only: a series has no director, its episodes do. */
   directors: (work: TmdbWork): ReadonlyArray<string> =>
@@ -314,9 +310,6 @@ export const Tmdb = {
 
   /** Named in `TMDB_BASE_LANGUAGE`. */
   genres: (work: TmdbWork): ReadonlyArray<string> => work.details.genres.map(({ name }) => name),
-
-  productionCompanies: (work: TmdbWork): ReadonlyArray<string> =>
-    work.details.productionCompanies.map(({ name }) => name),
 
   /** The countries it was produced in, named in `TMDB_BASE_LANGUAGE` (TMDB only names them in English). */
   productionCountries: (work: TmdbWork): ReadonlyArray<string> =>
@@ -344,16 +337,16 @@ export const Tmdb = {
 
   imdbId: (work: TmdbWork): ReadonlyArray<Result.Result<ImdbTitleId, ExtractionIssue>> =>
     Option.toArray(present(work.details.externalIds.imdbId)).map((id) =>
-      throughSchema(ImdbTitleId, id),
+      decodeExtractedValue(ImdbTitleId, id),
     ),
 
   /** TMDB's concordance with Wikidata. */
   wikidataId: (work: TmdbWork): ReadonlyArray<Result.Result<WikidataId, ExtractionIssue>> =>
     Option.toArray(present(work.details.externalIds.wikidataId)).map((id) =>
-      throughSchema(WikidataId, id),
+      decodeExtractedValue(WikidataId, id),
     ),
 
   /** A person or company as the name TMDB gives, until we have an article for it. */
   name: (name: string): Result.Result<ArticleOrName, ExtractionIssue> =>
-    throughSchema(ArticleOrName, { _tag: "NAME", name }),
+    decodeExtractedValue(ArticleOrName, { _tag: "NAME", name }),
 }

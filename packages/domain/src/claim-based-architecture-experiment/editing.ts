@@ -1,22 +1,32 @@
 /**
+ * Proposing values of canonical properties. Situated properties have no drafts: a person adds
+ * their own claims and removes them, and nobody else's are theirs to change.
+ *
  * What the edit form sends: per property and language, the people's claims it showed (by ID) and
  * the draft the person left. The form never builds claims; the server diffs the draft against the
  * claims it showed, never against claims approved since, into a person's changes.
  *
- * Values from other sources are read-only in the form, with "confirm" (an endorsement) and
- * "dispute" buttons. A draft that includes a value only a machine asserts is the person asserting
- * it too: their claim then attests the value and stays if the machine's claim is censored.
+ * Values from other sources are read-only in the form, with "confirm" and "report" buttons.
+ * Confirming is proposing the value: a draft that includes a value only a machine asserts is the
+ * person asserting it too: their claim then attests the value and stays if the machine's claim is censored.
  *
  * Wiki data isn't edited offline, but a form can still go stale (another tab, a long session).
  * When a claim it showed no longer shows, the diff reports it instead of guessing.
+ *
+ * @TODO delete this once we're settled on the architecture. This is just a reference of how we COULD implement
+ * editing of canonical properties. It's definitely not the final design.
  */
 import { Array as EffectArray, Option, Schema } from "effect"
 
-import type { Claim, LanguageOf, PersonClaim, PropertyScope } from "./claims.js"
+import type { CanonicalClaim, LanguageOf, CanonicalPersonClaim, PropertyScope } from "./claims.js"
 import type { ClaimId } from "./provenance.js"
 import { type ResolutionSpec, claimedValues } from "./resolution.js"
 import { type FractionalIndex, keyBetween } from "./values/fractional-index.js"
 
+/**
+ * A proposal, each standing on its own: there are no changesets, so each carries its own note
+ * when the person gives one.
+ */
 export type PersonChange<Value> =
   | {
       readonly _tag: "ASSERT"
@@ -33,7 +43,7 @@ export type DraftDiff<Value> =
   | { readonly _tag: "STALE"; readonly claimIds: ReadonlyArray<ClaimId> }
 
 interface ShownClaimedValue<Value, Scope extends PropertyScope> {
-  readonly claim: PersonClaim<Value, Scope>
+  readonly claim: CanonicalPersonClaim<Value, Scope>
   readonly value: Value
 }
 
@@ -45,7 +55,7 @@ const shownClaimedValues = <Value, Scope extends PropertyScope>({
   shown,
 }: {
   readonly property: ResolutionSpec<Value>
-  readonly claims: ReadonlyArray<Claim<Value, Scope>>
+  readonly claims: ReadonlyArray<CanonicalClaim<Value, Scope>>
   readonly language: LanguageOf<Scope>
   readonly shown: ReadonlyArray<ClaimId>
 }): Option.Option<ReadonlyArray<ShownClaimedValue<Value, Scope>>> => {
@@ -64,7 +74,7 @@ const staleClaims = <Value, Scope extends PropertyScope>({
   shown,
 }: {
   readonly property: ResolutionSpec<Value>
-  readonly claims: ReadonlyArray<Claim<Value, Scope>>
+  readonly claims: ReadonlyArray<CanonicalClaim<Value, Scope>>
   readonly shown: ReadonlyArray<ClaimId>
 }): DraftDiff<Value> => {
   const visible = claimedValues({ property, claims }).map(({ claim }) => claim.id)
@@ -80,7 +90,7 @@ export const diffOneDraft = <Value, Scope extends PropertyScope>({
   draft,
 }: {
   readonly property: ResolutionSpec<Value>
-  readonly claims: ReadonlyArray<Claim<Value, Scope>>
+  readonly claims: ReadonlyArray<CanonicalClaim<Value, Scope>>
   readonly language: LanguageOf<Scope>
   readonly shown: Option.Option<ClaimId>
   readonly draft: Option.Option<Value>
@@ -126,7 +136,7 @@ export const diffManyDraft = <Value, Scope extends PropertyScope>({
   draft,
 }: {
   readonly property: ResolutionSpec<Value>
-  readonly claims: ReadonlyArray<Claim<Value, Scope>>
+  readonly claims: ReadonlyArray<CanonicalClaim<Value, Scope>>
   readonly language: LanguageOf<Scope>
   readonly shown: ReadonlyArray<ClaimId>
   readonly draft: ReadonlyArray<Value>

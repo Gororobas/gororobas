@@ -60,6 +60,7 @@ export const informationVisibilityLabels: Labels<InformationVisibility> = {
 }
 
 export const plantUsageLabels: Labels<PlantUsage> = {
+  MOTHER_TREE: msg`Mother tree`,
   HUMAN_FEED: msg`Human food`,
   ANIMAL_FEED: msg`Animal feed`,
   CONSTRUCTION: msg`Construction`,

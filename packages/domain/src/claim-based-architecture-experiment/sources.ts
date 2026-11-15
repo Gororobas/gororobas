@@ -1,8 +1,10 @@
 /**
- * Who may assert a property, and how. A property's `sources` builds the list with a
- * `SourceBuilder`, best-ranked first: the order is resolution's ranking. The builder is typed by
- * the property's value and scope, so a source that extracts the wrong type, or a language for a
- * universal property, doesn't compile.
+ * Who may assert a property, and how. The builder is typed by the property's value and scope, so
+ * a source that extracts the wrong type, or a language for a universal property, doesn't compile.
+ *
+ * - A canonical property lists its sources best-ranked first: the order is resolution's ranking.
+ * - A situated property names its sources in a record. Nobody outranks anybody, so there's no
+ *   order to get wrong, and a source can't be listed twice.
  *
  * A source definition says how a source asserts values; a claim's provenance (`provenance.ts`)
  * records which source asserted one, with its evidence.
@@ -13,8 +15,21 @@ import type { PropertyScope } from "./claims.js"
 import type { Extracted, Extraction, ExtractionContext, ExtractionIssue } from "./extraction.js"
 import type { FetchedProvider, ProviderResults } from "./providers/index.js"
 
+/** People proposing values of a canonical property, which a curator evaluates. */
 export interface PersonSource {
   readonly _tag: "PERSON"
+}
+
+/** People giving their own say on a situated property, visible at once. */
+export interface SituatedPersonSource {
+  readonly _tag: "PERSON"
+  /**
+   * Whether a machine may read the property from people's own public publications, as their
+   * claims marked "inferred". Only situated properties can be inferred, never canonical ones.
+   */
+  readonly inferable: boolean
+  /** At most this many inferred claims of the property from one publication, the most confident first. */
+  readonly claimsPerPublication: number
 }
 
 /** A provider we fetch or look up, with how this property reads its result. */
@@ -30,12 +45,6 @@ export interface FetchedProviderSource<
   ) => ReadonlyArray<Extraction<Value, Scope>>
 }
 
-export interface ArticleTextInferenceSource {
-  readonly _tag: "ARTICLE_TEXT_INFERENCE"
-  /** At most this many claims of the property from one text, the most confident first. */
-  readonly claimsPerText: number
-}
-
 export interface MachineTranslationSource {
   readonly _tag: "MACHINE_TRANSLATION"
 }
@@ -44,8 +53,7 @@ export interface ArticleTextEntityReferenceSource {
   readonly _tag: "ARTICLE_TEXT_ENTITY_REFERENCE"
 }
 
-export type SourceDefinition<Value, Scope extends PropertyScope> =
-  | PersonSource
+export type ProviderSourceDefinition<Value, Scope extends PropertyScope> =
   | FetchedProviderSource<"WIKIDATA", Value, Scope>
   | FetchedProviderSource<"GBIF", Value, Scope>
   | FetchedProviderSource<"GOOGLE_BOOKS", Value, Scope>
@@ -53,17 +61,42 @@ export type SourceDefinition<Value, Scope extends PropertyScope> =
   | FetchedProviderSource<"SYNTROPEDIA", Value, Scope>
   | FetchedProviderSource<"TMDB", Value, Scope>
   | FetchedProviderSource<"WHOS_ON_FIRST", Value, Scope>
-  | ArticleTextInferenceSource
+
+export type CanonicalSourceDefinition<Value, Scope extends PropertyScope> =
+  | PersonSource
+  | ProviderSourceDefinition<Value, Scope>
   | MachineTranslationSource
   | ArticleTextEntityReferenceSource
+
+export type SituatedSourceDefinition<Value, Scope extends PropertyScope> =
+  | SituatedPersonSource
+  | ProviderSourceDefinition<Value, Scope>
+
+/** A situated property's sources, by name. At least one; `defineSituatedProperty` checks it. */
+export interface SituatedSources<Value, Scope extends PropertyScope> {
+  readonly person?: SituatedPersonSource
+  readonly wikidata?: FetchedProviderSource<"WIKIDATA", Value, Scope>
+  readonly gbif?: FetchedProviderSource<"GBIF", Value, Scope>
+  readonly googleBooks?: FetchedProviderSource<"GOOGLE_BOOKS", Value, Scope>
+  readonly contentChannels?: FetchedProviderSource<"CONTENT_CHANNELS", Value, Scope>
+  readonly syntropedia?: FetchedProviderSource<"SYNTROPEDIA", Value, Scope>
+  readonly tmdb?: FetchedProviderSource<"TMDB", Value, Scope>
+  readonly whosOnFirst?: FetchedProviderSource<"WHOS_ON_FIRST", Value, Scope>
+}
+
+/** The source keys a situated property's record names. */
+export type SituatedSourceKeys<Sources> = {
+  readonly [K in keyof Sources]-?: NonNullable<Sources[K]> extends { readonly _tag: infer Tag }
+    ? Tag
+    : never
+}[keyof Sources]
 
 type ExtractOf<Provider extends FetchedProvider, Value, Scope extends PropertyScope> = Pick<
   FetchedProviderSource<Provider, Value, Scope>,
   "extract"
 >
 
-export interface SourceBuilder<Value, Scope extends PropertyScope> {
-  readonly person: () => PersonSource
+interface ProviderSourceBuilder<Value, Scope extends PropertyScope> {
   readonly wikidata: (
     config: ExtractOf<"WIKIDATA", Value, Scope>,
   ) => FetchedProviderSource<"WIKIDATA", Value, Scope>
@@ -85,11 +118,6 @@ export interface SourceBuilder<Value, Scope extends PropertyScope> {
   readonly whosOnFirst: (
     config: ExtractOf<"WHOS_ON_FIRST", Value, Scope>,
   ) => FetchedProviderSource<"WHOS_ON_FIRST", Value, Scope>
-  readonly articleTextInference: (config?: {
-    readonly claimsPerText?: number
-  }) => ArticleTextInferenceSource
-  readonly machineTranslation: () => MachineTranslationSource
-  readonly articleTextEntityReference: () => ArticleTextEntityReferenceSource
   /**
    * A value `extract` found: the value itself for a universal property, `{ language, value }` for
    * a language-specific one.
@@ -98,14 +126,32 @@ export interface SourceBuilder<Value, Scope extends PropertyScope> {
   readonly issue: (issue: ExtractionIssue) => Extraction<Value, Scope>
 }
 
-/** Typed facts or links from one text, before the property says otherwise (the plan's budgets). */
-const DEFAULT_CLAIMS_PER_TEXT = 20
+export interface CanonicalSourceBuilder<
+  Value,
+  Scope extends PropertyScope,
+> extends ProviderSourceBuilder<Value, Scope> {
+  readonly person: () => PersonSource
+  readonly machineTranslation: () => MachineTranslationSource
+  readonly articleTextEntityReference: () => ArticleTextEntityReferenceSource
+}
 
-export const makeSourceBuilder = <Value, Scope extends PropertyScope>(): SourceBuilder<
+export interface SituatedSourceBuilder<
+  Value,
+  Scope extends PropertyScope,
+> extends ProviderSourceBuilder<Value, Scope> {
+  readonly person: (config: {
+    readonly inferable: boolean
+    readonly claimsPerPublication?: number
+  }) => SituatedPersonSource
+}
+
+/** Claims of one property from one publication, before the property says otherwise. */
+const DEFAULT_CLAIMS_PER_PUBLICATION = 20
+
+const makeProviderSourceBuilder = <Value, Scope extends PropertyScope>(): ProviderSourceBuilder<
   Value,
   Scope
 > => ({
-  person: () => ({ _tag: "PERSON" }),
   wikidata: ({ extract }) => ({ _tag: "WIKIDATA", extract }),
   gbif: ({ extract }) => ({ _tag: "GBIF", extract }),
   googleBooks: ({ extract }) => ({ _tag: "GOOGLE_BOOKS", extract }),
@@ -113,12 +159,28 @@ export const makeSourceBuilder = <Value, Scope extends PropertyScope>(): SourceB
   syntropedia: ({ extract }) => ({ _tag: "SYNTROPEDIA", extract }),
   tmdb: ({ extract }) => ({ _tag: "TMDB", extract }),
   whosOnFirst: ({ extract }) => ({ _tag: "WHOS_ON_FIRST", extract }),
-  articleTextInference: (config) => ({
-    _tag: "ARTICLE_TEXT_INFERENCE",
-    claimsPerText: config?.claimsPerText ?? DEFAULT_CLAIMS_PER_TEXT,
-  }),
-  machineTranslation: () => ({ _tag: "MACHINE_TRANSLATION" }),
-  articleTextEntityReference: () => ({ _tag: "ARTICLE_TEXT_ENTITY_REFERENCE" }),
   found: (extracted) => Result.succeed(extracted),
   issue: (issue) => Result.fail(issue),
+})
+
+export const makeCanonicalSourceBuilder = <
+  Value,
+  Scope extends PropertyScope,
+>(): CanonicalSourceBuilder<Value, Scope> => ({
+  ...makeProviderSourceBuilder<Value, Scope>(),
+  person: () => ({ _tag: "PERSON" }),
+  machineTranslation: () => ({ _tag: "MACHINE_TRANSLATION" }),
+  articleTextEntityReference: () => ({ _tag: "ARTICLE_TEXT_ENTITY_REFERENCE" }),
+})
+
+export const makeSituatedSourceBuilder = <
+  Value,
+  Scope extends PropertyScope,
+>(): SituatedSourceBuilder<Value, Scope> => ({
+  ...makeProviderSourceBuilder<Value, Scope>(),
+  person: ({ inferable, claimsPerPublication }) => ({
+    _tag: "PERSON",
+    inferable,
+    claimsPerPublication: claimsPerPublication ?? DEFAULT_CLAIMS_PER_PUBLICATION,
+  }),
 })

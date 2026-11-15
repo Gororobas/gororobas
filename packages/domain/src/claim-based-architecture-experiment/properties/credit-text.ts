@@ -1,8 +1,8 @@
 import { NonEmptyTrimmedString } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-/** Today's resource `creditLine`, named as schema.org names it. */
-export const CreditTextProperty = defineProperty({
+/** Named as schema.org names it. */
+export const CreditTextProperty = defineCanonicalProperty({
   id: "creditText",
   valueSchema: NonEmptyTrimmedString,
   kinds: ["RESOURCE"],

@@ -1,10 +1,13 @@
 /**
- * Rules for claims machines write: what evidence they rest on, which ones a dispute's outcome
- * keeps out, and how a provider's refresh updates them.
+ * Rules for claims machines write: what evidence they rest on, which ones a report's outcome
+ * keeps out, and how a provider's refresh updates them, on canonical and situated properties
+ * alike. What inference reads from publications is people's claims (`isAllowedToInfer` in
+ * `inference.ts`).
  */
 import { Array as EffectArray, Option, Schema } from "effect"
 
-import type { MachineClaim, LanguageOf, PropertyScope } from "./claims.js"
+import type { ModerationStatus } from "../common/enums.js"
+import type { CanonicalMachineClaim, LanguageOf, PropertyScope } from "./claims.js"
 import { MachineProvenance, type ClaimId, TextLocation } from "./provenance.js"
 import type { ResolutionSpec } from "./resolution.js"
 import { type FractionalIndex, keyBetween } from "./values/fractional-index.js"
@@ -15,13 +18,13 @@ const locationKey = (location: TextLocation) =>
     : `publication:${location.publicationId}:${location.nodeId}`
 
 /**
- * What a machine claim rests on: a provider's record for the article, a node in some text, the
- * claim a translation translates. Two claims share evidence when a re-run read the same thing.
+ * What a machine claim rests on: a provider's record for the article, the node of article text
+ * holding an entity reference, the claim a translation translates. Two claims share evidence when
+ * a re-run read the same thing.
  */
 export const evidenceKey = (provenance: MachineProvenance): string =>
   MachineProvenance.match(provenance, {
     EXTERNAL_PROVIDER: ({ provider }) => `provider:${provider}`,
-    ARTICLE_TEXT_INFERENCE: ({ location }) => locationKey(location),
     ARTICLE_TEXT_ENTITY_REFERENCE: ({ location }) => locationKey(location),
     MACHINE_TRANSLATION: ({ translatedFrom }) => `translation:${translatedFrom}`,
   })
@@ -33,13 +36,10 @@ export interface ExtractedValue<Value, Scope extends PropertyScope> {
 }
 
 /**
- * Whether a machine may (re)assert a value. A value censored from the same evidence stays out on
- * every re-run, but the same value from other evidence (another publication saying papaya grows in
- * the Cerrado) still counts: censoring is about what a source read, not about the fact.
- *
- * It holds across model and workflow versions. A moderator censors a value because it's wrong for
- * that evidence, and a newer model reading the same text into the same value is just as wrong. The
- * version stays in the claim's provenance, so a moderator can still reapprove a run's censored claims.
+ * Whether a machine may (re)assert a value of a canonical property. A value censored from the
+ * same evidence stays out on every re-run, but the same value from other evidence (an entity
+ * reference in another paragraph) still counts: censoring is about what a source read, not about
+ * the value.
  */
 export const isAllowedToAssert = <Value, Scope extends PropertyScope>({
   valueSchema,
@@ -48,7 +48,7 @@ export const isAllowedToAssert = <Value, Scope extends PropertyScope>({
 }: {
   readonly valueSchema: Schema.Schema<Value>
   /** The source's claims of the property about the article. */
-  readonly existingClaims: ReadonlyArray<MachineClaim<Value, Scope>>
+  readonly existingClaims: ReadonlyArray<CanonicalMachineClaim<Value, Scope>>
   readonly candidate: ExtractedValue<Value, Scope> & { readonly provenance: MachineProvenance }
 }) => {
   const isSameValue = Schema.toEquivalence(valueSchema)
@@ -70,8 +70,20 @@ export interface PlannedValue<Value, Scope extends PropertyScope> extends Extrac
   readonly position: FractionalIndex | null
 }
 
+/**
+ * A provider's claim as a refresh sees it: a canonical one, with a position in a list, or a
+ * situated one, which has none.
+ */
+export interface RefreshableClaim<Value, Scope extends PropertyScope> {
+  readonly id: ClaimId
+  readonly language: LanguageOf<Scope>
+  readonly value: Value
+  readonly moderationStatus: ModerationStatus
+  readonly position?: FractionalIndex | null
+}
+
 export interface ProviderRefreshPlan<Value, Scope extends PropertyScope> {
-  /** Claims whose value the provider still asserts: kept with their ID, status and endorsements. */
+  /** Claims whose value the provider still asserts: kept with their ID, status and reports. */
   readonly keepClaimIds: ReadonlyArray<ClaimId>
   /** Kept claims the provider now lists elsewhere, in a list. */
   readonly repositionClaims: ReadonlyArray<{
@@ -85,8 +97,8 @@ export interface ProviderRefreshPlan<Value, Scope extends PropertyScope> {
 }
 
 /**
- * A provider's refresh, in place. Claims are never deleted and re-inserted, so disputes,
- * endorsements and translations keep pointing at them. Censored claims are always kept: they're
+ * A provider's refresh, in place. Claims are never deleted and re-inserted, so reports
+ * and translations keep pointing at them. Censored claims are always kept: they're
  * how the censored value stays out of later refreshes. In a list, the provider's order is kept
  * too: each value's position follows the order it was extracted in.
  */
@@ -95,9 +107,11 @@ export const planProviderRefresh = <Value, Scope extends PropertyScope>({
   existingClaims,
   extractedValues,
 }: {
-  readonly property: Pick<ResolutionSpec<Value>, "valueSchema" | "cardinality">
+  /** Situated properties have no cardinality: their claims have no position. */
+  readonly property: Pick<ResolutionSpec<Value>, "valueSchema"> &
+    Partial<Pick<ResolutionSpec<Value>, "cardinality">>
   /** The provider's current claims of the property about the article. */
-  readonly existingClaims: ReadonlyArray<MachineClaim<Value, Scope>>
+  readonly existingClaims: ReadonlyArray<RefreshableClaim<Value, Scope>>
   /** What the provider asserts now, in its order, from its latest result. */
   readonly extractedValues: ReadonlyArray<ExtractedValue<Value, Scope>>
 }): ProviderRefreshPlan<Value, Scope> => {
@@ -133,7 +147,7 @@ export const planProviderRefresh = <Value, Scope extends PropertyScope>({
     },
   )
 
-  const extractionOf = (claim: MachineClaim<Value, Scope>) =>
+  const extractionOf = (claim: RefreshableClaim<Value, Scope>) =>
     EffectArray.findFirst(positioned, (planned) =>
       isSameExtraction(planned, { language: claim.language, value: claim.value }),
     )
@@ -146,7 +160,9 @@ export const planProviderRefresh = <Value, Scope extends PropertyScope>({
     keepClaimIds: kept.map((claim) => claim.id),
     repositionClaims: kept.flatMap((claim) =>
       Option.toArray(extractionOf(claim)).flatMap(({ position }) =>
-        position !== null && position !== claim.position ? [{ claimId: claim.id, position }] : [],
+        position !== null && position !== (claim.position ?? null)
+          ? [{ claimId: claim.id, position }]
+          : [],
       ),
     ),
     removeClaimIds: existingClaims

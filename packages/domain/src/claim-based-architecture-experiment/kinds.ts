@@ -24,29 +24,3 @@ export const ArticleKind = Schema.Literals([
 export type ArticleKind = typeof ArticleKind.Type
 
 export const everyKind = ArticleKind.literals
-
-/** Plant properties a cultivar may inherit from its plant (see `inheritsFromParent`). */
-export const InheritableTrait = Schema.Literals([
-  "scientificNames",
-  "height",
-  "temperature",
-  "developmentCycle",
-  "edibleParts",
-  "lifecycles",
-  "plantingMethods",
-  "strata",
-  "plantUsage",
-  "growthForm",
-  "growthRate",
-  "pruningResponse",
-  "successionalGroup",
-  "leafPersistence",
-  "crownDiameter",
-  "crownShape",
-  "climateZones",
-  "agroforestryRoles",
-  "seedDormancy",
-  "seedStorageBehavior",
-])
-
-export type InheritableTrait = typeof InheritableTrait.Type

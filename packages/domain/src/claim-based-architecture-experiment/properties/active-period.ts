@@ -1,17 +1,15 @@
-import { Schema } from "effect"
+import { makeRange } from "../../common/range.js"
+import { PartialDate, isPartialDateNotAfter } from "../../common/utils/dates.js"
+import { defineCanonicalProperty } from "../property.js"
 
-import { PartialDate } from "../../common/utils/dates.js"
-import { defineProperty } from "../property.js"
-
-/**
- * Today's `foundedDate` and `dissolvedDate`, bundled like ranges. Unlike ranges, there's no
- * ordering check: partial dates at different precisions ("2010" and "2010-03") don't order.
- */
-export const ActivePeriodProperty = defineProperty({
+export const ActivePeriodProperty = defineCanonicalProperty({
   id: "activePeriod",
-  valueSchema: Schema.Struct({
-    founded: Schema.optionalKey(PartialDate),
-    dissolved: Schema.optionalKey(PartialDate),
+  valueSchema: makeRange({
+    bound: PartialDate,
+    keys: { min: "founded", max: "dissolved" },
+    isLessThanOrEqual: isPartialDateNotAfter,
+    identifier: "ActivePeriod",
+    title: "Active period",
   }),
   kinds: ["NOTEWORTHY_ENTITY"],
   scope: "UNIVERSAL",

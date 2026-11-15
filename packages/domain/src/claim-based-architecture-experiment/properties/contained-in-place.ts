@@ -1,20 +1,19 @@
 import { Option, Result } from "effect"
 
 import { WikiArticleId } from "../../common/ids.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { WhosOnFirst } from "../providers/whos-on-first.js"
 
 /**
- * Today's `parentPlaceId`, allowing several parents: a watershed across two states, a
- * municipality inside a state and a biome.
+ * Allows several parents: a watershed across two states, a municipality inside a state and a
+ * biome.
  */
-export const ContainedInPlaceProperty = defineProperty({
+export const ContainedInPlaceProperty = defineCanonicalProperty({
   id: "containedInPlace",
   valueSchema: WikiArticleId,
   kinds: ["PLACE"],
   scope: "UNIVERSAL",
   cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
   sources: (source) => [
     source.whosOnFirst({
       // Only the closest: a municipality is in its state, which is in its country.

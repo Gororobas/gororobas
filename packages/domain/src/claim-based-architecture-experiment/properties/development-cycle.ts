@@ -1,9 +1,12 @@
 import { IntNonNegative } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
-import { makeRange } from "../values/range.js"
+import { makeRange } from "../../common/range.js"
+import { defineSituatedProperty } from "../property.js"
 
-/** In days. */
-export const DevelopmentCycleProperty = defineProperty({
+/**
+ * Days from planting to the first harvest. People give the number they saw, a single one (`min`
+ * equal to `max`) or a range, and the summary spans everyone's.
+ */
+export const DevelopmentCycleProperty = defineSituatedProperty({
   id: "developmentCycle",
   valueSchema: makeRange({
     bound: IntNonNegative,
@@ -13,7 +16,7 @@ export const DevelopmentCycleProperty = defineProperty({
   }),
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
-  cardinality: "ONE",
-  presence: "OPTIONAL",
-  sources: (source) => [source.person()],
+  sources: (source) => ({ person: source.person({ inferable: true }) }),
+  summary: (summarize) => summarize.range((days) => days),
+  inheritance: { through: ["cultivarOf"], mode: "ALONGSIDE" },
 })

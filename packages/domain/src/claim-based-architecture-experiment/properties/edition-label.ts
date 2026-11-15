@@ -1,8 +1,8 @@
 import { NonEmptyTrimmedString } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-/** Today's book `edition` ("2nd edition, revised"). See `datePublished` on works vs editions. */
-export const EditionLabelProperty = defineProperty({
+/** See `datePublished` on works vs editions. */
+export const EditionLabelProperty = defineCanonicalProperty({
   id: "editionLabel",
   valueSchema: NonEmptyTrimmedString,
   kinds: ["BOOK"],

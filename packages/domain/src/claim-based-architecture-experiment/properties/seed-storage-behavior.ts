@@ -1,19 +1,21 @@
 import { Option } from "effect"
 
 import { SeedStorageBehavior } from "../../common/enums.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-export const SeedStorageBehaviorProperty = defineProperty({
+/** A botanical fact: Syntropedia's answer is canonical over people's proposals. */
+export const SeedStorageBehaviorProperty = defineCanonicalProperty({
   id: "seedStorageBehavior",
   valueSchema: SeedStorageBehavior,
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
   cardinality: "ONE",
   sources: (source) => [
-    source.person(),
     source.syntropedia({
       extract: (plant) =>
         Option.toArray(Option.fromNullishOr(plant.seedStorageBehavior)).map(source.found),
     }),
+    source.person(),
   ],
+  inheritance: { through: ["cultivarOf"], mode: "BY_CHOICE" },
 })

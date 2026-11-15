@@ -1,7 +1,7 @@
 import { Option } from "effect"
 
 import { PositiveInteger } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Tmdb } from "../providers/tmdb.js"
 
 /**
@@ -9,7 +9,7 @@ import { Tmdb } from "../providers/tmdb.js"
  * TMDB's per-episode runtimes are too loose to assert.
  * @todo rename to duration and apply it to resources (useful for YouTube videos and Podcasts)
  */
-export const RuntimeProperty = defineProperty({
+export const RuntimeProperty = defineCanonicalProperty({
   id: "runtime",
   // @todo make it a Duration encoded as an integer of minutes
   valueSchema: PositiveInteger,

@@ -1,7 +1,7 @@
 import { PlaceKind } from "../../common/enums.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
-export const PlaceKindProperty = defineProperty({
+export const PlaceKindProperty = defineCanonicalProperty({
   id: "placeKind",
   valueSchema: PlaceKind,
   kinds: ["PLACE"],

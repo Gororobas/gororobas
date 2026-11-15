@@ -1,6 +1,6 @@
 /**
  * What a provider's result says about an article: every property of its kind that lists the
- * provider, extracted and checked (`defineProperty`'s `extractFrom`).
+ * provider, extracted and checked (each property's `extractFrom`).
  */
 import { Match, Option } from "effect"
 

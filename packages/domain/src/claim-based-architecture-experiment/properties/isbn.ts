@@ -1,7 +1,7 @@
 import { Schema } from "effect"
 
 import { isbnDigits, isValidIsbn } from "../../common/book-identifiers.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
 const Isbn = Schema.String.check(
   Schema.makeFilter(isValidIsbn, {
@@ -15,14 +15,13 @@ const Isbn = Schema.String.check(
   Schema.overrideToEquivalence(() => (self, that) => isbnDigits(self) === isbnDigits(that)),
 )
 
-/** Today's `isbn10` and `isbn13`: one property, since a book's editions have many of both. */
-export const IsbnProperty = defineProperty({
+/** One property, since a book's editions have many of both. */
+export const IsbnProperty = defineCanonicalProperty({
   id: "isbn",
   valueSchema: Isbn,
   kinds: ["BOOK"],
   scope: "UNIVERSAL",
   cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
   sources: (source) => [
     source.person(),
     source.googleBooks({

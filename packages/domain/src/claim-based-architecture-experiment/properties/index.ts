@@ -1,7 +1,9 @@
 import { ActivePeriodProperty } from "./active-period.js"
 import { ActorsProperty } from "./actors.js"
-import { AgroforestryRolesProperty } from "./agroforestry-roles.js"
-import { AnimalRolesProperty } from "./animal-roles.js"
+import { AnimalEcologicalFunctionsProperty } from "./animal-ecological-functions.js"
+import { AnimalFeedingBehaviorsProperty } from "./animal-feeding-behaviors.js"
+import { AnimalHumanUsagesProperty } from "./animal-human-usages.js"
+import { AnimalProductionSystemsProperty } from "./animal-production-systems.js"
 import { AreasOfWorkProperty } from "./areas-of-work.js"
 import { AudiovisualFormatProperty } from "./audiovisual-format.js"
 import { AuthorsProperty } from "./authors.js"
@@ -16,6 +18,7 @@ import { CreditTextProperty } from "./credit-text.js"
 import { CrownDiameterProperty } from "./crown-diameter.js"
 import { CrownShapeProperty } from "./crown-shape.js"
 import { CultivarOfProperty } from "./cultivar-of.js"
+import { CultivationExperienceProperty } from "./cultivation-experience.js"
 import { DatePublishedProperty } from "./date-published.js"
 import { DevelopmentCycleProperty } from "./development-cycle.js"
 import { DirectorsProperty } from "./directors.js"
@@ -25,19 +28,19 @@ import { GbifTaxonIdProperty } from "./gbif-taxon-id.js"
 import { GenresProperty } from "./genres.js"
 import { GeonamesIdProperty } from "./geonames-id.js"
 import { GoogleBooksVolumeIdProperty } from "./google-books-volume-id.js"
-import { GrowsInProperty } from "./grows-in.js"
 import { GrowthFormProperty } from "./growth-form.js"
 import { GrowthRateProperty } from "./growth-rate.js"
 import { HeightProperty } from "./height.js"
 import { ImagesProperty } from "./images.js"
 import { ImdbIdProperty } from "./imdb-id.js"
 import { InLanguageProperty } from "./in-language.js"
-import { InheritsFromParentProperty } from "./inherits-from-parent.js"
+import { InheritedPropertiesProperty } from "./inherited-properties.js"
 import { IsbnProperty } from "./isbn.js"
 import { LeafPersistenceProperty } from "./leaf-persistence.js"
 import { LifecyclesProperty } from "./lifecycles.js"
 import { LifespanProperty } from "./lifespan.js"
 import { MainImageProperty } from "./main-image.js"
+import { MostCommonlyKnownAsProperty } from "./most-commonly-known-as.js"
 import { NamesProperty } from "./names.js"
 import { NumberOfEpisodesProperty } from "./number-of-episodes.js"
 import { NumberOfSeasonsProperty } from "./number-of-seasons.js"
@@ -47,14 +50,12 @@ import { OriginProperty } from "./origin.js"
 import { PlaceKindProperty } from "./place-kind.js"
 import { PlantUsageProperty } from "./plant-usage.js"
 import { PlantingMethodsProperty } from "./planting-methods.js"
-import { ProductionCompaniesProperty } from "./production-companies.js"
 import { PruningResponseProperty } from "./pruning-response.js"
 import { PublisherProperty } from "./publisher.js"
 import { RelatedToProperty } from "./related-to.js"
 import { ResourceFormatProperty } from "./resource-format.js"
 import { ResourceUrlProperty } from "./resource-url.js"
 import { RuntimeProperty } from "./runtime.js"
-import { ScientificNamesProperty } from "./scientific-names.js"
 import { SeedDormancyProperty } from "./seed-dormancy.js"
 import { SeedStorageBehaviorProperty } from "./seed-storage-behavior.js"
 import { StrataProperty } from "./strata.js"
@@ -75,8 +76,10 @@ import { WikipediaPageProperty } from "./wikipedia-page.js"
 export const properties = [
   ActivePeriodProperty,
   ActorsProperty,
-  AgroforestryRolesProperty,
-  AnimalRolesProperty,
+  AnimalEcologicalFunctionsProperty,
+  AnimalFeedingBehaviorsProperty,
+  AnimalHumanUsagesProperty,
+  AnimalProductionSystemsProperty,
   AreasOfWorkProperty,
   AudiovisualFormatProperty,
   AuthorsProperty,
@@ -91,6 +94,7 @@ export const properties = [
   CrownDiameterProperty,
   CrownShapeProperty,
   CultivarOfProperty,
+  CultivationExperienceProperty,
   DevelopmentCycleProperty,
   DirectorsProperty,
   EdiblePartsProperty,
@@ -99,19 +103,19 @@ export const properties = [
   GenresProperty,
   GeonamesIdProperty,
   GoogleBooksVolumeIdProperty,
-  GrowsInProperty,
   GrowthFormProperty,
   GrowthRateProperty,
   HeightProperty,
   ImagesProperty,
   ImdbIdProperty,
-  InheritsFromParentProperty,
+  InheritedPropertiesProperty,
   IsbnProperty,
   InLanguageProperty,
   LeafPersistenceProperty,
   LifecyclesProperty,
   LifespanProperty,
   MainImageProperty,
+  MostCommonlyKnownAsProperty,
   NamesProperty,
   NumberOfEpisodesProperty,
   NumberOfSeasonsProperty,
@@ -123,13 +127,11 @@ export const properties = [
   PlantingMethodsProperty,
   PruningResponseProperty,
   DatePublishedProperty,
-  ProductionCompaniesProperty,
   PublisherProperty,
   RelatedToProperty,
   ResourceFormatProperty,
   ResourceUrlProperty,
   RuntimeProperty,
-  ScientificNamesProperty,
   SeedDormancyProperty,
   SeedStorageBehaviorProperty,
   StrataProperty,
@@ -148,5 +150,9 @@ export const properties = [
 ] as const
 
 export type Property = (typeof properties)[number]
+
+export type CanonicalProperty = Extract<Property, { readonly propertyType: "CANONICAL" }>
+
+export type SituatedProperty = Extract<Property, { readonly propertyType: "SITUATED" }>
 
 export type PropertyId = Property["id"]

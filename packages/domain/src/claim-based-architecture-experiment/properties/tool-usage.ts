@@ -1,12 +1,12 @@
 import { ToolUsage } from "../../common/enums.js"
-import { defineProperty } from "../property.js"
+import { NonEmptySet } from "../../common/sets.js"
+import { defineSituatedProperty } from "../property.js"
 
-export const ToolUsageProperty = defineProperty({
+export const ToolUsageProperty = defineSituatedProperty({
   id: "toolUsage",
-  valueSchema: ToolUsage,
+  valueSchema: NonEmptySet(ToolUsage),
   kinds: ["TOOL"],
   scope: "UNIVERSAL",
-  cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
-  sources: (source) => [source.person()],
+  sources: (source) => ({ person: source.person({ inferable: true }) }),
+  summary: (summarize) => summarize.eachMember(ToolUsage),
 })

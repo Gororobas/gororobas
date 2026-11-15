@@ -2,7 +2,7 @@ import { Schema } from "effect"
 
 import { ContentChannelType } from "../../common/enums.js"
 import { NonEmptyTrimmedString } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 
 /**
  * Which channel item a scraped resource is: a YouTube video's ID, an RSS item's GUID. Like the
@@ -10,7 +10,7 @@ import { defineProperty } from "../property.js"
  * created instead of creating another, and a person adding the same video by hand is offered a
  * merge.
  */
-export const ContentChannelItemProperty = defineProperty({
+export const ContentChannelItemProperty = defineCanonicalProperty({
   id: "contentChannelItem",
   valueSchema: Schema.Struct({
     channelType: ContentChannelType,

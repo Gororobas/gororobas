@@ -1,6 +1,6 @@
 import { Array as EffectArray, Option, Result } from "effect"
 
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 import { ArticleOrName, articleOf, articleOrNameToJsonLd } from "../values/article-or-name.js"
 
@@ -10,13 +10,12 @@ import { ArticleOrName, articleOf, articleOrNameToJsonLd } from "../values/artic
  * authors, so a person's page lists all their works with one query. Other roles (translators,
  * directors, hosts) are properties of their own, for the same reason.
  */
-export const AuthorsProperty = defineProperty({
+export const AuthorsProperty = defineCanonicalProperty({
   id: "authors",
   valueSchema: ArticleOrName,
   kinds: ["BOOK", "RESOURCE"],
   scope: "UNIVERSAL",
   cardinality: "LIST",
-  mergeStrategy: "ALL_SOURCES",
   sources: (source) => [
     source.person(),
     source.wikidata({
@@ -46,7 +45,6 @@ export const AuthorsProperty = defineProperty({
         source.found(ArticleOrName.cases.ARTICLE.make({ wikiArticleId: item.producerArticleId })),
       ],
     }),
-    source.articleTextInference(),
   ],
   references: {
     targetKinds: ["NOTEWORTHY_PERSON", "NOTEWORTHY_ENTITY", "CONTENT_PRODUCER"],

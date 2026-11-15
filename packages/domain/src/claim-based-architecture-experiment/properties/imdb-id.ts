@@ -1,11 +1,11 @@
 import { Result } from "effect"
 
 import { ImdbTitleId } from "../../common/external-identifiers.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Tmdb } from "../providers/tmdb.js"
 
 /** TMDB's concordance with IMDb, which most people know their films by. */
-export const ImdbIdProperty = defineProperty({
+export const ImdbIdProperty = defineCanonicalProperty({
   id: "imdbId",
   valueSchema: ImdbTitleId,
   kinds: ["FILM"],

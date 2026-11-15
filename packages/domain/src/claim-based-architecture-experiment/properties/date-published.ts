@@ -1,19 +1,18 @@
 import { Option, Result } from "effect"
 
 import { PartialDate, partialDateToIso } from "../../common/utils/dates.js"
-import { defineProperty } from "../property.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Tmdb } from "../providers/tmdb.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 
 /**
- * When a work came out: a book, a resource, a film (today's `publicationDate` and `releaseDate`),
- * named as schema.org names it for every kind of work.
+ * When a work came out: a book, a resource, a film, named as schema.org names it for every kind
+ * of work.
  *
- * Today's book attributes describe one edition (publisher, date, pages, edition label), while
- * Google Books returns many (`bookEditions`). Deciding whether a BOOK article is a work or an
- * edition would decide whether these stay, or move into `bookEditions` as people-authored values.
+ * Whether a BOOK article is a work or an edition decides whether its publisher, date, pages and
+ * edition label stay here or move into `bookEditions` as people-authored values.
  */
-export const DatePublishedProperty = defineProperty({
+export const DatePublishedProperty = defineCanonicalProperty({
   id: "datePublished",
   valueSchema: PartialDate,
   kinds: ["BOOK", "RESOURCE", "FILM"],

@@ -1,13 +1,12 @@
 import { Option, Result } from "effect"
 
 import { UrlAsString } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
-import { throughSchema } from "../providers/through-schema.js"
+import { decodeExtractedValue } from "../extraction.js"
+import { defineCanonicalProperty } from "../property.js"
 import { Tmdb } from "../providers/tmdb.js"
 import { Wikidata, WikidataProperty } from "../providers/wikidata.js"
 
-/** Today's optional `url` on books, films, entities and people. A resource's URL is `resourceUrl`. */
-export const WebsiteProperty = defineProperty({
+export const WebsiteProperty = defineCanonicalProperty({
   id: "website",
   valueSchema: UrlAsString,
   kinds: ["BOOK", "FILM", "NOTEWORTHY_ENTITY", "NOTEWORTHY_PERSON"],
@@ -26,7 +25,7 @@ export const WebsiteProperty = defineProperty({
     source.tmdb({
       extract: (work) =>
         Option.toArray(Tmdb.homepage(work)).map((url) =>
-          Result.flatMap(throughSchema(UrlAsString, url), source.found),
+          Result.flatMap(decodeExtractedValue(UrlAsString, url), source.found),
         ),
     }),
   ],

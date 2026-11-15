@@ -205,21 +205,12 @@ export const ClimateZone = Schema.Literals([
 
 export type ClimateZone = typeof ClimateZone.Type
 
-/**
- * What a tree does for the plants around it in an agroforest, as Syntropedia classifies trees.
- * @TODO Merge this into PlantUsage and merge NURSE and MOTHER together
- */
-export const AgroforestryRole = Schema.Literals([
-  "MOTHER_TREE", // Trees of rapid growth, deep roots, good pruning response and easy management
-  "NURSE_TREE", // Trees of rapid growth who act as initial facilitators for mother trees. The mothers of mother trees, per se.
-])
-
-export type AgroforestryRole = typeof AgroforestryRole.Type
-
 export const PlantLifecycle = Schema.Literals(["SEMIANNUAL", "ANNUAL", "BIENNIAL", "PERENNIAL"])
 export type PlantLifecycle = typeof PlantLifecycle.Type
 
+// @todo Rename PlantUsage to PlantHumanUsage.
 export const PlantUsage = Schema.Literals([
+  "MOTHER_TREE", // Fast-growing trees that facilitate other plants in an agroforest
   "HUMAN_FEED",
   "ANIMAL_FEED",
   "CONSTRUCTION",
@@ -253,6 +244,60 @@ export const PlantingMethod = Schema.Literals([
 
 export type PlantingMethod = typeof PlantingMethod.Type
 
+/** Ecological contributions animals can make. */
+export const AnimalEcologicalFunction = Schema.Literals([
+  "POLLINATOR",
+  "PEST_CONTROL",
+  "SOIL_ENGINEER",
+  "ORGANIC_MATTER_RECYCLING", // Breaks down or consumes dead organic matter, including carrion & worms.
+  "SEED_DISPERSER",
+])
+
+export type AnimalEcologicalFunction = typeof AnimalEcologicalFunction.Type
+
+export const AnimalFeedingBehavior = Schema.Literals([
+  "PLANT_EATER", // Cattle eat grass; bees feed on nectar and pollen.
+  "ANIMAL_EATER", // Owls eat mice; swallows eat insects.
+  "OMNIVORE", // Pigs and chickens eat both plants and animals.
+  "SCAVENGER", // Vultures and hyenas eat carrion.
+  "DEAD_MATTER_EATER", // Earthworms and woodlice eat decaying organic matter.
+  "FILTER_FEEDER", // Oysters and mussels filter food from water.
+  "PARASITE", // Ticks and fleas feed on living hosts.
+])
+
+export type AnimalFeedingBehavior = typeof AnimalFeedingBehavior.Type
+
+/** Systems in which people raise animals. */
+export const AnimalProductionSystem = Schema.Literals([
+  "LIVESTOCK", // Raising cattle, goats, poultry or other land animals.
+  "AQUACULTURE", // Farming fish, shrimp or molluscs.
+  "BEEKEEPING", // Keeping bees for honey, wax or pollination.
+])
+
+export type AnimalProductionSystem = typeof AnimalProductionSystem.Type
+
+// @todo review and reduce options
+export const AnimalHumanUsage = Schema.Literals([
+  "DRAFT_ANIMAL", // Oxen pull plows; horses pull carts.
+  "TRANSPORT", // Donkeys carry loads; horses carry riders.
+  "HUMAN_FOOD", // Fish provide meat; hens lay eggs; bees make honey.
+  "ANIMAL_FEED", // Insect larvae and fish meal feed livestock.
+  "MATERIAL", // Cattle provide leather; bees provide wax; Sheep provide wool; Silkworms produce silk
+  "FERTILIZER", // Manure and worm castings nourish soil.
+  "POLLINATION", // Managed bees pollinate crops.
+  "PEST_CONTROL", // Ducks eat slugs; ladybirds eat aphids.
+  "COMPOSTING", // Earthworms process organic waste.
+  "GUARDIAN", // Dogs protect livestock; geese guard farms.
+  "COMPANIONSHIP", // Dogs and cats are kept as companions.
+  "ORNAMENTAL", // Peacocks and ornamental fish are kept for display.
+  "RESEARCH", // Fruit flies and mice are used in research.
+  "MEDICINAL", // Leeches are used in medicine.
+  "RITUALISTIC", // Animals feature in ceremonies and traditions.
+])
+
+export type AnimalHumanUsage = typeof AnimalHumanUsage.Type
+
+// @todo Delete AnimalRole when the rest of the codebase adopts the new claims properties.
 export const AnimalRole = Schema.Literals([
   "POLLINATOR",
   "PEST_CONTROL",

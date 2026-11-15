@@ -1,12 +1,13 @@
 import { PlantLifecycle } from "../../common/enums.js"
-import { defineProperty } from "../property.js"
+import { NonEmptySet } from "../../common/sets.js"
+import { defineSituatedProperty } from "../property.js"
 
-export const LifecyclesProperty = defineProperty({
+export const LifecyclesProperty = defineSituatedProperty({
   id: "lifecycles",
-  valueSchema: PlantLifecycle,
+  valueSchema: NonEmptySet(PlantLifecycle),
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
-  cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
-  sources: (source) => [source.person()],
+  sources: (source) => ({ person: source.person({ inferable: true }) }),
+  summary: (summarize) => summarize.eachMember(PlantLifecycle),
+  inheritance: { through: ["cultivarOf"], mode: "ALONGSIDE" },
 })

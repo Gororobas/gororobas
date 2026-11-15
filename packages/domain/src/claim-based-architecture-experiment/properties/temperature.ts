@@ -1,10 +1,10 @@
 import * as Temperature from "effect-units/Temperature"
 
 import { TemperatureInCelsius } from "../../common/primitives.js"
-import { defineProperty } from "../property.js"
-import { makeRange } from "../values/range.js"
+import { makeRange } from "../../common/range.js"
+import { defineSituatedProperty } from "../property.js"
 
-export const TemperatureProperty = defineProperty({
+export const TemperatureProperty = defineSituatedProperty({
   id: "temperature",
   valueSchema: makeRange({
     bound: TemperatureInCelsius,
@@ -14,7 +14,7 @@ export const TemperatureProperty = defineProperty({
   }),
   kinds: ["PLANT", "PLANT_CULTIVAR"],
   scope: "UNIVERSAL",
-  cardinality: "ONE",
-  presence: "OPTIONAL",
-  sources: (source) => [source.person()],
+  sources: (source) => ({ person: source.person({ inferable: true }) }),
+  summary: (summarize) => summarize.range(Temperature.inDegreesCelsius),
+  inheritance: { through: ["cultivarOf"], mode: "ALONGSIDE" },
 })

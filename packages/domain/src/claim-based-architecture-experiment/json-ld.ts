@@ -33,10 +33,16 @@ export const articleToJsonLd = ({
     ),
   )
 
-  const entries = fields.flatMap((field) => Record.toEntries(field))
-  const names = EffectArray.dedupe(entries.map(([name]) => name))
-  const valuesOf = (name: string): ReadonlyArray<JsonLdValue> =>
-    entries.filter(([entryName]) => entryName === name).map(([, value]) => value)
+  const fieldEntries = fields.flatMap((field) => Record.toEntries(field))
+  // The article's own name (`mostCommonlyKnownAs`) is usually one of its situated names too;
+  // JSON-LD leaves out alternate names that repeat it.
+  const articleNames = fieldEntries.flatMap(([key, value]) => (key === "name" ? [value] : []))
+  const publishedEntries = fieldEntries.filter(
+    ([key, value]) => key !== "alternateName" || !articleNames.includes(value),
+  )
+  const publishedKeys = EffectArray.dedupe(publishedEntries.map(([key]) => key))
+  const valuesFor = (key: string): ReadonlyArray<JsonLdValue> =>
+    publishedEntries.filter(([entryKey]) => entryKey === key).map(([, value]) => value)
 
   return {
     "@context": "https://schema.org",
@@ -44,9 +50,9 @@ export const articleToJsonLd = ({
     "@id": context.articleUrl(articleId),
     url: context.articleUrl(articleId),
     ...Record.fromEntries(
-      names.map((name) => {
-        const values = valuesOf(name)
-        return [name, values.length === 1 ? (values[0] ?? []) : values]
+      publishedKeys.map((key) => {
+        const values = valuesFor(key)
+        return [key, values.length === 1 ? (values[0] ?? []) : values]
       }),
     ),
   }

@@ -180,3 +180,12 @@ export const PositiveInteger = Schema.Int.check(Schema.isGreaterThan(0))
 export const NonNegativeNumber = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))
 
 export const Fraction = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 }))
+
+/**
+ * A range where either end may be missing: "up to 3 m", "from 2020 on".
+ * By default, `makeRange` builds schemas of this shape, with at least one end.
+ */
+export interface RangeWithOptionalEnds<T> {
+  readonly min?: T
+  readonly max?: T
+}

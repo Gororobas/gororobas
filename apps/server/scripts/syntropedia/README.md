@@ -36,7 +36,8 @@ Comparing `revisions` in `syntropedia-plants.json` before and after tells whethe
   `pt-br`, `es`, `fr`, `de` and `sw`. Category values are always stored in English, and the free
   text (`comment`) is English only. One dump is every language.
 - `tested_location_profiles` repeats the plant once per site it was tested in; only the site and
-  `nurse_mother_tree` differ, so they become `testedSites` with their roles.
+  `nurse_mother_tree` differ, so they become `testedSites` with their usages. Nurse and mother tree roles both map to
+  `MOTHER_TREE`.
 - Always empty, and dropped: `descritivo`, `sistema`, `origem`, `bioma_origem`, `estados_ocorrencia`,
   `tipo_vegetacao`, `umidade`, `epoca_colheita`, `info_complementar`, `fonte`, `priority`.
   `tamanho_copa` duplicates `crown_diameter_m`.

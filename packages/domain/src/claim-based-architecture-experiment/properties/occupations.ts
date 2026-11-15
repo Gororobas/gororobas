@@ -1,13 +1,12 @@
-import { defineProperty } from "../property.js"
-import { FoldedName } from "../values/folded-name.js"
+import { defineCanonicalProperty } from "../property.js"
+import { NameWithNormalizedEquivalence } from "../values/name-with-normalized-equivalence.js"
 
 /** Language-dependent free text in an `ARTICLE` property: see the README's open questions. */
-export const OccupationsProperty = defineProperty({
+export const OccupationsProperty = defineCanonicalProperty({
   id: "occupations",
-  valueSchema: FoldedName,
+  valueSchema: NameWithNormalizedEquivalence,
   kinds: ["NOTEWORTHY_PERSON"],
   scope: "UNIVERSAL",
   cardinality: "SET",
-  mergeStrategy: "ALL_SOURCES",
   sources: (source) => [source.person()],
 })

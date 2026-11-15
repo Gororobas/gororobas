@@ -432,6 +432,12 @@ describe("the property registry", () => {
     ).toEqual([])
   })
 
+  it("names at least one source for every property", () => {
+    expect(
+      properties.filter((property) => EffectArray.isReadonlyArrayEmpty(property.sourceKeys)),
+    ).toEqual([])
+  })
+
   it("leaves agroecology's own properties unmapped: candidates to propose upstream", () => {
     const unmapped = properties
       .filter(
