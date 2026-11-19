@@ -18,6 +18,8 @@ Fight entropy. Leave the codebase better than you found it.
 
 Always build code cleanly, modularly, and with proper architecture and separation of concerns. Never simply bolt on a feature because I asked for it. If you can’t find an easy way to build it naturally, and you'd recommend a refactor to make the whole thing cleanly, stop your work ahead of time and say so.
 
+Before non-trivial work, if a simpler or sturdier way exists, say so once, up front: "Are you sure you want X? Y is simpler because Z." Then do what I choose. Challenge the frame, not just the details. Silence means you checked and X is the best path.
+
 ## Typescript
 
 Do not set `as any`, `@ts-ignore` or `@ts-expect-error` when you're stuck. Think hard about types and find ways to make them work.

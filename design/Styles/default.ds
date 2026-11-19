@@ -1,0 +1,234 @@
+ds:v1
+// This is the default system shipped with Brilliant, and a project's own design system starts here.
+// The default design system, carrying Brilliant's own visual identity.
+// Every token below is something your designs reference, so one edit
+// here ripples through the whole project.
+//
+// Comments like this reach the AI as it designs. Brief it the way you'd
+// brief a teammate: the intent behind a value, when to reach for it,
+// and what to avoid.
+//
+// DSL reference: https://brilliant.design/docs/design-system
+
+modes {
+  theme:         [light, dark]
+  density:       [comfortable, compact]
+  accessibility: [standard, high-contrast, large-text]
+}
+
+// The four colors of the Brilliant mark: a confident blue lead, with
+// magenta, orange, and yellow in support. They are vivid on purpose, so
+// spend them sparingly: one primary action, an accent, a moment of
+// focus. Color earns attention here, it does not fill space.
+primary:    boldness(color(#0080FF))
+secondary:  boldness(color(#FF3377))
+tertiary:   boldness(color(#FF9900))
+quaternary: boldness(color(#FFDD00))
+
+// Neutral is the workhorse. Black, white, and greys carry nearly every
+// surface, border, and label; hierarchy and depth come from neutral
+// steps, not from hue.
+neutral:    boldness(color(oklch(55.6%, 0,     0)))
+
+// Tailwind's palettes, kept here as utility accents: chart series, data
+// viz, an illustration's exact hue. They are not part of Brilliant's
+// identity: they are for emphasis and data viz. Surfaces and text use the
+// color.* roles below.
+red:      boldness(color(oklch(63.7%, 0.237, 25.331)))
+orange:   boldness(color(oklch(70.5%, 0.213, 47.604)))
+amber:    boldness(color(oklch(76.9%, 0.188, 70.08)))
+yellow:   boldness(color(oklch(79.5%, 0.184, 86.047)))
+lime:     boldness(color(oklch(76.8%, 0.233, 130.85)))
+green:    boldness(color(oklch(72.3%, 0.219, 149.579)))
+emerald:  boldness(color(oklch(69.6%, 0.17,  162.48)))
+teal:     boldness(color(oklch(70.4%, 0.14,  182.503)))
+cyan:     boldness(color(oklch(71.5%, 0.143, 215.221)))
+sky:      boldness(color(oklch(68.5%, 0.169, 237.323)))
+blue:     boldness(color(oklch(62.3%, 0.214, 259.815)))
+indigo:   boldness(color(oklch(58.5%, 0.233, 277.117)))
+violet:   boldness(color(oklch(60.6%, 0.25,  292.717)))
+purple:   boldness(color(oklch(62.7%, 0.265, 303.9)))
+fuchsia:  boldness(color(oklch(66.7%, 0.295, 322.15)))
+pink:     boldness(color(oklch(65.6%, 0.241, 354.308)))
+rose:     boldness(color(oklch(64.5%, 0.246, 16.439)))
+slate:    boldness(color(oklch(55.4%, 0.046, 257.417)))
+gray:     boldness(color(oklch(55.1%, 0.027, 264.364)))
+zinc:     boldness(color(oklch(55.2%, 0.016, 285.938)))
+stone:    boldness(color(oklch(55.3%, 0.013, 58.071)))
+
+// Geometry. Keep spacing and sizing on these scales: consistent rhythm
+// is what makes a layout feel composed. Brilliant runs sharp and precise,
+// so heavy rounding and thick strokes are the exception, not the default.
+spacing:      tshirt(number([4, 8, 12, 16, 24, 32, 48, 64, 96, 128]),
+                     min: { none: 0 })
+radius:       tshirt(number([2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96]),
+                     min: { none: 0 }, max: { full: 9999 },
+                     transforms: none)
+stroke.width: boldness(number([0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4]),
+                       min: { none: 0 }, max: { thick: 8, thicker: 16, thickest: 48 })
+visibility:   boldness(number([0.05, 0.10, 0.20, 0.40, 0.50, 0.60, 0.80, 0.90, 0.95]),
+                       min: { invisible: 0 }, max: { opaque: 1 })
+
+// Negative spacing for overlap. Auto layout accepts negative gaps, so
+// these "pull children together" instead of pushing them apart. Reach
+// for them when you want avatars in a stack, a badge biting into a
+// card corner, or content breaking out of its container.
+spacing.overlap.xs:  -2
+spacing.overlap.sm:  -4
+spacing.overlap.md:  -8
+spacing.overlap.lg:  -16
+spacing.overlap.xl:  -24
+spacing.overlap.2xl: -32
+
+// Type pairs two voices. Manrope is the default: a clean, modern
+// workhorse for UI, labels, and body. The serif brings warmth and
+// maturity to editorial moments, headlines, and hero text. A serif
+// headline can anchor a page; a paragraph uses one of the two faces.
+// `$font.family.sans` is an alias of the default, for when you want to
+// name the sans out loud beside `$font.family.serif`: same face, one
+// home. Retint the type by editing `font.family` and both follow.
+font.family:        Manrope
+font.family.sans:   font.family
+font.family.serif:  "Noto Serif"
+font.family.mono:   "JetBrains Mono"
+
+// font.size opts out of the tshirt default compact shift, shrinking
+// text by mode is a readability regression. Large-text still widens.
+font.size:          tshirt(number([12, 14, 16, 20, 24, 32, 36, 40, 48, 64, 80, 96, 128]),
+                           transforms: { accessibility.large-text: shift(+1) })
+font.weight:        boldness(number([100, 200, 300, 400, 500, 600, 700, 800, 900]))
+font.lineHeight:    looseness(number([1.0, 1.25, 1.375, 1.5, 1.625, 2.0]))
+font.letterSpacing: looseness(number([-0.05, -0.025, -0.0125, 0, 0.025, 0.1]))
+
+// Semantic roles. Build interfaces from these, not from raw palette
+// stops: they re-tint with the brand and flip correctly between light
+// and dark, so a surface stays a surface and text stays legible on its
+// own. Most of a screen lives in these neutrals; the brand roles are
+// the highlights.
+color.surface:                neutral.hint
+color.surface.container:      neutral.faint
+color.surface.container.high: neutral.subtle
+color.on-surface:             neutral.strong
+
+// Interactive states for items sitting on `$color.surface`. Swap the role
+// in for the cursor's feedback: hover for "I see you", pressed for the
+// moment of click, selected for the current row in a nav/menu/list.
+// Disabled state uses `$color.text.disabled` on the muted label/icon
+// while the surface stays at rest, the same pattern apps actually use, no
+// extra background token needed. For items on a deeper container, step
+// one boldness role darker (e.g. `$neutral.subtle` for hover).
+color.surface.hover:          neutral.faint
+color.surface.pressed:        neutral.subtle
+color.surface.selected:       primary.hint
+color.on-surface.selected:    neutral.bold
+
+color.outline:                neutral.soft
+color.outline.variant:        neutral.subtle
+
+color.text.primary:           neutral.bold
+color.text.secondary:         neutral.firm
+color.text.disabled:          neutral.soft
+color.text.display:           primary.firm
+color.text.display.alt:       secondary.firm
+
+color.primary:                primary.mid
+color.on-primary:             neutral.50
+color.primary.container:      primary.hint
+
+color.secondary:              secondary.mid
+color.on-secondary:           neutral.50
+color.secondary.container:    secondary.hint
+
+color.tertiary:               tertiary.mid
+color.on-tertiary:            neutral.50
+color.tertiary.container:     tertiary.hint
+
+color.quaternary:             quaternary.mid
+color.on-quaternary:          neutral.900     // dark text: yellow is too bright to carry white
+color.quaternary.container:   quaternary.hint
+
+color.success:                green.mid
+color.on-success:             neutral.50
+color.success.container:      green.hint
+
+color.error:                  red.mid
+color.on-error:               neutral.50
+color.error.container:        red.hint
+
+color.warning:                orange.mid
+color.on-warning:             neutral.900     // dark text: orange needs a dark foreground too
+color.warning.container:      orange.hint
+
+color.info:                   blue.mid
+color.on-info:                neutral.50
+color.info.container:         blue.hint
+
+// shadow and glow take absolute colors on purpose: a shadow stays dark
+// whether it falls on a light or dark surface. Shadows are painted with
+// $color.shadow. A brand or neutral role here flips in dark mode and
+// turns the shadow into a glowing halo.
+color.shadow:                 neutral.950
+color.glow:                   neutral.50
+
+// Composites bundle several atoms into one decision: a full heading
+// style, a layered shadow. typography.h1 and shadow.md are those composites,
+// set once instead of re-assembling size, weight, and blur each time.
+typography.display.lg: { fontSize: font.size.6xl, fontWeight: font.weight.bold, lineHeight: 1.1  }
+typography.display.md: { fontSize: 52,            fontWeight: font.weight.bold, lineHeight: 1.1  }
+typography.display.sm: { fontSize: 44,            fontWeight: font.weight.bold, lineHeight: 1.15 }
+
+typography.h1: { fontSize: font.size.3xl, fontWeight: font.weight.bold, lineHeight: 1.2  }
+typography.h2: { fontSize: 30,            fontWeight: font.weight.bold, lineHeight: 1.25 }
+typography.h3: { fontSize: font.size.xl,  fontWeight: font.weight.firm, lineHeight: 1.3  }
+typography.h4: { fontSize: font.size.lg,  fontWeight: font.weight.firm, lineHeight: 1.35 }
+
+typography.body.lg: { fontSize: 18,             fontWeight: font.weight.soft, lineHeight: font.lineHeight.normal }
+typography.body.md: { fontSize: font.size.md,   fontWeight: font.weight.soft, lineHeight: font.lineHeight.normal }
+typography.body.sm: { fontSize: font.size.sm,   fontWeight: font.weight.soft, lineHeight: font.lineHeight.normal }
+
+typography.button:  { fontSize: font.size.sm,   fontWeight: font.weight.firm, lineHeight: font.lineHeight.tight }
+typography.input:   { fontSize: font.size.md,   fontWeight: font.weight.soft, lineHeight: 1.4 }
+typography.label:   { fontSize: font.size.sm,   fontWeight: font.weight.mid,  lineHeight: 1.4 }
+typography.caption: { fontSize: font.size.xs,   fontWeight: font.weight.soft, lineHeight: 1.4 }
+typography.code:    { fontSize: font.size.sm,   fontWeight: font.weight.soft,
+                       lineHeight: font.lineHeight.normal, fontFamily: font.family.mono }
+
+typography.editorial.lg: { fontSize: font.size.6xl, fontWeight: font.weight.bold, lineHeight: 1.1,  fontFamily: font.family.serif }
+typography.editorial.md: { fontSize: 52,            fontWeight: font.weight.bold, lineHeight: 1.1,  fontFamily: font.family.serif }
+typography.editorial.sm: { fontSize: 44,            fontWeight: font.weight.bold, lineHeight: 1.15, fontFamily: font.family.serif }
+
+shadow.2xs: [ drop(y: 1, blur: 0, color: rgba(0, 0, 0, 0.05)) ]
+shadow.xs:  [ drop(y: 1, blur: 1, color: rgba(0, 0, 0, 0.05)) ]
+shadow.sm:  [ drop(y: 1, blur: 2, color: rgba(0, 0, 0, 0.05)) ]
+
+shadow.md: [
+  drop(y: 2, blur: 4, spread: -1, color: rgba(0, 0, 0, 0.06)),
+  drop(y: 4, blur: 6, spread: -1, color: rgba(0, 0, 0, 0.10)),
+]
+
+shadow.lg: [
+  drop(y: 4,  blur: 6,  spread: -2, color: rgba(0, 0, 0, 0.05)),
+  drop(y: 10, blur: 15, spread: -3, color: rgba(0, 0, 0, 0.10)),
+]
+
+shadow.xl: [
+  drop(y: 10, blur: 10, spread: -5, color: rgba(0, 0, 0, 0.04)),
+  drop(y: 20, blur: 25, spread: -5, color: rgba(0, 0, 0, 0.10)),
+]
+
+shadow.2xl:   [ drop(y: 25, blur: 50, spread: -12, color: rgba(0, 0, 0, 0.25)) ]
+shadow.inner: [ drop(y: 2,  blur: 4,                color: rgba(0, 0, 0, 0.06)) ]
+
+// In-app color-picker housekeeping: which palettes stay tucked away and
+// which pin to the top. No effect on what designs or the AI can use.
+hide: red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky,
+      blue, indigo, violet, purple, fuchsia, pink, rose,
+      slate, gray, zinc, stone
+pin:  primary, secondary, tertiary, quaternary,
+      color.primary, color.on-primary,
+      color.secondary, color.on-secondary,
+      color.tertiary, color.on-tertiary,
+      color.quaternary, color.on-quaternary,
+      color.surface, color.surface.container, color.on-surface,
+      color.text.primary, color.text.secondary, color.text.disabled,
+      color.outline, color.outline.variant

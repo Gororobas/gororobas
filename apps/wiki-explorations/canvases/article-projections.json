@@ -1,0 +1,295 @@
+{
+  "title": "Article projections",
+  "nodes": [
+    {
+      "id": "name-claim",
+      "title": "Name claim",
+      "description": "A contributor, publication inference, or import asserts a localized name.\n\n```ts\ntype NameClaim = { value: string; language: string; gender: GrammaticalGender | null }\n```",
+      "position": {
+        "x": 0,
+        "y": 640
+      },
+      "kind": "event",
+      "eventType": "Claim added"
+    },
+    {
+      "id": "name-review",
+      "title": "Name claim evaluation",
+      "description": "A reviewer records an evaluation against a name claim.",
+      "position": {
+        "x": 0,
+        "y": 514
+      },
+      "kind": "event",
+      "eventType": "Claim evaluated"
+    },
+    {
+      "id": "consolidate-names",
+      "title": "Consolidate names",
+      "description": "Group equivalent spellings by language and place. Preserve display spelling and provenance.",
+      "position": {
+        "x": 330,
+        "y": 630
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "names",
+      "title": "Names by article",
+      "description": "Localized names with their sources and contexts.",
+      "position": {
+        "x": 660,
+        "y": 630
+      },
+      "kind": "property"
+    },
+    {
+      "id": "build-paths",
+      "title": "Build article paths",
+      "description": "Derive one canonical path and alternate paths from names and resolved identifiers. Collapse duplicate paths.",
+      "position": {
+        "x": 990,
+        "y": 398
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "paths",
+      "title": "Articles by path",
+      "description": "Resolve a canonical path or an alias to its article.\n\n```ts\ntype ArticlesByPath = Record<string, { articleId: ArticleId; canonical: boolean }>\n```",
+      "position": {
+        "x": 1205.442326647685,
+        "y": 639.433376097352
+      },
+      "kind": "property"
+    },
+    {
+      "id": "gbif-claim",
+      "title": "GBIF taxon ID claim",
+      "description": "A contributor proposes an identifier, or a provider supplies a candidate ID.",
+      "position": {
+        "x": 0,
+        "y": 388
+      },
+      "kind": "event",
+      "eventType": "Claim added"
+    },
+    {
+      "id": "wikidata",
+      "title": "Wikidata record",
+      "description": "A Wikidata response can supply a GBIF taxon ID candidate.",
+      "position": {
+        "x": 0,
+        "y": 252
+      },
+      "kind": "event",
+      "eventType": "External data received"
+    },
+    {
+      "id": "pick-gbif",
+      "title": "Decide GBIF taxon ID",
+      "description": "Order of preference:\n- an **EVALUATED** ID sent by a contributor\n- Wikidata\n- an **UNDECIDED** ID sent by a contributor\n\nConfidence (or better word) is included in the GbifIdByArticle so that we can display it in the front-end (i.e. \"This source has not yet been evaluated\")",
+      "position": {
+        "x": 330,
+        "y": 378
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "gbif-id",
+      "title": "ArticlesByGbifId",
+      "description": "The selected GBIF identifier for a plant or animal article.\n\n```ts\ntype ArticlesByGbifId = Record<\n  GbifId, \n  { articleId: ArticleId, confidence: \"UNVERIFIED\" | \"VERIFIED\" | \"EXTERNAL\" }\n>\n```\n\n@todo Looking for a better name than \"confidence\" and better values for it",
+      "position": {
+        "x": 660,
+        "y": 378
+      },
+      "kind": "property"
+    },
+    {
+      "id": "gbif-response",
+      "title": "GBIF result",
+      "description": "An external fetch delivered a result tagged with its GBIF taxon ID.",
+      "position": {
+        "x": 660,
+        "y": 252
+      },
+      "kind": "event",
+      "eventType": "External data received"
+    },
+    {
+      "id": "parse-gbif",
+      "title": "Parse GBIF result",
+      "description": "Match the result to the resolved taxon ID and project taxonomy and occurrences.\n\nInclude the Confidence of the ID.",
+      "position": {
+        "x": 990,
+        "y": 252
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "taxonomy",
+      "title": "Taxonomy by article",
+      "description": "The group and classification reported by GBIF for the selected taxon.",
+      "position": {
+        "x": 1320,
+        "y": 252
+      },
+      "kind": "property"
+    },
+    {
+      "id": "occurrences",
+      "title": "Occurrences by article",
+      "description": "Occurrence records associated with the resolved taxon. This is a proposed output from the notebook.",
+      "position": {
+        "x": 1320,
+        "y": 126
+      },
+      "kind": "property"
+    },
+    {
+      "id": "height-claim",
+      "title": "Height observation",
+      "description": "A person, inference, or Syntropedia provides a height range. Bounds are optional and ordered when both exist.",
+      "position": {
+        "x": 660,
+        "y": 0
+      },
+      "kind": "event",
+      "eventType": "Claim added"
+    },
+    {
+      "id": "summarize-height",
+      "title": "Summarize height",
+      "description": "Summarize observed bounds in centimeters. Keep cultivar observations and parent bounds alongside each other with their origins.",
+      "position": {
+        "x": 990,
+        "y": 0
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "height",
+      "title": "Height by article",
+      "description": "A situated height summary in centimeters, with a separate parent range for a cultivar.",
+      "position": {
+        "x": 1320,
+        "y": 0
+      },
+      "kind": "property"
+    },
+    {
+      "id": "assemble",
+      "title": "Assemble article",
+      "description": "Combine resolved properties into a consistent article projection for downstream readers.",
+      "position": {
+        "x": 1650,
+        "y": 315
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "article",
+      "title": "Article document",
+      "description": "Article page data assembled from supported properties.",
+      "position": {
+        "x": 1980,
+        "y": 315
+      },
+      "kind": "property"
+    }
+  ],
+  "edges": [
+    {
+      "source": "name-claim",
+      "target": "consolidate-names"
+    },
+    {
+      "source": "name-review",
+      "target": "consolidate-names"
+    },
+    {
+      "source": "consolidate-names",
+      "target": "names"
+    },
+    {
+      "source": "names",
+      "target": "build-paths"
+    },
+    {
+      "source": "gbif-id",
+      "target": "build-paths"
+    },
+    {
+      "source": "build-paths",
+      "target": "paths"
+    },
+    {
+      "source": "gbif-claim",
+      "target": "pick-gbif"
+    },
+    {
+      "source": "wikidata",
+      "target": "pick-gbif"
+    },
+    {
+      "source": "pick-gbif",
+      "target": "gbif-id"
+    },
+    {
+      "source": "gbif-response",
+      "target": "parse-gbif"
+    },
+    {
+      "source": "gbif-id",
+      "target": "parse-gbif"
+    },
+    {
+      "source": "parse-gbif",
+      "target": "taxonomy"
+    },
+    {
+      "source": "parse-gbif",
+      "target": "occurrences"
+    },
+    {
+      "source": "height-claim",
+      "target": "summarize-height"
+    },
+    {
+      "source": "summarize-height",
+      "target": "height"
+    },
+    {
+      "source": "names",
+      "target": "assemble"
+    },
+    {
+      "source": "paths",
+      "target": "assemble"
+    },
+    {
+      "source": "taxonomy",
+      "target": "assemble"
+    },
+    {
+      "source": "occurrences",
+      "target": "assemble"
+    },
+    {
+      "source": "height",
+      "target": "assemble"
+    },
+    {
+      "source": "assemble",
+      "target": "article"
+    },
+    {
+      "source": "parse-gbif",
+      "target": "paths"
+    },
+    {
+      "source": "taxonomy",
+      "target": "consolidate-names"
+    }
+  ]
+}

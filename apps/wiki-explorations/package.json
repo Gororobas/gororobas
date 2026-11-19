@@ -1,0 +1,29 @@
+{
+  "name": "@gororobas/wiki-explorations",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx -e \"import { createServer } from 'vite'; createServer().then(async server => { await server.listen(); server.printUrls() })\"",
+    "server": "tsx src/server.ts",
+    "build": "tsx -e \"import { build } from 'vite'; build()\"",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^2",
+    "@effect/platform-node": "catalog:",
+    "@xyflow/react": "^12",
+    "effect": "catalog:",
+    "highlight.js": "^11",
+    "react": "^19",
+    "react-dom": "^19",
+    "react-markdown": "^10",
+    "rehype-highlight": "^7"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "vite": "catalog:"
+  }
+}

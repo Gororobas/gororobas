@@ -88,6 +88,28 @@ export default defineConfig({
   },
   overrides: [
     {
+      // React Flow owns the viewport and gesture state in this standalone editor.
+      files: ["apps/wiki-explorations/src/*.tsx", "apps/wiki-explorations/src/workspace.ts"],
+      rules: {
+        "effect/avoid-react-hooks": "off",
+        "effect/avoid-native-fetch": "off",
+        "effect/avoid-direct-json": "off",
+        "effect/avoid-untagged-errors": "off",
+        "effect/no-unknown-parameters": "off",
+        "effect/avoid-try-catch": "off",
+        "effect/imperative-loops": "off",
+        "effect/avoid-native-object-helpers": "off",
+      },
+    },
+    {
+      // The topological traversal builds and consumes a mutable queue.
+      files: ["apps/wiki-explorations/src/graph.ts"],
+      rules: {
+        "effect/imperative-loops": "off",
+        "effect/avoid-native-object-helpers": "off",
+      },
+    },
+    {
       files: [
         "packages/effect-bdd/src/feature/describe-feature.ts",
         "packages/effect-bdd/src/steps/run-steps.ts",
