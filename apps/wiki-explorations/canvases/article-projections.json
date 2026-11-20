@@ -4,75 +4,120 @@
     {
       "id": "name-claim",
       "title": "Name claim",
-      "description": "A contributor, publication inference, or import asserts a localized name.\n\n```ts\ntype NameClaim = { value: string; language: string; gender: GrammaticalGender | null }\n```",
+      "description": "A contributor, publication inference, or import supplies a name in a specific language.",
       "position": {
-        "x": 0,
-        "y": 640
+        "x": 660,
+        "y": 816
+      },
+      "exampleData": {
+        "claimId": "example-name-claim",
+        "articleId": "plant-acacia-dealbata",
+        "value": "Silver wattle",
+        "language": "en",
+        "gender": null
       },
       "kind": "event",
-      "eventType": "Claim added"
-    },
-    {
-      "id": "name-review",
-      "title": "Name claim evaluation",
-      "description": "A reviewer records an evaluation against a name claim.",
-      "position": {
-        "x": 0,
-        "y": 514
-      },
-      "kind": "event",
-      "eventType": "Claim evaluated"
+      "eventType": "Claim",
+      "isEvaluationRequired": false
     },
     {
       "id": "consolidate-names",
       "title": "Consolidate names",
-      "description": "Group equivalent spellings by language and place. Preserve display spelling and provenance.",
+      "description": "Group equivalent names by language and place. Keep the original spelling, sources and locality. Leave gender unset when missing.",
       "position": {
-        "x": 330,
-        "y": 630
+        "x": 990,
+        "y": 796
       },
       "kind": "transformation"
     },
     {
       "id": "names",
       "title": "Names by article",
-      "description": "Localized names with their sources and contexts.",
+      "description": "Localized names with spelling, gender and sources. Open question: which source languages should we include?",
       "position": {
-        "x": 660,
-        "y": 630
+        "x": 1320,
+        "y": 796
+      },
+      "exampleData": {
+        "plant-acacia-dealbata": {
+          "en": [
+            {
+              "value": "Silver wattle",
+              "gender": null,
+              "sources": [
+                {
+                  "claimId": "example-name-claim"
+                }
+              ]
+            },
+            {
+              "value": "Blue Wattle",
+              "gender": null,
+              "sources": [
+                {
+                  "observationId": "example-gbif-taxon-observation"
+                }
+              ]
+            }
+          ]
+        }
       },
       "kind": "property"
     },
     {
       "id": "build-paths",
       "title": "Build article paths",
-      "description": "Derive one canonical path and alternate paths from names and resolved identifiers. Collapse duplicate paths.",
+      "description": "Build one canonical localized path per article. Deduplicate aliases from names and identifiers such as GBIF, Wikidata and Syntropedia.",
       "position": {
-        "x": 990,
-        "y": 398
+        "x": 1650,
+        "y": 723
       },
       "kind": "transformation"
     },
     {
       "id": "paths",
       "title": "Articles by path",
-      "description": "Resolve a canonical path or an alias to its article.\n\n```ts\ntype ArticlesByPath = Record<string, { articleId: ArticleId; canonical: boolean }>\n```",
+      "description": "Index canonical paths and aliases by URL. Each alias points to its canonical path.",
       "position": {
-        "x": 1205.442326647685,
-        "y": 639.433376097352
+        "x": 1980,
+        "y": 723
+      },
+      "exampleData": {
+        "/en/plants/silver-wattle": {
+          "_tag": "CanonicalPath",
+          "articleId": "plant-acacia-dealbata"
+        },
+        "/gbif/8P4G": {
+          "_tag": "AlternativePath",
+          "articleId": "plant-acacia-dealbata",
+          "canonical": "/en/plants/silver-wattle"
+        },
+        "/wikidata/Q757123": {
+          "_tag": "AlternativePath",
+          "articleId": "plant-acacia-dealbata",
+          "canonical": "/en/plants/silver-wattle"
+        }
       },
       "kind": "property"
     },
     {
       "id": "gbif-claim",
       "title": "GBIF taxon ID claim",
-      "description": "A contributor proposes an identifier, or a provider supplies a candidate ID.",
+      "description": "A contributor proposes a GBIF taxon ID for a plant or animal.",
       "position": {
         "x": 0,
-        "y": 388
+        "y": 534
+      },
+      "exampleData": {
+        "claimId": "example-gbif-taxon-claim",
+        "articleId": "plant-acacia-dealbata",
+        "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
+        "taxonId": "8P4G",
+        "evaluation": "PENDING"
       },
       "kind": "event",
-      "eventType": "Claim added"
+      "eventType": "Claim",
+      "isEvaluationRequired": true
     },
     {
       "id": "wikidata",
@@ -80,69 +125,195 @@
       "description": "A Wikidata response can supply a GBIF taxon ID candidate.",
       "position": {
         "x": 0,
-        "y": 252
+        "y": 408
+      },
+      "exampleData": {
+        "wikidataId": "Q757123",
+        "gbifBackboneTaxonId": "2979474"
       },
       "kind": "event",
-      "eventType": "External data received"
+      "eventType": "External data"
     },
     {
       "id": "pick-gbif",
       "title": "Decide GBIF taxon ID",
-      "description": "Order of preference:\n- an **EVALUATED** ID sent by a contributor\n- Wikidata\n- an **UNDECIDED** ID sent by a contributor\n\nConfidence (or better word) is included in the GbifIdByArticle so that we can display it in the front-end (i.e. \"This source has not yet been evaluated\")",
+      "description": "Prefer an approved claim, then an unambiguous Wikidata ID, then a pending claim. Ignore rejected claims. Resolve legacy Backbone IDs in the selected checklist before comparison or fetch. Keep the source and evaluation so readers can see why the ID was selected.",
       "position": {
         "x": 330,
-        "y": 378
+        "y": 534
       },
       "kind": "transformation"
     },
     {
       "id": "gbif-id",
       "title": "ArticlesByGbifId",
-      "description": "The selected GBIF identifier for a plant or animal article.\n\n```ts\ntype ArticlesByGbifId = Record<\n  GbifId, \n  { articleId: ArticleId, confidence: \"UNVERIFIED\" | \"VERIFIED\" | \"EXTERNAL\" }\n>\n```\n\n@todo Looking for a better name than \"confidence\" and better values for it",
+      "description": "Index articles by the selected GBIF taxon ID and include the checklist key. Keep Wikidata attribution or the contributor claim and its evaluation.",
       "position": {
         "x": 660,
-        "y": 378
+        "y": 534
+      },
+      "exampleData": {
+        "8P4G": {
+          "articleId": "plant-acacia-dealbata",
+          "provenance": {
+            "kind": "WIKIDATA",
+            "wikidataId": "Q757123"
+          },
+          "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b"
+        }
       },
       "kind": "property"
     },
     {
       "id": "gbif-response",
-      "title": "GBIF result",
-      "description": "An external fetch delivered a result tagged with its GBIF taxon ID.",
+      "title": "GBIF taxon metadata received",
+      "description": "A taxon metadata response with the fetch time and the checklist and taxon selection used for the request.",
       "position": {
-        "x": 660,
-        "y": 252
+        "x": 0,
+        "y": 282
+      },
+      "exampleData": {
+        "observationId": "example-gbif-taxon-observation",
+        "kind": "TAXON_METADATA",
+        "taxonSelection": {
+          "articleId": "plant-acacia-dealbata",
+          "provenance": {
+            "kind": "WIKIDATA",
+            "wikidataId": "Q757123"
+          },
+          "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
+          "taxonId": "8P4G"
+        },
+        "fetchedAt": "2026-11-20T12:00:00Z",
+        "response": {
+          "taxonID": "8P4G",
+          "scientificName": "Acacia dealbata",
+          "taxonRank": "SPECIES",
+          "classification": [
+            {
+              "taxonID": "P",
+              "scientificName": "Plantae",
+              "taxonRank": "KINGDOM"
+            },
+            {
+              "taxonID": "623QT",
+              "scientificName": "Fabaceae",
+              "taxonRank": "FAMILY"
+            },
+            {
+              "taxonID": "LV7",
+              "scientificName": "Acacia",
+              "taxonRank": "GENUS"
+            }
+          ],
+          "vernacularNames": [
+            {
+              "vernacularName": "Blue Wattle",
+              "language": "eng"
+            }
+          ],
+          "distributions": [
+            {
+              "locality": "Australia, Australian Capital Territory",
+              "establishmentMeans": "NATIVE",
+              "remarks": "Fl. Australia 11A: 243 (2001)"
+            },
+            {
+              "locality": "Australia, New South Wales",
+              "establishmentMeans": "NATIVE",
+              "remarks": "Fl. Australia 11A: 243 (2001)"
+            },
+            {
+              "locality": "Australia, Tasmania",
+              "establishmentMeans": "NATIVE",
+              "remarks": "Fl. Australia 11A: 243 (2001)"
+            },
+            {
+              "locality": "Australia, Victoria",
+              "establishmentMeans": "NATIVE",
+              "remarks": "Fl. Australia 11A: 243 (2001)"
+            },
+            {
+              "locality": "Australia, Western Australia",
+              "establishmentMeans": "INTRODUCED",
+              "remarks": "Fl. Australia 11A: 243 (2001)"
+            },
+            {
+              "locality": "Australia, South Australia",
+              "establishmentMeans": "INTRODUCED",
+              "remarks": "Fl. Australia 11A: 243 (2001)"
+            }
+          ]
+        }
       },
       "kind": "event",
-      "eventType": "External data received"
+      "eventType": "External data"
     },
     {
       "id": "parse-gbif",
-      "title": "Parse GBIF result",
-      "description": "Match the result to the resolved taxon ID and project taxonomy and occurrences.\n\nInclude the Confidence of the ID.",
+      "title": "Project GBIF taxonomy",
+      "description": "Project taxonomy from the latest successful metadata fetch for the current selection.",
       "position": {
         "x": 990,
-        "y": 252
+        "y": 640
       },
       "kind": "transformation"
     },
     {
       "id": "taxonomy",
       "title": "Taxonomy by article",
-      "description": "The group and classification reported by GBIF for the selected taxon.",
+      "description": "The selected taxon's group and ordered classification, with their source observation.",
       "position": {
         "x": 1320,
-        "y": 252
+        "y": 640
+      },
+      "exampleData": {
+        "plant-acacia-dealbata": {
+          "observationId": "example-gbif-taxon-observation",
+          "classification": [
+            {
+              "taxonId": "P",
+              "scientificName": "Plantae",
+              "taxonRank": "KINGDOM"
+            },
+            {
+              "taxonId": "623QT",
+              "scientificName": "Fabaceae",
+              "taxonRank": "FAMILY"
+            },
+            {
+              "taxonId": "LV7",
+              "scientificName": "Acacia",
+              "taxonRank": "GENUS"
+            }
+          ]
+        }
       },
       "kind": "property"
     },
     {
       "id": "occurrences",
       "title": "Occurrences by article",
-      "description": "Occurrence records associated with the resolved taxon. This is a proposed output from the notebook.",
+      "description": "A sample of detections with record and dataset IDs, date, basis, matched taxon and optional place match. Roll up counts by place and its ancestors. Counts describe the sample. Look up the fetch date in the observation.",
       "position": {
         "x": 1320,
-        "y": 126
+        "y": 378
+      },
+      "exampleData": {
+        "plant-acacia-dealbata": {
+          "observationId": "example-gbif-occurrence-observation",
+          "records": [
+            {
+              "occurrenceKey": 5938164805,
+              "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",
+              "eventDate": "2026-01-03T13:55:56",
+              "basisOfRecord": "HUMAN_OBSERVATION",
+              "matchedTaxonId": "8P4G",
+              "placeArticleId": "place-australia",
+              "matchMethod": "COUNTRY_CODE"
+            }
+          ]
+        }
       },
       "kind": "property"
     },
@@ -151,19 +322,26 @@
       "title": "Height observation",
       "description": "A person, inference, or Syntropedia provides a height range. Bounds are optional and ordered when both exist.",
       "position": {
-        "x": 660,
-        "y": 0
+        "x": 1320,
+        "y": 252
+      },
+      "exampleData": {
+        "claimId": "example-height-observation",
+        "articleId": "plant-acacia-dealbata",
+        "minimumCm": 600,
+        "maximumCm": 800
       },
       "kind": "event",
-      "eventType": "Claim added"
+      "eventType": "Claim",
+      "isEvaluationRequired": false
     },
     {
       "id": "summarize-height",
       "title": "Summarize height",
       "description": "Summarize observed bounds in centimeters. Keep cultivar observations and parent bounds alongside each other with their origins.",
       "position": {
-        "x": 990,
-        "y": 0
+        "x": 1650,
+        "y": 252
       },
       "kind": "transformation"
     },
@@ -172,8 +350,19 @@
       "title": "Height by article",
       "description": "A situated height summary in centimeters, with a separate parent range for a cultivar.",
       "position": {
-        "x": 1320,
-        "y": 0
+        "x": 1980,
+        "y": 252
+      },
+      "exampleData": {
+        "plant-acacia-dealbata": {
+          "minimumCm": 600,
+          "maximumCm": 800,
+          "sources": [
+            {
+              "claimId": "example-height-observation"
+            }
+          ]
+        }
       },
       "kind": "property"
     },
@@ -182,18 +371,456 @@
       "title": "Assemble article",
       "description": "Combine resolved properties into a consistent article projection for downstream readers.",
       "position": {
-        "x": 1650,
-        "y": 315
+        "x": 2310,
+        "y": 325
       },
       "kind": "transformation"
     },
     {
       "id": "article",
       "title": "Article document",
-      "description": "Article page data assembled from supported properties.",
+      "description": "Page data combining names, paths, native range, occurrence sample, taxonomy, height and images. Use observation IDs to look up GBIF evidence.",
       "position": {
-        "x": 1980,
-        "y": 315
+        "x": 2640,
+        "y": 325
+      },
+      "exampleData": {
+        "articleId": "plant-acacia-dealbata",
+        "canonicalPath": "/en/plants/silver-wattle",
+        "names": {
+          "en": [
+            {
+              "value": "Silver wattle",
+              "gender": null,
+              "sources": [
+                {
+                  "claimId": "example-name-claim"
+                }
+              ]
+            },
+            {
+              "value": "Blue Wattle",
+              "gender": null,
+              "sources": [
+                {
+                  "observationId": "example-gbif-taxon-observation"
+                }
+              ]
+            }
+          ]
+        },
+        "geographicalOrigin": {
+          "gbif": {
+            "observationId": "example-gbif-taxon-observation"
+          },
+          "contributorByLanguage": {
+            "pt": {
+              "claimId": "example-origin-claim",
+              "text": "Nativa do sudeste da Austrália, incluindo a Tasmânia."
+            }
+          }
+        },
+        "occurrenceSample": {
+          "observationId": "example-gbif-occurrence-observation",
+          "records": 1
+        },
+        "taxonomy": {
+          "observationId": "example-gbif-taxon-observation",
+          "classification": [
+            {
+              "taxonId": "P",
+              "scientificName": "Plantae",
+              "taxonRank": "KINGDOM"
+            },
+            {
+              "taxonId": "623QT",
+              "scientificName": "Fabaceae",
+              "taxonRank": "FAMILY"
+            },
+            {
+              "taxonId": "LV7",
+              "scientificName": "Acacia",
+              "taxonRank": "GENUS"
+            }
+          ]
+        },
+        "height": {
+          "minimumCm": 600,
+          "maximumCm": 800,
+          "sources": [
+            {
+              "claimId": "example-height-observation"
+            }
+          ]
+        },
+        "images": {
+          "observationId": "example-gbif-image-observation",
+          "assets": [
+            {
+              "mediaAssetId": "example-gbif-media-asset"
+            }
+          ]
+        }
+      },
+      "kind": "property"
+    },
+    {
+      "id": "geographical-origin-claim",
+      "title": "Geographical origin claim",
+      "description": "A contributor proposes a sourced description of the taxon's native range in a specific language.",
+      "position": {
+        "x": 660,
+        "y": 63
+      },
+      "exampleData": {
+        "claimId": "example-origin-claim",
+        "articleId": "plant-acacia-dealbata",
+        "language": "pt",
+        "text": "Nativa do sudeste da Austrália, incluindo a Tasmânia.",
+        "reference": "Fl. Australia 11A: 243 (2001)",
+        "evaluation": "APPROVED"
+      },
+      "kind": "event",
+      "eventType": "Claim",
+      "isEvaluationRequired": true
+    },
+    {
+      "id": "derive-geographical-origin",
+      "title": "Derive geographical origin",
+      "description": "Resolve approved contributor text per language. Use the latest matching taxon metadata fetch and reference it when it contains explicit native rows.",
+      "position": {
+        "x": 990,
+        "y": 126
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "geographical-origin",
+      "title": "Geographical origin by article",
+      "description": "Localized contributor text alongside a GBIF observation reference. For GBIF, display explicit native rows using equivalent PLACE names when available, with the original locality as fallback.",
+      "position": {
+        "x": 1320,
+        "y": 126
+      },
+      "exampleData": {
+        "plant-acacia-dealbata": {
+          "gbif": {
+            "observationId": "example-gbif-taxon-observation"
+          },
+          "contributorByLanguage": {
+            "pt": {
+              "claimId": "example-origin-claim",
+              "text": "Nativa do sudeste da Austrália, incluindo a Tasmânia."
+            }
+          }
+        }
+      },
+      "kind": "property"
+    },
+    {
+      "id": "gbif-occurrence-response",
+      "title": "GBIF occurrence search received",
+      "description": "A bounded detection search with the filters, pagination, fetch time and selection used for the request. Keep matched taxa to distinguish exact records, synonyms and descendants.",
+      "position": {
+        "x": 0,
+        "y": 156
+      },
+      "exampleData": {
+        "observationId": "example-gbif-occurrence-observation",
+        "kind": "OCCURRENCE_SEARCH",
+        "taxonSelection": {
+          "articleId": "plant-acacia-dealbata",
+          "provenance": {
+            "kind": "WIKIDATA",
+            "wikidataId": "Q757123"
+          },
+          "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
+          "taxonId": "8P4G"
+        },
+        "fetchedAt": "2026-11-20T12:00:00Z",
+        "query": {
+          "occurrenceStatus": "DETECTED",
+          "hasGeospatialIssue": false,
+          "country": "AU",
+          "limit": 2
+        },
+        "response": {
+          "offset": 0,
+          "limit": 2,
+          "count": 36310,
+          "endOfRecords": false,
+          "results": [
+            {
+              "key": 5938164805,
+              "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",
+              "eventDate": "2026-01-03T13:55:56",
+              "basisOfRecord": "HUMAN_OBSERVATION",
+              "countryCode": "AU",
+              "stateProvince": "Victoria",
+              "classifications": {
+                "7ddf754f-d193-4cc9-b351-99906754a03b": {
+                  "acceptedUsage": {
+                    "key": "8P4G"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "kind": "event",
+      "eventType": "External data"
+    },
+    {
+      "id": "place-occurrences",
+      "title": "Link occurrences to places",
+      "description": "Use the latest matching search. Link each record to the smallest supported place containing its reliable extent, respecting uncertainty and withheld or generalized locations. Fall back to a reliable area ID or country. Keep unresolved records and record how matches were made. Create PLACE articles only for surfaced places.",
+      "position": {
+        "x": 990,
+        "y": 378
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "gbif-image-response",
+      "title": "GBIF image search received",
+      "description": "A StillImage search response with its fetch time and the selection used for the request.",
+      "position": {
+        "x": 0,
+        "y": 30
+      },
+      "exampleData": {
+        "observationId": "example-gbif-image-observation",
+        "kind": "IMAGE_SEARCH",
+        "taxonSelection": {
+          "articleId": "plant-acacia-dealbata",
+          "provenance": {
+            "kind": "WIKIDATA",
+            "wikidataId": "Q757123"
+          },
+          "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
+          "taxonId": "8P4G"
+        },
+        "fetchedAt": "2026-11-20T12:00:00Z",
+        "query": {
+          "mediaType": "StillImage",
+          "limit": 1
+        },
+        "response": {
+          "results": [
+            {
+              "key": 5938164805,
+              "media": [
+                {
+                  "type": "StillImage",
+                  "identifier": "https://example.org/blue-wattle.jpg",
+                  "creator": "Example contributor",
+                  "license": "https://creativecommons.org/licenses/by/4.0/"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "event",
+      "eventType": "External data"
+    },
+    {
+      "id": "import-gbif-images",
+      "title": "Import GBIF occurrence images",
+      "description": "Use the latest matching image observation and the existing provider photo import. Keep the source occurrence URL, credits and license on the imported assets.",
+      "position": {
+        "x": 990,
+        "y": 0
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "gbif-images",
+      "title": "GBIF images by article",
+      "description": "Imported GBIF media assets with their source observation. Assets follow the shared moderation lifecycle.",
+      "position": {
+        "x": 1320,
+        "y": 0
+      },
+      "exampleData": {
+        "plant-acacia-dealbata": {
+          "observationId": "example-gbif-image-observation",
+          "assets": [
+            {
+              "mediaAssetId": "example-gbif-media-asset"
+            }
+          ]
+        }
+      },
+      "kind": "property"
+    },
+    {
+      "id": "record-gbif-observation",
+      "title": "Record GBIF observation",
+      "description": "Index each successful fetch by observation ID. Keep its result, request filters and the taxon selection as captured when the fetch started. A late response keeps its original selection.",
+      "position": {
+        "x": 330,
+        "y": 219
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "gbif-observations-by-id",
+      "title": "GbifObservationsById",
+      "description": "Shared GBIF observations by ID. Each holds the result, fetch time, checklist and taxon selection with its provenance. Derived properties reference these observations.",
+      "position": {
+        "x": 660,
+        "y": 219
+      },
+      "exampleData": {
+        "example-gbif-taxon-observation": {
+          "kind": "TAXON_METADATA",
+          "taxonSelection": {
+            "articleId": "plant-acacia-dealbata",
+            "provenance": {
+              "kind": "WIKIDATA",
+              "wikidataId": "Q757123"
+            },
+            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
+            "taxonId": "8P4G"
+          },
+          "fetchedAt": "2026-11-20T12:00:00Z",
+          "response": {
+            "taxonID": "8P4G",
+            "scientificName": "Acacia dealbata",
+            "taxonRank": "SPECIES",
+            "classification": [
+              {
+                "taxonID": "P",
+                "scientificName": "Plantae",
+                "taxonRank": "KINGDOM"
+              },
+              {
+                "taxonID": "623QT",
+                "scientificName": "Fabaceae",
+                "taxonRank": "FAMILY"
+              },
+              {
+                "taxonID": "LV7",
+                "scientificName": "Acacia",
+                "taxonRank": "GENUS"
+              }
+            ],
+            "vernacularNames": [
+              {
+                "vernacularName": "Blue Wattle",
+                "language": "eng"
+              }
+            ],
+            "distributions": [
+              {
+                "locality": "Australia, Australian Capital Territory",
+                "establishmentMeans": "NATIVE",
+                "remarks": "Fl. Australia 11A: 243 (2001)"
+              },
+              {
+                "locality": "Australia, New South Wales",
+                "establishmentMeans": "NATIVE",
+                "remarks": "Fl. Australia 11A: 243 (2001)"
+              },
+              {
+                "locality": "Australia, Tasmania",
+                "establishmentMeans": "NATIVE",
+                "remarks": "Fl. Australia 11A: 243 (2001)"
+              },
+              {
+                "locality": "Australia, Victoria",
+                "establishmentMeans": "NATIVE",
+                "remarks": "Fl. Australia 11A: 243 (2001)"
+              },
+              {
+                "locality": "Australia, Western Australia",
+                "establishmentMeans": "INTRODUCED",
+                "remarks": "Fl. Australia 11A: 243 (2001)"
+              },
+              {
+                "locality": "Australia, South Australia",
+                "establishmentMeans": "INTRODUCED",
+                "remarks": "Fl. Australia 11A: 243 (2001)"
+              }
+            ]
+          }
+        },
+        "example-gbif-occurrence-observation": {
+          "kind": "OCCURRENCE_SEARCH",
+          "taxonSelection": {
+            "articleId": "plant-acacia-dealbata",
+            "provenance": {
+              "kind": "WIKIDATA",
+              "wikidataId": "Q757123"
+            },
+            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
+            "taxonId": "8P4G"
+          },
+          "fetchedAt": "2026-11-20T12:00:00Z",
+          "query": {
+            "occurrenceStatus": "DETECTED",
+            "hasGeospatialIssue": false,
+            "country": "AU",
+            "limit": 2
+          },
+          "response": {
+            "offset": 0,
+            "limit": 2,
+            "count": 36310,
+            "endOfRecords": false,
+            "results": [
+              {
+                "key": 5938164805,
+                "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",
+                "eventDate": "2026-01-03T13:55:56",
+                "basisOfRecord": "HUMAN_OBSERVATION",
+                "countryCode": "AU",
+                "stateProvince": "Victoria",
+                "classifications": {
+                  "7ddf754f-d193-4cc9-b351-99906754a03b": {
+                    "acceptedUsage": {
+                      "key": "8P4G"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "example-gbif-image-observation": {
+          "kind": "IMAGE_SEARCH",
+          "taxonSelection": {
+            "articleId": "plant-acacia-dealbata",
+            "provenance": {
+              "kind": "WIKIDATA",
+              "wikidataId": "Q757123"
+            },
+            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
+            "taxonId": "8P4G"
+          },
+          "fetchedAt": "2026-11-20T12:00:00Z",
+          "query": {
+            "mediaType": "StillImage",
+            "limit": 1
+          },
+          "response": {
+            "results": [
+              {
+                "key": 5938164805,
+                "media": [
+                  {
+                    "type": "StillImage",
+                    "identifier": "https://example.org/blue-wattle.jpg",
+                    "creator": "Example contributor",
+                    "license": "https://creativecommons.org/licenses/by/4.0/"
+                  }
+                ]
+              }
+            ]
+          }
+        }
       },
       "kind": "property"
     }
@@ -201,10 +828,6 @@
   "edges": [
     {
       "source": "name-claim",
-      "target": "consolidate-names"
-    },
-    {
-      "source": "name-review",
       "target": "consolidate-names"
     },
     {
@@ -236,20 +859,12 @@
       "target": "gbif-id"
     },
     {
-      "source": "gbif-response",
-      "target": "parse-gbif"
-    },
-    {
       "source": "gbif-id",
       "target": "parse-gbif"
     },
     {
       "source": "parse-gbif",
       "target": "taxonomy"
-    },
-    {
-      "source": "parse-gbif",
-      "target": "occurrences"
     },
     {
       "source": "height-claim",
@@ -284,11 +899,79 @@
       "target": "article"
     },
     {
-      "source": "parse-gbif",
-      "target": "paths"
+      "source": "geographical-origin-claim",
+      "target": "derive-geographical-origin"
     },
     {
-      "source": "taxonomy",
+      "source": "derive-geographical-origin",
+      "target": "geographical-origin"
+    },
+    {
+      "source": "geographical-origin",
+      "target": "assemble"
+    },
+    {
+      "source": "gbif-id",
+      "target": "place-occurrences"
+    },
+    {
+      "source": "place-occurrences",
+      "target": "occurrences"
+    },
+    {
+      "source": "gbif-id",
+      "target": "import-gbif-images"
+    },
+    {
+      "source": "import-gbif-images",
+      "target": "gbif-images"
+    },
+    {
+      "source": "gbif-images",
+      "target": "assemble"
+    },
+    {
+      "source": "gbif-response",
+      "target": "record-gbif-observation"
+    },
+    {
+      "source": "gbif-occurrence-response",
+      "target": "record-gbif-observation"
+    },
+    {
+      "source": "gbif-image-response",
+      "target": "record-gbif-observation"
+    },
+    {
+      "source": "record-gbif-observation",
+      "target": "gbif-observations-by-id"
+    },
+    {
+      "source": "gbif-observations-by-id",
+      "target": "parse-gbif"
+    },
+    {
+      "source": "gbif-observations-by-id",
+      "target": "derive-geographical-origin"
+    },
+    {
+      "source": "gbif-observations-by-id",
+      "target": "place-occurrences"
+    },
+    {
+      "source": "gbif-observations-by-id",
+      "target": "import-gbif-images"
+    },
+    {
+      "source": "gbif-id",
+      "target": "derive-geographical-origin"
+    },
+    {
+      "source": "gbif-observations-by-id",
+      "target": "consolidate-names"
+    },
+    {
+      "source": "gbif-id",
       "target": "consolidate-names"
     }
   ]

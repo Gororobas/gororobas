@@ -1,153 +1,35 @@
-import dagre from "@dagrejs/dagre"
 import {
   Background,
   Controls,
-  Handle,
   MarkerType,
   MiniMap,
   Panel,
-  Position,
   ReactFlow,
   useReactFlow,
   type Edge,
-  type Node,
-  type NodeProps,
 } from "@xyflow/react"
-import { useMemo, useRef, useState } from "react"
-import Markdown from "react-markdown"
-import rehypeHighlight from "rehype-highlight"
+import { useMemo, useState } from "react"
 
-import { EventType, edgeId, inspectGraph, type Canvas, type GraphNode } from "./graph.js"
-
-const kinds = {
-  event: { title: "Event", glyph: "ϟ", color: "#ffedd8" },
-  transformation: { title: "Transformation", glyph: "ƒ", color: "#e9edff" },
-  property: { title: "Property", glyph: "▤", color: "#e2f2e9" },
-}
-
-type FlowNode = Node<GraphNode, "graph">
-const width = 228
-const height = 86
-
-function NodeCard({ data, selected }: NodeProps<FlowNode>) {
-  const kind = kinds[data.kind]
-
-  return (
-    <div className={`node-card ${data.kind} ${selected ? "selected" : ""}`}>
-      {data.kind !== "event" && <Handle type="target" position={Position.Left} id="input" />}
-      <div className="node-kind">
-        <span className="node-glyph">{kind.glyph}</span>
-        {kind.title}
-        {data.kind === "event" && <span className="event-type">{data.eventType}</span>}
-      </div>
-      <strong title={data.title}>{data.title.trim() || "Untitled"}</strong>
-      <span className="node-description">{data.description.trim().replace(/\s+/g, " ")}</span>
-      <Handle type="source" position={Position.Right} id="output" />
-    </div>
-  )
-}
-
-const nodeTypes = { graph: NodeCard }
-
-function NodeSidebar({
-  node,
-  edit,
-  close,
-  remove,
-}: {
-  node: GraphNode
-  edit: (node: GraphNode, group?: symbol) => void
-  close: () => void
-  remove: () => void
-}) {
-  const [preview, setPreview] = useState(false)
-  const editGroup = useRef<symbol>(undefined)
-  const kind = kinds[node.kind]
-
-  function startTextEdit() {
-    editGroup.current = Symbol()
-  }
-
-  return (
-    <aside className={`sidebar ${node.kind}`} aria-label="Node editor">
-      <div className="sidebar-heading">
-        <span className="node-glyph">{kind.glyph}</span>
-        <h2>{kind.title}</h2>
-        <button className="icon-button" aria-label="Close node editor" onClick={close}>
-          ×
-        </button>
-      </div>
-      <label>
-        Title
-        <input
-          value={node.title}
-          onFocus={startTextEdit}
-          onChange={(event) => edit({ ...node, title: event.target.value }, editGroup.current)}
-        />
-      </label>
-      {node.kind === "event" && (
-        <label>
-          Event type
-          <select
-            value={node.eventType}
-            onChange={(event) => {
-              const eventType = EventType.literals.find((type) => type === event.target.value)
-              if (eventType) edit({ ...node, eventType })
-            }}
-          >
-            {EventType.literals.map((type) => (
-              <option key={type}>{type}</option>
-            ))}
-          </select>
-        </label>
-      )}
-      <div className="description-header">
-        <label htmlFor="description">Description</label>
-        <div className="segmented" aria-label="Markdown mode">
-          <button aria-pressed={!preview} onClick={() => setPreview(false)}>
-            Write
-          </button>
-          <button aria-pressed={preview} onClick={() => setPreview(true)}>
-            Preview
-          </button>
-        </div>
-      </div>
-      {preview ? (
-        <div className="markdown-preview">
-          <Markdown rehypePlugins={[rehypeHighlight]}>{node.description}</Markdown>
-        </div>
-      ) : (
-        <textarea
-          id="description"
-          value={node.description}
-          placeholder="Write in Markdown…"
-          onFocus={startTextEdit}
-          onChange={(event) =>
-            edit({ ...node, description: event.target.value }, editGroup.current)
-          }
-        />
-      )}
-      <button className="delete-button" onClick={remove}>
-        Delete node
-      </button>
-    </aside>
-  )
-}
+import { edgeId, inspectGraph, withoutNodes, type Canvas, type GraphNode } from "./graph.js"
+import { layoutPositions } from "./layout.js"
+import { height, kinds, nodeTypes, width, type FlowNode } from "./node-card.js"
+import { NodeSidebar } from "./node-sidebar.js"
 
 export function CanvasEditor({
   canvas,
   onEdit,
+  onOpenPipeline,
 }: {
   canvas: Canvas
   onEdit: (next: Canvas, group?: symbol) => void
+  onOpenPipeline: (id: string) => void
 }) {
   const [selected, setSelected] = useState<string>()
   const [drag, setDrag] = useState<{ id: string; position: GraphNode["position"] }>()
-  const [menu, setMenu] = useState<"add" | "lint">()
+  const [menu, setMenu] = useState<"add">()
   const [connectionError, setConnectionError] = useState("")
   const flow = useReactFlow<FlowNode, Edge>()
   const selectedNode = canvas.nodes.find(({ id }) => id === selected)
-  const report = useMemo(() => inspectGraph(canvas), [canvas])
 
   const nodes = useMemo(
     () =>
@@ -190,24 +72,29 @@ export function CanvasEditor({
     })
     const fields = { id: crypto.randomUUID(), title: "", description: "", position }
     const node: GraphNode =
-      kind === "event" ? { ...fields, kind, eventType: "Claim added" } : { ...fields, kind }
+      kind === "event"
+        ? { ...fields, kind, eventType: "Claim", isEvaluationRequired: false }
+        : { ...fields, kind }
     onEdit({ ...canvas, nodes: [...canvas.nodes, node] })
     setSelected(node.id)
     setMenu(undefined)
   }
 
   function layout() {
-    if (report.errors.length) return
-    const graph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-    graph.setGraph({ rankdir: "LR", nodesep: 40, ranksep: 102 })
-    for (const { id } of canvas.nodes) graph.setNode(id, { width, height })
-    for (const { source, target } of canvas.edges) graph.setEdge(source, target)
-    dagre.layout(graph)
-    const nodes = canvas.nodes.map((node) => {
-      const { x, y } = graph.node(node.id)
-      return { ...node, position: { x: x - width / 2, y: y - height / 2 } }
+    if (inspectGraph(canvas).errors.length) return
+    const positions = layoutPositions(
+      canvas.nodes.map(({ id }) => id),
+      canvas.edges,
+    )
+
+    onEdit({
+      ...canvas,
+      nodes: canvas.nodes.map((node) => ({
+        ...node,
+        position: positions.get(node.id) ?? node.position,
+      })),
     })
-    onEdit({ ...canvas, nodes })
+
     requestAnimationFrame(() => {
       void flow.fitView({ duration: 220, padding: 0.18 })
     })
@@ -228,6 +115,7 @@ export function CanvasEditor({
           multiSelectionKeyCode={null}
           selectionKeyCode={null}
           onNodeClick={(_, node) => setSelected(node.id)}
+          onNodeDoubleClick={(_, node) => onOpenPipeline(node.id)}
           onPaneClick={() => {
             setSelected(undefined)
             setMenu(undefined)
@@ -263,16 +151,11 @@ export function CanvasEditor({
           onDelete={({ nodes, edges }) => {
             const removedNodes = new Set(nodes.map(({ id }) => id))
             const removedEdges = new Set(edges.map(({ id }) => id))
+            const remaining = withoutNodes(canvas, removedNodes)
 
             onEdit({
-              ...canvas,
-              nodes: canvas.nodes.filter(({ id }) => !removedNodes.has(id)),
-              edges: canvas.edges.filter(
-                (edge) =>
-                  !removedEdges.has(edgeId(edge)) &&
-                  !removedNodes.has(edge.source) &&
-                  !removedNodes.has(edge.target),
-              ),
+              ...remaining,
+              edges: remaining.edges.filter((edge) => !removedEdges.has(edgeId(edge))),
             })
 
             if (selected && removedNodes.has(selected)) setSelected(undefined)
@@ -298,15 +181,6 @@ export function CanvasEditor({
               <button onClick={layout} disabled={!nodes.length}>
                 Auto layout
               </button>
-              <button
-                aria-expanded={menu === "lint"}
-                onClick={() => setMenu(menu === "lint" ? undefined : "lint")}
-              >
-                Lint
-                {report.errors.length + report.warnings.length > 0
-                  ? ` · ${report.errors.length + report.warnings.length}`
-                  : ""}
-              </button>
             </div>
             {menu === "add" && (
               <div className="popover">
@@ -316,25 +190,6 @@ export function CanvasEditor({
                     {kinds[kind].title}
                   </button>
                 ))}
-              </div>
-            )}
-            {menu === "lint" && (
-              <div className="popover lint">
-                {report.errors.map((error) => (
-                  <p key={error}>{error}</p>
-                ))}
-                {report.warnings.map(({ id, message }) => (
-                  <button
-                    key={`${id}-${message}`}
-                    onClick={() => {
-                      setSelected(id)
-                      void flow.fitView({ nodes: [{ id }], maxZoom: 1.2, duration: 200 })
-                    }}
-                  >
-                    {canvas.nodes.find((node) => node.id === id)?.title || "Untitled"} · {message}
-                  </button>
-                ))}
-                {report.errors.length + report.warnings.length === 0 && <p>No graph issues.</p>}
               </div>
             )}
             {connectionError && (
@@ -365,6 +220,7 @@ export function CanvasEditor({
             )
           }
           close={() => setSelected(undefined)}
+          openPipeline={() => onOpenPipeline(selectedNode.id)}
           remove={() => {
             void flow.deleteElements({ nodes: [{ id: selectedNode.id }] })
           }}

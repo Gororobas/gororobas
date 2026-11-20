@@ -1,10 +1,11 @@
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 
-export const EventType = Schema.Literals([
-  "Claim added",
-  "Claim evaluated",
-  "External data received",
-])
+export const EventType = Schema.Literals(["Claim", "External data"])
+export const ExampleDataText = Schema.fromJsonString(Schema.Json, { space: 2 })
+const encodeExampleData = Schema.encodeSync(ExampleDataText)
+
+export const formatExampleData = (value: Schema.Json | undefined) =>
+  value === undefined ? "" : encodeExampleData(value)
 
 const nodeFields = {
   id: Schema.NonEmptyString,
@@ -13,10 +14,21 @@ const nodeFields = {
   position: Schema.Struct({ x: Schema.Finite, y: Schema.Finite }),
 }
 
-export const GraphNode = Schema.Union([
-  Schema.Struct({ ...nodeFields, kind: Schema.Literal("event"), eventType: EventType }),
+const dataFields = { ...nodeFields, exampleData: Schema.optional(Schema.Json) }
+const eventFields = { ...dataFields, kind: Schema.Literal("event") }
+const otherNodes = [
   Schema.Struct({ ...nodeFields, kind: Schema.Literal("transformation") }),
-  Schema.Struct({ ...nodeFields, kind: Schema.Literal("property") }),
+  Schema.Struct({ ...dataFields, kind: Schema.Literal("property") }),
+] as const
+
+export const GraphNode = Schema.Union([
+  Schema.Struct({
+    ...eventFields,
+    eventType: Schema.Literal("Claim"),
+    isEvaluationRequired: Schema.Boolean,
+  }),
+  Schema.Struct({ ...eventFields, eventType: Schema.Literal("External data") }),
+  ...otherNodes,
 ])
 
 export type GraphNode = typeof GraphNode.Type
@@ -32,6 +44,69 @@ export const Canvas = Schema.Struct({
 
 export type Canvas = typeof Canvas.Type
 export type GraphEdge = Canvas["edges"][number]
+
+const LegacyCanvas = Schema.Struct({
+  ...Canvas.fields,
+  nodes: Schema.Array(
+    Schema.Union([
+      Schema.Struct({
+        ...eventFields,
+        eventType: Schema.Literals(["Claim added", "Claim evaluated", "External data received"]),
+      }),
+      ...otherNodes,
+    ]),
+  ),
+})
+
+const decodeCurrentCanvas = Schema.decodeEffect(Schema.fromJsonString(Canvas))
+const decodeLegacyCanvas = Schema.decodeEffect(Schema.fromJsonString(LegacyCanvas))
+
+export const decodeCanvasFile = (content: string) =>
+  decodeCurrentCanvas(content).pipe(
+    Effect.catch(() =>
+      decodeLegacyCanvas(content).pipe(
+        Effect.map((canvas): Canvas => {
+          const evaluations = new Set(
+            canvas.nodes.flatMap((node) =>
+              node.kind === "event" && node.eventType === "Claim evaluated" ? [node.id] : [],
+            ),
+          )
+
+          // Legacy canvases linked a claim and its evaluation to the same transformation.
+          const evaluatedTargets = new Set(
+            canvas.edges
+              .filter(({ source }) => evaluations.has(source))
+              .map(({ target }) => target),
+          )
+
+          const evaluatedClaims = new Set(
+            canvas.edges
+              .filter(({ target }) => evaluatedTargets.has(target))
+              .map(({ source }) => source),
+          )
+
+          return {
+            ...canvas,
+            nodes: canvas.nodes.flatMap((node): GraphNode[] => {
+              if (node.kind !== "event") return [node]
+
+              if (node.eventType === "Claim evaluated") return []
+              if (node.eventType === "External data received") {
+                return [{ ...node, eventType: "External data" }]
+              }
+
+              return [
+                { ...node, eventType: "Claim", isEvaluationRequired: evaluatedClaims.has(node.id) },
+              ]
+            }),
+            edges: canvas.edges.filter(
+              ({ source, target }) => !evaluations.has(source) && !evaluations.has(target),
+            ),
+          }
+        }),
+      ),
+    ),
+  )
 
 export const edgeId = ({ source, target }: GraphEdge) =>
   `${encodeURIComponent(source)}:${encodeURIComponent(target)}`
@@ -83,15 +158,11 @@ export function inspectGraph({ nodes, edges }: Canvas) {
     outputs: [...(outgoing.get(id) ?? [])],
   }))
 
-  const warnings = flow.flatMap(({ id, title, kind, inputs, outputs }) => {
-    const messages = []
-    if (!title.trim()) messages.push("Give this node a title.")
-    if (kind === "transformation" && !inputs.length) messages.push("Transformation has no inputs.")
-    if (kind === "transformation" && !outputs.length) messages.push("Transformation has no output.")
-    if (kind === "property" && !inputs.length) messages.push("Property has no producer.")
-    if (kind === "event" && !outputs.length) messages.push("Event has no consumer.")
-    return messages.map((message) => ({ id, message }))
-  })
-
-  return { errors: [...new Set(errors)], warnings, order, flow }
+  return { errors: [...new Set(errors)], order, flow }
 }
+
+export const withoutNodes = (canvas: Canvas, ids: ReadonlySet<string>): Canvas => ({
+  ...canvas,
+  nodes: canvas.nodes.filter(({ id }) => !ids.has(id)),
+  edges: canvas.edges.filter(({ source, target }) => !ids.has(source) && !ids.has(target)),
+})

@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 
+import type { CanvasHistoryComparison } from "./git-history.js"
 import type { Canvas } from "./graph.js"
 
 type Entry = { id: string; title: string; forkedFrom?: string }
@@ -38,6 +39,9 @@ async function request<Value>(
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "Could not reach canvas storage."
+
+export const loadCanvasHistory = (id: string, ref: string) =>
+  request<CanvasHistoryComparison>(`${endpoint}/${id}/history?${new URLSearchParams({ ref })}`)
 
 export function useWorkspace() {
   const [entries, setEntries] = useState<Entry[]>([])

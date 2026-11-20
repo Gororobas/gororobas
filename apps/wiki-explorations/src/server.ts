@@ -1,7 +1,7 @@
-import { NodeFileSystem, NodeHttpServer, NodeRuntime } from "@effect/platform-node"
+import { NodeHttpServer, NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Config, Effect, FileSystem, Layer, Order, Schema, Semaphore } from "effect"
 import { sort } from "effect/Array"
-import { HttpRouter, HttpServerResponse } from "effect/http"
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 // oxlint-disable-next-line effect/avoid-node-imports, custom-lint-rules/no-node-apis -- Hash the stored bytes for optimistic concurrency.
 import { createHash } from "node:crypto"
 // oxlint-disable-next-line effect/use-http-client-service, custom-lint-rules/no-node-apis -- NodeHttpServer needs the Node HTTP factory.
@@ -9,7 +9,8 @@ import { createServer } from "node:http"
 // oxlint-disable-next-line effect/avoid-node-imports, custom-lint-rules/no-node-apis -- Resolve the checked-in canvas directory relative to this module.
 import { fileURLToPath } from "node:url"
 
-import { Canvas, inspectGraph } from "./graph.js"
+import { GitRef, readCanvasHistory } from "./git-history.js"
+import { Canvas, decodeCanvasFile, inspectGraph } from "./graph.js"
 
 const directory = fileURLToPath(new URL("../canvases/", import.meta.url))
 const CanvasFile = Schema.fromJsonString(Canvas, { space: 2 })
@@ -40,7 +41,7 @@ const routes = HttpRouter.addAll(
           return yield* Effect.fail(problem(404, "Canvas not found."))
         }
         const content = yield* files.readFileString(path)
-        const canvas = yield* Schema.decodeEffect(CanvasFile)(content)
+        const canvas = yield* decodeCanvasFile(content)
         return { id, revision: revisionOf(content), canvas }
       })
 
@@ -62,6 +63,31 @@ const routes = HttpRouter.addAll(
     })
 
     return [
+      HttpRouter.route(
+        "GET",
+        "/api/canvases/:id/history",
+        Effect.gen(function* () {
+          const { id } = yield* HttpRouter.params
+          if (!validId(id) || !(yield* files.exists(pathFor(id)))) {
+            return problem(404, "Canvas not found.")
+          }
+          const { ref = "HEAD" } = yield* HttpServerRequest.ParsedSearchParams
+          if (!Schema.is(GitRef)(ref)) return problem(400, "Enter a Git commit ref.")
+
+          const comparison = yield* readCanvasHistory({ directory, id, ref }).pipe(
+            Effect.mapError((error) =>
+              Schema.isSchemaError(error)
+                ? problem(422, "The canvas at that commit uses an unsupported format.")
+                : problem(500, "Could not read Git history from this checkout."),
+            ),
+          )
+
+          if (!comparison) return problem(404, "Git ref does not resolve to a commit.")
+          return HttpServerResponse.jsonUnsafe(comparison, {
+            headers: { "cache-control": "no-store" },
+          })
+        }).pipe(storageError),
+      ),
       HttpRouter.route(
         "GET",
         "/api/canvases",
@@ -198,7 +224,7 @@ const server = Layer.unwrap(
 )
 
 HttpRouter.serve(routes).pipe(
-  Layer.provide(NodeFileSystem.layer),
+  Layer.provide(NodeServices.layer),
   Layer.provide(server),
   Layer.launch,
   NodeRuntime.runMain,

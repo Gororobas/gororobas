@@ -6,12 +6,42 @@ import "highlight.js/styles/github.css"
 
 import "./styles.css"
 import { CanvasEditor } from "./canvas-editor.js"
+import type { Canvas } from "./graph.js"
+import { HistoryDialog } from "./history-dialog.js"
+import { PipelineView, type PipelineMode } from "./pipeline-view.js"
 import { useWorkspace } from "./workspace.js"
+
+function CanvasView({
+  canvas,
+  onEdit,
+}: {
+  canvas: Canvas
+  onEdit: (next: Canvas, group?: symbol) => void
+}) {
+  const [focusId, setFocusId] = useState<string>()
+  const [mode, setMode] = useState<PipelineMode>("graph")
+
+  // Undo or a delete can remove the focused node; fall back to the whole canvas.
+  return focusId && canvas.nodes.some(({ id }) => id === focusId) ? (
+    <PipelineView
+      canvas={canvas}
+      focusId={focusId}
+      mode={mode}
+      onEdit={onEdit}
+      onFocus={setFocusId}
+      onMode={setMode}
+      onClose={() => setFocusId(undefined)}
+    />
+  ) : (
+    <CanvasEditor canvas={canvas} onEdit={onEdit} onOpenPipeline={setFocusId} />
+  )
+}
 
 function App() {
   const workspace = useWorkspace()
   const [action, setAction] = useState<"new" | "fork">()
   const [title, setTitle] = useState("")
+  const [historyOpen, setHistoryOpen] = useState(false)
   const current = workspace.document
 
   return (
@@ -54,6 +84,9 @@ function App() {
             onClick={workspace.redo}
           >
             Redo
+          </button>
+          <button disabled={workspace.loading || !current} onClick={() => setHistoryOpen(true)}>
+            Git history
           </button>
         </div>
         <div className="workspace-actions">
@@ -113,13 +146,21 @@ function App() {
       {current ? (
         <ReactFlowProvider key={current.id}>
           <div className="canvas-container" inert={workspace.loading}>
-            <CanvasEditor canvas={current.canvas} onEdit={workspace.edit} />
+            <CanvasView canvas={current.canvas} onEdit={workspace.edit} />
           </div>
         </ReactFlowProvider>
       ) : (
         <div className="empty-workspace">
           {workspace.loading ? "Opening canvas…" : "Create a canvas to start exploring."}
         </div>
+      )}
+      {current && historyOpen && (
+        <HistoryDialog
+          key={current.id}
+          id={current.id}
+          canvas={current.canvas}
+          onClose={() => setHistoryOpen(false)}
+        />
       )}
     </div>
   )

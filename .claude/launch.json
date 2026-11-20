@@ -55,6 +55,18 @@
       "port": 4643
     },
     {
+      "name": "wiki-explorations-server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gororobas/wiki-explorations", "server"],
+      "port": 4561
+    },
+    {
+      "name": "wiki-explorations",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gororobas/wiki-explorations", "dev"],
+      "port": 4560
+    },
+    {
       "name": "live-draft-solid",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "/Users/h/dev/live-draft-solid", "--pm-on-fail=ignore", "dev"],

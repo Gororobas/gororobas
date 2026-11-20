@@ -102,8 +102,12 @@ export default defineConfig({
       },
     },
     {
-      // The topological traversal builds and consumes a mutable queue.
-      files: ["apps/wiki-explorations/src/graph.ts"],
+      // Graph traversals build and consume mutable queues, and dagre lays out an imperative graph.
+      files: [
+        "apps/wiki-explorations/src/graph.ts",
+        "apps/wiki-explorations/src/layout.ts",
+        "apps/wiki-explorations/src/pipeline.ts",
+      ],
       rules: {
         "effect/imperative-loops": "off",
         "effect/avoid-native-object-helpers": "off",
