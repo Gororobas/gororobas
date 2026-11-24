@@ -7,7 +7,7 @@ pnpm --filter @gororobas/wiki-explorations server
 pnpm --filter @gororobas/wiki-explorations dev
 ```
 
-Open [the editor](http://127.0.0.1:4560). Use **New canvas** for a blank graph or **Fork canvas** to copy the current graph into its own file. Drag from an event or property output to a transformation input, and from a transformation output to a property input. The editor saves node edits, connections and positions automatically. Descriptions accept Markdown with fenced code blocks. Use **Preview** to see syntax highlighting. Select a node to highlight its connections.
+Open [the editor](http://127.0.0.1:4560). Open the canvas menu next to the title to switch canvases, then choose **New canvas** for a blank graph or **Fork canvas** to copy the current graph into its own file. Drag from an event or property output to a transformation input, and from a transformation output to a property input. The editor saves node edits, connections and positions automatically. Descriptions accept Markdown with fenced code blocks. Use **Preview** to see syntax highlighting. Select a node to highlight its connections.
 
 Description and **Example data (JSON)** open in **Preview**. Choose **Write** to edit. In the highlighted JSON preview, fold objects and arrays or use the expand icon beside **Write** and **Preview** for a larger dialog. Use **Apply example** to save valid JSON or clear the field and apply to remove it. The examples in Article projections are illustrative excerpts, with provider values where available and sample IDs and claims for the app's own data.
 
@@ -15,7 +15,11 @@ Set **Architecture confidence** in the node sidebar. Every node starts as **Not 
 
 Double-click a node, or use **Open pipeline** in its sidebar, to see only what feeds it (upstream) and what it feeds (downstream). **Graph** shows that pipeline laid out on its own, with depth limits for each direction; dashed `+N in` and `+N out` badges count the connections the limits or the pipeline leave out. **Steps** pairs the upstream tree with a document that lists the triggering events and reads each transformation as a numbered step with its inputs and outputs. Click any node there to open its pipeline, or **Edit** to change it.
 
-Use **Undo** and **Redo** in the header, or **Cmd/Ctrl+Z** and **Cmd/Ctrl+Shift+Z**. **Ctrl+Y** also redoes an edit. Typing in a node field groups into one canvas edit per focus session. Each canvas keeps its own history while the app is open, and undo and redo save the resulting graph to disk.
+The URL records the selected node, the open pipeline and its **Steps** mode. Opening a pipeline adds a history entry, so the browser Back and Forward buttons retrace nested pipelines.
+
+Press **Cmd/Ctrl+K**, or **Search** in the header, to find a node by title, kind or description. Press Enter to select it, open its sidebar and center it on the canvas.
+
+Use the undo and redo icons in the header, or **Cmd/Ctrl+Z** and **Cmd/Ctrl+Shift+Z**. **Ctrl+Y** also redoes an edit. Typing in a node field groups into one canvas edit per focus session. Each canvas keeps its own history while the app is open, and undo and redo save the resulting graph to disk.
 
 Open **Git history** to compare the current canvas with `HEAD`, another local Git ref, or a commit hash. Choose a recent commit affecting that canvas on `HEAD` to use its saved version as the baseline. The view shows node edits, added and removed connections, and a collapsible list of layout moves. Git must be available to the local server.
 

@@ -1,4 +1,12 @@
 import { Option, Schema } from "effect"
+import {
+  CircleDashed,
+  CircleHelp,
+  Globe,
+  Lock,
+  MessageSquareQuote,
+  type LucideIcon,
+} from "lucide-react"
 import { useRef, useState } from "react"
 import Markdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
@@ -15,6 +23,17 @@ import {
 import { kinds } from "./node-card.js"
 
 const parseExampleData = Schema.decodeOption(ExampleDataText)
+
+const architectureConfidenceIcons = {
+  NOT_REVIEWED: CircleDashed,
+  LOCKED_IN: Lock,
+  UNCERTAIN: CircleHelp,
+} satisfies Record<typeof ArchitectureConfidence.Type, LucideIcon>
+
+const eventTypeIcons = {
+  Claim: MessageSquareQuote,
+  "External data": Globe,
+} satisfies Record<typeof EventType.Type, LucideIcon>
 
 function EditorMode({
   label,
@@ -41,12 +60,14 @@ function RadioTabs<Value extends string>({
   legend,
   options,
   labels,
+  icons,
   value,
   onChange,
 }: {
   legend: string
   options: ReadonlyArray<Value>
   labels?: Record<Value, string>
+  icons: Record<Value, LucideIcon>
   value: Value
   onChange: (value: Value) => void
 }) {
@@ -54,17 +75,22 @@ function RadioTabs<Value extends string>({
     <fieldset className="radio-tabs">
       <legend>{legend}</legend>
       <div className="segmented">
-        {options.map((option) => (
-          <label key={option}>
-            <input
-              type="radio"
-              name={legend}
-              checked={option === value}
-              onChange={() => onChange(option)}
-            />
-            {labels?.[option] ?? option}
-          </label>
-        ))}
+        {options.map((option) => {
+          const Icon: LucideIcon = icons[option]
+
+          return (
+            <label key={option}>
+              <input
+                type="radio"
+                name={legend}
+                checked={option === value}
+                onChange={() => onChange(option)}
+              />
+              <Icon size={14} aria-hidden="true" />
+              {labels?.[option] ?? option}
+            </label>
+          )
+        })}
       </div>
     </fieldset>
   )
@@ -182,6 +208,7 @@ export function NodeSidebar({
         legend="Architecture confidence"
         options={ArchitectureConfidence.literals}
         labels={architectureConfidenceLabels}
+        icons={architectureConfidenceIcons}
         value={node.architectureConfidence}
         onChange={(architectureConfidence) => edit({ ...node, architectureConfidence })}
       />
@@ -190,6 +217,7 @@ export function NodeSidebar({
           <RadioTabs
             legend="Event type"
             options={EventType.literals}
+            icons={eventTypeIcons}
             value={node.eventType}
             onChange={(eventType) => {
               if (eventType === node.eventType) return

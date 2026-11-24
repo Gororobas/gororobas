@@ -8,7 +8,7 @@ import {
   useReactFlow,
   type Edge,
 } from "@xyflow/react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import {
   defaultArchitectureConfidence,
@@ -27,12 +27,20 @@ export function CanvasEditor({
   canvas,
   onEdit,
   onOpenPipeline,
+  selected,
+  onSelect: setSelected,
+  reveal,
 }: {
   canvas: Canvas
   onEdit: (next: Canvas, group?: symbol) => void
   onOpenPipeline: (id: string) => void
+  selected: string | undefined
+  onSelect: (id: string | undefined) => void
+  /** Changes whenever the selected node should be brought into view. */
+  reveal: number
 }) {
-  const [selected, setSelected] = useState<string>()
+  // A node selected on mount (from the URL) is centered instead of fitting the whole canvas.
+  const [revealOnMount] = useState(() => canvas.nodes.some(({ id }) => id === selected))
   const [drag, setDrag] = useState<{ id: string; position: GraphNode["position"] }>()
   const [menu, setMenu] = useState<"add">()
   const [connectionError, setConnectionError] = useState("")
@@ -52,6 +60,19 @@ export function CanvasEditor({
       })),
     [canvas.nodes, drag, selected],
   )
+
+  useEffect(() => {
+    const position = selectedNode?.position
+
+    if (position) {
+      void flow.setCenter(position.x + width / 2, position.y + height / 2, {
+        zoom: Math.max(flow.getZoom(), 1),
+        duration: 300,
+      })
+    }
+    // Only reveal on mount and on explicit requests, not on every selection click.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal])
 
   const edges = useMemo(() => {
     const byId = new Map(canvas.nodes.map((node) => [node.id, node]))
@@ -127,7 +148,7 @@ export function CanvasEditor({
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
-          fitView
+          fitView={!revealOnMount}
           fitViewOptions={{ padding: 0.15 }}
           minZoom={0.1}
           maxZoom={3}

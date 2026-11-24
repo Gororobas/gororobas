@@ -39,7 +39,7 @@ describe("architecture confidence", () => {
       assert.deepEqual(legacy, baseline)
       assert.strictEqual(baseline.nodes[0]?.architectureConfidence, "NOT_REVIEWED")
       assert.deepEqual(diffCanvas(baseline, current).nodes[0]?.fields, [
-        { label: "Architecture confidence", before: "Not reviewed", after: "Locked in" },
+        { label: "Architecture confidence", before: "Pending", after: "Locked" },
       ])
     }),
   )

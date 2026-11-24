@@ -43,6 +43,8 @@ export function PipelineView({
   onFocus,
   onMode,
   onClose,
+  selected,
+  onSelect: setSelected,
 }: {
   canvas: Canvas
   focusId: string
@@ -51,18 +53,14 @@ export function PipelineView({
   onFocus: (id: string) => void
   onMode: (mode: PipelineMode) => void
   onClose: () => void
+  selected: string | undefined
+  onSelect: (id: string | undefined) => void
 }) {
-  const [selected, setSelected] = useState<string>()
   const [depth, setDepth] = useState<Depth>({ upstream: Infinity, downstream: Infinity })
   const pipeline = useMemo(() => pipelineAround(canvas, focusId), [canvas, focusId])
   const { focus, upstream, downstream } = pipeline
   const selectedNode = canvas.nodes.find(({ id }) => id === selected)
   if (!focus) return null
-
-  const focusOn = (id: string) => {
-    setSelected(undefined)
-    onFocus(id)
-  }
 
   return (
     <div className="pipeline-view">
@@ -106,10 +104,10 @@ export function PipelineView({
             depth={depth}
             selected={selected}
             onSelect={setSelected}
-            onFocus={focusOn}
+            onFocus={onFocus}
           />
         ) : (
-          <PipelineSteps pipeline={pipeline} onFocus={focusOn} onSelect={setSelected} />
+          <PipelineSteps pipeline={pipeline} onFocus={onFocus} onSelect={setSelected} />
         )}
         {selectedNode && (
           <NodeSidebar
@@ -131,7 +129,7 @@ export function PipelineView({
               setSelected(undefined)
               onEdit(withoutNodes(canvas, new Set([selectedNode.id])))
             }}
-            openPipeline={selectedNode.id === focus.id ? undefined : () => focusOn(selectedNode.id)}
+            openPipeline={selectedNode.id === focus.id ? undefined : () => onFocus(selectedNode.id)}
           />
         )}
       </div>

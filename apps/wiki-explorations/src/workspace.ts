@@ -71,7 +71,16 @@ export function useWorkspace() {
     live.current = value
     persisted.current = value.canvas
     setDocument(value)
-    history.replaceState(null, "", `?canvas=${encodeURIComponent(value.id)}`)
+    // Keep the node and pipeline params when reopening the canvas already in the URL.
+    const current = new URLSearchParams(location.search).get("canvas")
+
+    if (current !== value.id) {
+      history[current ? "pushState" : "replaceState"](
+        null,
+        "",
+        `?canvas=${encodeURIComponent(value.id)}`,
+      )
+    }
   }
 
   useEffect(() => {

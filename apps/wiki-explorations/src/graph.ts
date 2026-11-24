@@ -5,8 +5,8 @@ export const ArchitectureConfidence = Schema.Literals(["NOT_REVIEWED", "LOCKED_I
 export const defaultArchitectureConfidence = "NOT_REVIEWED"
 
 export const architectureConfidenceLabels = {
-  NOT_REVIEWED: "Not reviewed",
-  LOCKED_IN: "Locked in",
+  NOT_REVIEWED: "Pending",
+  LOCKED_IN: "Locked",
   UNCERTAIN: "Uncertain",
 } satisfies Record<typeof ArchitectureConfidence.Type, string>
 

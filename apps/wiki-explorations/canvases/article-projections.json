@@ -269,9 +269,7 @@
                             }
                           ]
                         },
-                        "snaks-order": [
-                          "P248"
-                        ]
+                        "snaks-order": ["P248"]
                       }
                     ]
                   }
@@ -314,9 +312,7 @@
                             }
                           ]
                         },
-                        "snaks-order": [
-                          "P248"
-                        ]
+                        "snaks-order": ["P248"]
                       }
                     ]
                   }
@@ -355,9 +351,7 @@
                             }
                           ]
                         },
-                        "snaks-order": [
-                          "P248"
-                        ]
+                        "snaks-order": ["P248"]
                       }
                     ]
                   }
@@ -396,9 +390,7 @@
                             }
                           ]
                         },
-                        "snaks-order": [
-                          "P248"
-                        ]
+                        "snaks-order": ["P248"]
                       }
                     ]
                   }
@@ -440,9 +432,7 @@
                             }
                           ]
                         },
-                        "snaks-order": [
-                          "P248"
-                        ]
+                        "snaks-order": ["P248"]
                       }
                     ]
                   },
@@ -482,9 +472,7 @@
                             }
                           ]
                         },
-                        "snaks-order": [
-                          "P248"
-                        ]
+                        "snaks-order": ["P248"]
                       }
                     ]
                   }
@@ -1627,10 +1615,7 @@
           {
             "_tag": "LOCATION",
             "placeArticleId": "place-villa-de-leyva",
-            "ancestorIds": [
-              "place-boyaca",
-              "place-colombia"
-            ]
+            "ancestorIds": ["place-boyaca", "place-colombia"]
           },
           {
             "_tag": "ELEVATION",

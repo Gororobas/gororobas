@@ -89,7 +89,11 @@ export default defineConfig({
   overrides: [
     {
       // React Flow owns the viewport and gesture state in this standalone editor.
-      files: ["apps/wiki-explorations/src/*.tsx", "apps/wiki-explorations/src/workspace.ts"],
+      files: [
+        "apps/wiki-explorations/src/*.tsx",
+        "apps/wiki-explorations/src/workspace.ts",
+        "apps/wiki-explorations/src/url-view.ts",
+      ],
       rules: {
         "effect/avoid-react-hooks": "off",
         "effect/avoid-native-fetch": "off",
