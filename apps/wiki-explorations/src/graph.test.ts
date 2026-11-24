@@ -1,8 +1,18 @@
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Schema } from "effect"
 
-import { diffCanvas } from "./canvas-diff.js"
-import { ArchitectureConfidence, Canvas, decodeCanvasFile, inspectGraph } from "./graph.js"
+import { diffCanvas, diffWords } from "./canvas-diff.js"
+import {
+  ArchitectureConfidence,
+  Canvas,
+  decodeCanvasFile,
+  GraphNode,
+  inspectGraph,
+  isMissingOpenQuestions,
+  lockContent,
+  lockIntegrity,
+  withLockFingerprint,
+} from "./graph.js"
 
 const fileWith = (fields: Record<string, string | boolean>) =>
   JSON.stringify({
@@ -93,4 +103,80 @@ describe("triggers", () => {
     assert.deepEqual(inspectGraph(loop("trigger")).errors, [])
     assert.include(inspectGraph(loop("transformation")).errors, "This graph contains a cycle.")
   })
+})
+
+describe("locks", () => {
+  const reopen = (node: GraphNode) =>
+    Effect.gen(function* () {
+      const file = Schema.fromJsonString(Canvas)
+      const content = yield* Schema.encodeEffect(file)({ title: "Lock", nodes: [node], edges: [] })
+      const reopened = (yield* Schema.decodeEffect(file)(content)).nodes[0]
+      assert.isDefined(reopened)
+      // The editor sends nodes to the API as plain JSON, without encoding them first.
+      const sent = yield* Schema.decodeEffect(GraphNode)(reopened)
+      assert.deepEqual(sent, reopened)
+      return reopened
+    })
+
+  it.effect.prop(
+    "flag content edits made outside the editor until they're accepted",
+    [GraphNode, Schema.String],
+    ([node, title]) =>
+      Effect.gen(function* () {
+        const locked = yield* reopen(lockContent({ ...node, architectureConfidence: "LOCKED_IN" }))
+        assert.strictEqual(lockIntegrity(locked), "INTACT")
+        assert.strictEqual(
+          lockIntegrity({ ...locked, position: { x: locked.position.x + 1, y: 0 } }),
+          "INTACT",
+        )
+
+        const tampered = { ...locked, description: `${locked.description} ` }
+        assert.strictEqual(lockIntegrity(tampered), "CHANGED")
+        // An unrelated edit in the editor mustn't hide the earlier change.
+        const edited = withLockFingerprint(tampered, { ...tampered, title })
+        assert.strictEqual(lockIntegrity(edited), "CHANGED")
+        assert.strictEqual(lockIntegrity(lockContent(edited)), "INTACT")
+        assert.strictEqual(
+          lockIntegrity(withLockFingerprint(locked, { ...locked, title: `${title}!` })),
+          "INTACT",
+        )
+      }),
+  )
+})
+
+describe("open questions", () => {
+  it.prop(
+    "are required only while uncertain, and never block saving",
+    [GraphNode, Schema.UndefinedOr(Schema.String)],
+    ([node, openQuestions]) => {
+      const candidate = { ...node, openQuestions }
+      const isBlank = (openQuestions ?? "").trim() === ""
+      assert.strictEqual(
+        isMissingOpenQuestions(candidate),
+        candidate.architectureConfidence === "UNCERTAIN" && isBlank,
+      )
+      const { errors, warnings } = inspectGraph({ title: "Q", nodes: [candidate], edges: [] })
+      assert.deepEqual(errors, [])
+      assert.strictEqual(warnings.length, isMissingOpenQuestions(candidate) ? 1 : 0)
+    },
+  )
+})
+
+describe("word diff", () => {
+  it.prop(
+    "rebuilds the current text and keeps every word of the previous one",
+    [Schema.String, Schema.String],
+    ([before, after]) => {
+      const changes = diffWords(before, after)
+      const words = (text: string) => text.split(/\s+/).filter(Boolean)
+      assert.strictEqual(
+        changes.flatMap(({ text, status }) => (status === "removed" ? [] : [text])).join(""),
+        after,
+      )
+      assert.deepEqual(
+        words(changes.flatMap(({ text, status }) => (status === "added" ? [] : [text])).join("")),
+        words(before),
+      )
+    },
+  )
 })

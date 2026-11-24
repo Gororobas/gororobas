@@ -21,6 +21,10 @@
   video {
     filter: invert(1) hue-rotate(180deg);
   }
+  /* Modal dialogs render in the top layer, outside the root's filter. */
+  dialog:modal {
+    filter: invert(0.88) hue-rotate(180deg) brightness(1.15);
+  }
 }
 
 * {
@@ -379,6 +383,57 @@ button.primary:hover:not(:disabled) {
   background: transparent;
   border: 1px solid currentColor;
 }
+.node-warning {
+  padding: 1px 7px;
+  border: 1px dashed currentColor;
+  border-radius: 999px;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.node-warning.CHANGED {
+  border: none;
+  background: #fee2e2;
+  color: #991b1b;
+}
+.open-questions {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-left: 3px solid #f59e0b;
+  background: #fffbeb;
+}
+.open-questions h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #92400e;
+}
+.field-error {
+  margin: -4px 0 0;
+  color: #991b1b;
+  font-size: 12px;
+}
+.lock-warning {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 8px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13px;
+}
+.lock-warning p {
+  margin: 0;
+}
+.lock-warning button {
+  grid-column: 2;
+  justify-self: start;
+}
 .node-card strong {
   display: block;
   margin-top: 6px;
@@ -520,6 +575,8 @@ button.primary:hover:not(:disabled) {
   font-weight: 550;
 }
 .radio-tabs label {
+  /* Contains the hidden radio, which is otherwise as wide as the page and scrolls it on focus. */
+  position: relative;
   flex: 1;
   display: inline-flex;
   align-items: center;
@@ -647,6 +704,8 @@ button.primary:hover:not(:disabled) {
   border: 1px solid #dedee3;
   border-radius: 12px;
   color: inherit;
+  background: #fafafa;
+  box-shadow: 0 24px 60px #18181b2e;
 }
 .history-dialog::backdrop,
 .example-dialog::backdrop {
@@ -664,13 +723,17 @@ button.primary:hover:not(:disabled) {
 .history-heading {
   justify-content: space-between;
 }
-.history-heading h2,
+.history-heading h2 {
+  margin: 0 0 2px;
+  font-size: 18px;
+}
 .history-heading p {
-  margin: 0 0 6px;
+  margin: 0;
+  color: #555560;
 }
 .history-compare {
   align-items: end;
-  padding: 12px 0 16px;
+  padding: 14px 0 16px;
 }
 .history-compare label {
   display: grid;
@@ -678,10 +741,17 @@ button.primary:hover:not(:disabled) {
   min-width: 0;
   flex: 1;
   gap: 5px;
+  color: #555560;
+  font-size: 12px;
+  font-weight: 600;
 }
 .history-compare input {
   width: 100%;
   padding: 7px 10px;
+  color: #18181b;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 400;
 }
 .history-error {
   color: #9f2929;
@@ -689,28 +759,40 @@ button.primary:hover:not(:disabled) {
 .history-columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2.5fr);
-  gap: 18px;
+  gap: 20px;
+  padding-top: 4px;
   border-top: 1px solid #e4e4e7;
 }
 .history-columns h3,
 .history-columns h4 {
+  margin: 14px 0 8px;
   overflow-wrap: anywhere;
+}
+.history-columns h3 {
+  font-size: 13px;
+}
+.history-columns h4 {
+  color: #555560;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .history-commits button {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   width: 100%;
   margin-bottom: 6px;
   text-align: left;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 .history-commits button[aria-pressed="true"] {
   background: #e9edff;
   border-color: #9baad6;
 }
-.history-commits small,
-.diff-status {
+.history-commits small {
   color: #555560;
+  font-size: 11px;
 }
 .diff-results details,
 .diff-results li {
@@ -719,19 +801,48 @@ button.primary:hover:not(:disabled) {
 }
 .diff-results details {
   border: 1px solid #e4e4e7;
-  border-radius: 7px;
-  padding: 8px 10px;
+  border-radius: 8px;
+  background: white;
+}
+.diff-results details[open] {
+  padding-bottom: 10px;
 }
 .diff-results summary {
+  padding: 8px 10px;
   cursor: pointer;
+  font-weight: 550;
+}
+.diff-results details > dl {
+  margin: 0 10px;
 }
 .diff-status {
-  font-size: 12px;
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: #555560;
+  font-size: 11px;
   font-weight: 650;
-  margin-right: 5px;
+}
+.diff-status[data-status="Added"] {
+  background: #dcf3e3;
+  color: #166534;
+}
+.diff-status[data-status="Removed"] {
+  background: #fde4e2;
+  color: #9f2929;
+}
+.diff-status[data-status="Edited"] {
+  background: #fdf1d8;
+  color: #8a5a06;
+}
+.diff-fields {
+  margin: 0;
 }
 .diff-fields dt {
   margin: 10px 0 5px;
+  font-size: 12px;
   font-weight: 650;
 }
 .diff-fields dd {
@@ -741,23 +852,43 @@ button.primary:hover:not(:disabled) {
   gap: 6px;
 }
 .diff-fields dd > div {
-  padding: 7px;
-  border-radius: 5px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  line-height: 1.5;
 }
 .diff-fields strong {
   display: block;
-  font-size: 12px;
   margin-bottom: 4px;
+  color: #555560;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .diff-fields span {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .diff-before {
-  background: #fff1f0;
+  background: #fff6f5;
+  border: 1px solid #f6dcd9;
 }
 .diff-after {
-  background: #e8f5ec;
+  background: #f1faf4;
+  border: 1px solid #d3ecdb;
+}
+.diff-fields del,
+.diff-fields ins {
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.diff-fields del {
+  background: #f8c9c4;
+  color: #7f1d1d;
+}
+.diff-fields ins {
+  background: #b7e4c4;
+  color: #14532d;
+  text-decoration: none;
 }
 .diff-layout {
   margin-top: 16px;

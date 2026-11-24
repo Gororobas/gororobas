@@ -20,6 +20,7 @@ const nodeFields = (node?: GraphNode) => ({
         : "No"
       : "",
   Description: node?.description ?? "",
+  "Open questions": node?.openQuestions ?? "",
   "Example data": node && node.kind !== "transformation" ? formatExampleData(node.exampleData) : "",
 })
 
@@ -83,4 +84,60 @@ export function diffCanvas(baseline: Canvas | null, current: Canvas) {
     { Title: current.title, "Fork of": current.forkedFrom ?? "" },
   )
   return { metadata, nodes, connections, moved }
+}
+
+export type WordChange = { text: string; status: "same" | "removed" | "added" }
+
+/** Longest-common-subsequence diff over words, keeping whitespace attached so segments rejoin exactly. */
+export function diffWords(before: string, after: string): WordChange[] {
+  const a = before.match(/\s*\S+\s*|\s+/g) ?? []
+  const b = after.match(/\s*\S+\s*|\s+/g) ?? []
+  const word = (tokens: string[], index: number) => tokens[index]?.trim()
+  const indexesFromEnd = (tokens: string[]) => tokens.map((_, index) => index).reverse()
+
+  // table[i][j]: common words between a[i..] and b[j..]
+  const table = Array.from({ length: a.length + 1 }, () =>
+    Array.from({ length: b.length + 1 }, () => 0),
+  )
+  const length = (i: number, j: number) => table[i]?.[j] ?? 0
+
+  indexesFromEnd(a).forEach((i) =>
+    indexesFromEnd(b).forEach((j) => {
+      const row = table[i]
+
+      if (row) {
+        row[j] =
+          word(a, i) === word(b, j)
+            ? length(i + 1, j + 1) + 1
+            : Math.max(length(i + 1, j), length(i, j + 1))
+      }
+    }),
+  )
+
+  const changes: WordChange[] = []
+
+  const push = (text = "", status: WordChange["status"]) => {
+    const last = changes.at(-1)
+    if (last?.status === status) last.text += text
+    else changes.push({ text, status })
+  }
+
+  let i = 0
+  let j = 0
+
+  const step = () => {
+    if (i < a.length && j < b.length && word(a, i) === word(b, j)) {
+      // Equal words may differ in surrounding whitespace; show the current spacing.
+      push(b[j++], "same")
+      i++
+    } else if (j < b.length && (i === a.length || length(i, j + 1) >= length(i + 1, j))) {
+      push(b[j++], "added")
+    } else if (i < a.length) {
+      push(a[i++], "removed")
+    }
+  }
+
+  // Every step consumes at least one token, so this many steps always reach the end.
+  Array.from({ length: a.length + b.length }).forEach(step)
+  return changes
 }

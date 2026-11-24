@@ -1,10 +1,24 @@
 import { Array as EffectArray } from "effect"
 import { useEffect, useRef, useState } from "react"
 
-import { diffCanvas } from "./canvas-diff.js"
+import { diffCanvas, diffWords, type WordChange } from "./canvas-diff.js"
 import type { CanvasHistoryComparison } from "./git-history.js"
 import type { Canvas } from "./graph.js"
 import { loadCanvasHistory } from "./workspace.js"
+
+function HighlightedText({ changes, side }: { changes: WordChange[]; side: "removed" | "added" }) {
+  const parts = changes.filter(({ status }) => status === "same" || status === side)
+  if (!parts.some(({ text }) => text.trim())) return <span>—</span>
+  const Change = side === "removed" ? "del" : "ins"
+
+  return (
+    <span>
+      {parts.map(({ text, status }, index) =>
+        status === "same" ? text : <Change key={index}>{text}</Change>,
+      )}
+    </span>
+  )
+}
 
 function FieldChanges({
   fields,
@@ -13,21 +27,25 @@ function FieldChanges({
 }) {
   return (
     <dl className="diff-fields">
-      {fields.map(({ id, label, before, after }) => (
-        <div key={id ?? label}>
-          <dt>{label}</dt>
-          <dd>
-            <div className="diff-before">
-              <strong>Before</strong>
-              <span>{before || "—"}</span>
-            </div>
-            <div className="diff-after">
-              <strong>Now</strong>
-              <span>{after || "—"}</span>
-            </div>
-          </dd>
-        </div>
-      ))}
+      {fields.map(({ id, label, before, after }) => {
+        const changes = diffWords(before, after)
+
+        return (
+          <div key={id ?? label}>
+            <dt>{label}</dt>
+            <dd>
+              <div className="diff-before">
+                <strong>Before</strong>
+                <HighlightedText changes={changes} side="removed" />
+              </div>
+              <div className="diff-after">
+                <strong>Now</strong>
+                <HighlightedText changes={changes} side="added" />
+              </div>
+            </dd>
+          </div>
+        )
+      })}
     </dl>
   )
 }
@@ -55,7 +73,10 @@ function Comparison({ result, canvas }: { result: CanvasHistoryComparison; canva
           {nodes.map(({ id, title, status, fields }) => (
             <details key={id}>
               <summary>
-                <span className="diff-status">{status}</span> {title}
+                <span className="diff-status" data-status={status}>
+                  {status}
+                </span>{" "}
+                {title}
               </summary>
               <FieldChanges fields={fields} />
             </details>
@@ -68,7 +89,10 @@ function Comparison({ result, canvas }: { result: CanvasHistoryComparison; canva
           <ul>
             {connections.map(({ id, status, source, target }) => (
               <li key={id}>
-                <span className="diff-status">{status}</span> {source} → {target}
+                <span className="diff-status" data-status={status}>
+                  {status}
+                </span>{" "}
+                {source} → {target}
               </li>
             ))}
           </ul>

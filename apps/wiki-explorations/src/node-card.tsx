@@ -1,6 +1,12 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
 
-import { architectureConfidenceLabels, type GraphNode } from "./graph.js"
+import {
+  architectureConfidenceLabels,
+  type GraphNode,
+  isMissingOpenQuestions,
+  lockIntegrity,
+  lockWarnings,
+} from "./graph.js"
 
 export const kinds = {
   event: { title: "Event", glyph: "ϟ", color: "#ffedd8" },
@@ -18,6 +24,7 @@ export const height = 86
 
 function NodeCard({ data, selected }: NodeProps<FlowNode>) {
   const kind = kinds[data.kind]
+  const integrity = lockIntegrity(data)
 
   return (
     <div
@@ -31,6 +38,16 @@ function NodeCard({ data, selected }: NodeProps<FlowNode>) {
         <span className={`architecture-confidence ${data.architectureConfidence}`}>
           {architectureConfidenceLabels[data.architectureConfidence]}
         </span>
+        {(integrity === "CHANGED" || integrity === "UNVERIFIED") && (
+          <span className={`node-warning ${integrity}`} title={lockWarnings[integrity]}>
+            {integrity === "CHANGED" ? "Changed" : "Unverified"}
+          </span>
+        )}
+        {isMissingOpenQuestions(data) && (
+          <span className="node-warning" title="Uncertain nodes need open questions.">
+            No questions
+          </span>
+        )}
       </div>
       <strong title={data.title}>{data.title.trim() || "Untitled"}</strong>
       <span className="node-description">{data.description.trim().replace(/\s+/g, " ")}</span>

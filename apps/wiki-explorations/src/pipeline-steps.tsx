@@ -7,6 +7,20 @@ import type { GraphNode } from "./graph.js"
 import { kinds } from "./node-card.js"
 import { upstreamTree, type Pipeline, type UpstreamBranch } from "./pipeline.js"
 
+function NodeText({ node }: { node: GraphNode }) {
+  return (
+    <div className="markdown-preview borderless">
+      <Markdown rehypePlugins={[rehypeHighlight]}>{node.description}</Markdown>
+      {node.openQuestions !== undefined && (
+        <aside className="open-questions" aria-label="Open questions">
+          <h3>Open questions</h3>
+          <Markdown rehypePlugins={[rehypeHighlight]}>{node.openQuestions}</Markdown>
+        </aside>
+      )}
+    </div>
+  )
+}
+
 type Navigate = { onFocus: (id: string) => void; onSelect: (id: string) => void }
 
 function NodeChip({
@@ -106,9 +120,7 @@ export function PipelineSteps({ pipeline, onFocus, onSelect }: { pipeline: Pipel
           <h1>{focus.title.trim() || "Untitled"}</h1>
           <button onClick={() => onSelect(focus.id)}>Edit</button>
         </header>
-        <div className="markdown-preview borderless">
-          <Markdown rehypePlugins={[rehypeHighlight]}>{focus.description}</Markdown>
-        </div>
+        <NodeText node={focus} />
         {focus.kind !== "transformation" && focus.exampleData !== undefined && (
           <details className="markdown-preview borderless example-data">
             <summary>Example data (JSON)</summary>
@@ -147,9 +159,7 @@ export function PipelineSteps({ pipeline, onFocus, onSelect }: { pipeline: Pipel
                       </button>
                       <button onClick={() => onSelect(step.id)}>Edit</button>
                     </div>
-                    <div className="markdown-preview borderless">
-                      <Markdown rehypePlugins={[rehypeHighlight]}>{step.description}</Markdown>
-                    </div>
+                    <NodeText node={step} />
                     <div className="chips">
                       <span className="chips-label">In</span>
                       {nodesOf(inputs.get(step.id)).map((input) => {

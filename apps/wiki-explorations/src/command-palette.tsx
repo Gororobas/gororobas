@@ -49,6 +49,7 @@ export function CommandPalette({
               kinds[node.kind].title,
               ...(node.kind === "event" ? [node.eventType] : []),
               node.description,
+              node.openQuestions ?? "",
             ]}
             className={node.kind}
             onSelect={() => onPick(node.id)}

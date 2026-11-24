@@ -2,9 +2,11 @@ import { Option, Schema } from "effect"
 import {
   CircleDashed,
   CircleHelp,
+  Flag,
   Globe,
   Lock,
   MessageSquareQuote,
+  TriangleAlert,
   type LucideIcon,
 } from "lucide-react"
 import { useRef, useState } from "react"
@@ -19,6 +21,11 @@ import {
   ExampleDataText,
   formatExampleData,
   type GraphNode,
+  isMissingOpenQuestions,
+  lockContent,
+  lockIntegrity,
+  lockWarnings,
+  withLockFingerprint,
 } from "./graph.js"
 import { kinds } from "./node-card.js"
 
@@ -33,6 +40,7 @@ const architectureConfidenceIcons = {
 const eventTypeIcons = {
   Claim: MessageSquareQuote,
   "External data": Globe,
+  Report: Flag,
 } satisfies Record<typeof EventType.Type, LucideIcon>
 
 function EditorMode({
@@ -53,6 +61,55 @@ function EditorMode({
         Preview
       </button>
     </div>
+  )
+}
+
+function MarkdownField({
+  id,
+  label,
+  value,
+  placeholder,
+  error,
+  onFocus,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: string
+  placeholder: string
+  error?: string | undefined
+  onFocus: () => void
+  onChange: (value: string) => void
+}) {
+  const [preview, setPreview] = useState(value.trim() !== "")
+
+  return (
+    <>
+      <div className="description-header">
+        <label htmlFor={id}>{label}</label>
+        <EditorMode label={`${label} Markdown mode`} preview={preview} setPreview={setPreview} />
+      </div>
+      {preview ? (
+        <div className="markdown-preview">
+          <Markdown rehypePlugins={[rehypeHighlight]}>{value}</Markdown>
+        </div>
+      ) : (
+        <textarea
+          id={id}
+          value={value}
+          placeholder={placeholder}
+          aria-invalid={error !== undefined}
+          aria-describedby={error === undefined ? undefined : `${id}-error`}
+          onFocus={onFocus}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+      {error !== undefined && (
+        <p className="field-error" id={`${id}-error`}>
+          {error}
+        </p>
+      )}
+    </>
   )
 }
 
@@ -162,7 +219,7 @@ function ExampleDataEditor({
 
 export function NodeSidebar({
   node,
-  edit,
+  edit: saveNode,
   close,
   remove,
   openPipeline,
@@ -173,10 +230,15 @@ export function NodeSidebar({
   remove: () => void
   openPipeline?: (() => void) | undefined
 }) {
-  const [preview, setPreview] = useState(true)
   const editGroup = useRef<symbol>(undefined)
   const kind = kinds[node.kind]
   const example = node.kind === "transformation" ? "" : formatExampleData(node.exampleData)
+
+  const integrity = lockIntegrity(node)
+
+  function edit(next: GraphNode, group?: symbol) {
+    saveNode(withLockFingerprint(node, next), group)
+  }
 
   function startTextEdit() {
     editGroup.current = Symbol()
@@ -212,6 +274,13 @@ export function NodeSidebar({
         value={node.architectureConfidence}
         onChange={(architectureConfidence) => edit({ ...node, architectureConfidence })}
       />
+      {(integrity === "CHANGED" || integrity === "UNVERIFIED") && (
+        <div className="lock-warning" role="alert">
+          <TriangleAlert size={16} aria-hidden />
+          <p>{lockWarnings[integrity]}</p>
+          <button onClick={() => saveNode(lockContent(node))}>Accept changes</button>
+        </div>
+      )}
       {node.kind === "event" && (
         <>
           <RadioTabs
@@ -228,6 +297,8 @@ export function NodeSidebar({
                 description,
                 architectureConfidence,
                 position,
+                openQuestions,
+                lockedContentHash,
                 kind,
                 exampleData,
               } = node
@@ -238,6 +309,8 @@ export function NodeSidebar({
                 description,
                 architectureConfidence,
                 position,
+                openQuestions,
+                lockedContentHash,
                 kind,
                 exampleData,
               }
@@ -262,22 +335,32 @@ export function NodeSidebar({
           )}
         </>
       )}
-      <div className="description-header">
-        <label htmlFor="description">Description</label>
-        <EditorMode label="Markdown mode" preview={preview} setPreview={setPreview} />
-      </div>
-      {preview ? (
-        <div className="markdown-preview">
-          <Markdown rehypePlugins={[rehypeHighlight]}>{node.description}</Markdown>
-        </div>
-      ) : (
-        <textarea
-          id="description"
-          value={node.description}
-          placeholder="Write in Markdown…"
+      <MarkdownField
+        key={`${node.id}:description`}
+        id="description"
+        label="Description"
+        value={node.description}
+        placeholder="Write in Markdown…"
+        onFocus={startTextEdit}
+        onChange={(description) => edit({ ...node, description }, editGroup.current)}
+      />
+      {(node.architectureConfidence === "UNCERTAIN" || node.openQuestions !== undefined) && (
+        <MarkdownField
+          key={`${node.id}:open-questions`}
+          id="open-questions"
+          label="Open questions"
+          value={node.openQuestions ?? ""}
+          placeholder="What's still undecided, in Markdown…"
+          error={isMissingOpenQuestions(node) ? "Required while uncertain." : undefined}
           onFocus={startTextEdit}
-          onChange={(event) =>
-            edit({ ...node, description: event.target.value }, editGroup.current)
+          onChange={(openQuestions) =>
+            edit(
+              {
+                ...node,
+                openQuestions: openQuestions === "" ? undefined : openQuestions,
+              },
+              editGroup.current,
+            )
           }
         />
       )}

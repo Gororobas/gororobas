@@ -1,6 +1,6 @@
-import { Effect, Match, Schema } from "effect"
+import { Effect, Hash, Match, Schema } from "effect"
 
-export const EventType = Schema.Literals(["Claim", "External data"])
+export const EventType = Schema.Literals(["Claim", "External data", "Report"])
 export const ArchitectureConfidence = Schema.Literals(["NOT_REVIEWED", "LOCKED_IN", "UNCERTAIN"])
 export const defaultArchitectureConfidence = "NOT_REVIEWED"
 
@@ -24,6 +24,10 @@ const nodeFields = {
     Schema.withDecodingDefaultKey(Effect.succeed(defaultArchitectureConfidence)),
   ),
   position: Schema.Struct({ x: Schema.Finite, y: Schema.Finite }),
+  /** Markdown. Required while the node is uncertain, so the doubt is written down. */
+  openQuestions: Schema.optional(Schema.String),
+  /** Fingerprint of the content when the node was locked, to flag edits made since. */
+  lockedContentHash: Schema.optional(Schema.String),
 }
 
 const dataFields = { ...nodeFields, exampleData: Schema.optional(Schema.Json) }
@@ -41,11 +45,67 @@ export const GraphNode = Schema.Union([
     eventType: Schema.Literal("Claim"),
     isEvaluationRequired: Schema.Boolean,
   }),
-  Schema.Struct({ ...eventFields, eventType: Schema.Literal("External data") }),
+  Schema.Struct({ ...eventFields, eventType: Schema.Literals(["External data", "Report"]) }),
   ...otherNodes,
 ])
 
 export type GraphNode = typeof GraphNode.Type
+
+const encodeFingerprint = Schema.encodeSync(Schema.fromJsonString(Schema.Json))
+
+/** Everything a lock vouches for. Position and confidence can change freely. */
+const contentHash = (node: GraphNode) =>
+  (
+    Hash.string(
+      encodeFingerprint([
+        node.kind,
+        node.kind === "event" ? node.eventType : null,
+        node.kind === "event" && node.eventType === "Claim" ? node.isEvaluationRequired : null,
+        node.title,
+        node.description,
+        node.openQuestions ?? null,
+        node.kind === "transformation" ? null : (node.exampleData ?? null),
+      ]),
+    ) >>> 0
+  ).toString(16)
+
+export type LockIntegrity = "INTACT" | "CHANGED" | "UNVERIFIED"
+
+/** Whether a locked node still has the content it was locked with. Undefined when it isn't locked. */
+export const lockIntegrity = (node: GraphNode): LockIntegrity | undefined => {
+  if (node.architectureConfidence !== "LOCKED_IN") return undefined
+  if (node.lockedContentHash === undefined) return "UNVERIFIED"
+  return node.lockedContentHash === contentHash(node) ? "INTACT" : "CHANGED"
+}
+
+export const isMissingOpenQuestions = (node: GraphNode) =>
+  node.architectureConfidence === "UNCERTAIN" && (node.openQuestions ?? "").trim() === ""
+
+export const lockWarnings = {
+  CHANGED:
+    "Changed since it was locked. Review the changes, for example in Git history, then accept them or revert.",
+  UNVERIFIED:
+    "Locked before fingerprints existed, so changes can't be detected. Accept to fingerprint the current content.",
+} satisfies Record<Exclude<LockIntegrity, "INTACT">, string>
+
+export const lockContent = (node: GraphNode): GraphNode => ({
+  ...node,
+  lockedContentHash: contentHash(node),
+})
+
+/**
+ * Keeps the fingerprint in step with an editor edit. Locking, and editing a lock that was intact,
+ * fingerprint the new content. A changed or unverified lock stays flagged until it's accepted, so
+ * an unrelated edit can't hide edits made outside the editor.
+ */
+export const withLockFingerprint = (before: GraphNode, after: GraphNode): GraphNode => {
+  if (after.architectureConfidence !== "LOCKED_IN") {
+    return { ...after, lockedContentHash: undefined }
+  }
+  return before.architectureConfidence !== "LOCKED_IN" || lockIntegrity(before) === "INTACT"
+    ? lockContent(after)
+    : after
+}
 
 export const Canvas = Schema.Struct({
   title: Schema.NonEmptyString,
@@ -196,7 +256,12 @@ export function inspectGraph({ nodes, edges }: Canvas) {
     outputs: [...(outgoing.get(id) ?? [])],
   }))
 
-  return { errors: [...new Set(errors)], order, flow }
+  // Warnings don't block saving: a node switched to uncertain has no questions until they're typed.
+  const warnings = nodes
+    .filter(isMissingOpenQuestions)
+    .map(({ title }) => `“${title.trim() || "Untitled"}” is uncertain but has no open questions.`)
+
+  return { errors: [...new Set(errors)], warnings, order, flow }
 }
 
 export const withoutNodes = (canvas: Canvas, ids: ReadonlySet<string>): Canvas => ({

@@ -269,7 +269,9 @@
                             }
                           ]
                         },
-                        "snaks-order": ["P248"]
+                        "snaks-order": [
+                          "P248"
+                        ]
                       }
                     ]
                   }
@@ -312,7 +314,9 @@
                             }
                           ]
                         },
-                        "snaks-order": ["P248"]
+                        "snaks-order": [
+                          "P248"
+                        ]
                       }
                     ]
                   }
@@ -351,7 +355,9 @@
                             }
                           ]
                         },
-                        "snaks-order": ["P248"]
+                        "snaks-order": [
+                          "P248"
+                        ]
                       }
                     ]
                   }
@@ -390,7 +396,9 @@
                             }
                           ]
                         },
-                        "snaks-order": ["P248"]
+                        "snaks-order": [
+                          "P248"
+                        ]
                       }
                     ]
                   }
@@ -432,7 +440,9 @@
                             }
                           ]
                         },
-                        "snaks-order": ["P248"]
+                        "snaks-order": [
+                          "P248"
+                        ]
                       }
                     ]
                   },
@@ -472,7 +482,9 @@
                             }
                           ]
                         },
-                        "snaks-order": ["P248"]
+                        "snaks-order": [
+                          "P248"
+                        ]
                       }
                     ]
                   }
@@ -505,12 +517,13 @@
     {
       "id": "pick-gbif",
       "title": "SelectGbifTaxonId",
-      "description": "Prefer an approved claim, then an unambiguous Wikidata ID, then a pending claim. Ignore rejected claims. Resolve legacy Backbone IDs in the selected checklist before comparison or fetch.\n\nEach taxon ID goes to the article whose source was accepted first: the claim's acceptance, or the Wikidata record's arrival. Other articles' sources for the same taxon ID go to GbifTaxonIdConflicts instead, and those articles get no taxon ID until the conflict is resolved (for example, by rejecting one of the claims, which hands the ID to the next earliest source).\n\nKeeps the ID provenance for presentation purposes, such as warning when the GBIF data came from an ID whose claim is not yet verified/approved.",
+      "description": "Prefer an approved claim, then an unambiguous Wikidata ID, then a pending claim. Ignore rejected claims, and sources hidden in ClaimVisibilityById (such as a censored `WRONG_ENTITY` report). Resolve legacy Backbone IDs in the selected checklist before comparison or fetch.\n\nEach taxon ID goes to the article whose source was accepted first: the claim's acceptance, or the Wikidata record's arrival. Other articles' sources for the same taxon ID go to GbifTaxonIdConflicts instead, and those articles get no taxon ID until the conflict is resolved (for example, by rejecting one of the claims, which hands the ID to the next earliest source).\n\nKeeps the ID provenance for presentation purposes, such as warning when the GBIF data came from an ID whose claim is not yet verified/approved.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
         "x": 330,
         "y": 384.5
       },
+      "lockedContentHash": "d0acee08",
       "kind": "transformation"
     },
     {
@@ -1203,7 +1216,7 @@
     {
       "id": "fetch-gbif-taxon",
       "title": "FetchGbifTaxonData",
-      "description": "Request GBIF metadata and occurrences for an article's taxon selection.\n\nFires when ArticlesByGbifTaxonId changes for an article: a new selection, a different taxon or checklist.\n\nOpen questions:\n- Is a fetch needed? Compare the selection with the one captured by the latest observation in GbifObservationsById, and its fetch time with a staleness window.\n- How often should unchanged selections be refreshed, and should occurrences refresh more often than metadata?\n- Where does it run: a workflow per article, retried and deduplicated by selection?",
+      "description": "Request GBIF metadata and occurrences for an article's taxon selection.\n\nFires when ArticlesByGbifTaxonId changes for an article (a new selection, a different taxon or checklist), and from a periodic sweep for refreshes. Like FetchWikidataEntity, it reads only the selection, and the workflow owns freshness, idempotency and retries.\n\nMetadata and occurrences are separate executions, so one failing doesn't refetch the other. Both refresh every 2 weeks for now, configurable later. Occurrences gain little from refreshing sooner: the article shows a bounded sample, and each refresh can relink places and import or drop gallery images. Keep the occurrence query deterministic, so a refresh changes the sample only when GBIF's records change.\n\nGBIF has no revision to compare, so every refresh records a full response. A taxon missing from the checklist records ExternalFetchFailed with `NOT_FOUND`.",
       "architectureConfidence": "UNCERTAIN",
       "position": {
         "x": 990,
@@ -1220,15 +1233,12 @@
           "taxonId": "8P4G"
         },
         "reason": "SELECTION_CHANGED",
-        "latestObservations": {
-          "TAXON_METADATA": null,
-          "TAXON_OCCURRENCES": null
-        },
         "requests": [
           {
             "kind": "TAXON_METADATA",
             "taxonId": "8P4G",
-            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b"
+            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
+            "idempotencyKey": "GBIF_TAXON_METADATA:7ddf754f-d193-4cc9-b351-99906754a03b:8P4G:plant-acacia-dealbata:initial"
           },
           {
             "kind": "TAXON_OCCURRENCES",
@@ -1238,7 +1248,8 @@
               "occurrenceStatus": "DETECTED",
               "hasGeospatialIssue": false,
               "limit": 300
-            }
+            },
+            "idempotencyKey": "GBIF_TAXON_OCCURRENCES:7ddf754f-d193-4cc9-b351-99906754a03b:8P4G:plant-acacia-dealbata:initial"
           }
         ]
       },
@@ -1265,7 +1276,7 @@
     {
       "id": "select-wikidata-id",
       "title": "SelectWikidataId",
-      "description": "For each article, prefer an approved claim, then a pending claim. Ignore rejected claims.\n\nEach Wikidata ID goes to the article whose claim was accepted first. Claims from other articles for the same ID go to WikidataIdConflicts instead, and those articles get no Wikidata ID until the conflict is resolved (for example, by rejecting one of the claims, which hands the ID to the next earliest claim).\n\nKeeps the ID provenance for presentation purposes, such as warning when Wikidata data came from an ID whose claim is not yet approved.",
+      "description": "For each article, prefer an approved claim, then a pending claim. Ignore rejected claims, and sources hidden in ClaimVisibilityById (such as a censored `WRONG_ENTITY` report).\n\nEach Wikidata ID goes to the article whose claim was accepted first. Claims from other articles for the same ID go to WikidataIdConflicts instead, and those articles get no Wikidata ID until the conflict is resolved (for example, by rejecting one of the claims, which hands the ID to the next earliest claim).\n\nKeeps the ID provenance for presentation purposes, such as warning when Wikidata data came from an ID whose claim is not yet approved.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
         "x": 1650,
@@ -1296,7 +1307,7 @@
     {
       "id": "fetch-wikidata-entity",
       "title": "FetchWikidataEntity",
-      "description": "Request the Wikidata entity for an article's selected ID.\n\nFires when ArticlesByWikidataId changes for an article: a new selection or a different ID.\n\nOpen questions:\n- Is a fetch needed? Nothing indexes past Wikidata responses yet, so there's no fetch time or revision to compare against.\n- How often should unchanged selections be refreshed? Wikidata exposes the entity's `lastrevid`, which could make refreshes cheap to skip.",
+      "description": "Request the Wikidata entity for an article's selected ID.\n\nFires when ArticlesByWikidataId changes for an article (a new selection or a different ID), and from a periodic sweep for refreshes. It reads only the selection: when to fetch again is the workflow's state, not the canvas's, so the canvas stays acyclic.\n\nThe fetch runs as an Effect workflow, like `FetchArticleExternalData` in `apps/server/src/wiki/external-data/workflow.ts`, which owns freshness:\n- Its idempotency key combines the target, the selection and a refresh generation, so repeated triggers collapse into one execution. Manual refreshes call the workflow directly with a generation of their own, outside the canvas.\n- The sweep (like `refreshExternalData` in `refresh.ts`) reads the workflow's own fetch log. A target is due when it has no fetch for its current selection, its last attempt failed over 1 hour ago, or its last success is over 2 weeks old.\n- Transient errors retry inside the workflow. Permanent ones record ExternalFetchFailed and stop.\n- When refreshing an unchanged selection, it first reads `lastrevid` with `wbgetentities?props=info` (50 IDs per request). If it matches the latest record, it logs the check and records no WikidataRecordReceived. A changed selection always records the full entity, so the record captures the new selection.\n- A merged item (the response names another ID) is a permanent failure, `REDIRECTED`: the article's ID claim needs updating.",
       "architectureConfidence": "UNCERTAIN",
       "position": {
         "x": 2310,
@@ -1312,6 +1323,7 @@
           }
         },
         "reason": "SELECTION_CHANGED",
+        "idempotencyKey": "WIKIDATA:Q757123:plant-acacia-dealbata:example-wikidata-id-claim:initial",
         "request": {
           "url": "https://www.wikidata.org/wiki/Special:EntityData/Q757123.json",
           "entityId": "Q757123"
@@ -1380,12 +1392,13 @@
     {
       "id": "build-moderation-queue",
       "title": "BuildModerationQueue",
-      "description": "Merge everything awaiting a moderator into one list, oldest first. Each item keeps its kind and a reference to the source (the conflicting ID), so moderators open the entry in its own property for details.\n\nOpen question: which other sources join later (reports, newcomers awaiting approval, revisions awaiting evaluation), and how is an item assigned?",
+      "description": "Merge everything awaiting a moderator into one list, oldest first. Each item keeps its kind and a reference to its source, so moderators open the entry in its own property for details:\n- ID conflicts, from WikidataIdConflicts and GbifTaxonIdConflicts.\n- Reported targets with open reports, from ClaimVisibilityById: one item per target, with every report's reason. Conduct reports go ahead of the rest, since their targets are already hidden. ReportOutcomesByPersonId ranks reports from people whose reports keep being rejected lower.\n- Fetches that stopped retrying (ExternalFetchFailed), while the article still selects the failed target.\n- People with repeated upheld conduct verdicts, for a blocking decision that is never automatic.",
       "architectureConfidence": "UNCERTAIN",
       "position": {
         "x": 2310,
         "y": 335
       },
+      "openQuestions": "- Which other sources join later: newcomers awaiting approval, revisions awaiting evaluation?\n- How is an item assigned?",
       "kind": "transformation"
     },
     {
@@ -1407,6 +1420,23 @@
           "kind": "GBIF_TAXON_ID_CONFLICT",
           "taxonId": "8P4G",
           "since": "2026-11-22T14:05:00Z"
+        },
+        {
+          "kind": "CLAIM_REPORTS",
+          "target": {
+            "kind": "OBSERVATION_VALUE",
+            "valueKey": "wikidata:Q757123:names:pt:mimosa"
+          },
+          "reasons": [
+            "MISTAKEN"
+          ],
+          "since": "2026-11-23T10:00:00Z"
+        },
+        {
+          "kind": "EXTERNAL_FETCH_FAILED",
+          "target": "WIKIDATA:Q757123",
+          "error": "REDIRECTED",
+          "since": "2026-11-23T12:00:00Z"
         }
       ],
       "kind": "property"
@@ -1615,7 +1645,10 @@
           {
             "_tag": "LOCATION",
             "placeArticleId": "place-villa-de-leyva",
-            "ancestorIds": ["place-boyaca", "place-colombia"]
+            "ancestorIds": [
+              "place-boyaca",
+              "place-colombia"
+            ]
           },
           {
             "_tag": "ELEVATION",
@@ -1647,6 +1680,156 @@
             }
           }
         ]
+      },
+      "kind": "property"
+    },
+    {
+      "id": "external-fetch-failed",
+      "title": "ExternalFetchFailed",
+      "description": "A fetch that stopped retrying: the entity or taxon doesn't exist (`NOT_FOUND`), or the Wikidata item was merged into another (`REDIRECTED`, with the new ID). Transient errors stay inside the workflow and never show here.\n\nIt only flows downstream: the fetch triggers don't read it.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 2640,
+        "y": 820
+      },
+      "exampleData": {
+        "target": "WIKIDATA:Q757123",
+        "selection": {
+          "articleId": "plant-acacia-dealbata",
+          "provenance": {
+            "kind": "CLAIM",
+            "claimId": "example-wikidata-id-claim"
+          }
+        },
+        "failedAt": "2026-11-23T12:00:00Z",
+        "error": {
+          "kind": "REDIRECTED",
+          "redirectedTo": "Q1234567"
+        }
+      },
+      "kind": "event",
+      "eventType": "External data"
+    },
+    {
+      "id": "claim-reported",
+      "title": "ClaimReported",
+      "description": "Someone reports a piece of information on an article. Anyone who can see it can report it.\n\nThe target is either a claim (`claimId`: a person's claim, an inferred claim or an ID claim) or a value projected from an external observation (the observation, the property and a value key). Value keys come from the source and the value, not from the observation, so a report keeps pointing at the same value across refreshes.\n\nReasons fall into two groups:\n- **Conduct**: `ABUSIVE` (racism, classism, queerphobia, misogyny…), `SPAM`, `FALSE` (deliberately false: fake news, vandalism) and `DANGEROUS` (could hurt someone who follows it, such as eating a toxic part).\n- **Quality**: `MISTAKEN`, `OFF_TOPIC` and `WRONG_ENTITY` (the article's Wikidata or GBIF ID points at another taxon; report the ID claim or the selected ID).\n\nDisagreeing isn't a report: on situated properties, make your own claim, and on canonical ones, propose a correction. A person has at most one open report per target.",
+      "architectureConfidence": "LOCKED_IN",
+      "position": {
+        "x": 1320,
+        "y": 1950
+      },
+      "exampleData": {
+        "reportId": "example-claim-report",
+        "articleId": "plant-acacia-dealbata",
+        "target": {
+          "kind": "OBSERVATION_VALUE",
+          "observationId": "example-wikidata-observation",
+          "property": "names",
+          "valueKey": "wikidata:Q757123:names:pt:mimosa"
+        },
+        "reason": "MISTAKEN",
+        "note": "In Brazil, \"mimosa\" usually means Mimosa pudica.",
+        "reporterId": "example-person",
+        "reportedAt": "2026-11-23T10:00:00Z"
+      },
+      "kind": "event",
+      "eventType": "Report"
+    },
+    {
+      "id": "claim-report-settled",
+      "title": "ClaimReportSettled",
+      "description": "A moderator's verdict on all of a target's open reports at once: `CENSOR`, `KEEP` or `KEEP_WITH_WARNING` (with a note readers see). It records the reports it settles, who decided and why, and the target's authors as captured when settling.\n\nA `CENSOR` verdict on a `WRONG_ENTITY` report works like rejecting the ID: the selection moves to the next source. Reports on values that were already approved contest an earlier evaluation, so a moderator other than the one who approved should settle them.",
+      "architectureConfidence": "LOCKED_IN",
+      "position": {
+        "x": 1320,
+        "y": 2110
+      },
+      "lockedContentHash": "10df7131",
+      "exampleData": {
+        "reportIds": [
+          "example-claim-report"
+        ],
+        "target": {
+          "kind": "OBSERVATION_VALUE",
+          "observationId": "example-wikidata-observation",
+          "property": "names",
+          "valueKey": "wikidata:Q757123:names:pt:mimosa"
+        },
+        "verdict": "KEEP_WITH_WARNING",
+        "note": "Also used for Mimosa pudica in Brazil.",
+        "authorIds": [],
+        "settledBy": "example-moderator",
+        "settledAt": "2026-11-24T09:00:00Z"
+      },
+      "kind": "event",
+      "eventType": "Report"
+    },
+    {
+      "id": "resolve-claim-visibility",
+      "title": "ResolveClaimVisibility",
+      "description": "Derive each reported target's visibility from its reports and verdicts:\n- An open conduct report hides the target from everyone but its authors and moderators until a verdict. `KEEP` shows it again.\n- Open quality reports change nothing readers see until a verdict.\n- `CENSOR` hides it. For external values, the same value from the same source stays hidden on later refreshes; a different value from that source shows normally.\n- `KEEP_WITH_WARNING` shows it with the moderator's note.\n\nAfter a verdict, new reports with a reason it already settled join that verdict instead of reopening the target. A new reason reopens it.\n\nAlso tallies outcomes per person: upheld conduct verdicts against the target's authors, and how each reporter's reports were settled. Upheld quality verdicts count against no one, and an inferred claim's verdict counts against the inference, not the publication's author.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 1650,
+        "y": 2030
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "claim-visibility",
+      "title": "ClaimVisibilityById",
+      "description": "Visibility of every reported target, keyed by claim ID or value key: `HIDDEN` (with the reason, and whether an open report or a verdict hides it), `WARNED` (with the moderator's note), or `UNDER_REVIEW` (open quality reports only, still shown). Targets without an entry are visible.\n\nRead by every transformation that resolves values for readers, so hidden values also stay out of summaries, counts and selections. Read by the moderation queue for open reports, grouped per target.",
+      "architectureConfidence": "UNCERTAIN",
+      "position": {
+        "x": 1980,
+        "y": 1950
+      },
+      "openQuestions": "Can we have a better data structure?\n\n- I bet `visibility: \"HIDDEN_WHILE_REVIEWING\"` is much better than having an extra \"hiddenBy\"\n- top level `reasons` feels out of place when we have openReports.\n- why not just `reports` with the status of open | closed or something like that?",
+      "exampleData": {
+        "wikidata:Q757123:names:pt:mimosa": {
+          "visibility": "WARNED",
+          "note": "Also used for Mimosa pudica in Brazil.",
+          "settledByReportIds": [
+            "example-claim-report"
+          ],
+          "openReports": []
+        },
+        "example-height-claim": {
+          "visibility": "HIDDEN",
+          "hiddenBy": "OPEN_REPORT",
+          "reasons": [
+            "SPAM"
+          ],
+          "openReports": [
+            {
+              "reportId": "example-spam-report",
+              "reason": "SPAM",
+              "reportedAt": "2026-11-24T08:00:00Z"
+            }
+          ]
+        }
+      },
+      "kind": "property"
+    },
+    {
+      "id": "report-outcomes",
+      "title": "ReportOutcomesByPersonId",
+      "description": "Per person: upheld conduct verdicts on their claims, and how their own reports were settled.\n\nThe moderation queue uses it to move a person's other recent claims up after an upheld conduct verdict, to list people with repeated conduct verdicts for a blocking decision, and to rank reports from people whose reports keep being rejected lower. Their reports still count.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 1980,
+        "y": 2110
+      },
+      "exampleData": {
+        "example-person": {
+          "upheldConductVerdicts": [],
+          "reports": {
+            "upheld": 3,
+            "kept": 1,
+            "open": 0
+          }
+        }
       },
       "kind": "property"
     }
@@ -1801,10 +1984,6 @@
       "target": "fetch-gbif-taxon"
     },
     {
-      "source": "gbif-observations-by-id",
-      "target": "fetch-gbif-taxon"
-    },
-    {
       "source": "fetch-gbif-taxon",
       "target": "gbif-response"
     },
@@ -1879,6 +2058,82 @@
     {
       "source": "context-dimensions",
       "target": "summarize-height"
+    },
+    {
+      "source": "fetch-wikidata-entity",
+      "target": "external-fetch-failed"
+    },
+    {
+      "source": "fetch-gbif-taxon",
+      "target": "external-fetch-failed"
+    },
+    {
+      "source": "external-fetch-failed",
+      "target": "build-moderation-queue"
+    },
+    {
+      "source": "wikidata-id",
+      "target": "build-moderation-queue"
+    },
+    {
+      "source": "gbif-id",
+      "target": "build-moderation-queue"
+    },
+    {
+      "source": "claim-reported",
+      "target": "resolve-claim-visibility"
+    },
+    {
+      "source": "claim-report-settled",
+      "target": "resolve-claim-visibility"
+    },
+    {
+      "source": "resolve-claim-visibility",
+      "target": "claim-visibility"
+    },
+    {
+      "source": "resolve-claim-visibility",
+      "target": "report-outcomes"
+    },
+    {
+      "source": "report-outcomes",
+      "target": "build-moderation-queue"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "consolidate-names"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "summarize-height"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "derive-geographical-origin"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "parse-gbif"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "place-occurrences"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "import-gbif-images"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "select-wikidata-id"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "pick-gbif"
+    },
+    {
+      "source": "claim-visibility",
+      "target": "build-moderation-queue"
     }
   ]
 }
