@@ -4,10 +4,10 @@
     {
       "id": "name-claim",
       "title": "ArticleNameClaim",
-      "description": "A contributor, publication inference, or import supplies a name in a specific language.",
+      "description": "A contributor, publication inference, or import supplies a name in a specific language.\n\nA name can be regional, not tied to someone's plot, so it records a region instead of a profile context: a place by ID or in the contributor's words (\"macaxeira\" in Pernambuco, or the whole Nordeste). Its provenance says who, without a context.\n\nOpen question: is the region optional, with no region meaning the name isn't regional?",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3300,
+        "x": 1980,
         "y": 0
       },
       "exampleData": {
@@ -15,7 +15,16 @@
         "articleId": "plant-acacia-dealbata",
         "value": "Silver wattle",
         "language": "en",
-        "gender": null
+        "gender": null,
+        "provenance": {
+          "_tag": "PERSON",
+          "personId": "example-person",
+          "profileContextId": null
+        },
+        "region": {
+          "_tag": "PLACE_ARTICLE",
+          "placeArticleId": "place-australia"
+        }
       },
       "kind": "event",
       "eventType": "Claim",
@@ -27,8 +36,8 @@
       "description": "Group equivalent names by language and place. Keep the original spelling, sources and locality. Leave gender unset when missing.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3630,
-        "y": 10
+        "x": 2310,
+        "y": 1131
       },
       "kind": "transformation"
     },
@@ -38,8 +47,8 @@
       "description": "Localized names with spelling, gender and sources. Open question: which source languages should we include?",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3960,
-        "y": 10
+        "x": 2640,
+        "y": 1171
       },
       "exampleData": {
         "plant-acacia-dealbata": {
@@ -75,8 +84,8 @@
       "description": "Build one canonical localized path per article. Deduplicate aliases from names and identifiers such as GBIF, Wikidata and Syntropedia.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 4290,
-        "y": 83
+        "x": 2970,
+        "y": 1529.5
       },
       "kind": "transformation"
     },
@@ -86,8 +95,8 @@
       "description": "Index canonical paths and aliases by URL. Each alias points to its canonical path.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 4620,
-        "y": 83
+        "x": 3300,
+        "y": 1529.5
       },
       "exampleData": {
         "/en/plants/silver-wattle": {
@@ -113,8 +122,8 @@
       "description": "A contributor proposes a GBIF taxon ID for a plant or animal.\n\nFor the 1st version of the claim, we'd always assume checklist key `7ddf754f-d193-4cc9-b351-99906754a03b`, instead of requiring users to send the GBIF checklist key.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 1320,
-        "y": 156
+        "x": 0,
+        "y": 384.5
       },
       "exampleData": {
         "claimId": "example-gbif-taxon-claim",
@@ -131,8 +140,8 @@
       "description": "The Wikidata entity for an article, fetched as Special:EntityData JSON. Keep the whole entity with its revision, the request and fetch time, and the selection it was fetched for (captured when the fetch started, so a late response keeps it).\n\nThis allows us to derive multiple types of properties as we discover valuable insights from Wikidata.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 1320,
-        "y": 391.5
+        "x": 2640,
+        "y": 677
       },
       "exampleData": {
         "observationId": "example-wikidata-observation",
@@ -511,8 +520,8 @@
       "description": "Prefer an approved claim, then an unambiguous Wikidata ID, then a pending claim. Ignore rejected claims. Resolve legacy Backbone IDs in the selected checklist before comparison or fetch.\n\nEach taxon ID goes to the article whose source was accepted first: the claim's acceptance, or the Wikidata record's arrival. Other articles' sources for the same taxon ID go to GbifTaxonIdConflicts instead, and those articles get no taxon ID until the conflict is resolved (for example, by rejecting one of the claims, which hands the ID to the next earliest source).\n\nKeeps the ID provenance for presentation purposes, such as warning when the GBIF data came from an ID whose claim is not yet verified/approved.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 1650,
-        "y": 295.5
+        "x": 330,
+        "y": 384.5
       },
       "kind": "transformation"
     },
@@ -522,8 +531,8 @@
       "description": "Index articles by the selected GBIF taxon ID and include the checklist key. One article per taxon ID: competing sources are in GbifTaxonIdConflicts. For provenance, keep Wikidata attribution or the contributor claim and its evaluation.\n\nThis is later used by transformations which match GBIF data to articles in a quick look-up.\n\nIt's also used to trigger GBIF data fetching.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 1980,
-        "y": 401.5
+        "x": 660,
+        "y": 1599
       },
       "exampleData": {
         "8P4G": {
@@ -541,10 +550,10 @@
       "id": "gbif-response",
       "title": "GbifTaxonMetadataReceived",
       "description": "A taxon metadata response with the fetch time and the checklist and taxon selection used for the request.",
-      "architectureConfidence": "NOT_REVIEWED",
+      "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 2640,
-        "y": 494.5
+        "x": 1320,
+        "y": 1429.5
       },
       "exampleData": {
         "observationId": "example-gbif-taxon-observation",
@@ -629,8 +638,8 @@
       "description": "Project taxonomy from the latest successful metadata fetch for the current selection.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3630,
-        "y": 322
+        "x": 2310,
+        "y": 1728.5
       },
       "kind": "transformation"
     },
@@ -640,8 +649,8 @@
       "description": "The selected taxon's group and ordered classification, with their source observation.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3960,
-        "y": 322
+        "x": 2640,
+        "y": 1728.5
       },
       "exampleData": {
         "plant-acacia-dealbata": {
@@ -673,8 +682,8 @@
       "description": "A sample of detections with record and dataset IDs, date, basis, matched taxon and optional place match. Roll up counts by place and its ancestors. Counts describe the sample. Look up the fetch date in the observation.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3960,
-        "y": 504.5
+        "x": 2640,
+        "y": 1602.5
       },
       "exampleData": {
         "plant-acacia-dealbata": {
@@ -697,17 +706,31 @@
     {
       "id": "height-claim",
       "title": "HeightClaim",
-      "description": "A person, inference, or Syntropedia provides a height range. Bounds are optional and ordered when both exist.",
+      "description": "A person, inference, or Syntropedia provides a height range. Bounds are optional and ordered when both exist.\n\nA person's provenance names them and the profile context the claim comes from: one they pick when submitting, their latest by default. The claim stays anchored on that context when they start a new one. The claim itself adds when it held and how they grew the plant.\n\nOpen question: which practice questions are height's own, and which form a shared set (planting method, ground cover, pesticides) reused across plant properties? Some may belong on the context instead.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3960,
-        "y": 630.5
+        "x": 2640,
+        "y": 1045
       },
       "exampleData": {
         "claimId": "example-height-observation",
         "articleId": "plant-acacia-dealbata",
         "minimumCm": 600,
-        "maximumCm": 800
+        "maximumCm": 800,
+        "provenance": {
+          "_tag": "PERSON",
+          "personId": "example-person",
+          "profileContextId": "example-context-villa-de-leyva"
+        },
+        "period": {
+          "start": "2023",
+          "end": null
+        },
+        "practices": {
+          "plantingMethod": "SEEDLING",
+          "groundCover": "ORGANIC_MULCH",
+          "pesticides": "NONE"
+        }
       },
       "kind": "event",
       "eventType": "Claim",
@@ -716,11 +739,11 @@
     {
       "id": "summarize-height",
       "title": "SummarizeArticleHeights",
-      "description": "Summarize observed bounds in centimeters. Keep cultivar observations and parent bounds alongside each other with their origins.",
+      "description": "Summarize observed bounds in centimeters. Keep cultivar observations and parent bounds alongside each other with their origins.\n\nKeep each claim's profile context beside its bounds, so readers' pages can rank them by affinity using height's relevant dimensions. Claims without a context still count.\n\nOpen question: is a single overall range still useful once readers see ranges ranked by affinity?",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 4290,
-        "y": 630.5
+        "x": 2970,
+        "y": 885.5
       },
       "kind": "transformation"
     },
@@ -730,8 +753,8 @@
       "description": "A situated height summary in centimeters, with a separate parent range for a cultivar.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 4620,
-        "y": 630.5
+        "x": 3300,
+        "y": 885.5
       },
       "exampleData": {
         "plant-acacia-dealbata": {
@@ -753,8 +776,8 @@
       "description": "Combine resolved properties into a consistent article projection for downstream readers.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 4950,
-        "y": 501
+        "x": 3630,
+        "y": 1542.5
       },
       "kind": "transformation"
     },
@@ -764,8 +787,8 @@
       "description": "Page data combining names, paths, native range, occurrence sample, taxonomy, height and images. Use observation IDs to look up GBIF evidence.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 5280,
-        "y": 501
+        "x": 3960,
+        "y": 1542.5
       },
       "exampleData": {
         "articleId": "plant-acacia-dealbata",
@@ -856,8 +879,8 @@
       "description": "A contributor proposes a sourced description of the taxon's native range in a specific language.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 3300,
-        "y": 763
+        "x": 1980,
+        "y": 126
       },
       "exampleData": {
         "claimId": "example-origin-claim",
@@ -875,8 +898,8 @@
       "description": "Resolve approved contributor text per language. Use the latest matching taxon metadata fetch and reference it when it contains explicit native rows.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3630,
-        "y": 756.5
+        "x": 2310,
+        "y": 1307
       },
       "kind": "transformation"
     },
@@ -886,8 +909,8 @@
       "description": "Localized contributor text alongside a GBIF observation reference. For GBIF, display explicit native rows using equivalent PLACE names when available, with the original locality as fallback.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3960,
-        "y": 756.5
+        "x": 2640,
+        "y": 1307
       },
       "exampleData": {
         "plant-acacia-dealbata": {
@@ -910,8 +933,8 @@
       "description": "A bounded detection search for the selected taxon, with the filters, pagination, fetch time and selection used for the request. Images come from each occurrence's media, so one search feeds both places and galleries. Keep matched taxa to distinguish exact records, synonyms and descendants.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 2640,
-        "y": 627
+        "x": 1320,
+        "y": 1078
       },
       "exampleData": {
         "observationId": "example-gbif-occurrences-observation",
@@ -989,8 +1012,8 @@
       "description": "Use the latest matching search. Link each record to the smallest supported place containing its reliable extent, respecting uncertainty and withheld or generalized locations. Fall back to a reliable area ID or country. Keep unresolved records and record how matches were made. Create PLACE articles only for surfaced places.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3630,
-        "y": 504.5
+        "x": 2310,
+        "y": 1602.5
       },
       "kind": "transformation"
     },
@@ -1000,8 +1023,8 @@
       "description": "Use the media of the latest matching occurrences observation and the existing provider photo import. Keep the source occurrence URL, credits and license on the imported assets.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3630,
-        "y": 892.5
+        "x": 2310,
+        "y": 1456.5
       },
       "kind": "transformation"
     },
@@ -1011,8 +1034,8 @@
       "description": "Imported GBIF media assets with their source observation. Assets follow the shared moderation lifecycle.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3960,
-        "y": 892.5
+        "x": 2640,
+        "y": 1456.5
       },
       "exampleData": {
         "plant-acacia-dealbata": {
@@ -1032,8 +1055,8 @@
       "description": "Index each successful fetch by observation ID. Keep its result, request filters and the taxon selection as captured when the fetch started. A late response keeps its original selection.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 2970,
-        "y": 557.5
+        "x": 1650,
+        "y": 1393
       },
       "kind": "transformation"
     },
@@ -1043,8 +1066,8 @@
       "description": "Shared GBIF observations by ID. Each holds the result, fetch time, checklist and taxon selection with its provenance. Derived properties reference these observations.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
-        "x": 3300,
-        "y": 637
+        "x": 1980,
+        "y": 1393
       },
       "exampleData": {
         "example-gbif-taxon-observation": {
@@ -1195,8 +1218,8 @@
       "description": "Request GBIF metadata and occurrences for an article's taxon selection.\n\nFires when ArticlesByGbifTaxonId changes for an article: a new selection, a different taxon or checklist.\n\nOpen questions:\n- Is a fetch needed? Compare the selection with the one captured by the latest observation in GbifObservationsById, and its fetch time with a staleness window.\n- How often should unchanged selections be refreshed, and should occurrences refresh more often than metadata?\n- Where does it run: a workflow per article, retried and deduplicated by selection?",
       "architectureConfidence": "UNCERTAIN",
       "position": {
-        "x": 2310,
-        "y": 680
+        "x": 990,
+        "y": 1034.5
       },
       "exampleData": {
         "taxonSelection": {
@@ -1239,8 +1262,8 @@
       "description": "A contributor proposes the Wikidata item for an article, such as a plant or animal.\n\nUniqueness rule: if the propose ID already exists in ArticlesByWikidataId, we reject the event.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 0,
-        "y": 232.5
+        "x": 1320,
+        "y": 524
       },
       "exampleData": {
         "claimId": "example-wikidata-id-claim",
@@ -1257,8 +1280,8 @@
       "description": "For each article, prefer an approved claim, then a pending claim. Ignore rejected claims.\n\nEach Wikidata ID goes to the article whose claim was accepted first. Claims from other articles for the same ID go to WikidataIdConflicts instead, and those articles get no Wikidata ID until the conflict is resolved (for example, by rejecting one of the claims, which hands the ID to the next earliest claim).\n\nKeeps the ID provenance for presentation purposes, such as warning when Wikidata data came from an ID whose claim is not yet approved.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 330,
-        "y": 232.5
+        "x": 1650,
+        "y": 524
       },
       "kind": "transformation"
     },
@@ -1268,8 +1291,8 @@
       "description": "Index articles by the selected Wikidata ID, with the claim as provenance. One article per ID: competing claims are in WikidataIdConflicts.\n\nUsed to match Wikidata responses to articles, and to trigger Wikidata fetching.",
       "architectureConfidence": "LOCKED_IN",
       "position": {
-        "x": 660,
-        "y": 391.5
+        "x": 1980,
+        "y": 587
       },
       "exampleData": {
         "Q757123": {
@@ -1288,8 +1311,8 @@
       "description": "Request the Wikidata entity for an article's selected ID.\n\nFires when ArticlesByWikidataId changes for an article: a new selection or a different ID.\n\nOpen questions:\n- Is a fetch needed? Nothing indexes past Wikidata responses yet, so there's no fetch time or revision to compare against.\n- How often should unchanged selections be refreshed? Wikidata exposes the entity's `lastrevid`, which could make refreshes cheap to skip.",
       "architectureConfidence": "UNCERTAIN",
       "position": {
-        "x": 990,
-        "y": 391.5
+        "x": 2310,
+        "y": 643.5
       },
       "exampleData": {
         "wikidataSelection": {
@@ -1315,7 +1338,7 @@
       "architectureConfidence": "LOCKED_IN",
       "position": {
         "x": 1980,
-        "y": 56.5
+        "y": 398
       },
       "exampleData": {
         "Q757123": {
@@ -1338,10 +1361,10 @@
       "id": "gbif-taxon-id-conflicts",
       "title": "GbifTaxonIdConflicts",
       "description": "GBIF taxon IDs selected by more than one article, keyed by taxon ID: the article that holds the ID in ArticlesByGbifTaxonId, the competing sources (contributor claims or Wikidata records), and when the conflict started.\n\nRead by the moderation queue, and by article pages to warn readers that the GBIF data may belong to another article.",
-      "architectureConfidence": "NOT_REVIEWED",
+      "architectureConfidence": "LOCKED_IN",
       "position": {
         "x": 1980,
-        "y": 182.5
+        "y": 272
       },
       "exampleData": {
         "8P4G": {
@@ -1370,10 +1393,10 @@
       "id": "build-moderation-queue",
       "title": "BuildModerationQueue",
       "description": "Merge everything awaiting a moderator into one list, oldest first. Each item keeps its kind and a reference to the source (the conflicting ID), so moderators open the entry in its own property for details.\n\nOpen question: which other sources join later (reports, newcomers awaiting approval, revisions awaiting evaluation), and how is an item assigned?",
-      "architectureConfidence": "NOT_REVIEWED",
+      "architectureConfidence": "UNCERTAIN",
       "position": {
         "x": 2310,
-        "y": 202.5
+        "y": 335
       },
       "kind": "transformation"
     },
@@ -1384,7 +1407,7 @@
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
         "x": 2640,
-        "y": 202.5
+        "y": 199
       },
       "exampleData": [
         {
@@ -1398,6 +1421,248 @@
           "since": "2026-11-22T14:05:00Z"
         }
       ],
+      "kind": "property"
+    },
+    {
+      "id": "profile-context-recorded",
+      "title": "ProfileContextRecorded",
+      "description": "A person adds or deletes a context on their profile's timeline: where and how they live and produce over a period, with its own visibility and an optional label. A context is made of dimensions. Location is one of them, at any resolution (a country, a municipality, a municipality and an elevation), alongside the kind of production (agroecological, permacultural, conventional…), soil as they see it, land tenure, or living communally.\n\nDimensions are measured or declared. An elevation from the device's geolocation is measured; \"we're at about 1,200 m\" is declared.\n\nA context never changes. When something changes, the person starts a new one, so claims stay anchored on the context they were made from. Thirty years of conventional farming followed by an agroecological settlement on the same land are two consecutive contexts with the same location. Grouping them like positions under one company can wait until we need it.\n\nOpen question: this isn't a claim about an article. Should the canvas get a third event type for profile changes?\n\nOpen question: if contexts never change, how does someone fix a typo or a wrong municipality without leaving their claims behind?",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 1320,
+        "y": 713
+      },
+      "exampleData": {
+        "contextId": "example-context-villa-de-leyva",
+        "personId": "example-person",
+        "label": "Finca no deserto da Candelaria",
+        "period": {
+          "start": "2021",
+          "end": null
+        },
+        "visibility": "COMMUNITY",
+        "dimensions": [
+          {
+            "_tag": "LOCATION",
+            "place": {
+              "_tag": "GAZETTEER_PLACE",
+              "placeArticleId": "place-villa-de-leyva"
+            },
+            "elevation": {
+              "_tag": "MEASURED",
+              "source": "DEVICE",
+              "meters": 2150
+            }
+          },
+          {
+            "_tag": "PRODUCTION",
+            "value": {
+              "_tag": "DECLARED",
+              "kind": "AGROECOLOGICAL"
+            }
+          }
+        ]
+      },
+      "kind": "event",
+      "eventType": "Claim",
+      "isEvaluationRequired": false
+    },
+    {
+      "id": "index-profile-contexts",
+      "title": "IndexProfileContexts",
+      "description": "Keep each person's contexts in timeline order. Deleting a context removes it: claims whose provenance points to it keep their value and stay visible, but lose its dimensions.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 1650,
+        "y": 713
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "profile-contexts",
+      "title": "ProfileContextsById",
+      "description": "Contexts by ID, with their owner, period, visibility and the dimensions the person recorded.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 1980,
+        "y": 713
+      },
+      "exampleData": {
+        "example-context-villa-de-leyva": {
+          "personId": "example-person",
+          "period": {
+            "start": "2021",
+            "end": null
+          },
+          "visibility": "COMMUNITY",
+          "dimensions": [
+            {
+              "_tag": "LOCATION",
+              "place": {
+                "_tag": "GAZETTEER_PLACE",
+                "placeArticleId": "place-villa-de-leyva"
+              },
+              "elevation": {
+                "_tag": "MEASURED",
+                "source": "DEVICE",
+                "meters": 2150
+              }
+            },
+            {
+              "_tag": "PRODUCTION",
+              "value": {
+                "_tag": "DECLARED",
+                "kind": "AGROECOLOGICAL"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "property"
+    },
+    {
+      "id": "place-climate-computed",
+      "title": "PlaceClimateProfileComputed",
+      "description": "CHELSA 1981–2010 monthly normals aggregated over a gazetteer place's boundary (IBGE in Brazil, IGAC in Colombia), weighted by the area of each cell inside it. Each variable is a distribution (mean, P10, P50, P90), for the whole place and for each elevation band from the Copernicus DEM. Keeps the dataset version and the computation date. Method: the permaculture climate findings notebook (12 November 2026).\n\nOpen question: which variables come first? The notebook covered mean, minimum and maximum temperature, rainfall, PET, humidity, VPD and shortwave.\n\nOpen question: band width. 500 m bands lined up with the notebook's cuts, while 200 m bins shifted shares by up to 8 percentage points.\n\nOpen question: compute every gazetteer place in a batch, or the first time a location references one?",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 1320,
+        "y": 865.5
+      },
+      "exampleData": {
+        "placeArticleId": "place-rio-acima",
+        "whosOnFirstId": 102054687,
+        "boundarySource": "IBGE 2024",
+        "dataset": "CHELSA 2.1, 1981–2010",
+        "computedAt": "2026-11-12T00:00:00Z",
+        "months": {
+          "1": {
+            "temperatureMeanC": {
+              "mean": 21.75,
+              "p10": 19.95,
+              "p50": 22.05,
+              "p90": 23.15
+            },
+            "precipitationMm": {
+              "mean": 322.2,
+              "p10": 280.1,
+              "p50": 316.3,
+              "p90": 373
+            }
+          }
+        },
+        "elevationBands": [
+          {
+            "minimumMeters": 1500,
+            "maximumMeters": 2000,
+            "fractionOfPlace": 0.0125,
+            "months": {
+              "1": {
+                "temperatureMeanC": {
+                  "mean": 18.37,
+                  "p10": 18.05,
+                  "p90": 18.75
+                }
+              }
+            }
+          }
+        ]
+      },
+      "kind": "event",
+      "eventType": "External data"
+    },
+    {
+      "id": "summarize-place-climate",
+      "title": "SummarizePlaceClimate",
+      "description": "Keep the latest dataset version per place, and derive what growers compare: annual mean temperature and rainfall, dry months, the rainfall pattern (one rainy season or two) and frost risk. Derive the same for each elevation band.\n\nOpen question: what counts as a dry month? Rainfall under PET, or under half of it?\n\nOpen question: compare the shape of the year rather than calendar months, so places in different hemispheres line up by their dry season?",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 1650,
+        "y": 865.5
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "place-climates",
+      "title": "ClimateProfilesByPlaceId",
+      "description": "Derived climate dimensions per place and per elevation band, with the dataset they came from.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 1980,
+        "y": 865.5
+      },
+      "exampleData": {
+        "place-villa-de-leyva": {
+          "dataset": "CHELSA 2.1, 1981–2010",
+          "annualMeanTemperatureC": 14.4,
+          "annualPrecipitationMm": 1320,
+          "rainfallPattern": "BIMODAL",
+          "elevationBands": []
+        }
+      },
+      "kind": "property"
+    },
+    {
+      "id": "resolve-context-dimensions",
+      "title": "ResolveContextDimensions",
+      "description": "Complete each context's dimensions with what can be measured from its location: the place's ancestors, the elevation band when there's an elevation inside the place, and the climate of that band (or of the whole place without one). A location in free text adds nothing measured.\n\nDetail grows without touching claims: claims point to contexts, so a new dimension or dataset reaches every older claim.\n\nOpen question: when the context is less visible than the claim (a public claim, a community context), what do readers see? Perhaps the dimensions without the place, or only the state.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 2310,
+        "y": 517.5
+      },
+      "kind": "transformation"
+    },
+    {
+      "id": "context-dimensions",
+      "title": "ContextDimensionsById",
+      "description": "Every dimension of each context, each marked measured or declared, with its source.\n\nReaders see claims ranked and annotated by affinity: how close the claim's context is to their own. Each dimension compares itself and explains the difference (\"same rainfall pattern, 4 °C cooler\"). There's never one overall score. Affinity is computed when someone reads, against their own context, so it's never stored, and it never hides a claim.\n\nEach property declares its relevant dimensions, the ones affinity uses. Plant and animal properties default to climate and elevation.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 2640,
+        "y": 431.5
+      },
+      "exampleData": {
+        "example-context-villa-de-leyva": [
+          {
+            "_tag": "LOCATION",
+            "placeArticleId": "place-villa-de-leyva",
+            "ancestorIds": [
+              "place-boyaca",
+              "place-colombia"
+            ]
+          },
+          {
+            "_tag": "ELEVATION",
+            "value": {
+              "_tag": "MEASURED",
+              "source": "DEVICE",
+              "meters": 2150,
+              "band": {
+                "minimumMeters": 2000,
+                "maximumMeters": 2500
+              }
+            }
+          },
+          {
+            "_tag": "CLIMATE",
+            "value": {
+              "_tag": "MEASURED",
+              "source": "CHELSA 2.1, 1981–2010",
+              "annualMeanTemperatureC": 14.4,
+              "annualPrecipitationMm": 1320,
+              "rainfallPattern": "BIMODAL"
+            }
+          },
+          {
+            "_tag": "PRODUCTION",
+            "value": {
+              "_tag": "DECLARED",
+              "kind": "AGROECOLOGICAL"
+            }
+          }
+        ]
+      },
       "kind": "property"
     }
   ],
@@ -1597,6 +1862,38 @@
     {
       "source": "build-moderation-queue",
       "target": "moderation-queue"
+    },
+    {
+      "source": "profile-context-recorded",
+      "target": "index-profile-contexts"
+    },
+    {
+      "source": "index-profile-contexts",
+      "target": "profile-contexts"
+    },
+    {
+      "source": "place-climate-computed",
+      "target": "summarize-place-climate"
+    },
+    {
+      "source": "summarize-place-climate",
+      "target": "place-climates"
+    },
+    {
+      "source": "profile-contexts",
+      "target": "resolve-context-dimensions"
+    },
+    {
+      "source": "place-climates",
+      "target": "resolve-context-dimensions"
+    },
+    {
+      "source": "resolve-context-dimensions",
+      "target": "context-dimensions"
+    },
+    {
+      "source": "context-dimensions",
+      "target": "summarize-height"
     }
   ]
 }
