@@ -76,7 +76,7 @@ function TreeRow({
 
 /** The upstream tree beside a document that reads the pipeline as numbered steps. */
 export function PipelineSteps({ pipeline, onFocus, onSelect }: { pipeline: Pipeline } & Navigate) {
-  const { focus, byId, inputs, outputs, upstream, downstream, steps, triggers } = pipeline
+  const { focus, byId, inputs, outputs, upstream, downstream, steps, sourceEvents } = pipeline
   const tree = upstreamTree(pipeline)
   if (!focus || !tree) return null
 
@@ -117,11 +117,11 @@ export function PipelineSteps({ pipeline, onFocus, onSelect }: { pipeline: Pipel
           </details>
         )}
 
-        {EffectArray.isReadonlyArrayNonEmpty(triggers) && (
+        {EffectArray.isReadonlyArrayNonEmpty(sourceEvents) && (
           <section>
-            <h2>Triggered by</h2>
+            <h2>Source events</h2>
             <div className="chips">
-              {triggers.map((event) => (
+              {sourceEvents.map((event) => (
                 <NodeChip
                   key={event.id}
                   node={event}

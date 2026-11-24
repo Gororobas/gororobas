@@ -10,7 +10,15 @@ import {
 } from "@xyflow/react"
 import { useMemo, useState } from "react"
 
-import { edgeId, inspectGraph, withoutNodes, type Canvas, type GraphNode } from "./graph.js"
+import {
+  defaultArchitectureConfidence,
+  edgeId,
+  inspectGraph,
+  isTriggerEdge,
+  withoutNodes,
+  type Canvas,
+  type GraphNode,
+} from "./graph.js"
 import { layoutPositions } from "./layout.js"
 import { height, kinds, nodeTypes, width, type FlowNode } from "./node-card.js"
 import { NodeSidebar } from "./node-sidebar.js"
@@ -45,32 +53,44 @@ export function CanvasEditor({
     [canvas.nodes, drag, selected],
   )
 
-  const edges = useMemo(
-    () =>
-      canvas.edges.map((edge): Edge => {
-        const active = edge.source === selected || edge.target === selected
-        const stroke = active ? "#202025" : "#a1a1aa"
+  const edges = useMemo(() => {
+    const byId = new Map(canvas.nodes.map((node) => [node.id, node]))
 
-        return {
-          ...edge,
-          id: edgeId(edge),
-          type: "smoothstep",
-          sourceHandle: "output",
-          targetHandle: "input",
-          markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
-          style: { stroke, strokeWidth: active ? 2.7 : 1.5 },
-          zIndex: active ? 1 : 0,
-        }
-      }),
-    [canvas.edges, selected],
-  )
+    return canvas.edges.map((edge): Edge => {
+      const active = edge.source === selected || edge.target === selected
+      const stroke = active ? "#202025" : "#a1a1aa"
+
+      return {
+        ...edge,
+        id: edgeId(edge),
+        type: "smoothstep",
+        sourceHandle: "output",
+        targetHandle: "input",
+        markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
+        style: {
+          stroke,
+          strokeWidth: active ? 2.7 : 1.5,
+          strokeDasharray: isTriggerEdge(edge, byId) ? "5 4" : undefined,
+        },
+        zIndex: active ? 1 : 0,
+      }
+    })
+  }, [canvas.nodes, canvas.edges, selected])
 
   function add(kind: GraphNode["kind"]) {
     const position = flow.screenToFlowPosition({
       x: window.innerWidth / 2 - 110,
       y: window.innerHeight / 2 - 40,
     })
-    const fields = { id: crypto.randomUUID(), title: "", description: "", position }
+
+    const fields = {
+      id: crypto.randomUUID(),
+      title: "",
+      description: "",
+      architectureConfidence: defaultArchitectureConfidence,
+      position,
+    } as const
+
     const node: GraphNode =
       kind === "event"
         ? { ...fields, kind, eventType: "Claim", isEvaluationRequired: false }
@@ -184,7 +204,7 @@ export function CanvasEditor({
             </div>
             {menu === "add" && (
               <div className="popover">
-                {(["event", "transformation", "property"] as const).map((kind) => (
+                {(["event", "transformation", "property", "trigger"] as const).map((kind) => (
                   <button key={kind} className={kind} onClick={() => add(kind)}>
                     <span className="node-glyph">{kinds[kind].glyph}</span>
                     {kinds[kind].title}

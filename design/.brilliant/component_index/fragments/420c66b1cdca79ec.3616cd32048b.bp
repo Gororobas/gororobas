@@ -1,0 +1,7 @@
+    420c66b1cdca79ec fr comp p(555,0) s(520,50) f[] st[(aa1514152fdfd4fe,tok(pen.tone.primary.shade.300,#F6DAA6),w(0:$pen.stroke.width-0,0:$pen.stroke.width-0,1:$pen.stroke.width-1,0:$pen.stroke.width-0),pos(i))] "wiki-article/overview-fact"
+      4defc699591630c6 t("Main uses",Alan Sans,14,sb,align(l),lh(auto,1.29)) mref(4defc699591630c6) p(0,16) s(130,18) f[(fe1cae456f1131b4,tok(pen.tone.primary.foreground,#2A111C))] "Título"
+      e0f91546605e79ec fr mref(e0f91546605e79ec) p(154,12) s(214,26) f[] "Valor"
+        1ef0c9bbcb481ba3 fr mref(1ef0c9bbcb481ba3) p(0,0) s(104,26) f[(8a424f442f8f3a39,tok(pen.tone.primary.ramp.400,#F0D095))] rd(16) "Human food"
+          bcac40954dbbaf5c t("Human food",Alan Sans,14,m,align(l),lh(auto,1.29)) mref(bcac40954dbbaf5c) p(12,4) s(hug:79.9,18) f[(39e35c700a02d562,tok(pen.tone.neutral.ramp.800,#59303E))] "Rótulo"
+        293437a8b8d70900 fr mref(293437a8b8d70900) p(112,0) s(102,26) f[(73053af8a009523f,tok(pen.tone.primary.ramp.400,#F0D095))] rd(16) "Animal feed"
+          42cf49a166e13515 t("Animal feed",Alan Sans,14,m,align(l),lh(auto,1.29)) mref(42cf49a166e13515) p(12,4) s(hug:77.37,18) f[(6bfc6d4c876d5043,tok(pen.tone.neutral.ramp.800,#59303E))] "Rótulo"

@@ -1,11 +1,12 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
 
-import type { GraphNode } from "./graph.js"
+import { architectureConfidenceLabels, type GraphNode } from "./graph.js"
 
 export const kinds = {
   event: { title: "Event", glyph: "ϟ", color: "#ffedd8" },
   transformation: { title: "Transformation", glyph: "ƒ", color: "#e9edff" },
   property: { title: "Property", glyph: "▤", color: "#e2f2e9" },
+  trigger: { title: "Trigger", glyph: "⏵", color: "#f3e8ff" },
 }
 
 /** Connections a pipeline view leaves out, counted so the card can say so. */
@@ -22,11 +23,14 @@ function NodeCard({ data, selected }: NodeProps<FlowNode>) {
     <div
       className={`node-card ${data.kind} ${selected ? "selected" : ""} ${data.focused ? "focused" : ""}`}
     >
-      {data.kind !== "event" && <Handle type="target" position={Position.Left} id="input" />}
+      <Handle type="target" position={Position.Left} id="input" />
       <div className="node-kind">
         <span className="node-glyph">{kind.glyph}</span>
         {kind.title}
-        {data.kind === "event" && <span className="event-type">{data.eventType}</span>}
+        {data.kind === "event" && <span className="event-type">· {data.eventType}</span>}
+        <span className={`architecture-confidence ${data.architectureConfidence}`}>
+          {architectureConfidenceLabels[data.architectureConfidence]}
+        </span>
       </div>
       <strong title={data.title}>{data.title.trim() || "Untitled"}</strong>
       <span className="node-description">{data.description.trim().replace(/\s+/g, " ")}</span>

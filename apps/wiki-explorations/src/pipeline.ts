@@ -1,14 +1,14 @@
 import { Array as EffectArray, Order } from "effect"
 
-import type { Canvas, GraphNode } from "./graph.js"
+import { type Canvas, type GraphNode, isTriggerEdge } from "./graph.js"
 
 type Adjacency = ReadonlyMap<string, readonly string[]>
 
 /**
  * Longest hop count from each node reached through `next` back to `start`.
  * Longest (not shortest) so every node sits after all of its own inputs, which
- * makes "sources first" a valid reading order. Canvases are acyclic: the server
- * rejects cycles.
+ * makes "sources first" a valid reading order. Canvases are acyclic once trigger
+ * edges are left out: the server rejects cycles.
  */
 function distances({
   start,
@@ -56,7 +56,7 @@ export function pipelineAround(canvas: Canvas, focusId: string) {
   const byId = new Map(canvas.nodes.map((node) => [node.id, node]))
   const inputs = new Map<string, string[]>()
   const outputs = new Map<string, string[]>()
-  for (const { source, target } of canvas.edges) {
+  for (const { source, target } of canvas.edges.filter((edge) => !isTriggerEdge(edge, byId))) {
     inputs.set(target, [...(inputs.get(target) ?? []), source])
     outputs.set(source, [...(outputs.get(source) ?? []), target])
   }
@@ -83,7 +83,7 @@ export function pipelineAround(canvas: Canvas, focusId: string) {
     steps: [...ancestors, ...(focus?.kind === "transformation" ? [focus] : [])].filter(
       ({ kind }) => kind === "transformation",
     ),
-    triggers: ancestors.filter(({ kind }) => kind === "event"),
+    sourceEvents: ancestors.filter(({ kind }) => kind === "event"),
   }
 }
 

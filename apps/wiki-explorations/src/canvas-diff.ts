@@ -1,10 +1,17 @@
 import { Array as EffectArray, HashMap, HashSet, Option, Record } from "effect"
 
-import { edgeId, formatExampleData, type Canvas, type GraphNode } from "./graph.js"
+import {
+  architectureConfidenceLabels,
+  edgeId,
+  formatExampleData,
+  type Canvas,
+  type GraphNode,
+} from "./graph.js"
 
 const nodeFields = (node?: GraphNode) => ({
   Title: node?.title ?? "",
   Kind: node?.kind ?? "",
+  "Architecture confidence": node ? architectureConfidenceLabels[node.architectureConfidence] : "",
   Event: node?.kind === "event" ? node.eventType : "",
   "Needs evaluation":
     node?.kind === "event" && node.eventType === "Claim"

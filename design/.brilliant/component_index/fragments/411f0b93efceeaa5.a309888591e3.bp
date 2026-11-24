@@ -1,0 +1,2 @@
+    411f0b93efceeaa5 fr comp p(192,1) s(72,34) f[(7ca8dea401c12ead,solid(#000000,o(0)))] st[(086b8ead149e9009,solid(#000000,o(0)),w(2))] rd(20) "ui/app-button/bleed"
+      d4b1ea6e41934a76 t("Salvar",Alan Sans,14,m,align(l),lh(auto,1.29)) mref(d4b1ea6e41934a76) p(16,8) s(hug:39.86,18) f[(52a8bacc72b7c743,tok(pen.tone.accent.foreground,#0C2B28))] "Rótulo"

@@ -1,7 +1,7 @@
 import { Background, Controls, MarkerType, ReactFlow, type Edge } from "@xyflow/react"
 import { useMemo } from "react"
 
-import { edgeId, type Canvas } from "./graph.js"
+import { edgeId, isTriggerEdge, type Canvas } from "./graph.js"
 import { layoutPositions } from "./layout.js"
 import { height, nodeTypes, width, type FlowNode } from "./node-card.js"
 import type { Pipeline } from "./pipeline.js"
@@ -77,7 +77,11 @@ export function PipelineGraph({
       sourceHandle: "output",
       targetHandle: "input",
       markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
-      style: { stroke, strokeWidth: active ? 2.7 : 1.5 },
+      style: {
+        stroke,
+        strokeWidth: active ? 2.7 : 1.5,
+        strokeDasharray: isTriggerEdge(edge, byId) ? "5 4" : undefined,
+      },
     }
   })
 

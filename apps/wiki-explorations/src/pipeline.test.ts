@@ -18,6 +18,7 @@ function canvasFrom(pairs: ReadonlyArray<readonly [number, number]>): Canvas {
       id: `${index}`,
       title: `${index}`,
       description: "",
+      architectureConfidence: "NOT_REVIEWED" as const,
       position: { x: 0, y: 0 },
       kind: "transformation" as const,
     })),

@@ -11,6 +11,8 @@ Open [the editor](http://127.0.0.1:4560). Use **New canvas** for a blank graph o
 
 Description and **Example data (JSON)** open in **Preview**. Choose **Write** to edit. In the highlighted JSON preview, fold objects and arrays or use the expand icon beside **Write** and **Preview** for a larger dialog. Use **Apply example** to save valid JSON or clear the field and apply to remove it. The examples in Article projections are illustrative excerpts, with provider values where available and sample IDs and claims for the app's own data.
 
+Set **Architecture confidence** in the node sidebar. Every node starts as **Not reviewed** (`NOT_REVIEWED`). Use **Locked in** (`LOCKED_IN`) for settled decisions and **Uncertain** (`UNCERTAIN`) for ones you may revisit. The current status appears on the node card, and changes appear in **Git history**.
+
 Double-click a node, or use **Open pipeline** in its sidebar, to see only what feeds it (upstream) and what it feeds (downstream). **Graph** shows that pipeline laid out on its own, with depth limits for each direction; dashed `+N in` and `+N out` badges count the connections the limits or the pipeline leave out. **Steps** pairs the upstream tree with a document that lists the triggering events and reads each transformation as a numbered step with its inputs and outputs. Click any node there to open its pipeline, or **Edit** to change it.
 
 Use **Undo** and **Redo** in the header, or **Cmd/Ctrl+Z** and **Cmd/Ctrl+Shift+Z**. **Ctrl+Y** also redoes an edit. Typing in a node field groups into one canvas edit per focus session. Each canvas keeps its own history while the app is open, and undo and redo save the resulting graph to disk.

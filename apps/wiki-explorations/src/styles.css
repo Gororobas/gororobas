@@ -203,6 +203,10 @@ button.primary:hover:not(:disabled) {
   --tint: #e2f2e9;
   --accent: #2c644a;
 }
+.trigger {
+  --tint: #f3e8ff;
+  --accent: #6b3fa0;
+}
 .node-card {
   width: 100%;
   height: 100%;
@@ -236,10 +240,42 @@ button.primary:hover:not(:disabled) {
   flex: none;
 }
 .event-type {
-  margin-left: auto;
-  color: #6b6259;
-  font-size: 10px;
+  font-weight: 500;
   white-space: nowrap;
+}
+.architecture-confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.architecture-confidence::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.architecture-confidence.LOCKED_IN {
+  background: #dcfce7;
+  color: #166534;
+}
+.architecture-confidence.UNCERTAIN {
+  background: #fef3c7;
+  color: #92400e;
+}
+.architecture-confidence.NOT_REVIEWED {
+  color: #a1a1aa;
+  font-weight: 500;
+}
+.architecture-confidence.NOT_REVIEWED::before {
+  background: transparent;
+  border: 1px solid currentColor;
 }
 .node-card strong {
   display: block;
@@ -370,6 +406,37 @@ button.primary:hover:not(:disabled) {
   border: 1px solid transparent;
   padding: 3px 6px;
   font-size: 12px;
+}
+.radio-tabs {
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+}
+.radio-tabs legend {
+  margin-bottom: 7px;
+  padding: 0;
+  font-weight: 550;
+}
+.radio-tabs label {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  text-align: center;
+  cursor: pointer;
+}
+.radio-tabs input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.radio-tabs label:has(:checked) {
+  background: white;
+  border-color: #e4e4e7;
+  font-weight: 550;
+}
+.radio-tabs label:has(:focus-visible) {
+  outline: 2px solid #2563eb;
 }
 .segmented button[aria-pressed="true"] {
   background: white;

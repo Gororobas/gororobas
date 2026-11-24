@@ -1,0 +1,2 @@
+    a63a2359791f3f0f fr comp p(0,1) s(72,34) f[(d318ac8b208be77d,tok(pen.tone.accent.action.background,#246E6A))] st[(3189981340ca624c,tok(pen.tone.accent.action.background,#246E6A),w(2:$pen.stroke.width-2))] rd(20) "ui/app-button"
+      9c0f2ffcb7406a99 t("Salvar",Alan Sans,14,m,align(l),lh(auto,1.29)) mref(9c0f2ffcb7406a99) p(16,8) s(hug:39.86,18) f[(883c90f313cec811,tok(pen.tone.accent.action.foreground,#F7F6E9))] "Rótulo"

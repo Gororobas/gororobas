@@ -4,7 +4,14 @@ import Markdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
 
 import { ExampleDataTree, ExpandExampleData } from "./example-data-viewer.js"
-import { EventType, ExampleDataText, formatExampleData, type GraphNode } from "./graph.js"
+import {
+  ArchitectureConfidence,
+  architectureConfidenceLabels,
+  EventType,
+  ExampleDataText,
+  formatExampleData,
+  type GraphNode,
+} from "./graph.js"
 import { kinds } from "./node-card.js"
 
 const parseExampleData = Schema.decodeOption(ExampleDataText)
@@ -27,6 +34,39 @@ function EditorMode({
         Preview
       </button>
     </div>
+  )
+}
+
+function RadioTabs<Value extends string>({
+  legend,
+  options,
+  labels,
+  value,
+  onChange,
+}: {
+  legend: string
+  options: ReadonlyArray<Value>
+  labels?: Record<Value, string>
+  value: Value
+  onChange: (value: Value) => void
+}) {
+  return (
+    <fieldset className="radio-tabs">
+      <legend>{legend}</legend>
+      <div className="segmented">
+        {options.map((option) => (
+          <label key={option}>
+            <input
+              type="radio"
+              name={legend}
+              checked={option === value}
+              onChange={() => onChange(option)}
+            />
+            {labels?.[option] ?? option}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   )
 }
 
@@ -138,31 +178,49 @@ export function NodeSidebar({
           onChange={(event) => edit({ ...node, title: event.target.value }, editGroup.current)}
         />
       </label>
+      <RadioTabs
+        legend="Architecture confidence"
+        options={ArchitectureConfidence.literals}
+        labels={architectureConfidenceLabels}
+        value={node.architectureConfidence}
+        onChange={(architectureConfidence) => edit({ ...node, architectureConfidence })}
+      />
       {node.kind === "event" && (
         <>
-          <label>
-            Event type
-            <select
-              value={node.eventType}
-              onChange={(event) => {
-                const eventType = EventType.literals.find((type) => type === event.target.value)
-                if (eventType === undefined || eventType === node.eventType) return
+          <RadioTabs
+            legend="Event type"
+            options={EventType.literals}
+            value={node.eventType}
+            onChange={(eventType) => {
+              if (eventType === node.eventType) return
 
-                const { id, title, description, position, kind, exampleData } = node
-                const fields = { id, title, description, position, kind, exampleData }
+              const {
+                id,
+                title,
+                description,
+                architectureConfidence,
+                position,
+                kind,
+                exampleData,
+              } = node
 
-                edit(
-                  eventType === "Claim"
-                    ? { ...fields, eventType, isEvaluationRequired: false }
-                    : { ...fields, eventType },
-                )
-              }}
-            >
-              {EventType.literals.map((type) => (
-                <option key={type}>{type}</option>
-              ))}
-            </select>
-          </label>
+              const fields = {
+                id,
+                title,
+                description,
+                architectureConfidence,
+                position,
+                kind,
+                exampleData,
+              }
+
+              edit(
+                eventType === "Claim"
+                  ? { ...fields, eventType, isEvaluationRequired: false }
+                  : { ...fields, eventType },
+              )
+            }}
+          />
           {node.eventType === "Claim" && (
             <label className="evaluation-switch">
               Needs evaluation

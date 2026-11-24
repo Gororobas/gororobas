@@ -1,0 +1,264 @@
+modes { rendering: [] }
+pen.view.reference: 1
+pen.view.layers: 0
+pen.tone.primary.ramp.50: #fff9ee
+pen.tone.primary.ramp.100: #fef1d8
+pen.tone.primary.ramp.200: #fde7bf
+pen.tone.primary.ramp.300: #f6daa6
+pen.tone.primary.ramp.400: #f0d095
+pen.tone.primary.ramp.500: #d8b05c
+pen.tone.primary.ramp.600: #b88f2e
+pen.tone.primary.ramp.700: #926c16
+pen.tone.primary.ramp.800: #694b0d
+pen.tone.primary.ramp.900: #4a3208
+pen.tone.primary.ramp.950: #2f1f05
+pen.tone.primary.shade.50 { $default: #fff9ee, theme.dark: #2f1f05 }
+pen.tone.primary.shade.100 { $default: #fef1d8, theme.dark: #4a3208 }
+pen.tone.primary.shade.200 { $default: #fde7bf, theme.dark: #694b0d }
+pen.tone.primary.shade.300 { $default: #f6daa6, theme.dark: #926c16 }
+pen.tone.primary.shade.400 { $default: #f0d095, theme.dark: #b88f2e }
+pen.tone.primary.shade.500: #d8b05c
+pen.tone.primary.shade.600 { $default: #b88f2e, theme.dark: #f0d095 }
+pen.tone.primary.shade.700 { $default: #926c16, theme.dark: #f6daa6 }
+pen.tone.primary.shade.800 { $default: #694b0d, theme.dark: #fde7bf }
+pen.tone.primary.shade.900 { $default: #4a3208, theme.dark: #fef1d8 }
+pen.tone.primary.shade.950 { $default: #2f1f05, theme.dark: #fff9ee }
+pen.tone.primary.foreground { $default: #2a111c, theme.dark: #fcf8f7 }
+pen.tone.primary.foreground-muted { $default: #926c16, theme.dark: #f6daa6 }
+pen.tone.primary.emphasis { $default: #b88f2e, theme.dark: #f0d095 }
+pen.tone.primary.background { $default: #fef1d8, theme.dark: #4a3208 }
+pen.tone.primary.background-card { $default: #fff9ee, theme.dark: #2f1f05 }
+pen.tone.primary.background-muted { $default: #fde7bf, theme.dark: #694b0d }
+pen.tone.primary.border { $default: #fde7bf, theme.dark: #694b0d }
+pen.tone.primary.border-strong { $default: #f6daa6, theme.dark: #926c16 }
+pen.tone.primary.control-border { $default: #926c16, theme.dark: #f6daa6 }
+pen.tone.primary.hover { $default: #fde7bf, theme.dark: #694b0d }
+pen.tone.primary.pressed { $default: #f6daa6, theme.dark: #926c16 }
+pen.tone.primary.focus { $default: #926c16, theme.dark: #f6daa6 }
+pen.tone.primary.tint { $default: #f0d095, theme.dark: #b88f2e }
+pen.tone.primary.link { $default: #926c16, theme.dark: #f6daa6 }
+pen.tone.primary.action.background { $default: #926c16, theme.dark: #f6daa6 }
+pen.tone.primary.action.foreground { $default: #fff9ee, theme.dark: #2f1f05 }
+pen.tone.primary.action.hover { $default: #694b0d, theme.dark: #fde7bf }
+pen.tone.primary.action.pressed { $default: #4a3208, theme.dark: #fef1d8 }
+pen.tone.primary.selected.background { $default: #e0e0b3, theme.dark: #1c5753 }
+pen.tone.primary.selected.foreground { $default: #0c2b28, theme.dark: #f7f6e9 }
+pen.tone.primary.selected.border { $default: #246e6a, theme.dark: #ccd08f }
+pen.tone.primary.selected.hover { $default: #ccd08f, theme.dark: #246e6a }
+pen.tone.secondary.ramp.50: #fbf2f4
+pen.tone.secondary.ramp.100: #f6e1e6
+pen.tone.secondary.ramp.200: #f0c6d1
+pen.tone.secondary.ramp.300: #e7a6b9
+pen.tone.secondary.ramp.400: #db819d
+pen.tone.secondary.ramp.500: #c55a7c
+pen.tone.secondary.ramp.600: #a8325d
+pen.tone.secondary.ramp.700: #8e254e
+pen.tone.secondary.ramp.800: #721c3e
+pen.tone.secondary.ramp.900: #54132d
+pen.tone.secondary.ramp.950: #3b0c1f
+pen.tone.secondary.shade.50 { $default: #fbf2f4, theme.dark: #3b0c1f }
+pen.tone.secondary.shade.100 { $default: #f6e1e6, theme.dark: #54132d }
+pen.tone.secondary.shade.200 { $default: #f0c6d1, theme.dark: #721c3e }
+pen.tone.secondary.shade.300 { $default: #e7a6b9, theme.dark: #8e254e }
+pen.tone.secondary.shade.400 { $default: #db819d, theme.dark: #a8325d }
+pen.tone.secondary.shade.500: #c55a7c
+pen.tone.secondary.shade.600 { $default: #a8325d, theme.dark: #db819d }
+pen.tone.secondary.shade.700 { $default: #8e254e, theme.dark: #e7a6b9 }
+pen.tone.secondary.shade.800 { $default: #721c3e, theme.dark: #f0c6d1 }
+pen.tone.secondary.shade.900 { $default: #54132d, theme.dark: #f6e1e6 }
+pen.tone.secondary.shade.950 { $default: #3b0c1f, theme.dark: #fbf2f4 }
+pen.tone.secondary.foreground { $default: #3b0c1f, theme.dark: #fbf2f4 }
+pen.tone.secondary.foreground-muted { $default: #8e254e, theme.dark: #e7a6b9 }
+pen.tone.secondary.emphasis { $default: #a8325d, theme.dark: #db819d }
+pen.tone.secondary.background { $default: #f6e1e6, theme.dark: #54132d }
+pen.tone.secondary.background-card { $default: #fbf2f4, theme.dark: #3b0c1f }
+pen.tone.secondary.background-muted { $default: #f0c6d1, theme.dark: #721c3e }
+pen.tone.secondary.border { $default: #f0c6d1, theme.dark: #721c3e }
+pen.tone.secondary.border-strong { $default: #e7a6b9, theme.dark: #8e254e }
+pen.tone.secondary.control-border { $default: #8e254e, theme.dark: #e7a6b9 }
+pen.tone.secondary.hover { $default: #f0c6d1, theme.dark: #721c3e }
+pen.tone.secondary.pressed { $default: #e7a6b9, theme.dark: #8e254e }
+pen.tone.secondary.focus { $default: #8e254e, theme.dark: #e7a6b9 }
+pen.tone.secondary.tint { $default: #db819d, theme.dark: #a8325d }
+pen.tone.secondary.link { $default: #8e254e, theme.dark: #e7a6b9 }
+pen.tone.secondary.action.background { $default: #8e254e, theme.dark: #e7a6b9 }
+pen.tone.secondary.action.foreground { $default: #fbf2f4, theme.dark: #3b0c1f }
+pen.tone.secondary.action.hover { $default: #721c3e, theme.dark: #f0c6d1 }
+pen.tone.secondary.action.pressed { $default: #54132d, theme.dark: #f6e1e6 }
+pen.tone.secondary.selected.background { $default: #f0c6d1, theme.dark: #721c3e }
+pen.tone.secondary.selected.foreground { $default: #3b0c1f, theme.dark: #fbf2f4 }
+pen.tone.secondary.selected.border { $default: #8e254e, theme.dark: #e7a6b9 }
+pen.tone.secondary.selected.hover { $default: #e7a6b9, theme.dark: #8e254e }
+pen.tone.accent.ramp.50: #f7f6e9
+pen.tone.accent.ramp.100: #f0efd6
+pen.tone.accent.ramp.200: #e0e0b3
+pen.tone.accent.ramp.300: #ccd08f
+pen.tone.accent.ramp.400: #aebb72
+pen.tone.accent.ramp.500: #839d58
+pen.tone.accent.ramp.600: #2e8581
+pen.tone.accent.ramp.700: #246e6a
+pen.tone.accent.ramp.800: #1c5753
+pen.tone.accent.ramp.900: #13403d
+pen.tone.accent.ramp.950: #0c2b28
+pen.tone.accent.shade.50 { $default: #f7f6e9, theme.dark: #0c2b28 }
+pen.tone.accent.shade.100 { $default: #f0efd6, theme.dark: #13403d }
+pen.tone.accent.shade.200 { $default: #e0e0b3, theme.dark: #1c5753 }
+pen.tone.accent.shade.300 { $default: #ccd08f, theme.dark: #246e6a }
+pen.tone.accent.shade.400 { $default: #aebb72, theme.dark: #2e8581 }
+pen.tone.accent.shade.500: #839d58
+pen.tone.accent.shade.600 { $default: #2e8581, theme.dark: #aebb72 }
+pen.tone.accent.shade.700 { $default: #246e6a, theme.dark: #ccd08f }
+pen.tone.accent.shade.800 { $default: #1c5753, theme.dark: #e0e0b3 }
+pen.tone.accent.shade.900 { $default: #13403d, theme.dark: #f0efd6 }
+pen.tone.accent.shade.950 { $default: #0c2b28, theme.dark: #f7f6e9 }
+pen.tone.accent.foreground { $default: #0c2b28, theme.dark: #f7f6e9 }
+pen.tone.accent.foreground-muted { $default: #246e6a, theme.dark: #ccd08f }
+pen.tone.accent.emphasis { $default: #2e8581, theme.dark: #aebb72 }
+pen.tone.accent.background { $default: #f0efd6, theme.dark: #13403d }
+pen.tone.accent.background-card { $default: #f7f6e9, theme.dark: #0c2b28 }
+pen.tone.accent.background-muted { $default: #e0e0b3, theme.dark: #1c5753 }
+pen.tone.accent.border { $default: #e0e0b3, theme.dark: #1c5753 }
+pen.tone.accent.border-strong { $default: #ccd08f, theme.dark: #246e6a }
+pen.tone.accent.control-border { $default: #246e6a, theme.dark: #ccd08f }
+pen.tone.accent.hover { $default: #e0e0b3, theme.dark: #1c5753 }
+pen.tone.accent.pressed { $default: #ccd08f, theme.dark: #246e6a }
+pen.tone.accent.focus { $default: #246e6a, theme.dark: #ccd08f }
+pen.tone.accent.tint { $default: #aebb72, theme.dark: #2e8581 }
+pen.tone.accent.link { $default: #246e6a, theme.dark: #ccd08f }
+pen.tone.accent.action.background { $default: #246e6a, theme.dark: #ccd08f }
+pen.tone.accent.action.foreground { $default: #f7f6e9, theme.dark: #0c2b28 }
+pen.tone.accent.action.hover { $default: #1c5753, theme.dark: #e0e0b3 }
+pen.tone.accent.action.pressed { $default: #13403d, theme.dark: #f0efd6 }
+pen.tone.accent.selected.background { $default: #e0e0b3, theme.dark: #1c5753 }
+pen.tone.accent.selected.foreground { $default: #0c2b28, theme.dark: #f7f6e9 }
+pen.tone.accent.selected.border { $default: #246e6a, theme.dark: #ccd08f }
+pen.tone.accent.selected.hover { $default: #ccd08f, theme.dark: #246e6a }
+pen.tone.neutral.ramp.50: #fcf8f7
+pen.tone.neutral.ramp.100: #f5e9e7
+pen.tone.neutral.ramp.200: #ead4d3
+pen.tone.neutral.ramp.300: #d8b5b7
+pen.tone.neutral.ramp.400: #bd9197
+pen.tone.neutral.ramp.500: #9f6c78
+pen.tone.neutral.ramp.600: #85515f
+pen.tone.neutral.ramp.700: #6f3e4d
+pen.tone.neutral.ramp.800: #59303e
+pen.tone.neutral.ramp.900: #432231
+pen.tone.neutral.ramp.950: #2a111c
+pen.tone.neutral.shade.50 { $default: #fcf8f7, theme.dark: #2a111c }
+pen.tone.neutral.shade.100 { $default: #f5e9e7, theme.dark: #432231 }
+pen.tone.neutral.shade.200 { $default: #ead4d3, theme.dark: #59303e }
+pen.tone.neutral.shade.300 { $default: #d8b5b7, theme.dark: #6f3e4d }
+pen.tone.neutral.shade.400 { $default: #bd9197, theme.dark: #85515f }
+pen.tone.neutral.shade.500: #9f6c78
+pen.tone.neutral.shade.600 { $default: #85515f, theme.dark: #bd9197 }
+pen.tone.neutral.shade.700 { $default: #6f3e4d, theme.dark: #d8b5b7 }
+pen.tone.neutral.shade.800 { $default: #59303e, theme.dark: #ead4d3 }
+pen.tone.neutral.shade.900 { $default: #432231, theme.dark: #f5e9e7 }
+pen.tone.neutral.shade.950 { $default: #2a111c, theme.dark: #fcf8f7 }
+pen.tone.neutral.foreground { $default: #2a111c, theme.dark: #fcf8f7 }
+pen.tone.neutral.foreground-muted { $default: #6f3e4d, theme.dark: #d8b5b7 }
+pen.tone.neutral.emphasis { $default: #85515f, theme.dark: #bd9197 }
+pen.tone.neutral.background { $default: #fdeadd, theme.dark: #432231 }
+pen.tone.neutral.background-card { $default: #fcf8f7, theme.dark: #2a111c }
+pen.tone.neutral.background-muted { $default: #ead4d3, theme.dark: #59303e }
+pen.tone.neutral.border { $default: #ead4d3, theme.dark: #59303e }
+pen.tone.neutral.border-strong { $default: #d8b5b7, theme.dark: #6f3e4d }
+pen.tone.neutral.control-border { $default: #6f3e4d, theme.dark: #d8b5b7 }
+pen.tone.neutral.hover { $default: #ead4d3, theme.dark: #59303e }
+pen.tone.neutral.pressed { $default: #d8b5b7, theme.dark: #6f3e4d }
+pen.tone.neutral.focus { $default: #6f3e4d, theme.dark: #d8b5b7 }
+pen.tone.neutral.tint { $default: #bd9197, theme.dark: #85515f }
+pen.tone.neutral.link { $default: #6f3e4d, theme.dark: #d8b5b7 }
+pen.tone.neutral.action.background { $default: #6f3e4d, theme.dark: #d8b5b7 }
+pen.tone.neutral.action.foreground { $default: #fcf8f7, theme.dark: #2a111c }
+pen.tone.neutral.action.hover { $default: #59303e, theme.dark: #ead4d3 }
+pen.tone.neutral.action.pressed { $default: #432231, theme.dark: #f5e9e7 }
+pen.tone.neutral.selected.background { $default: #ead4d3, theme.dark: #59303e }
+pen.tone.neutral.selected.foreground { $default: #2a111c, theme.dark: #fcf8f7 }
+pen.tone.neutral.selected.border { $default: #6f3e4d, theme.dark: #d8b5b7 }
+pen.tone.neutral.selected.hover { $default: #d8b5b7, theme.dark: #6f3e4d }
+pen.tone.destructive.ramp.50: #fef2f2
+pen.tone.destructive.ramp.100: #ffe2e2
+pen.tone.destructive.ramp.200: #ffc9c9
+pen.tone.destructive.ramp.300: #ffa2a2
+pen.tone.destructive.ramp.400: #ff6467
+pen.tone.destructive.ramp.500: #fb2c36
+pen.tone.destructive.ramp.600: #e7000b
+pen.tone.destructive.ramp.700: #c10007
+pen.tone.destructive.ramp.800: #9f0712
+pen.tone.destructive.ramp.900: #82181a
+pen.tone.destructive.ramp.950: #460809
+pen.tone.destructive.shade.50 { $default: #fef2f2, theme.dark: #460809 }
+pen.tone.destructive.shade.100 { $default: #ffe2e2, theme.dark: #82181a }
+pen.tone.destructive.shade.200 { $default: #ffc9c9, theme.dark: #9f0712 }
+pen.tone.destructive.shade.300 { $default: #ffa2a2, theme.dark: #c10007 }
+pen.tone.destructive.shade.400 { $default: #ff6467, theme.dark: #e7000b }
+pen.tone.destructive.shade.500: #fb2c36
+pen.tone.destructive.shade.600 { $default: #e7000b, theme.dark: #ff6467 }
+pen.tone.destructive.shade.700 { $default: #c10007, theme.dark: #ffa2a2 }
+pen.tone.destructive.shade.800 { $default: #9f0712, theme.dark: #ffc9c9 }
+pen.tone.destructive.shade.900 { $default: #82181a, theme.dark: #ffe2e2 }
+pen.tone.destructive.shade.950 { $default: #460809, theme.dark: #fef2f2 }
+pen.tone.destructive.foreground { $default: #460809, theme.dark: #fef2f2 }
+pen.tone.destructive.foreground-muted { $default: #c10007, theme.dark: #ffa2a2 }
+pen.tone.destructive.emphasis { $default: #e7000b, theme.dark: #ff6467 }
+pen.tone.destructive.background { $default: #ffe2e2, theme.dark: #82181a }
+pen.tone.destructive.background-card { $default: #fef2f2, theme.dark: #460809 }
+pen.tone.destructive.background-muted { $default: #ffc9c9, theme.dark: #9f0712 }
+pen.tone.destructive.border { $default: #ffc9c9, theme.dark: #9f0712 }
+pen.tone.destructive.border-strong { $default: #ffa2a2, theme.dark: #c10007 }
+pen.tone.destructive.control-border { $default: #c10007, theme.dark: #ffa2a2 }
+pen.tone.destructive.hover { $default: #ffc9c9, theme.dark: #9f0712 }
+pen.tone.destructive.pressed { $default: #ffa2a2, theme.dark: #c10007 }
+pen.tone.destructive.focus { $default: #c10007, theme.dark: #ffa2a2 }
+pen.tone.destructive.tint { $default: #ff6467, theme.dark: #e7000b }
+pen.tone.destructive.link { $default: #c10007, theme.dark: #ffa2a2 }
+pen.tone.destructive.action.background { $default: #c10007, theme.dark: #ffa2a2 }
+pen.tone.destructive.action.foreground { $default: #fef2f2, theme.dark: #460809 }
+pen.tone.destructive.action.hover { $default: #9f0712, theme.dark: #ffc9c9 }
+pen.tone.destructive.action.pressed { $default: #82181a, theme.dark: #ffe2e2 }
+pen.tone.destructive.selected.background { $default: #ffc9c9, theme.dark: #9f0712 }
+pen.tone.destructive.selected.foreground { $default: #460809, theme.dark: #fef2f2 }
+pen.tone.destructive.selected.border { $default: #c10007, theme.dark: #ffa2a2 }
+pen.tone.destructive.selected.hover { $default: #ffa2a2, theme.dark: #c10007 }
+pen.space.0: 0
+pen.space.1: 4
+pen.space.2: 8
+pen.space.3: 12
+pen.space.4: 16
+pen.space.5: 20
+pen.space.6: 24
+pen.space.7: 28
+pen.space.8: 32
+pen.space.9: 40
+pen.space.10: 48
+pen.space.11: 56
+pen.space.12: 64
+pen.font-size.caption: 12
+pen.font-size.footnote: 14
+pen.font-size.regular: 16
+pen.font-size.large: 21
+pen.font-size.xl: 24
+pen.font-size.xxl: 30
+pen.font-size.display: 36
+pen.font-weight.regular: 400
+pen.font-weight.medium: 500
+pen.font-weight.semibold: 600
+pen.font-weight.bold: 700
+pen.measure.narrow: 448
+pen.measure.form: 576
+pen.measure.prose: 768
+pen.measure.page: 1024
+pen.measure.wide: 1280
+pen.control-size.sm: 36
+pen.control-size.md: 40
+pen.control-size.lg: 44
+pen.stroke.width-0: 0
+pen.stroke.width-1: 1
+pen.stroke.width-1-5: 1.5
+pen.stroke.width-2: 2
+pen.stroke.width-2-5: 2.5
+pen.stroke.width-3: 3
+pen.stroke.width-4: 4
+
+hide: pen.view.reference, pen.view.layers

@@ -1,6 +1,15 @@
-import { Effect, Schema } from "effect"
+import { Effect, Match, Schema } from "effect"
 
 export const EventType = Schema.Literals(["Claim", "External data"])
+export const ArchitectureConfidence = Schema.Literals(["NOT_REVIEWED", "LOCKED_IN", "UNCERTAIN"])
+export const defaultArchitectureConfidence = "NOT_REVIEWED"
+
+export const architectureConfidenceLabels = {
+  NOT_REVIEWED: "Not reviewed",
+  LOCKED_IN: "Locked in",
+  UNCERTAIN: "Uncertain",
+} satisfies Record<typeof ArchitectureConfidence.Type, string>
+
 export const ExampleDataText = Schema.fromJsonString(Schema.Json, { space: 2 })
 const encodeExampleData = Schema.encodeSync(ExampleDataText)
 
@@ -11,14 +20,19 @@ const nodeFields = {
   id: Schema.NonEmptyString,
   title: Schema.String,
   description: Schema.String,
+  architectureConfidence: ArchitectureConfidence.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(defaultArchitectureConfidence)),
+  ),
   position: Schema.Struct({ x: Schema.Finite, y: Schema.Finite }),
 }
 
 const dataFields = { ...nodeFields, exampleData: Schema.optional(Schema.Json) }
 const eventFields = { ...dataFields, kind: Schema.Literal("event") }
+
 const otherNodes = [
   Schema.Struct({ ...nodeFields, kind: Schema.Literal("transformation") }),
   Schema.Struct({ ...dataFields, kind: Schema.Literal("property") }),
+  Schema.Struct({ ...dataFields, kind: Schema.Literal("trigger") }),
 ] as const
 
 export const GraphNode = Schema.Union([
@@ -108,6 +122,23 @@ export const decodeCanvasFile = (content: string) =>
     ),
   )
 
+/**
+ * A trigger's outgoing edges point at the events it causes, such as an external data fetch. They
+ * don't carry data, so a trigger can read what those events later update (to decide whether to
+ * fire again) without the canvas becoming cyclic.
+ */
+export const isTriggerEdge = (edge: GraphEdge, byId: ReadonlyMap<string, GraphNode>) =>
+  byId.get(edge.source)?.kind === "trigger"
+
+const connects = (from: GraphNode, to: GraphNode) =>
+  Match.value(from.kind).pipe(
+    Match.when("transformation", () => to.kind === "property"),
+    Match.when("trigger", () => to.kind === "event"),
+    Match.when("property", () => to.kind === "transformation" || to.kind === "trigger"),
+    Match.when("event", () => to.kind === "transformation"),
+    Match.exhaustive,
+  )
+
 export const edgeId = ({ source, target }: GraphEdge) =>
   `${encodeURIComponent(source)}:${encodeURIComponent(target)}`
 
@@ -115,6 +146,8 @@ export function inspectGraph({ nodes, edges }: Canvas) {
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const incoming = new Map(nodes.map(({ id }) => [id, new Set<string>()]))
   const outgoing = new Map(nodes.map(({ id }) => [id, new Set<string>()]))
+  const dataOutgoing = new Map(nodes.map(({ id }) => [id, new Set<string>()]))
+  const dataIncoming = new Map<string, number>()
   const errors = []
   if (byId.size !== nodes.length) errors.push("Node IDs must be unique.")
 
@@ -126,22 +159,26 @@ export function inspectGraph({ nodes, edges }: Canvas) {
       continue
     }
 
-    if (from.kind === "transformation" ? to.kind !== "property" : to.kind !== "transformation") {
+    if (!connects(from, to)) {
       errors.push(
-        "Connect events or properties to transformations, and transformations to properties.",
+        "Connect events or properties to transformations, transformations to properties, properties to triggers, and triggers to events.",
       )
     }
 
     if (outgoing.get(source)?.has(target)) errors.push("This connection already exists.")
     outgoing.get(source)?.add(target)
     incoming.get(target)?.add(source)
+    if (!isTriggerEdge({ source, target }, byId)) {
+      dataOutgoing.get(source)?.add(target)
+      dataIncoming.set(target, (dataIncoming.get(target) ?? 0) + 1)
+    }
   }
 
-  const remaining = new Map(nodes.map(({ id }) => [id, incoming.get(id)?.size ?? 0]))
+  const remaining = new Map(nodes.map(({ id }) => [id, dataIncoming.get(id) ?? 0]))
   const order = [...remaining].filter(([, count]) => count === 0).map(([id]) => id)
 
   for (const id of order) {
-    for (const target of outgoing.get(id) ?? []) {
+    for (const target of dataOutgoing.get(id) ?? []) {
       const count = (remaining.get(target) ?? 0) - 1
       remaining.set(target, count)
       if (count === 0) order.push(target)
@@ -150,10 +187,11 @@ export function inspectGraph({ nodes, edges }: Canvas) {
 
   if (order.length !== byId.size) errors.push("This graph contains a cycle.")
 
-  const flow = nodes.map(({ id, title, kind }) => ({
+  const flow = nodes.map(({ id, title, kind, architectureConfidence }) => ({
     id,
     title,
     kind,
+    architectureConfidence,
     inputs: [...(incoming.get(id) ?? [])],
     outputs: [...(outgoing.get(id) ?? [])],
   }))
