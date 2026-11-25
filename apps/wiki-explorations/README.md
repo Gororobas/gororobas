@@ -9,11 +9,11 @@ pnpm --filter @gororobas/wiki-explorations dev
 
 Open [the editor](http://127.0.0.1:4560). Open the canvas menu next to the title to switch canvases, then choose **New canvas** for a blank graph or **Fork canvas** to copy the current graph into its own file. Drag from an event or property output to a transformation input, and from a transformation output to a property input. The editor saves node edits, connections and positions automatically. Descriptions accept Markdown with fenced code blocks. Use **Preview** to see syntax highlighting. Select a node to highlight its connections.
 
-Description and open questions open in **Preview** when they have content, and **Example data (JSON)** always does. Choose **Write** to edit. In the highlighted JSON preview, fold objects and arrays or use the expand icon beside **Write** and **Preview** for a larger dialog. Use **Apply example** to save valid JSON or clear the field and apply to remove it. The examples in Article projections are illustrative excerpts, with provider values where available and sample IDs and claims for the app's own data.
+Description and open questions open in **Preview** when they have content. **Example schema** is a TypeScript editor with syntax highlighting. Write a single Effect Schema expression such as `Schema.Struct({ claimId: ClaimId })` or `Schema.TaggedStruct("ContributorClaim", { personId: PersonId })`. Select **Apply schema** to save it, or clear the editor and apply to remove it. The expand button opens a larger editor with the same draft. Pipeline **Steps** shows a read-only view. Snippets are saved as source text. They use `Schema` from `effect` and the [shared schemas below](#shared-schemas). Lookup projections use `Schema.Record` with branded keys. Older canvases with JSON examples open with equivalent literal schema expressions.
 
 Set **Architecture confidence** in the node sidebar. Every node starts as **Not reviewed** (`NOT_REVIEWED`). Use **Locked in** (`LOCKED_IN`) for settled decisions and **Uncertain** (`UNCERTAIN`) for ones you may revisit. The current status appears on the node card, and changes appear in **Git history**.
 
-Locking a node records a fingerprint of its title, kind, event type, description, open questions and example data. Edits you make in the sidebar keep it up to date. If the content changes any other way, for example through the JSON API, the card shows **Changed** and the sidebar asks you to review it in **Git history**. Choose **Accept changes** to fingerprint the current content. Nodes locked before fingerprints existed show **Unverified** until you accept them. Moving a node or changing its confidence doesn't count as a change.
+Locking a node records a fingerprint of its title, kind, event type, description, open questions and the example schema. Edits you make in the sidebar keep it up to date. If the content changes any other way, for example through the JSON API, the card shows **Changed** and the sidebar asks you to review it in **Git history**. Choose **Accept changes** to fingerprint the current content. Nodes locked before fingerprints existed show **Unverified** until you accept them. Moving a node or changing its confidence doesn't count as a change.
 
 An **Uncertain** node needs **Open questions**: a Markdown field, separate from the description, for what's still undecided. Until it has some, the card shows **No questions** and `/flow` lists the node under `warnings`. Saving still works, so you can switch a node to **Uncertain** before writing them. **Steps** shows open questions under each description.
 
@@ -45,6 +45,69 @@ Decide whether a claim needs evaluation based on what happens when readers or do
 ## Claims, provenance and contexts
 
 A claim's **provenance** says who gave the information, and nothing else: a contributor (`CONTRIBUTOR`), an inference from a contributor's own publication (`INFERENCE`), or an external provider (`EXTERNAL_PROVIDER`).
+
+### Shared schemas
+
+Use named schemas in the snippets. App-owned language fields and lookup keys use `SupportedLanguage`. Provider responses keep their original language codes.
+
+```ts
+import { Schema } from "effect"
+import {
+  ExternalDataObservationId as ObservationId,
+  GbifTaxonId as GbifTaxonIdentifier,
+  GrammaticalGender,
+  InformationVisibility,
+  MediaAssetId,
+  PersonId,
+  PublicationId,
+  SupportedLanguage,
+  WhosOnFirstId,
+  WikiArticleId as ArticleId,
+  WikidataId as WikidataIdentifier,
+} from "@gororobas/domain"
+import { ClaimReportId as ReportId } from "@gororobas/domain/claim-based-architecture-experiment/claim-reports"
+import { ClaimId } from "@gororobas/domain/claim-based-architecture-experiment/provenance"
+import { WikidataPropertyId } from "@gororobas/domain/claim-based-architecture-experiment/providers/wikidata"
+
+const GbifTaxonId = GbifTaxonIdentifier.pipe(Schema.brand("GbifTaxonId"))
+const WikidataId = WikidataIdentifier.pipe(Schema.brand("WikidataId"))
+const PlaceArticleId = ArticleId.pipe(Schema.brand("PlaceArticleId"))
+const ProfileContextId = Schema.NonEmptyString.pipe(Schema.brand("ProfileContextId"))
+const ArticlePath = Schema.NonEmptyString.pipe(Schema.brand("ArticlePath"))
+const EvaluationId = Schema.NonEmptyString.pipe(Schema.brand("EvaluationId"))
+const ObservationValueKey = Schema.NonEmptyString.pipe(Schema.brand("ObservationValueKey"))
+const GbifChecklistKey = Schema.NonEmptyString.pipe(Schema.brand("GbifChecklistKey"))
+const GbifDatasetKey = Schema.NonEmptyString.pipe(Schema.brand("GbifDatasetKey"))
+const GbifOccurrenceKey = Schema.Int.pipe(Schema.brand("GbifOccurrenceKey"))
+const WikidataRevisionId = Schema.Int.pipe(Schema.brand("WikidataRevisionId"))
+const WikidataStatementId = Schema.NonEmptyString.pipe(Schema.brand("WikidataStatementId"))
+
+const ClaimProvenance = Schema.TaggedUnion({
+  CONTRIBUTOR: { personId: PersonId },
+  INFERENCE: { personId: PersonId, publicationId: PublicationId },
+  EXTERNAL_PROVIDER: { provider: Schema.NonEmptyString, observationId: ObservationId },
+})
+
+const WikidataSelectionProvenance = Schema.Struct({
+  kind: Schema.Literal("CLAIM"),
+  claimId: ClaimId,
+})
+
+const GbifSelectionProvenance = Schema.Union([
+  Schema.Struct({
+    ...WikidataSelectionProvenance.fields,
+    evaluationId: Schema.optionalKey(EvaluationId),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("WIKIDATA"),
+    wikidataId: WikidataId,
+  }),
+])
+```
+
+The GBIF and Wikidata ID claims use `ClaimProvenance.cases.CONTRIBUTOR`. Selection provenance records which claim or Wikidata item supplied the chosen provider ID.
+
+### Claim contexts
 
 A claim's **context** says where its value holds, in a shape each claim type chooses: a place article, a profile context, or text in the contributor's words. Some claims have none, such as a GBIF taxon ID. To place a field, ask whether it would still be true if someone else made the same claim. If it would, it describes the value and belongs to the claim. If it wouldn't, it describes who said it and belongs to the provenance.
 

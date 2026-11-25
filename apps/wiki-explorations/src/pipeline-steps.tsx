@@ -2,7 +2,7 @@ import { Array as EffectArray } from "effect"
 import Markdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
 
-import { ExampleDataTree, ExpandExampleData } from "./example-data-viewer.js"
+import { ExampleSchemaPreview, ExpandExampleSchema } from "./example-schema.js"
 import type { GraphNode } from "./graph.js"
 import { kinds } from "./node-card.js"
 import { upstreamTree, type Pipeline, type UpstreamBranch } from "./pipeline.js"
@@ -121,11 +121,13 @@ export function PipelineSteps({ pipeline, onFocus, onSelect }: { pipeline: Pipel
           <button onClick={() => onSelect(focus.id)}>Edit</button>
         </header>
         <NodeText node={focus} />
-        {focus.kind !== "transformation" && focus.exampleData !== undefined && (
-          <details className="markdown-preview borderless example-data">
-            <summary>Example data (JSON)</summary>
-            <ExpandExampleData value={focus.exampleData} />
-            <ExampleDataTree value={focus.exampleData} />
+        {focus.kind !== "transformation" && focus.exampleSchema !== undefined && (
+          <details className="markdown-preview borderless example-schema">
+            <summary>Example schema</summary>
+            <ExpandExampleSchema>
+              <ExampleSchemaPreview value={focus.exampleSchema} />
+            </ExpandExampleSchema>
+            <ExampleSchemaPreview value={focus.exampleSchema} />
           </details>
         )}
 

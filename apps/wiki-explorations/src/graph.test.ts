@@ -14,7 +14,7 @@ import {
   withLockFingerprint,
 } from "./graph.js"
 
-const fileWith = (fields: Record<string, string | boolean>) =>
+const fileWith = (fields: Record<string, Schema.Json>) =>
   JSON.stringify({
     title: "Architecture decisions",
     nodes: [
@@ -66,6 +66,39 @@ describe("architecture confidence", () => {
         const reopened = yield* decodeCanvasFile(content)
         assert.strictEqual(reopened.nodes[0]?.architectureConfidence, architectureConfidence)
       }),
+  )
+})
+
+describe("example schemas", () => {
+  it.effect("preserves older examples and stores edits as schema source", () =>
+    Effect.gen(function* () {
+      const fields = {
+        eventType: "Claim added",
+        exampleData: { claimId: "first-claim", authors: ["first-person"], context: null },
+      }
+      const legacy = yield* decodeCanvasFile(fileWith(fields))
+
+      const exampleSchema = [
+        "Schema.Struct({",
+        '  "claimId": Schema.Literal("first-claim"),',
+        '  "authors": Schema.Tuple([',
+        '    Schema.Literal("first-person"),',
+        "  ]),",
+        '  "context": Schema.Null,',
+        "})",
+      ].join("\n")
+
+      assert.propertyVal(legacy.nodes[0], "exampleSchema", exampleSchema)
+
+      const edited = 'Schema.TaggedStruct("NameClaim", { claimId: Schema.NonEmptyString })'
+      const current = yield* decodeCanvasFile(fileWith({ ...fields, exampleSchema: edited }))
+      const content = yield* Schema.encodeEffect(Schema.fromJsonString(Canvas))(current)
+      assert.notInclude(content, '"exampleData"')
+      assert.deepEqual(yield* decodeCanvasFile(content), current)
+      assert.deepEqual(diffCanvas(legacy, current).nodes[0]?.fields, [
+        { label: "Example schema", before: exampleSchema, after: edited },
+      ])
+    }),
   )
 })
 

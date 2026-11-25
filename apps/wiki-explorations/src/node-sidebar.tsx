@@ -1,5 +1,4 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import { Option, Schema } from "effect"
 import {
   CircleDashed,
   CircleHelp,
@@ -14,13 +13,11 @@ import { useRef, useState } from "react"
 import Markdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
 
-import { ExampleDataTree, ExpandExampleData } from "./example-data-viewer.js"
+import { ExampleSchemaEditor } from "./example-schema.js"
 import {
   ArchitectureConfidence,
   architectureConfidenceLabels,
   EventType,
-  ExampleDataText,
-  formatExampleData,
   type GraphNode,
   isMissingOpenQuestions,
   lockContent,
@@ -30,8 +27,6 @@ import {
 } from "./graph.js"
 import { kinds } from "./node-card.js"
 import { historyDialogAtom, nodeStatusesAtom } from "./workspace.js"
-
-const parseExampleData = Schema.decodeOption(ExampleDataText)
 
 const architectureConfidenceIcons = {
   NOT_REVIEWED: CircleDashed,
@@ -155,70 +150,6 @@ function RadioTabs<Value extends string>({
   )
 }
 
-function ExampleDataEditor({
-  value,
-  save,
-}: {
-  value: Schema.Json | undefined
-  save: (value: Schema.Json | undefined) => void
-}) {
-  const saved = formatExampleData(value)
-  const [draft, setDraft] = useState(saved)
-  const [preview, setPreview] = useState(true)
-  const parsed = draft.trim() === "" ? Option.some(undefined) : parseExampleData(draft)
-  const invalid = Option.isNone(parsed)
-  const example = Option.getOrUndefined(parsed)
-
-  return (
-    <section className="example-data">
-      <div className="description-header">
-        <label htmlFor="example-data">Example data (JSON)</label>
-        <div className="field-actions">
-          <EditorMode label="Example data mode" preview={preview} setPreview={setPreview} />
-          <ExpandExampleData value={example} />
-        </div>
-      </div>
-      {preview ? (
-        example !== undefined && <ExampleDataTree value={example} />
-      ) : (
-        <textarea
-          id="example-data"
-          value={draft}
-          placeholder="Enter JSON…"
-          spellCheck={false}
-          aria-invalid={invalid}
-          aria-describedby={invalid ? "example-data-error" : undefined}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-      )}
-      {preview && !invalid && example === undefined && (
-        <div className="json-tree">No example data.</div>
-      )}
-      {invalid && <p id="example-data-error">Enter valid JSON or clear the field.</p>}
-      {draft !== saved && (
-        <div className="field-actions example-edit-actions">
-          <button
-            type="button"
-            disabled={invalid}
-            onClick={() => {
-              if (Option.isSome(parsed)) {
-                save(parsed.value)
-                setDraft(formatExampleData(parsed.value))
-                setPreview(true)
-              }
-            }}
-          >
-            Apply example
-          </button>
-          <button type="button" onClick={() => setDraft(saved)}>
-            Cancel
-          </button>
-        </div>
-      )}
-    </section>
-  )
-}
-
 export function NodeSidebar({
   node,
   edit: saveNode,
@@ -234,7 +165,6 @@ export function NodeSidebar({
 }) {
   const editGroup = useRef<symbol>(undefined)
   const kind = kinds[node.kind]
-  const example = node.kind === "transformation" ? "" : formatExampleData(node.exampleData)
 
   const integrity = lockIntegrity(node)
   const change = useAtomValue(nodeStatusesAtom).get(node.id)
@@ -312,7 +242,7 @@ export function NodeSidebar({
                 openQuestions,
                 lockedContentHash,
                 kind,
-                exampleData,
+                exampleSchema,
               } = node
 
               const fields = {
@@ -324,7 +254,7 @@ export function NodeSidebar({
                 openQuestions,
                 lockedContentHash,
                 kind,
-                exampleData,
+                exampleSchema,
               }
 
               edit(
@@ -377,10 +307,10 @@ export function NodeSidebar({
         />
       )}
       {node.kind !== "transformation" && (
-        <ExampleDataEditor
-          key={example}
-          value={node.exampleData}
-          save={(exampleData) => edit({ ...node, exampleData })}
+        <ExampleSchemaEditor
+          key={JSON.stringify([node.id, node.exampleSchema])}
+          value={node.exampleSchema}
+          save={(exampleSchema) => edit({ ...node, exampleSchema })}
         />
       )}
       <button className="delete-button" onClick={remove}>

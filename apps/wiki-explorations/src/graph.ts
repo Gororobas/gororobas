@@ -1,5 +1,7 @@
 import { Effect, Hash, Match, Schema } from "effect"
 
+import { legacyExampleSchema } from "./legacy-example-schema.js"
+
 export const EventType = Schema.Literals(["Claim", "External data", "Report"])
 export const ArchitectureConfidence = Schema.Literals(["NOT_REVIEWED", "LOCKED_IN", "UNCERTAIN"])
 export const defaultArchitectureConfidence = "NOT_REVIEWED"
@@ -9,12 +11,6 @@ export const architectureConfidenceLabels = {
   LOCKED_IN: "Locked",
   UNCERTAIN: "Uncertain",
 } satisfies Record<typeof ArchitectureConfidence.Type, string>
-
-export const ExampleDataText = Schema.fromJsonString(Schema.Json, { space: 2 })
-const encodeExampleData = Schema.encodeSync(ExampleDataText)
-
-export const formatExampleData = (value: Schema.Json | undefined) =>
-  value === undefined ? "" : encodeExampleData(value)
 
 const nodeFields = {
   id: Schema.NonEmptyString,
@@ -30,7 +26,7 @@ const nodeFields = {
   lockedContentHash: Schema.optional(Schema.String),
 }
 
-const dataFields = { ...nodeFields, exampleData: Schema.optional(Schema.Json) }
+const dataFields = { ...nodeFields, exampleSchema: Schema.optional(Schema.String) }
 const eventFields = { ...dataFields, kind: Schema.Literal("event") }
 
 const otherNodes = [
@@ -64,7 +60,7 @@ const contentHash = (node: GraphNode) =>
         node.title,
         node.description,
         node.openQuestions ?? null,
-        node.kind === "transformation" ? null : (node.exampleData ?? null),
+        node.kind === "transformation" ? null : (node.exampleSchema ?? null),
       ]),
     ) >>> 0
   ).toString(16)
@@ -135,7 +131,17 @@ const LegacyCanvas = Schema.Struct({
 const decodeCurrentCanvas = Schema.decodeEffect(Schema.fromJsonString(Canvas))
 const decodeLegacyCanvas = Schema.decodeEffect(Schema.fromJsonString(LegacyCanvas))
 
-export const decodeCanvasFile = (content: string) =>
+const readLegacyExamples = Schema.decodeEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      nodes: Schema.Array(
+        Schema.Struct({ id: Schema.String, exampleData: Schema.optionalKey(Schema.Json) }),
+      ),
+    }),
+  ),
+)
+
+const decodeCanvas = (content: string) =>
   decodeCurrentCanvas(content).pipe(
     Effect.catch(() =>
       decodeLegacyCanvas(content).pipe(
@@ -181,6 +187,24 @@ export const decodeCanvasFile = (content: string) =>
       ),
     ),
   )
+
+export const decodeCanvasFile = (content: string) =>
+  Effect.gen(function* () {
+    const canvas = yield* decodeCanvas(content)
+    const { nodes } = yield* readLegacyExamples(content)
+    const examples = new Map(nodes.map(({ id, exampleData }) => [id, exampleData]))
+
+    return {
+      ...canvas,
+      nodes: canvas.nodes.map((node) => {
+        if (node.kind === "transformation" || node.exampleSchema !== undefined) return node
+        const example = examples.get(node.id)
+        return example === undefined
+          ? node
+          : { ...node, exampleSchema: legacyExampleSchema(example) }
+      }),
+    }
+  })
 
 /**
  * A trigger's outgoing edges point at the events it causes, such as an external data fetch. They

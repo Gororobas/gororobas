@@ -11,21 +11,7 @@
         "y": 0
       },
       "lockedContentHash": "e3902e37",
-      "exampleData": {
-        "claimId": "example-name-claim",
-        "articleId": "plant-acacia-dealbata",
-        "value": "Silver wattle",
-        "language": "en",
-        "gender": null,
-        "provenance": {
-          "_tag": "CONTRIBUTOR",
-          "personId": "example-person"
-        },
-        "context": {
-          "_tag": "PLACE_ARTICLE",
-          "placeArticleId": "place-australia"
-        }
-      },
+      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  value: Schema.NonEmptyString,\n  language: SupportedLanguage,\n  gender: Schema.NullOr(GrammaticalGender),\n  provenance: ClaimProvenance,\n  context: Schema.optionalKey(\n    Schema.Union([\n      Schema.TaggedStruct(\"PLACE_ARTICLE\", {\n        placeArticleId: PlaceArticleId,\n      }),\n      Schema.TaggedStruct(\"PROFILE_CONTEXT\", {\n        profileContextId: ProfileContextId,\n      }),\n      Schema.TaggedStruct(\"TEXT\", {\n        text: Schema.NonEmptyString,\n      }),\n    ]),\n  ),\n})",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": false
@@ -51,32 +37,7 @@
         "y": 26.5
       },
       "openQuestions": "- Which source languages should we include? External data can include languages beyond our SupportedLanguage.",
-      "exampleData": {
-        "plant-acacia-dealbata": {
-          "en": [
-            {
-              "value": "Silver wattle",
-              "gender": null,
-              "sources": [
-                {
-                  "_tag": "ContributorClaim",
-                  "claimId": "example-name-claim"
-                }
-              ]
-            },
-            {
-              "value": "Blue Wattle",
-              "gender": null,
-              "sources": [
-                {
-                  "_tag": "GbifObservation",
-                  "observationId": "example-gbif-taxon-observation"
-                }
-              ]
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Record(\n    SupportedLanguage,\n    Schema.optionalKey(\n      Schema.NonEmptyArray(\n        Schema.Struct({\n          value: Schema.NonEmptyString,\n          gender: Schema.NullOr(GrammaticalGender),\n          sources: Schema.NonEmptyArray(\n            Schema.Union([\n              Schema.TaggedStruct(\"ContributorClaim\", {\n                claimId: ClaimId,\n              }),\n              Schema.TaggedStruct(\"GbifObservation\", {\n                observationId: ObservationId,\n              }),\n              Schema.TaggedStruct(\"WikidataObservation\", {\n                observationId: ObservationId,\n              }),\n            ]),\n          ),\n        }),\n      ),\n    ),\n  ),\n)",
       "kind": "property"
     },
     {
@@ -99,22 +60,7 @@
         "x": 5280,
         "y": 866
       },
-      "exampleData": {
-        "/en/plants/silver-wattle": {
-          "_tag": "CanonicalPath",
-          "articleId": "plant-acacia-dealbata"
-        },
-        "/gbif/8P4G": {
-          "_tag": "AlternativePath",
-          "articleId": "plant-acacia-dealbata",
-          "canonical": "/en/plants/silver-wattle"
-        },
-        "/wikidata/Q757123": {
-          "_tag": "AlternativePath",
-          "articleId": "plant-acacia-dealbata",
-          "canonical": "/en/plants/silver-wattle"
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ArticlePath,\n  Schema.Union([\n    Schema.TaggedStruct(\"CanonicalPath\", {\n      articleId: ArticleId,\n    }),\n    Schema.TaggedStruct(\"AlternativePath\", {\n      articleId: ArticleId,\n      canonical: ArticlePath,\n    }),\n  ]),\n)",
       "kind": "property"
     },
     {
@@ -126,11 +72,7 @@
         "x": 1980,
         "y": 564
       },
-      "exampleData": {
-        "claimId": "example-gbif-taxon-claim",
-        "articleId": "plant-acacia-dealbata",
-        "taxonId": "8P4G"
-      },
+      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  taxonId: GbifTaxonId,\n  provenance: ClaimProvenance.cases.CONTRIBUTOR,\n})",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": true
@@ -144,362 +86,7 @@
         "x": 1980,
         "y": 690
       },
-      "exampleData": {
-        "observationId": "example-wikidata-observation",
-        "wikidataSelection": {
-          "wikidataId": "Q757123",
-          "articleId": "plant-acacia-dealbata",
-          "provenance": {
-            "kind": "CLAIM",
-            "claimId": "example-wikidata-id-claim"
-          }
-        },
-        "request": {
-          "url": "https://www.wikidata.org/wiki/Special:EntityData/Q757123.json",
-          "entityId": "Q757123"
-        },
-        "fetchedAt": "2026-11-20T11:58:00Z",
-        "response": {
-          "entities": {
-            "Q757123": {
-              "type": "item",
-              "id": "Q757123",
-              "pageid": 712345,
-              "ns": 0,
-              "title": "Q757123",
-              "lastrevid": 2291034512,
-              "modified": "2026-10-02T08:14:31Z",
-              "labels": {
-                "en": {
-                  "language": "en",
-                  "value": "Acacia dealbata"
-                },
-                "pt": {
-                  "language": "pt",
-                  "value": "Acacia dealbata"
-                }
-              },
-              "descriptions": {
-                "en": {
-                  "language": "en",
-                  "value": "species of plant"
-                },
-                "pt": {
-                  "language": "pt",
-                  "value": "espécie de planta"
-                }
-              },
-              "aliases": {
-                "en": [
-                  {
-                    "language": "en",
-                    "value": "silver wattle"
-                  },
-                  {
-                    "language": "en",
-                    "value": "blue wattle"
-                  }
-                ],
-                "pt": [
-                  {
-                    "language": "pt",
-                    "value": "mimosa"
-                  },
-                  {
-                    "language": "pt",
-                    "value": "acácia-mimosa"
-                  }
-                ]
-              },
-              "claims": {
-                "P31": [
-                  {
-                    "mainsnak": {
-                      "snaktype": "value",
-                      "property": "P31",
-                      "datavalue": {
-                        "value": {
-                          "entity-type": "item",
-                          "numeric-id": 16521,
-                          "id": "Q16521"
-                        },
-                        "type": "wikibase-entityid"
-                      },
-                      "datatype": "wikibase-item"
-                    },
-                    "type": "statement",
-                    "id": "Q757123$4F0E7B2C-1A9D-4E36-8C1B-0D2B7F5E9A01",
-                    "rank": "normal"
-                  }
-                ],
-                "P105": [
-                  {
-                    "mainsnak": {
-                      "snaktype": "value",
-                      "property": "P105",
-                      "datavalue": {
-                        "value": {
-                          "entity-type": "item",
-                          "numeric-id": 7432,
-                          "id": "Q7432"
-                        },
-                        "type": "wikibase-entityid"
-                      },
-                      "datatype": "wikibase-item"
-                    },
-                    "type": "statement",
-                    "id": "Q757123$9C3A1D44-7B52-4F0B-A6E3-2E8D1C4F6B12",
-                    "rank": "normal",
-                    "references": [
-                      {
-                        "hash": "fa278ebfc458360e5aed63d5058cca83c46134f1",
-                        "snaks": {
-                          "P248": [
-                            {
-                              "snaktype": "value",
-                              "property": "P248",
-                              "datavalue": {
-                                "value": {
-                                  "entity-type": "item",
-                                  "numeric-id": 1531570,
-                                  "id": "Q1531570"
-                                },
-                                "type": "wikibase-entityid"
-                              },
-                              "datatype": "wikibase-item"
-                            }
-                          ]
-                        },
-                        "snaks-order": ["P248"]
-                      }
-                    ]
-                  }
-                ],
-                "P171": [
-                  {
-                    "mainsnak": {
-                      "snaktype": "value",
-                      "property": "P171",
-                      "datavalue": {
-                        "value": {
-                          "entity-type": "item",
-                          "numeric-id": 81666,
-                          "id": "Q81666"
-                        },
-                        "type": "wikibase-entityid"
-                      },
-                      "datatype": "wikibase-item"
-                    },
-                    "type": "statement",
-                    "id": "Q757123$B61E2F90-3C7A-4D58-9E14-5A0C8B3D7E23",
-                    "rank": "normal",
-                    "references": [
-                      {
-                        "hash": "fa278ebfc458360e5aed63d5058cca83c46134f1",
-                        "snaks": {
-                          "P248": [
-                            {
-                              "snaktype": "value",
-                              "property": "P248",
-                              "datavalue": {
-                                "value": {
-                                  "entity-type": "item",
-                                  "numeric-id": 1531570,
-                                  "id": "Q1531570"
-                                },
-                                "type": "wikibase-entityid"
-                              },
-                              "datatype": "wikibase-item"
-                            }
-                          ]
-                        },
-                        "snaks-order": ["P248"]
-                      }
-                    ]
-                  }
-                ],
-                "P225": [
-                  {
-                    "mainsnak": {
-                      "snaktype": "value",
-                      "property": "P225",
-                      "datavalue": {
-                        "value": "Acacia dealbata",
-                        "type": "string"
-                      },
-                      "datatype": "string"
-                    },
-                    "type": "statement",
-                    "id": "Q757123$E2D47A16-8F03-4B9C-B5D2-6C1E0A9F3B34",
-                    "rank": "normal",
-                    "references": [
-                      {
-                        "hash": "fa278ebfc458360e5aed63d5058cca83c46134f1",
-                        "snaks": {
-                          "P248": [
-                            {
-                              "snaktype": "value",
-                              "property": "P248",
-                              "datavalue": {
-                                "value": {
-                                  "entity-type": "item",
-                                  "numeric-id": 1531570,
-                                  "id": "Q1531570"
-                                },
-                                "type": "wikibase-entityid"
-                              },
-                              "datatype": "wikibase-item"
-                            }
-                          ]
-                        },
-                        "snaks-order": ["P248"]
-                      }
-                    ]
-                  }
-                ],
-                "P846": [
-                  {
-                    "mainsnak": {
-                      "snaktype": "value",
-                      "property": "P846",
-                      "datavalue": {
-                        "value": "2979474",
-                        "type": "string"
-                      },
-                      "datatype": "external-id"
-                    },
-                    "type": "statement",
-                    "id": "Q757123$7A5C3E81-2D94-4F6A-9B07-8E3F1D2C5A45",
-                    "rank": "normal",
-                    "references": [
-                      {
-                        "hash": "fa278ebfc458360e5aed63d5058cca83c46134f1",
-                        "snaks": {
-                          "P248": [
-                            {
-                              "snaktype": "value",
-                              "property": "P248",
-                              "datavalue": {
-                                "value": {
-                                  "entity-type": "item",
-                                  "numeric-id": 1531570,
-                                  "id": "Q1531570"
-                                },
-                                "type": "wikibase-entityid"
-                              },
-                              "datatype": "wikibase-item"
-                            }
-                          ]
-                        },
-                        "snaks-order": ["P248"]
-                      }
-                    ]
-                  }
-                ],
-                "P1843": [
-                  {
-                    "mainsnak": {
-                      "snaktype": "value",
-                      "property": "P1843",
-                      "datavalue": {
-                        "value": {
-                          "text": "silver wattle",
-                          "language": "en"
-                        },
-                        "type": "monolingualtext"
-                      },
-                      "datatype": "monolingualtext"
-                    },
-                    "type": "statement",
-                    "id": "Q757123$C8F12B57-4E6D-4A39-8D21-9B0E7C3A1F56",
-                    "rank": "normal",
-                    "references": [
-                      {
-                        "hash": "fa278ebfc458360e5aed63d5058cca83c46134f1",
-                        "snaks": {
-                          "P248": [
-                            {
-                              "snaktype": "value",
-                              "property": "P248",
-                              "datavalue": {
-                                "value": {
-                                  "entity-type": "item",
-                                  "numeric-id": 1531570,
-                                  "id": "Q1531570"
-                                },
-                                "type": "wikibase-entityid"
-                              },
-                              "datatype": "wikibase-item"
-                            }
-                          ]
-                        },
-                        "snaks-order": ["P248"]
-                      }
-                    ]
-                  },
-                  {
-                    "mainsnak": {
-                      "snaktype": "value",
-                      "property": "P1843",
-                      "datavalue": {
-                        "value": {
-                          "text": "mimosa",
-                          "language": "pt"
-                        },
-                        "type": "monolingualtext"
-                      },
-                      "datatype": "monolingualtext"
-                    },
-                    "type": "statement",
-                    "id": "Q757123$D3A96C08-5F1B-4E72-A4C3-0F8B2E6D9C67",
-                    "rank": "normal",
-                    "references": [
-                      {
-                        "hash": "fa278ebfc458360e5aed63d5058cca83c46134f1",
-                        "snaks": {
-                          "P248": [
-                            {
-                              "snaktype": "value",
-                              "property": "P248",
-                              "datavalue": {
-                                "value": {
-                                  "entity-type": "item",
-                                  "numeric-id": 1531570,
-                                  "id": "Q1531570"
-                                },
-                                "type": "wikibase-entityid"
-                              },
-                              "datatype": "wikibase-item"
-                            }
-                          ]
-                        },
-                        "snaks-order": ["P248"]
-                      }
-                    ]
-                  }
-                ]
-              },
-              "sitelinks": {
-                "enwiki": {
-                  "site": "enwiki",
-                  "title": "Acacia dealbata",
-                  "badges": []
-                },
-                "ptwiki": {
-                  "site": "ptwiki",
-                  "title": "Acacia dealbata",
-                  "badges": []
-                },
-                "specieswiki": {
-                  "site": "specieswiki",
-                  "title": "Acacia dealbata",
-                  "badges": []
-                }
-              }
-            }
-          }
-        }
-      },
+      "exampleSchema": "Schema.Struct({\n  observationId: ObservationId,\n  wikidataSelection: Schema.Struct({\n    wikidataId: WikidataId,\n    articleId: ArticleId,\n    provenance: WikidataSelectionProvenance,\n  }),\n  request: Schema.Struct({\n    url: Schema.URLFromString,\n    entityId: WikidataId,\n  }),\n  fetchedAt: Schema.DateTimeUtcFromString,\n  response: Schema.Struct({\n    entities: Schema.Record(\n      WikidataId,\n      Schema.StructWithRest(\n        Schema.Struct({\n          id: WikidataId,\n          lastrevid: WikidataRevisionId,\n          modified: Schema.DateTimeUtcFromString,\n          labels: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Struct({\n              language: Schema.NonEmptyString,\n              value: Schema.NonEmptyString,\n            }),\n          ),\n          descriptions: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Struct({\n              language: Schema.NonEmptyString,\n              value: Schema.NonEmptyString,\n            }),\n          ),\n          aliases: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Array(\n              Schema.Struct({\n                language: Schema.NonEmptyString,\n                value: Schema.NonEmptyString,\n              }),\n            ),\n          ),\n          claims: Schema.Record(\n            WikidataPropertyId,\n            Schema.Array(\n              Schema.StructWithRest(\n                Schema.Struct({\n                  id: WikidataStatementId,\n                  mainsnak: Schema.JsonObject,\n                  rank: Schema.NonEmptyString,\n                  references: Schema.optionalKey(Schema.Array(Schema.JsonObject)),\n                }),\n                [Schema.JsonObject],\n              ),\n            ),\n          ),\n          sitelinks: Schema.Record(Schema.NonEmptyString, Schema.JsonObject),\n        }),\n        [Schema.JsonObject],\n      ),\n    ),\n  }),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -524,16 +111,7 @@
         "x": 2640,
         "y": 939
       },
-      "exampleData": {
-        "8P4G": {
-          "articleId": "plant-acacia-dealbata",
-          "provenance": {
-            "kind": "WIKIDATA",
-            "wikidataId": "Q757123"
-          },
-          "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b"
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  GbifTaxonId,\n  Schema.Struct({\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n)",
       "kind": "property"
     },
     {
@@ -545,80 +123,7 @@
         "x": 3300,
         "y": 1161.5
       },
-      "exampleData": {
-        "observationId": "example-gbif-taxon-observation",
-        "kind": "TAXON_METADATA",
-        "taxonSelection": {
-          "articleId": "plant-acacia-dealbata",
-          "provenance": {
-            "kind": "WIKIDATA",
-            "wikidataId": "Q757123"
-          },
-          "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
-          "taxonId": "8P4G"
-        },
-        "fetchedAt": "2026-11-20T12:00:00Z",
-        "response": {
-          "taxonID": "8P4G",
-          "scientificName": "Acacia dealbata",
-          "taxonRank": "SPECIES",
-          "classification": [
-            {
-              "taxonID": "P",
-              "scientificName": "Plantae",
-              "taxonRank": "KINGDOM"
-            },
-            {
-              "taxonID": "623QT",
-              "scientificName": "Fabaceae",
-              "taxonRank": "FAMILY"
-            },
-            {
-              "taxonID": "LV7",
-              "scientificName": "Acacia",
-              "taxonRank": "GENUS"
-            }
-          ],
-          "vernacularNames": [
-            {
-              "vernacularName": "Blue Wattle",
-              "language": "eng"
-            }
-          ],
-          "distributions": [
-            {
-              "locality": "Australia, Australian Capital Territory",
-              "establishmentMeans": "NATIVE",
-              "remarks": "Fl. Australia 11A: 243 (2001)"
-            },
-            {
-              "locality": "Australia, New South Wales",
-              "establishmentMeans": "NATIVE",
-              "remarks": "Fl. Australia 11A: 243 (2001)"
-            },
-            {
-              "locality": "Australia, Tasmania",
-              "establishmentMeans": "NATIVE",
-              "remarks": "Fl. Australia 11A: 243 (2001)"
-            },
-            {
-              "locality": "Australia, Victoria",
-              "establishmentMeans": "NATIVE",
-              "remarks": "Fl. Australia 11A: 243 (2001)"
-            },
-            {
-              "locality": "Australia, Western Australia",
-              "establishmentMeans": "INTRODUCED",
-              "remarks": "Fl. Australia 11A: 243 (2001)"
-            },
-            {
-              "locality": "Australia, South Australia",
-              "establishmentMeans": "INTRODUCED",
-              "remarks": "Fl. Australia 11A: 243 (2001)"
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Struct({\n  kind: Schema.Literal(\"TAXON_METADATA\"),\n  observationId: ObservationId,\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  fetchedAt: Schema.DateTimeUtcFromString,\n  response: Schema.Struct({\n    taxonID: GbifTaxonId,\n    scientificName: Schema.NonEmptyString,\n    taxonRank: Schema.NonEmptyString,\n    classification: Schema.Array(\n      Schema.Struct({\n        taxonID: GbifTaxonId,\n        scientificName: Schema.NonEmptyString,\n        taxonRank: Schema.NonEmptyString,\n      }),\n    ),\n    vernacularNames: Schema.Array(\n      Schema.Struct({\n        vernacularName: Schema.NonEmptyString,\n        language: Schema.NonEmptyString,\n      }),\n    ),\n    distributions: Schema.Array(\n      Schema.Struct({\n        locality: Schema.NonEmptyString,\n        establishmentMeans: Schema.NonEmptyString,\n        remarks: Schema.optionalKey(Schema.String),\n      }),\n    ),\n  }),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -642,28 +147,7 @@
         "x": 4620,
         "y": 969
       },
-      "exampleData": {
-        "plant-acacia-dealbata": {
-          "observationId": "example-gbif-taxon-observation",
-          "classification": [
-            {
-              "taxonId": "P",
-              "scientificName": "Plantae",
-              "taxonRank": "KINGDOM"
-            },
-            {
-              "taxonId": "623QT",
-              "scientificName": "Fabaceae",
-              "taxonRank": "FAMILY"
-            },
-            {
-              "taxonId": "LV7",
-              "scientificName": "Acacia",
-              "taxonRank": "GENUS"
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    observationId: ObservationId,\n    classification: Schema.Array(\n      Schema.Struct({\n        taxonId: GbifTaxonId,\n        scientificName: Schema.NonEmptyString,\n        taxonRank: Schema.NonEmptyString,\n      }),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -675,22 +159,7 @@
         "x": 4620,
         "y": 1224.5
       },
-      "exampleData": {
-        "plant-acacia-dealbata": {
-          "observationId": "example-gbif-occurrences-observation",
-          "records": [
-            {
-              "occurrenceKey": 5938164805,
-              "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",
-              "eventDate": "2026-01-03T13:55:56",
-              "basisOfRecord": "HUMAN_OBSERVATION",
-              "matchedTaxonId": "8P4G",
-              "placeArticleId": "place-australia",
-              "matchMethod": "COUNTRY_CODE"
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    observationId: ObservationId,\n    records: Schema.Array(\n      Schema.Struct({\n        occurrenceKey: GbifOccurrenceKey,\n        datasetKey: GbifDatasetKey,\n        eventDate: Schema.optionalKey(Schema.NonEmptyString),\n        basisOfRecord: Schema.NonEmptyString,\n        matchedTaxonId: GbifTaxonId,\n        placeArticleId: Schema.optionalKey(PlaceArticleId),\n        matchMethod: Schema.optionalKey(Schema.NonEmptyString),\n      }),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -703,29 +172,7 @@
         "y": 1360.5
       },
       "openQuestions": "- Which practice questions are height's own, and which form a shared set (planting method, ground cover, pesticides) reused across plant properties? Some may belong on the profile context instead.",
-      "exampleData": {
-        "claimId": "example-height-observation",
-        "articleId": "plant-acacia-dealbata",
-        "minimumCm": 600,
-        "maximumCm": 800,
-        "provenance": {
-          "_tag": "CONTRIBUTOR",
-          "personId": "example-person"
-        },
-        "context": {
-          "_tag": "PROFILE_CONTEXT",
-          "profileContextId": "example-context-villa-de-leyva",
-          "period": {
-            "start": "2023",
-            "end": null
-          },
-          "practices": {
-            "plantingMethod": "SEEDLING",
-            "groundCover": "ORGANIC_MULCH",
-            "pesticides": "NONE"
-          }
-        }
-      },
+      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  minimumCm: Schema.optionalKey(Schema.Finite),\n  maximumCm: Schema.optionalKey(Schema.Finite),\n  provenance: ClaimProvenance,\n  context: Schema.optionalKey(\n    Schema.Union([\n      Schema.TaggedStruct(\"PLACE_ARTICLE\", {\n        placeArticleId: PlaceArticleId,\n        period: Schema.optionalKey(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: Schema.optionalKey(\n          Schema.Struct({\n            plantingMethod: Schema.optionalKey(Schema.NonEmptyString),\n            groundCover: Schema.optionalKey(Schema.NonEmptyString),\n            pesticides: Schema.optionalKey(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n      Schema.TaggedStruct(\"PROFILE_CONTEXT\", {\n        profileContextId: ProfileContextId,\n        period: Schema.optionalKey(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: Schema.optionalKey(\n          Schema.Struct({\n            plantingMethod: Schema.optionalKey(Schema.NonEmptyString),\n            groundCover: Schema.optionalKey(Schema.NonEmptyString),\n            pesticides: Schema.optionalKey(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n      Schema.TaggedStruct(\"TEXT\", {\n        text: Schema.NonEmptyString,\n        period: Schema.optionalKey(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: Schema.optionalKey(\n          Schema.Struct({\n            plantingMethod: Schema.optionalKey(Schema.NonEmptyString),\n            groundCover: Schema.optionalKey(Schema.NonEmptyString),\n            pesticides: Schema.optionalKey(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n    ]),\n  ),\n})",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": false
@@ -751,18 +198,7 @@
         "x": 5280,
         "y": 1496.5
       },
-      "exampleData": {
-        "plant-acacia-dealbata": {
-          "minimumCm": 600,
-          "maximumCm": 800,
-          "sources": [
-            {
-              "_tag": "ContributorClaim",
-              "claimId": "example-height-observation"
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    minimumCm: Schema.optionalKey(Schema.Finite),\n    maximumCm: Schema.optionalKey(Schema.Finite),\n    sources: Schema.NonEmptyArray(\n      Schema.Union([\n        Schema.TaggedStruct(\"ContributorClaim\", {\n          claimId: ClaimId,\n        }),\n        Schema.TaggedStruct(\"ExternalObservation\", {\n          observationId: ObservationId,\n        }),\n      ]),\n    ),\n    parentRange: Schema.optionalKey(\n      Schema.Struct({\n        minimumCm: Schema.optionalKey(Schema.Finite),\n        maximumCm: Schema.optionalKey(Schema.Finite),\n      }),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -785,87 +221,7 @@
         "x": 5940,
         "y": 1224.5
       },
-      "exampleData": {
-        "articleId": "plant-acacia-dealbata",
-        "canonicalPath": "/en/plants/silver-wattle",
-        "names": {
-          "en": [
-            {
-              "value": "Silver wattle",
-              "gender": null,
-              "sources": [
-                {
-                  "_tag": "ContributorClaim",
-                  "claimId": "example-name-claim"
-                }
-              ]
-            },
-            {
-              "value": "Blue Wattle",
-              "gender": null,
-              "sources": [
-                {
-                  "_tag": "GbifObservation",
-                  "observationId": "example-gbif-taxon-observation"
-                }
-              ]
-            }
-          ]
-        },
-        "geographicalOrigin": {
-          "gbif": {
-            "observationId": "example-gbif-taxon-observation"
-          },
-          "contributorByLanguage": {
-            "pt": {
-              "claimId": "example-origin-claim",
-              "text": "Nativa do sudeste da Austrália, incluindo a Tasmânia."
-            }
-          }
-        },
-        "occurrenceSample": {
-          "observationId": "example-gbif-occurrences-observation",
-          "records": 1
-        },
-        "taxonomy": {
-          "observationId": "example-gbif-taxon-observation",
-          "classification": [
-            {
-              "taxonId": "P",
-              "scientificName": "Plantae",
-              "taxonRank": "KINGDOM"
-            },
-            {
-              "taxonId": "623QT",
-              "scientificName": "Fabaceae",
-              "taxonRank": "FAMILY"
-            },
-            {
-              "taxonId": "LV7",
-              "scientificName": "Acacia",
-              "taxonRank": "GENUS"
-            }
-          ]
-        },
-        "height": {
-          "minimumCm": 600,
-          "maximumCm": 800,
-          "sources": [
-            {
-              "_tag": "ContributorClaim",
-              "claimId": "example-height-observation"
-            }
-          ]
-        },
-        "images": {
-          "observationId": "example-gbif-occurrences-observation",
-          "assets": [
-            {
-              "mediaAssetId": "example-gbif-media-asset"
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Struct({\n  articleId: ArticleId,\n  canonicalPath: ArticlePath,\n  names: Schema.Record(\n    SupportedLanguage,\n    Schema.optionalKey(\n      Schema.NonEmptyArray(\n        Schema.Struct({\n          value: Schema.NonEmptyString,\n          gender: Schema.NullOr(GrammaticalGender),\n          sources: Schema.NonEmptyArray(\n            Schema.Union([\n              Schema.TaggedStruct(\"ContributorClaim\", {\n                claimId: ClaimId,\n              }),\n              Schema.TaggedStruct(\"GbifObservation\", {\n                observationId: ObservationId,\n              }),\n              Schema.TaggedStruct(\"WikidataObservation\", {\n                observationId: ObservationId,\n              }),\n            ]),\n          ),\n        }),\n      ),\n    ),\n  ),\n  geographicalOrigin: Schema.optionalKey(\n    Schema.Struct({\n      gbif: Schema.optionalKey(\n        Schema.Struct({\n          observationId: ObservationId,\n        }),\n      ),\n      contributorByLanguage: Schema.Record(\n        SupportedLanguage,\n        Schema.optionalKey(\n          Schema.Struct({\n            claimId: ClaimId,\n            text: Schema.NonEmptyString,\n          }),\n        ),\n      ),\n    }),\n  ),\n  occurrenceSample: Schema.optionalKey(\n    Schema.Struct({\n      observationId: ObservationId,\n      records: Schema.Int,\n    }),\n  ),\n  taxonomy: Schema.optionalKey(\n    Schema.Struct({\n      observationId: ObservationId,\n      classification: Schema.Array(\n        Schema.Struct({\n          taxonId: GbifTaxonId,\n          scientificName: Schema.NonEmptyString,\n          taxonRank: Schema.NonEmptyString,\n        }),\n      ),\n    }),\n  ),\n  height: Schema.optionalKey(\n    Schema.Struct({\n      minimumCm: Schema.optionalKey(Schema.Finite),\n      maximumCm: Schema.optionalKey(Schema.Finite),\n      sources: Schema.NonEmptyArray(\n        Schema.Union([\n          Schema.TaggedStruct(\"ContributorClaim\", {\n            claimId: ClaimId,\n          }),\n          Schema.TaggedStruct(\"ExternalObservation\", {\n            observationId: ObservationId,\n          }),\n        ]),\n      ),\n      parentRange: Schema.optionalKey(\n        Schema.Struct({\n          minimumCm: Schema.optionalKey(Schema.Finite),\n          maximumCm: Schema.optionalKey(Schema.Finite),\n        }),\n      ),\n    }),\n  ),\n  images: Schema.optionalKey(\n    Schema.Struct({\n      observationId: ObservationId,\n      assets: Schema.Array(\n        Schema.Struct({\n          mediaAssetId: MediaAssetId,\n        }),\n      ),\n    }),\n  ),\n})",
       "kind": "property"
     },
     {
@@ -877,12 +233,7 @@
         "x": 3960,
         "y": 1705.5
       },
-      "exampleData": {
-        "claimId": "example-origin-claim",
-        "articleId": "plant-acacia-dealbata",
-        "language": "pt",
-        "text": "Nativa do sudeste da Austrália, incluindo a Tasmânia."
-      },
+      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  language: SupportedLanguage,\n  text: Schema.NonEmptyString,\n  provenance: ClaimProvenance,\n})",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": true
@@ -907,19 +258,7 @@
         "x": 4620,
         "y": 1752
       },
-      "exampleData": {
-        "plant-acacia-dealbata": {
-          "gbif": {
-            "observationId": "example-gbif-taxon-observation"
-          },
-          "contributorByLanguage": {
-            "pt": {
-              "claimId": "example-origin-claim",
-              "text": "Nativa do sudeste da Austrália, incluindo a Tasmânia."
-            }
-          }
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    gbif: Schema.optionalKey(\n      Schema.Struct({\n        observationId: ObservationId,\n      }),\n    ),\n    contributorByLanguage: Schema.Record(\n      SupportedLanguage,\n      Schema.optionalKey(\n        Schema.Struct({\n          claimId: ClaimId,\n          text: Schema.NonEmptyString,\n        }),\n      ),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -931,73 +270,7 @@
         "x": 3300,
         "y": 1287.5
       },
-      "exampleData": {
-        "observationId": "example-gbif-occurrences-observation",
-        "kind": "TAXON_OCCURRENCES",
-        "taxonSelection": {
-          "articleId": "plant-acacia-dealbata",
-          "provenance": {
-            "kind": "WIKIDATA",
-            "wikidataId": "Q757123"
-          },
-          "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
-          "taxonId": "8P4G"
-        },
-        "fetchedAt": "2026-11-20T12:00:00Z",
-        "query": {
-          "occurrenceStatus": "DETECTED",
-          "hasGeospatialIssue": false,
-          "country": "AU",
-          "limit": 2
-        },
-        "response": {
-          "offset": 0,
-          "limit": 2,
-          "count": 36310,
-          "endOfRecords": false,
-          "results": [
-            {
-              "key": 5938164805,
-              "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",
-              "eventDate": "2026-01-03T13:55:56",
-              "basisOfRecord": "HUMAN_OBSERVATION",
-              "countryCode": "AU",
-              "stateProvince": "Victoria",
-              "classifications": {
-                "7ddf754f-d193-4cc9-b351-99906754a03b": {
-                  "acceptedUsage": {
-                    "key": "8P4G"
-                  }
-                }
-              },
-              "media": [
-                {
-                  "type": "StillImage",
-                  "identifier": "https://example.org/blue-wattle.jpg",
-                  "creator": "Example contributor",
-                  "license": "https://creativecommons.org/licenses/by/4.0/"
-                }
-              ]
-            },
-            {
-              "key": 5940021377,
-              "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",
-              "eventDate": "2026-01-09T09:12:04",
-              "basisOfRecord": "HUMAN_OBSERVATION",
-              "countryCode": "AU",
-              "stateProvince": "Tasmania",
-              "classifications": {
-                "7ddf754f-d193-4cc9-b351-99906754a03b": {
-                  "acceptedUsage": {
-                    "key": "8P4G"
-                  }
-                }
-              },
-              "media": []
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Struct({\n  kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n  observationId: ObservationId,\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  fetchedAt: Schema.DateTimeUtcFromString,\n  query: Schema.Struct({\n    occurrenceStatus: Schema.Literal(\"DETECTED\"),\n    hasGeospatialIssue: Schema.Literal(false),\n    country: Schema.optionalKey(Schema.NonEmptyString),\n    limit: Schema.Int,\n  }),\n  response: Schema.Struct({\n    offset: Schema.Int,\n    limit: Schema.Int,\n    count: Schema.Int,\n    endOfRecords: Schema.Boolean,\n    results: Schema.Array(\n      Schema.Struct({\n        key: GbifOccurrenceKey,\n        datasetKey: GbifDatasetKey,\n        eventDate: Schema.optionalKey(Schema.String),\n        basisOfRecord: Schema.NonEmptyString,\n        countryCode: Schema.optionalKey(Schema.NonEmptyString),\n        stateProvince: Schema.optionalKey(Schema.NonEmptyString),\n        classifications: Schema.Record(\n          GbifChecklistKey,\n          Schema.Struct({\n            acceptedUsage: Schema.Struct({\n              key: GbifTaxonId,\n            }),\n          }),\n        ),\n        media: Schema.Array(\n          Schema.Struct({\n            type: Schema.NonEmptyString,\n            identifier: Schema.URLFromString,\n            creator: Schema.optionalKey(Schema.NonEmptyString),\n            license: Schema.optionalKey(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n    ),\n  }),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -1032,16 +305,7 @@
         "x": 4620,
         "y": 1878
       },
-      "exampleData": {
-        "plant-acacia-dealbata": {
-          "observationId": "example-gbif-occurrences-observation",
-          "assets": [
-            {
-              "mediaAssetId": "example-gbif-media-asset"
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    observationId: ObservationId,\n    assets: Schema.Array(\n      Schema.Struct({\n        mediaAssetId: MediaAssetId,\n      }),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -1064,147 +328,7 @@
         "x": 3960,
         "y": 1198
       },
-      "exampleData": {
-        "example-gbif-taxon-observation": {
-          "kind": "TAXON_METADATA",
-          "taxonSelection": {
-            "articleId": "plant-acacia-dealbata",
-            "provenance": {
-              "kind": "WIKIDATA",
-              "wikidataId": "Q757123"
-            },
-            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
-            "taxonId": "8P4G"
-          },
-          "fetchedAt": "2026-11-20T12:00:00Z",
-          "response": {
-            "taxonID": "8P4G",
-            "scientificName": "Acacia dealbata",
-            "taxonRank": "SPECIES",
-            "classification": [
-              {
-                "taxonID": "P",
-                "scientificName": "Plantae",
-                "taxonRank": "KINGDOM"
-              },
-              {
-                "taxonID": "623QT",
-                "scientificName": "Fabaceae",
-                "taxonRank": "FAMILY"
-              },
-              {
-                "taxonID": "LV7",
-                "scientificName": "Acacia",
-                "taxonRank": "GENUS"
-              }
-            ],
-            "vernacularNames": [
-              {
-                "vernacularName": "Blue Wattle",
-                "language": "eng"
-              }
-            ],
-            "distributions": [
-              {
-                "locality": "Australia, Australian Capital Territory",
-                "establishmentMeans": "NATIVE",
-                "remarks": "Fl. Australia 11A: 243 (2001)"
-              },
-              {
-                "locality": "Australia, New South Wales",
-                "establishmentMeans": "NATIVE",
-                "remarks": "Fl. Australia 11A: 243 (2001)"
-              },
-              {
-                "locality": "Australia, Tasmania",
-                "establishmentMeans": "NATIVE",
-                "remarks": "Fl. Australia 11A: 243 (2001)"
-              },
-              {
-                "locality": "Australia, Victoria",
-                "establishmentMeans": "NATIVE",
-                "remarks": "Fl. Australia 11A: 243 (2001)"
-              },
-              {
-                "locality": "Australia, Western Australia",
-                "establishmentMeans": "INTRODUCED",
-                "remarks": "Fl. Australia 11A: 243 (2001)"
-              },
-              {
-                "locality": "Australia, South Australia",
-                "establishmentMeans": "INTRODUCED",
-                "remarks": "Fl. Australia 11A: 243 (2001)"
-              }
-            ]
-          }
-        },
-        "example-gbif-occurrences-observation": {
-          "kind": "TAXON_OCCURRENCES",
-          "taxonSelection": {
-            "articleId": "plant-acacia-dealbata",
-            "provenance": {
-              "kind": "WIKIDATA",
-              "wikidataId": "Q757123"
-            },
-            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
-            "taxonId": "8P4G"
-          },
-          "fetchedAt": "2026-11-20T12:00:00Z",
-          "query": {
-            "occurrenceStatus": "DETECTED",
-            "hasGeospatialIssue": false,
-            "country": "AU",
-            "limit": 2
-          },
-          "response": {
-            "offset": 0,
-            "limit": 2,
-            "count": 36310,
-            "endOfRecords": false,
-            "results": [
-              {
-                "key": 5938164805,
-                "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",
-                "eventDate": "2026-01-03T13:55:56",
-                "basisOfRecord": "HUMAN_OBSERVATION",
-                "countryCode": "AU",
-                "stateProvince": "Victoria",
-                "classifications": {
-                  "7ddf754f-d193-4cc9-b351-99906754a03b": {
-                    "acceptedUsage": {
-                      "key": "8P4G"
-                    }
-                  }
-                },
-                "media": [
-                  {
-                    "type": "StillImage",
-                    "identifier": "https://example.org/blue-wattle.jpg",
-                    "creator": "Example contributor",
-                    "license": "https://creativecommons.org/licenses/by/4.0/"
-                  }
-                ]
-              },
-              {
-                "key": 5940021377,
-                "datasetKey": "50c9509d-22c7-4a22-a47d-8c48425ef4a7",
-                "eventDate": "2026-01-09T09:12:04",
-                "basisOfRecord": "HUMAN_OBSERVATION",
-                "countryCode": "AU",
-                "stateProvince": "Tasmania",
-                "classifications": {
-                  "7ddf754f-d193-4cc9-b351-99906754a03b": {
-                    "acceptedUsage": {
-                      "key": "8P4G"
-                    }
-                  }
-                },
-                "media": []
-              }
-            ]
-          }
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ObservationId,\n  Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"TAXON_METADATA\"),\n      taxonSelection: Schema.Struct({\n        taxonId: GbifTaxonId,\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n        checklistKey: GbifChecklistKey,\n      }),\n      fetchedAt: Schema.DateTimeUtcFromString,\n      response: Schema.Struct({\n        taxonID: GbifTaxonId,\n        scientificName: Schema.NonEmptyString,\n        taxonRank: Schema.NonEmptyString,\n        classification: Schema.Array(\n          Schema.Struct({\n            taxonID: GbifTaxonId,\n            scientificName: Schema.NonEmptyString,\n            taxonRank: Schema.NonEmptyString,\n          }),\n        ),\n        vernacularNames: Schema.Array(\n          Schema.Struct({\n            vernacularName: Schema.NonEmptyString,\n            language: Schema.NonEmptyString,\n          }),\n        ),\n        distributions: Schema.Array(\n          Schema.Struct({\n            locality: Schema.NonEmptyString,\n            establishmentMeans: Schema.NonEmptyString,\n            remarks: Schema.optionalKey(Schema.String),\n          }),\n        ),\n      }),\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n      taxonSelection: Schema.Struct({\n        taxonId: GbifTaxonId,\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n        checklistKey: GbifChecklistKey,\n      }),\n      fetchedAt: Schema.DateTimeUtcFromString,\n      query: Schema.Struct({\n        occurrenceStatus: Schema.Literal(\"DETECTED\"),\n        hasGeospatialIssue: Schema.Literal(false),\n        country: Schema.optionalKey(Schema.NonEmptyString),\n        limit: Schema.Int,\n      }),\n      response: Schema.Struct({\n        offset: Schema.Int,\n        limit: Schema.Int,\n        count: Schema.Int,\n        endOfRecords: Schema.Boolean,\n        results: Schema.Array(\n          Schema.Struct({\n            key: GbifOccurrenceKey,\n            datasetKey: GbifDatasetKey,\n            eventDate: Schema.optionalKey(Schema.String),\n            basisOfRecord: Schema.NonEmptyString,\n            countryCode: Schema.optionalKey(Schema.NonEmptyString),\n            stateProvince: Schema.optionalKey(Schema.NonEmptyString),\n            classifications: Schema.Record(\n              GbifChecklistKey,\n              Schema.Struct({\n                acceptedUsage: Schema.Struct({\n                  key: GbifTaxonId,\n                }),\n              }),\n            ),\n            media: Schema.Array(\n              Schema.Struct({\n                type: Schema.NonEmptyString,\n                identifier: Schema.URLFromString,\n                creator: Schema.optionalKey(Schema.NonEmptyString),\n                license: Schema.optionalKey(Schema.NonEmptyString),\n              }),\n            ),\n          }),\n        ),\n      }),\n    }),\n  ]),\n)",
       "kind": "property"
     },
     {
@@ -1216,37 +340,7 @@
         "x": 2970,
         "y": 995.5
       },
-      "exampleData": {
-        "taxonSelection": {
-          "articleId": "plant-acacia-dealbata",
-          "provenance": {
-            "kind": "WIKIDATA",
-            "wikidataId": "Q757123"
-          },
-          "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
-          "taxonId": "8P4G"
-        },
-        "reason": "SELECTION_CHANGED",
-        "requests": [
-          {
-            "kind": "TAXON_METADATA",
-            "taxonId": "8P4G",
-            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
-            "idempotencyKey": "GBIF_TAXON_METADATA:7ddf754f-d193-4cc9-b351-99906754a03b:8P4G:plant-acacia-dealbata:initial"
-          },
-          {
-            "kind": "TAXON_OCCURRENCES",
-            "taxonId": "8P4G",
-            "checklistKey": "7ddf754f-d193-4cc9-b351-99906754a03b",
-            "query": {
-              "occurrenceStatus": "DETECTED",
-              "hasGeospatialIssue": false,
-              "limit": 300
-            },
-            "idempotencyKey": "GBIF_TAXON_OCCURRENCES:7ddf754f-d193-4cc9-b351-99906754a03b:8P4G:plant-acacia-dealbata:initial"
-          }
-        ]
-      },
+      "exampleSchema": "Schema.Struct({\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  reason: Schema.NonEmptyString,\n  requests: Schema.Array(\n    Schema.Union([\n      Schema.Struct({\n        kind: Schema.Literal(\"TAXON_METADATA\"),\n        taxonId: GbifTaxonId,\n        checklistKey: GbifChecklistKey,\n        idempotencyKey: Schema.NonEmptyString,\n      }),\n      Schema.Struct({\n        kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n        taxonId: GbifTaxonId,\n        checklistKey: GbifChecklistKey,\n        query: Schema.Struct({\n          occurrenceStatus: Schema.Literal(\"DETECTED\"),\n          hasGeospatialIssue: Schema.Literal(false),\n          country: Schema.optionalKey(Schema.NonEmptyString),\n          limit: Schema.Int,\n        }),\n        idempotencyKey: Schema.NonEmptyString,\n      }),\n    ]),\n  ),\n})",
       "kind": "trigger"
     },
     {
@@ -1258,11 +352,7 @@
         "x": 660,
         "y": 139.5
       },
-      "exampleData": {
-        "claimId": "example-wikidata-id-claim",
-        "articleId": "plant-acacia-dealbata",
-        "wikidataId": "Q757123"
-      },
+      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  wikidataId: WikidataId,\n  provenance: ClaimProvenance.cases.CONTRIBUTOR,\n})",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": true
@@ -1287,15 +377,7 @@
         "x": 1320,
         "y": 418
       },
-      "exampleData": {
-        "Q757123": {
-          "articleId": "plant-acacia-dealbata",
-          "provenance": {
-            "kind": "CLAIM",
-            "claimId": "example-wikidata-id-claim"
-          }
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  WikidataId,\n  Schema.Struct({\n    articleId: ArticleId,\n    provenance: WikidataSelectionProvenance,\n  }),\n)",
       "kind": "property"
     },
     {
@@ -1307,22 +389,7 @@
         "x": 1650,
         "y": 365
       },
-      "exampleData": {
-        "wikidataSelection": {
-          "wikidataId": "Q757123",
-          "articleId": "plant-acacia-dealbata",
-          "provenance": {
-            "kind": "CLAIM",
-            "claimId": "example-wikidata-id-claim"
-          }
-        },
-        "reason": "SELECTION_CHANGED",
-        "idempotencyKey": "WIKIDATA:Q757123:plant-acacia-dealbata:example-wikidata-id-claim:initial",
-        "request": {
-          "url": "https://www.wikidata.org/wiki/Special:EntityData/Q757123.json",
-          "entityId": "Q757123"
-        }
-      },
+      "exampleSchema": "Schema.Struct({\n  wikidataSelection: Schema.Struct({\n    wikidataId: WikidataId,\n    articleId: ArticleId,\n    provenance: WikidataSelectionProvenance,\n  }),\n  reason: Schema.NonEmptyString,\n  idempotencyKey: Schema.NonEmptyString,\n  request: Schema.Struct({\n    url: Schema.URLFromString,\n    entityId: WikidataId,\n  }),\n})",
       "kind": "trigger"
     },
     {
@@ -1334,21 +401,7 @@
         "x": 3300,
         "y": 166
       },
-      "exampleData": {
-        "Q757123": {
-          "selected": {
-            "articleId": "plant-acacia-dealbata",
-            "claimId": "example-wikidata-id-claim"
-          },
-          "conflicting": [
-            {
-              "articleId": "plant-acacia-mimosa",
-              "claimId": "example-conflicting-wikidata-id-claim"
-            }
-          ],
-          "since": "2026-11-21T09:30:00Z"
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  WikidataId,\n  Schema.Struct({\n    selected: Schema.Struct({\n      articleId: ArticleId,\n      claimId: ClaimId,\n    }),\n    conflicting: Schema.NonEmptyArray(\n      Schema.Struct({\n        articleId: ArticleId,\n        claimId: ClaimId,\n      }),\n    ),\n    since: Schema.DateTimeUtcFromString,\n  }),\n)",
       "kind": "property"
     },
     {
@@ -1360,27 +413,7 @@
         "x": 3300,
         "y": 292
       },
-      "exampleData": {
-        "8P4G": {
-          "selected": {
-            "articleId": "plant-acacia-dealbata",
-            "provenance": {
-              "kind": "WIKIDATA",
-              "wikidataId": "Q757123"
-            }
-          },
-          "conflicting": [
-            {
-              "articleId": "plant-acacia-mimosa",
-              "provenance": {
-                "kind": "CLAIM",
-                "claimId": "example-conflicting-gbif-taxon-claim"
-              }
-            }
-          ],
-          "since": "2026-11-22T14:05:00Z"
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  GbifTaxonId,\n  Schema.Struct({\n    selected: Schema.Struct({\n      articleId: ArticleId,\n      provenance: GbifSelectionProvenance,\n    }),\n    conflicting: Schema.NonEmptyArray(\n      Schema.Struct({\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n      }),\n    ),\n    since: Schema.DateTimeUtcFromString,\n  }),\n)",
       "kind": "property"
     },
     {
@@ -1404,33 +437,7 @@
         "x": 3960,
         "y": 491
       },
-      "exampleData": [
-        {
-          "kind": "WIKIDATA_ID_CONFLICT",
-          "wikidataId": "Q757123",
-          "since": "2026-11-21T09:30:00Z"
-        },
-        {
-          "kind": "GBIF_TAXON_ID_CONFLICT",
-          "taxonId": "8P4G",
-          "since": "2026-11-22T14:05:00Z"
-        },
-        {
-          "kind": "CLAIM_REPORTS",
-          "target": {
-            "kind": "OBSERVATION_VALUE",
-            "valueKey": "wikidata:Q757123:names:pt:mimosa"
-          },
-          "reasons": ["MISTAKEN"],
-          "since": "2026-11-23T10:00:00Z"
-        },
-        {
-          "kind": "EXTERNAL_FETCH_FAILED",
-          "target": "WIKIDATA:Q757123",
-          "error": "REDIRECTED",
-          "since": "2026-11-23T12:00:00Z"
-        }
-      ],
+      "exampleSchema": "Schema.Array(\n  Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"WIKIDATA_ID_CONFLICT\"),\n      wikidataId: WikidataId,\n      since: Schema.DateTimeUtcFromString,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"GBIF_TAXON_ID_CONFLICT\"),\n      taxonId: GbifTaxonId,\n      since: Schema.DateTimeUtcFromString,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM_REPORTS\"),\n      target: Schema.Union([\n        Schema.Struct({\n          kind: Schema.Literal(\"CLAIM\"),\n          claimId: ClaimId,\n        }),\n        Schema.Struct({\n          kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n          valueKey: ObservationValueKey,\n        }),\n      ]),\n      reasons: Schema.NonEmptyArray(\n        Schema.Literals([\n          \"ABUSIVE\",\n          \"SPAM\",\n          \"FALSE\",\n          \"DANGEROUS\",\n          \"MISTAKEN\",\n          \"OFF_TOPIC\",\n          \"WRONG_ENTITY\",\n        ]),\n      ),\n      since: Schema.DateTimeUtcFromString,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"EXTERNAL_FETCH_FAILED\"),\n      target: Schema.Union([\n        Schema.Struct({\n          kind: Schema.Literal(\"WIKIDATA\"),\n          wikidataId: WikidataId,\n        }),\n        Schema.Struct({\n          kind: Schema.Literal(\"GBIF\"),\n          taxonId: GbifTaxonId,\n          checklistKey: GbifChecklistKey,\n        }),\n      ]),\n      error: Schema.Literals([\"NOT_FOUND\", \"REDIRECTED\"]),\n      since: Schema.DateTimeUtcFromString,\n    }),\n  ]),\n)",
       "kind": "property"
     },
     {
@@ -1443,37 +450,7 @@
         "y": 1433.5
       },
       "openQuestions": "- This isn't a claim about an article. Should the canvas get a third event type for profile changes?\n- If contexts never change, how does someone fix a typo or a wrong municipality without leaving their claims behind?",
-      "exampleData": {
-        "contextId": "example-context-villa-de-leyva",
-        "personId": "example-person",
-        "label": "Finca no deserto da Candelaria",
-        "period": {
-          "start": "2021",
-          "end": null
-        },
-        "visibility": "COMMUNITY",
-        "dimensions": [
-          {
-            "_tag": "LOCATION",
-            "place": {
-              "_tag": "GAZETTEER_PLACE",
-              "placeArticleId": "place-villa-de-leyva"
-            },
-            "elevation": {
-              "_tag": "MEASURED",
-              "source": "DEVICE",
-              "meters": 2150
-            }
-          },
-          {
-            "_tag": "PRODUCTION",
-            "value": {
-              "_tag": "DECLARED",
-              "kind": "AGROECOLOGICAL"
-            }
-          }
-        ]
-      },
+      "exampleSchema": "Schema.Union([\n  Schema.TaggedStruct(\"ADDED\", {\n    profileContextId: ProfileContextId,\n    personId: PersonId,\n    label: Schema.optionalKey(Schema.NonEmptyString),\n    period: Schema.Struct({\n      start: Schema.NonEmptyString,\n      end: Schema.NullOr(Schema.NonEmptyString),\n    }),\n    visibility: InformationVisibility,\n    dimensions: Schema.Array(\n      Schema.Union([\n        Schema.TaggedStruct(\"LOCATION\", {\n          place: Schema.TaggedStruct(\"GAZETTEER_PLACE\", {\n            placeArticleId: PlaceArticleId,\n          }),\n          elevation: Schema.optionalKey(\n            Schema.Union([\n              Schema.TaggedStruct(\"MEASURED\", {\n                source: Schema.NonEmptyString,\n                meters: Schema.Finite,\n              }),\n              Schema.TaggedStruct(\"DECLARED\", {\n                meters: Schema.Finite,\n              }),\n            ]),\n          ),\n        }),\n        Schema.TaggedStruct(\"PRODUCTION\", {\n          value: Schema.TaggedStruct(\"DECLARED\", {\n            kind: Schema.NonEmptyString,\n          }),\n        }),\n      ]),\n    ),\n  }),\n  Schema.TaggedStruct(\"DELETED\", {\n    profileContextId: ProfileContextId,\n    personId: PersonId,\n  }),\n])",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": false
@@ -1498,37 +475,7 @@
         "x": 3960,
         "y": 1433.5
       },
-      "exampleData": {
-        "example-context-villa-de-leyva": {
-          "personId": "example-person",
-          "period": {
-            "start": "2021",
-            "end": null
-          },
-          "visibility": "COMMUNITY",
-          "dimensions": [
-            {
-              "_tag": "LOCATION",
-              "place": {
-                "_tag": "GAZETTEER_PLACE",
-                "placeArticleId": "place-villa-de-leyva"
-              },
-              "elevation": {
-                "_tag": "MEASURED",
-                "source": "DEVICE",
-                "meters": 2150
-              }
-            },
-            {
-              "_tag": "PRODUCTION",
-              "value": {
-                "_tag": "DECLARED",
-                "kind": "AGROECOLOGICAL"
-              }
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  ProfileContextId,\n  Schema.Struct({\n    personId: PersonId,\n    label: Schema.optionalKey(Schema.NonEmptyString),\n    period: Schema.Struct({\n      start: Schema.NonEmptyString,\n      end: Schema.NullOr(Schema.NonEmptyString),\n    }),\n    visibility: InformationVisibility,\n    dimensions: Schema.Array(\n      Schema.Union([\n        Schema.TaggedStruct(\"LOCATION\", {\n          place: Schema.TaggedStruct(\"GAZETTEER_PLACE\", {\n            placeArticleId: PlaceArticleId,\n          }),\n          elevation: Schema.optionalKey(\n            Schema.Union([\n              Schema.TaggedStruct(\"MEASURED\", {\n                source: Schema.NonEmptyString,\n                meters: Schema.Finite,\n              }),\n              Schema.TaggedStruct(\"DECLARED\", {\n                meters: Schema.Finite,\n              }),\n            ]),\n          ),\n        }),\n        Schema.TaggedStruct(\"PRODUCTION\", {\n          value: Schema.TaggedStruct(\"DECLARED\", {\n            kind: Schema.NonEmptyString,\n          }),\n        }),\n      ]),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -1541,45 +488,7 @@
         "y": 1559.5
       },
       "openQuestions": "- Which variables come first? The notebook covered mean, minimum and maximum temperature, rainfall, PET, humidity, VPD and shortwave.\n- Band width. 500 m bands lined up with the notebook's cuts, while 200 m bins shifted shares by up to 8 percentage points.\n- Compute every gazetteer place in a batch, or the first time a location references one?",
-      "exampleData": {
-        "placeArticleId": "place-rio-acima",
-        "whosOnFirstId": 102054687,
-        "boundarySource": "IBGE 2024",
-        "dataset": "CHELSA 2.1, 1981–2010",
-        "computedAt": "2026-11-12T00:00:00Z",
-        "months": {
-          "1": {
-            "temperatureMeanC": {
-              "mean": 21.75,
-              "p10": 19.95,
-              "p50": 22.05,
-              "p90": 23.15
-            },
-            "precipitationMm": {
-              "mean": 322.2,
-              "p10": 280.1,
-              "p50": 316.3,
-              "p90": 373
-            }
-          }
-        },
-        "elevationBands": [
-          {
-            "minimumMeters": 1500,
-            "maximumMeters": 2000,
-            "fractionOfPlace": 0.0125,
-            "months": {
-              "1": {
-                "temperatureMeanC": {
-                  "mean": 18.37,
-                  "p10": 18.05,
-                  "p90": 18.75
-                }
-              }
-            }
-          }
-        ]
-      },
+      "exampleSchema": "Schema.Struct({\n  placeArticleId: PlaceArticleId,\n  whosOnFirstId: WhosOnFirstId,\n  boundarySource: Schema.NonEmptyString,\n  dataset: Schema.NonEmptyString,\n  computedAt: Schema.DateTimeUtcFromString,\n  months: Schema.Record(\n    Schema.String.check(Schema.isPattern(/^(?:[1-9]|1[0-2])$/)),\n    Schema.Struct({\n      temperatureMeanC: Schema.Struct({\n        mean: Schema.Finite,\n        p10: Schema.Finite,\n        p50: Schema.Finite,\n        p90: Schema.Finite,\n      }),\n      precipitationMm: Schema.Struct({\n        mean: Schema.Finite,\n        p10: Schema.Finite,\n        p50: Schema.Finite,\n        p90: Schema.Finite,\n      }),\n    }),\n  ),\n  elevationBands: Schema.Array(\n    Schema.Struct({\n      minimumMeters: Schema.Finite,\n      maximumMeters: Schema.Finite,\n      fractionOfPlace: Schema.Finite,\n      months: Schema.Record(\n        Schema.String.check(Schema.isPattern(/^(?:[1-9]|1[0-2])$/)),\n        Schema.Struct({\n          temperatureMeanC: Schema.Struct({\n            mean: Schema.Finite,\n            p10: Schema.Finite,\n            p50: Schema.Finite,\n            p90: Schema.Finite,\n          }),\n          precipitationMm: Schema.Struct({\n            mean: Schema.Finite,\n            p10: Schema.Finite,\n            p50: Schema.Finite,\n            p90: Schema.Finite,\n          }),\n        }),\n      ),\n    }),\n  ),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -1604,15 +513,7 @@
         "x": 3960,
         "y": 1559.5
       },
-      "exampleData": {
-        "place-villa-de-leyva": {
-          "dataset": "CHELSA 2.1, 1981–2010",
-          "annualMeanTemperatureC": 14.4,
-          "annualPrecipitationMm": 1320,
-          "rainfallPattern": "BIMODAL",
-          "elevationBands": []
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  PlaceArticleId,\n  Schema.Struct({\n    dataset: Schema.NonEmptyString,\n    annualMeanTemperatureC: Schema.Finite,\n    annualPrecipitationMm: Schema.Finite,\n    rainfallPattern: Schema.NonEmptyString,\n    elevationBands: Schema.Array(\n      Schema.Struct({\n        minimumMeters: Schema.Finite,\n        maximumMeters: Schema.Finite,\n        annualMeanTemperatureC: Schema.Finite,\n        annualPrecipitationMm: Schema.Finite,\n        rainfallPattern: Schema.NonEmptyString,\n      }),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -1636,44 +537,7 @@
         "x": 4620,
         "y": 1496.5
       },
-      "exampleData": {
-        "example-context-villa-de-leyva": [
-          {
-            "_tag": "LOCATION",
-            "placeArticleId": "place-villa-de-leyva",
-            "ancestorIds": ["place-boyaca", "place-colombia"]
-          },
-          {
-            "_tag": "ELEVATION",
-            "value": {
-              "_tag": "MEASURED",
-              "source": "DEVICE",
-              "meters": 2150,
-              "band": {
-                "minimumMeters": 2000,
-                "maximumMeters": 2500
-              }
-            }
-          },
-          {
-            "_tag": "CLIMATE",
-            "value": {
-              "_tag": "MEASURED",
-              "source": "CHELSA 2.1, 1981–2010",
-              "annualMeanTemperatureC": 14.4,
-              "annualPrecipitationMm": 1320,
-              "rainfallPattern": "BIMODAL"
-            }
-          },
-          {
-            "_tag": "PRODUCTION",
-            "value": {
-              "_tag": "DECLARED",
-              "kind": "AGROECOLOGICAL"
-            }
-          }
-        ]
-      },
+      "exampleSchema": "Schema.Record(\n  ProfileContextId,\n  Schema.Array(\n    Schema.Union([\n      Schema.TaggedStruct(\"LOCATION\", {\n        placeArticleId: PlaceArticleId,\n        ancestorPlaceArticleIds: Schema.Array(PlaceArticleId),\n      }),\n      Schema.TaggedStruct(\"ELEVATION\", {\n        value: Schema.Union([\n          Schema.TaggedStruct(\"MEASURED\", {\n            source: Schema.NonEmptyString,\n            meters: Schema.Finite,\n            band: Schema.optionalKey(\n              Schema.Struct({\n                minimumMeters: Schema.Finite,\n                maximumMeters: Schema.Finite,\n              }),\n            ),\n          }),\n          Schema.TaggedStruct(\"DECLARED\", {\n            meters: Schema.Finite,\n            band: Schema.optionalKey(\n              Schema.Struct({\n                minimumMeters: Schema.Finite,\n                maximumMeters: Schema.Finite,\n              }),\n            ),\n          }),\n        ]),\n      }),\n      Schema.TaggedStruct(\"CLIMATE\", {\n        value: Schema.TaggedStruct(\"MEASURED\", {\n          source: Schema.NonEmptyString,\n          annualMeanTemperatureC: Schema.Finite,\n          annualPrecipitationMm: Schema.Finite,\n          rainfallPattern: Schema.NonEmptyString,\n        }),\n      }),\n      Schema.TaggedStruct(\"PRODUCTION\", {\n        value: Schema.TaggedStruct(\"DECLARED\", {\n          kind: Schema.NonEmptyString,\n        }),\n      }),\n    ]),\n  ),\n)",
       "kind": "property"
     },
     {
@@ -1685,21 +549,7 @@
         "x": 3300,
         "y": 418
       },
-      "exampleData": {
-        "target": "WIKIDATA:Q757123",
-        "selection": {
-          "articleId": "plant-acacia-dealbata",
-          "provenance": {
-            "kind": "CLAIM",
-            "claimId": "example-wikidata-id-claim"
-          }
-        },
-        "failedAt": "2026-11-23T12:00:00Z",
-        "error": {
-          "kind": "REDIRECTED",
-          "redirectedTo": "Q1234567"
-        }
-      },
+      "exampleSchema": "Schema.Struct({\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"WIKIDATA\"),\n      wikidataId: WikidataId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"GBIF\"),\n      taxonId: GbifTaxonId,\n      checklistKey: GbifChecklistKey,\n    }),\n  ]),\n  selection: Schema.Union([\n    Schema.Struct({\n      wikidataId: WikidataId,\n      articleId: ArticleId,\n      provenance: WikidataSelectionProvenance,\n    }),\n    Schema.Struct({\n      taxonId: GbifTaxonId,\n      articleId: ArticleId,\n      provenance: GbifSelectionProvenance,\n      checklistKey: GbifChecklistKey,\n    }),\n  ]),\n  failedAt: Schema.DateTimeUtcFromString,\n  error: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"NOT_FOUND\"),\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"REDIRECTED\"),\n      redirectedToWikidataId: WikidataId,\n    }),\n  ]),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -1712,20 +562,7 @@
         "x": 0,
         "y": 823
       },
-      "exampleData": {
-        "reportId": "example-claim-report",
-        "articleId": "plant-acacia-dealbata",
-        "target": {
-          "kind": "OBSERVATION_VALUE",
-          "observationId": "example-wikidata-observation",
-          "property": "names",
-          "valueKey": "wikidata:Q757123:names:pt:mimosa"
-        },
-        "reason": "MISTAKEN",
-        "note": "In Brazil, \"mimosa\" usually means Mimosa pudica.",
-        "reporterId": "example-person",
-        "reportedAt": "2026-11-23T10:00:00Z"
-      },
+      "exampleSchema": "Schema.Struct({\n  reportId: ReportId,\n  articleId: ArticleId,\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM\"),\n      claimId: ClaimId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n      observationId: ObservationId,\n      property: Schema.NonEmptyString,\n      valueKey: ObservationValueKey,\n    }),\n  ]),\n  reason: Schema.Literals([\n    \"ABUSIVE\",\n    \"SPAM\",\n    \"FALSE\",\n    \"DANGEROUS\",\n    \"MISTAKEN\",\n    \"OFF_TOPIC\",\n    \"WRONG_ENTITY\",\n  ]),\n  note: Schema.optionalKey(Schema.NonEmptyString),\n  reporterId: PersonId,\n  reportedAt: Schema.DateTimeUtcFromString,\n})",
       "kind": "event",
       "eventType": "Report"
     },
@@ -1739,20 +576,7 @@
         "y": 949
       },
       "lockedContentHash": "10df7131",
-      "exampleData": {
-        "reportIds": ["example-claim-report"],
-        "target": {
-          "kind": "OBSERVATION_VALUE",
-          "observationId": "example-wikidata-observation",
-          "property": "names",
-          "valueKey": "wikidata:Q757123:names:pt:mimosa"
-        },
-        "verdict": "KEEP_WITH_WARNING",
-        "note": "Also used for Mimosa pudica in Brazil.",
-        "authorIds": [],
-        "settledBy": "example-moderator",
-        "settledAt": "2026-11-24T09:00:00Z"
-      },
+      "exampleSchema": "Schema.Struct({\n  reportIds: Schema.NonEmptyArray(ReportId),\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM\"),\n      claimId: ClaimId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n      observationId: ObservationId,\n      property: Schema.NonEmptyString,\n      valueKey: ObservationValueKey,\n    }),\n  ]),\n  verdict: Schema.Literals([\"CENSOR\", \"KEEP\", \"KEEP_WITH_WARNING\"]),\n  note: Schema.optionalKey(Schema.NonEmptyString),\n  authorIds: Schema.Array(PersonId),\n  settledByPersonId: PersonId,\n  settledAt: Schema.DateTimeUtcFromString,\n})",
       "kind": "event",
       "eventType": "Report"
     },
@@ -1777,26 +601,7 @@
         "y": 1042
       },
       "openQuestions": "Can we have a better data structure?\n\n- I bet `visibility: \"HIDDEN_WHILE_REVIEWING\"` is much better than having an extra \"hiddenBy\"\n- top level `reasons` feels out of place when we have openReports.\n- why not just `reports` with the status of open | closed or something like that?",
-      "exampleData": {
-        "wikidata:Q757123:names:pt:mimosa": {
-          "visibility": "WARNED",
-          "note": "Also used for Mimosa pudica in Brazil.",
-          "settledByReportIds": ["example-claim-report"],
-          "openReports": []
-        },
-        "example-height-claim": {
-          "visibility": "HIDDEN",
-          "hiddenBy": "OPEN_REPORT",
-          "reasons": ["SPAM"],
-          "openReports": [
-            {
-              "reportId": "example-spam-report",
-              "reason": "SPAM",
-              "reportedAt": "2026-11-24T08:00:00Z"
-            }
-          ]
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  Schema.Union([ClaimId, ObservationValueKey]),\n  Schema.Union([\n    Schema.Struct({\n      visibility: Schema.Literal(\"HIDDEN\"),\n      hiddenBy: Schema.Literals([\"OPEN_REPORT\", \"VERDICT\"]),\n      reasons: Schema.NonEmptyArray(\n        Schema.Literals([\n          \"ABUSIVE\",\n          \"SPAM\",\n          \"FALSE\",\n          \"DANGEROUS\",\n          \"MISTAKEN\",\n          \"OFF_TOPIC\",\n          \"WRONG_ENTITY\",\n        ]),\n      ),\n      openReports: Schema.Array(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: Schema.DateTimeUtcFromString,\n        }),\n      ),\n    }),\n    Schema.Struct({\n      visibility: Schema.Literal(\"WARNED\"),\n      note: Schema.NonEmptyString,\n      settledByReportIds: Schema.NonEmptyArray(ReportId),\n      openReports: Schema.Array(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: Schema.DateTimeUtcFromString,\n        }),\n      ),\n    }),\n    Schema.Struct({\n      visibility: Schema.Literal(\"UNDER_REVIEW\"),\n      openReports: Schema.NonEmptyArray(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: Schema.DateTimeUtcFromString,\n        }),\n      ),\n    }),\n  ]),\n)",
       "kind": "property"
     },
     {
@@ -1808,16 +613,7 @@
         "x": 3300,
         "y": 783
       },
-      "exampleData": {
-        "example-person": {
-          "upheldConductVerdicts": [],
-          "reports": {
-            "upheld": 3,
-            "kept": 1,
-            "open": 0
-          }
-        }
-      },
+      "exampleSchema": "Schema.Record(\n  PersonId,\n  Schema.Struct({\n    upheldConductVerdicts: Schema.Array(\n      Schema.Struct({\n        claimId: ClaimId,\n        reportIds: Schema.NonEmptyArray(ReportId),\n        reasons: Schema.NonEmptyArray(Schema.Literals([\"ABUSIVE\", \"SPAM\", \"FALSE\", \"DANGEROUS\"])),\n        settledAt: Schema.DateTimeUtcFromString,\n      }),\n    ),\n    reports: Schema.Struct({\n      upheld: Schema.Int,\n      kept: Schema.Int,\n      open: Schema.Int,\n    }),\n  }),\n)",
       "kind": "property"
     }
   ],

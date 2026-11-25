@@ -1,12 +1,6 @@
 import { Array as EffectArray, HashMap, HashSet, Option, Record } from "effect"
 
-import {
-  architectureConfidenceLabels,
-  edgeId,
-  formatExampleData,
-  type Canvas,
-  type GraphNode,
-} from "./graph.js"
+import { architectureConfidenceLabels, edgeId, type Canvas, type GraphNode } from "./graph.js"
 
 const nodeFields = (node?: GraphNode) => ({
   Title: node?.title ?? "",
@@ -21,7 +15,7 @@ const nodeFields = (node?: GraphNode) => ({
       : "",
   Description: node?.description ?? "",
   "Open questions": node?.openQuestions ?? "",
-  "Example data": node && node.kind !== "transformation" ? formatExampleData(node.exampleData) : "",
+  "Example schema": node && node.kind !== "transformation" ? (node.exampleSchema ?? "") : "",
 })
 
 const position = ({ position }: GraphNode) => `(${position.x}, ${position.y})`

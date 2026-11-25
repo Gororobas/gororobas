@@ -626,10 +626,10 @@ button.primary:hover:not(:disabled) {
   overflow: auto;
   font-size: 12px;
 }
-.example-data {
+.example-schema {
   margin-top: 18px;
 }
-.example-data label {
+.example-schema label {
   font-weight: 550;
 }
 .field-actions {
@@ -648,49 +648,67 @@ button.primary:hover:not(:disabled) {
   font-size: 21px;
   line-height: 1;
 }
-.sidebar .example-data textarea {
-  min-height: 150px;
-}
-.example-data p {
-  margin: 4px 0;
-  color: #9f2929;
-}
-.example-data summary {
+.example-schema summary {
   cursor: pointer;
 }
-.json-tree {
-  margin-top: 8px;
-  max-height: 16rem;
-  overflow: auto;
+.schema-input,
+.schema-preview {
+  position: relative;
   border: 1px solid #dedee3;
   border-radius: 7px;
   background: #fafafa;
+}
+.schema-preview {
+  overflow: auto;
+  max-height: 16rem;
+}
+.schema-input .schema-code,
+.schema-preview .schema-code {
+  margin: 0;
   padding: 10px;
-  color: #3f3f46;
   font:
     12px/1.65 ui-monospace,
     monospace;
-  overflow-wrap: anywhere;
+  tab-size: 2;
+  white-space: pre;
 }
-.json-children {
-  margin-left: 10px;
-  padding-left: 12px;
-  border-left: 1px solid #dedee3;
+.schema-highlight .schema-code,
+.schema-preview .schema-code {
+  width: max-content;
+  min-width: 100%;
 }
-.json-tree details[open] > summary .json-collapsed {
-  display: none;
+.schema-code code {
+  font: inherit;
 }
-.json-key {
-  color: #1e40af;
+.schema-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
-.json-string {
-  color: #166534;
+.schema-input textarea.schema-code {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 16rem;
+  min-height: 8rem;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: #18181b;
 }
-.json-number {
-  color: #9a3412;
+.schema-input textarea::selection {
+  background: #6594ff55;
 }
-.json-literal {
-  color: #7e22ce;
+@media (forced-colors: active) {
+  .schema-highlight {
+    display: none;
+  }
+  .schema-input textarea.schema-code {
+    color: CanvasText;
+    caret-color: CanvasText;
+  }
 }
 .delete-button {
   margin-top: 18px;
@@ -721,8 +739,11 @@ button.primary:hover:not(:disabled) {
 .example-dialog::backdrop {
   background: #18181b60;
 }
-.example-dialog .json-tree {
+.example-dialog .schema-preview {
   max-height: 65dvh;
+}
+.example-dialog .schema-input textarea.schema-code {
+  height: 55dvh;
 }
 .history-heading,
 .history-compare {
