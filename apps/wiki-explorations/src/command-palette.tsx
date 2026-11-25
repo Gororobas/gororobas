@@ -1,10 +1,13 @@
-import { Command } from "cmdk"
+import { Autocomplete } from "@base-ui/react/autocomplete"
+import { Dialog } from "@base-ui/react/dialog"
+import { Array as EffectArray, Order } from "effect"
+import { useState } from "react"
 
 import type { GraphNode } from "./graph.js"
 import { kinds } from "./node-card.js"
 
 /** Every search word must appear somewhere; matches in earlier keywords (the title) rank higher. */
-function rank(search: string, keywords: ReadonlyArray<string> = []) {
+function rank(search: string, keywords: ReadonlyArray<string>) {
   const words = search.toLowerCase().split(/\s+/).filter(Boolean)
   const fields = keywords.map((keyword) => keyword.toLowerCase())
   const scores = words.map((word) => {
@@ -13,6 +16,27 @@ function rank(search: string, keywords: ReadonlyArray<string> = []) {
   })
 
   return scores.includes(0) ? 0 : scores.reduce((sum, score) => sum + score, 0) / scores.length
+}
+
+const keywords = (node: GraphNode) => [
+  node.title,
+  kinds[node.kind].title,
+  ...(node.kind === "event" ? [node.eventType] : []),
+  node.description,
+  node.openQuestions ?? "",
+]
+
+const byScoreDescending = Order.flip(
+  Order.mapInput(Order.Number, ({ score }: { score: number }) => score),
+)
+
+function search(nodes: ReadonlyArray<GraphNode>, query: string) {
+  if (!query.trim()) return nodes
+
+  const matches = nodes
+    .map((node) => ({ node, score: rank(query, keywords(node)) }))
+    .filter(({ score }) => score > 0)
+  return EffectArray.sort(matches, byScoreDescending).map(({ node }) => node)
 }
 
 /** Searches node titles, kinds and descriptions; Enter picks the highlighted node. */
@@ -27,41 +51,49 @@ export function CommandPalette({
   nodes: ReadonlyArray<GraphNode>
   onPick: (id: string) => void
 }) {
+  const [query, setQuery] = useState("")
+
   return (
-    <Command.Dialog
+    <Dialog.Root
       open={open}
       onOpenChange={onOpenChange}
-      label="Search nodes"
-      className="command-palette"
-      overlayClassName="command-overlay"
-      // cmdk calls filters with (value, search, keywords).
-      filter={(...[, search, keywords]) => rank(search, keywords)}
+      onOpenChangeComplete={(open) => open || setQuery("")}
     >
-      <Command.Input placeholder="Search nodes…" />
-      <Command.List>
-        <Command.Empty>No matching nodes.</Command.Empty>
-        {nodes.map((node) => (
-          <Command.Item
-            key={node.id}
-            value={node.id}
-            keywords={[
-              node.title,
-              kinds[node.kind].title,
-              ...(node.kind === "event" ? [node.eventType] : []),
-              node.description,
-              node.openQuestions ?? "",
-            ]}
-            className={node.kind}
-            onSelect={() => onPick(node.id)}
+      <Dialog.Portal>
+        <Dialog.Backdrop className="dialog-backdrop" />
+        <Dialog.Popup className="command-palette nokey" aria-label="Search nodes">
+          <Autocomplete.Root
+            open
+            inline
+            items={nodes}
+            filteredItems={search(nodes, query)}
+            value={query}
+            onValueChange={setQuery}
+            itemToStringValue={(node) => node.title}
+            autoHighlight="always"
+            keepHighlight
           >
-            <span className="node-glyph">{kinds[node.kind].glyph}</span>
-            <span className="command-item-text">
-              <strong>{node.title.trim() || "Untitled"}</strong>
-              <span>{node.description.trim().replace(/\s+/g, " ")}</span>
-            </span>
-          </Command.Item>
-        ))}
-      </Command.List>
-    </Command.Dialog>
+            <Autocomplete.Input className="command-input" placeholder="Search nodes…" />
+            <Autocomplete.Empty className="command-empty">No matching nodes.</Autocomplete.Empty>
+            <Autocomplete.List className="command-list">
+              {(node: GraphNode) => (
+                <Autocomplete.Item
+                  key={node.id}
+                  value={node}
+                  className={`command-item ${node.kind}`}
+                  onClick={() => onPick(node.id)}
+                >
+                  <span className="node-glyph">{kinds[node.kind].glyph}</span>
+                  <span className="command-item-text">
+                    <strong>{node.title.trim() || "Untitled"}</strong>
+                    <span>{node.description.trim().replace(/\s+/g, " ")}</span>
+                  </span>
+                </Autocomplete.Item>
+              )}
+            </Autocomplete.List>
+          </Autocomplete.Root>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

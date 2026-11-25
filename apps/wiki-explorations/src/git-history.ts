@@ -1,14 +1,8 @@
 import { Effect, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 
-import { decodeCanvasFile, type Canvas } from "./graph.js"
-
-export type CanvasHistoryComparison = {
-  ref: string
-  commit: string
-  baseline: Canvas | null
-  commits: { hash: string; date: string; subject: string }[]
-}
+import type { CanvasHistoryComparison } from "./canvas-api.js"
+import { decodeCanvasFile } from "./graph.js"
 
 const runGit = (directory: string, args: readonly string[]) =>
   Effect.gen(function* () {

@@ -43,7 +43,7 @@ export function diffCanvas(baseline: Canvas | null, current: Canvas) {
     const after = Option.getOrUndefined(HashMap.get(afterNodes, id))
     const fields = changedFields(nodeFields(before), nodeFields(after))
     if (before && after && !fields.length) return []
-    const status = !before ? "Added" : !after ? "Removed" : "Edited"
+    const status: "Added" | "Removed" | "Edited" = !before ? "Added" : !after ? "Removed" : "Edited"
     return [{ id, title: after?.title || before?.title || id, status, fields }]
   })
 

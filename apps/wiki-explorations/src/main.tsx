@@ -1,18 +1,32 @@
+import { useAtom, useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react"
 import { ReactFlowProvider } from "@xyflow/react"
+import { Option } from "effect"
+import { AsyncResult } from "effect/reactivity"
 import { Check, ChevronDown, GitFork, Plus, Redo2, Search, Undo2 } from "lucide-react"
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import "@xyflow/react/dist/style.css"
 import "highlight.js/styles/github.css"
 
 import "./styles.css"
+import type { CanvasEntry } from "./canvas-api.js"
 import { CanvasEditor } from "./canvas-editor.js"
+import { edit, step, type CanvasSession } from "./canvas-session.js"
 import { CommandPalette } from "./command-palette.js"
 import type { Canvas } from "./graph.js"
 import { HistoryDialog } from "./history-dialog.js"
 import { PipelineView } from "./pipeline-view.js"
-import { useUrlView, type View } from "./url-view.js"
-import { useWorkspace } from "./workspace.js"
+import { locationAtom, type View } from "./url-view.js"
+import {
+  createCanvasAtom,
+  currentCanvasIdAtom,
+  currentLoadErrorAtom,
+  currentSessionAtom,
+  entriesAtom,
+  historyDialogAtom,
+  keyboardShortcutsAtom,
+  searchOpenAtom,
+} from "./workspace.js"
 
 function CanvasView({
   canvas,
@@ -57,16 +71,19 @@ function CanvasView({
 }
 
 function CanvasMenu({
-  workspace,
+  entries,
+  current,
+  loading,
   onSelect,
   onAction,
 }: {
-  workspace: ReturnType<typeof useWorkspace>
+  entries: ReadonlyArray<CanvasEntry>
+  current: { id: string; title: string } | undefined
+  loading: boolean
   onSelect: (id: string) => void
   onAction: (action: "new" | "fork") => void
 }) {
   const menu = useRef<HTMLDivElement>(null)
-  const current = workspace.document
   const run = (action: () => void) => {
     menu.current?.hidePopover()
     action()
@@ -77,17 +94,17 @@ function CanvasMenu({
       <button
         className="canvas-menu-button"
         popoverTarget="canvas-menu"
-        disabled={workspace.loading && !current}
+        disabled={loading && !current}
       >
-        <span>{current?.canvas.title ?? "Select a canvas"}</span>
+        <span>{current?.title ?? "Select a canvas"}</span>
         <ChevronDown size={15} aria-hidden="true" />
       </button>
       <div ref={menu} id="canvas-menu" className="popover canvas-menu" popover="auto">
-        {workspace.entries.map(({ id, title, forkedFrom }) => (
+        {entries.map(({ id, title, forkedFrom }) => (
           <button
             key={id}
             aria-current={id === current?.id}
-            disabled={workspace.loading}
+            disabled={loading}
             onClick={() => run(() => onSelect(id))}
           >
             <Check size={15} aria-hidden="true" className="canvas-menu-check" />
@@ -98,14 +115,11 @@ function CanvasMenu({
           </button>
         ))}
         <hr />
-        <button
-          disabled={workspace.loading || !current}
-          onClick={() => run(() => onAction("fork"))}
-        >
+        <button disabled={loading || !current} onClick={() => run(() => onAction("fork"))}>
           <GitFork size={15} aria-hidden="true" />
           Fork canvas
         </button>
-        <button disabled={workspace.loading} onClick={() => run(() => onAction("new"))}>
+        <button disabled={loading} onClick={() => run(() => onAction("new"))}>
           <Plus size={15} aria-hidden="true" />
           New canvas
         </button>
@@ -115,35 +129,38 @@ function CanvasMenu({
 }
 
 function App() {
-  const workspace = useWorkspace()
-  const { view, navigate, sync } = useUrlView()
+  useAtomMount(keyboardShortcutsAtom)
+  const entries = useAtomValue(entriesAtom)
+  const currentId = useAtomValue(currentCanvasIdAtom)
+  const [session, setSession] = useAtom(currentSessionAtom)
+  const loadError = useAtomValue(currentLoadErrorAtom)
+  const [creation, create] = useAtom(createCanvasAtom)
+  const location = useAtomValue(locationAtom)
+  const setLocation = useAtomSet(locationAtom)
+  const [searchOpen, setSearchOpen] = useAtom(searchOpenAtom)
+  const [history, setHistory] = useAtom(historyDialogAtom)
   const [action, setAction] = useState<"new" | "fork">()
   const [title, setTitle] = useState("")
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
   const [reveal, setReveal] = useState(0)
-  const current = workspace.document
+  const current = Option.getOrUndefined(session)
+  const loading =
+    AsyncResult.isInitial(entries) || (currentId !== undefined && !current) || creation.waiting
+  const update = (f: (session: CanvasSession) => CanvasSession) =>
+    setSession((value) => Option.map(value, f))
 
-  const onPopState = useEffectEvent(() => {
-    const id = new URLSearchParams(location.search).get("canvas")
-    if (id && id !== current?.id) void workspace.select(id)
-  })
+  const error = [
+    Option.getOrUndefined(AsyncResult.error(entries))?.message,
+    Option.getOrUndefined(loadError)?.message,
+    Option.getOrUndefined(AsyncResult.error(creation))?.message,
+  ].find(Boolean)
 
-  const onSearchShortcut = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey) && current) {
-      event.preventDefault()
-      setSearchOpen((open) => !open)
-    }
-  })
+  const navigate = (next: View, { push = false } = {}) =>
+    setLocation({ to: { ...next, canvas: location.canvas }, push })
 
-  useEffect(() => {
-    window.addEventListener("popstate", onPopState)
-    window.addEventListener("keydown", onSearchShortcut)
-    return () => {
-      window.removeEventListener("popstate", onPopState)
-      window.removeEventListener("keydown", onSearchShortcut)
-    }
-  }, [])
+  function focusNode(id: string) {
+    navigate({ mode: location.mode, node: id }, { push: true })
+    setReveal((count) => count + 1)
+  }
 
   return (
     <div className="workspace">
@@ -152,10 +169,12 @@ function App() {
           <span aria-hidden="true">⌘</span> Wiki Explorations
         </div>
         <CanvasMenu
-          workspace={workspace}
+          entries={Option.getOrElse(AsyncResult.value(entries), () => [])}
+          current={current && { id: current.id, title: current.canvas.title }}
+          loading={loading}
           onSelect={(id) => {
             setAction(undefined)
-            void workspace.select(id).then(sync)
+            setLocation({ to: { canvas: id, mode: "graph" }, push: true })
           }}
           onAction={(next) => {
             setTitle(next === "fork" ? `${current?.canvas.title ?? ""} fork` : "")
@@ -168,8 +187,8 @@ function App() {
             aria-label="Undo"
             title="Undo (⌘Z)"
             aria-keyshortcuts="Meta+Z Control+Z"
-            disabled={!workspace.canUndo}
-            onClick={workspace.undo}
+            disabled={!current?.past.length}
+            onClick={() => update((session) => step(session, "undo"))}
           >
             <Undo2 size={16} aria-hidden="true" />
           </button>
@@ -178,12 +197,12 @@ function App() {
             aria-label="Redo"
             title="Redo (⇧⌘Z)"
             aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z Control+Y"
-            disabled={!workspace.canRedo}
-            onClick={workspace.redo}
+            disabled={!current?.future.length}
+            onClick={() => update((session) => step(session, "redo"))}
           >
             <Redo2 size={16} aria-hidden="true" />
           </button>
-          <button disabled={workspace.loading || !current} onClick={() => setHistoryOpen(true)}>
+          <button disabled={!current} onClick={() => setHistory({})}>
             Git history
           </button>
         </div>
@@ -198,14 +217,15 @@ function App() {
           <kbd>⌘K</kbd>
         </button>
       </header>
-      {workspace.error && (
+      {error && (
         <div className="workspace-error" role="alert">
-          {workspace.error}
-          <button
-            onClick={() => {
-              void workspace.retry()
-            }}
-          >
+          {error}
+        </div>
+      )}
+      {current?.saveError && (
+        <div className="workspace-error" role="alert">
+          {current.saveError}
+          <button onClick={() => update((session) => ({ ...session, saveError: undefined }))}>
             Retry save
           </button>
         </div>
@@ -216,14 +236,14 @@ function App() {
           onSubmit={(event) => {
             event.preventDefault()
             setAction(undefined)
-            void workspace.create(title, action === "fork" ? current?.id : undefined).then(sync)
+            create({ title, from: action === "fork" ? current?.id : undefined })
           }}
         >
           <label>
             {action === "fork" ? "Fork name" : "Canvas name"}
             <input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} />
           </label>
-          <button className="primary" disabled={!title.trim() || workspace.loading}>
+          <button className="primary" disabled={!title.trim() || loading}>
             {action === "fork" ? "Fork" : "Create"}
           </button>
           <button type="button" onClick={() => setAction(undefined)}>
@@ -233,11 +253,11 @@ function App() {
       )}
       {current ? (
         <ReactFlowProvider key={current.id}>
-          <div className="canvas-container" inert={workspace.loading}>
+          <div className="canvas-container" inert={creation.waiting}>
             <CanvasView
               canvas={current.canvas}
-              onEdit={workspace.edit}
-              view={view}
+              onEdit={(canvas, group) => update((session) => edit(session, { canvas, group }))}
+              view={location}
               navigate={navigate}
               reveal={reveal}
             />
@@ -245,7 +265,7 @@ function App() {
         </ReactFlowProvider>
       ) : (
         <div className="empty-workspace">
-          {workspace.loading ? "Opening canvas…" : "Create a canvas to start exploring."}
+          {loading ? "Opening canvas…" : "Create a canvas to start exploring."}
         </div>
       )}
       {current && (
@@ -255,17 +275,21 @@ function App() {
           nodes={current.canvas.nodes}
           onPick={(id) => {
             setSearchOpen(false)
-            navigate({ mode: view.mode, node: id }, { push: true })
-            setReveal((count) => count + 1)
+            focusNode(id)
           }}
         />
       )}
-      {current && historyOpen && (
+      {current && (
         <HistoryDialog
-          key={current.id}
+          open={history !== undefined}
+          onOpenChange={(open) => setHistory(open ? {} : undefined)}
           id={current.id}
           canvas={current.canvas}
-          onClose={() => setHistoryOpen(false)}
+          focusedNode={history?.focusedNode}
+          onShowNode={(id) => {
+            setHistory(undefined)
+            focusNode(id)
+          }}
         />
       )}
     </div>

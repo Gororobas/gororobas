@@ -1,184 +1,306 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { Context, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 
-import type { CanvasHistoryComparison } from "./git-history.js"
+import {
+  ApiProblem,
+  CanvasDocument,
+  CanvasEntry,
+  CanvasHistoryComparison,
+  canvasChangedEvent,
+} from "./canvas-api.js"
+import { diffCanvas } from "./canvas-diff.js"
+import {
+  hasUnsavedChanges,
+  markSaved,
+  openSession,
+  receive,
+  step,
+  type CanvasSession,
+} from "./canvas-session.js"
 import type { Canvas } from "./graph.js"
+import { locationAtom } from "./url-view.js"
 
-type Entry = { id: string; title: string; forkedFrom?: string }
-type Document = { id: string; revision: string; canvas: Canvas }
-
-type CanvasHistory = {
-  revision: string
-  past: Canvas[]
-  future: Canvas[]
-  editGroup: symbol | undefined
-}
-
-const historyLimit = 100
 const endpoint = "/api/canvases"
 
-async function request<Value>(
-  url: string,
-  {
-    method = "GET",
-    body,
-  }: { method?: string; body?: Document | { title: string; from: string | undefined } } = {},
-): Promise<Value> {
-  // oxlint-disable-next-line custom-lint-rules/no-direct-fetch -- This standalone browser app uses its same-origin development API.
-  const response = await fetch(url, {
-    method,
-    headers: { "content-type": "application/json", "x-wiki-explorations": "1" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  })
+export class CanvasStorageError extends Schema.TaggedError<CanvasStorageError>()(
+  "CanvasStorageError",
+  { message: Schema.String },
+) {}
 
-  if (!response.ok) {
-    const { error } = await response.json()
-    throw new Error(error)
-  }
-  return response.json()
-}
+class CanvasClient extends Context.Service<CanvasClient>()("wiki-explorations/CanvasClient", {
+  make: Effect.gen(function* () {
+    const client = (yield* HttpClient.HttpClient).pipe(
+      HttpClient.mapRequest(HttpClientRequest.setHeader("x-wiki-explorations", "1")),
+    )
 
-const message = (error: unknown) =>
-  error instanceof Error ? error.message : "Could not reach canvas storage."
+    /** Resolves with the JSON body, or fails with the server's `{ error }` message. */
+    const send = (request: HttpClientRequest.HttpClientRequest) =>
+      client.execute(request).pipe(
+        Effect.flatMap((response) =>
+          response.status < 400
+            ? response.json
+            : response.json.pipe(
+                // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- HTTP JSON is untrusted.
+                Effect.flatMap(Schema.decodeUnknownEffect(ApiProblem)),
+                Effect.flatMap(({ error }) => new CanvasStorageError({ message: error })),
+              ),
+        ),
+      )
 
-export const loadCanvasHistory = (id: string, ref: string) =>
-  request<CanvasHistoryComparison>(`${endpoint}/${id}/history?${new URLSearchParams({ ref })}`)
+    const decoded =
+      <A>(schema: Schema.Codec<A, unknown>) =>
+      (request: HttpClientRequest.HttpClientRequest) =>
+        send(request).pipe(
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- HTTP JSON is untrusted.
+          Effect.flatMap(Schema.decodeUnknownEffect(schema)),
+          Effect.mapError((error) =>
+            error instanceof CanvasStorageError
+              ? error
+              : new CanvasStorageError({ message: "Could not reach canvas storage." }),
+          ),
+        )
 
-export function useWorkspace() {
-  const [entries, setEntries] = useState<Entry[]>([])
-  const [document, setDocument] = useState<Document>()
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(true)
-  const live = useRef<Document>(undefined)
-  const persisted = useRef<Canvas>(undefined)
-  const pending = useRef<Promise<void>>(undefined)
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-
-  const histories = useRef(new Map<string, CanvasHistory>())
-  const activeHistory = document && histories.current.get(document.id)
-
-  function open(value: Document) {
-    const existing = histories.current.get(value.id)
-
-    if (existing?.revision !== value.revision) {
-      histories.current.set(value.id, {
-        revision: value.revision,
-        past: [],
-        future: [],
-        editGroup: undefined,
-      })
+    return {
+      list: decoded(Schema.Array(CanvasEntry))(HttpClientRequest.get(endpoint)),
+      read: (id: string) => decoded(CanvasDocument)(HttpClientRequest.get(`${endpoint}/${id}`)),
+      write: ({ id, revision, canvas }: CanvasDocument) =>
+        decoded(CanvasDocument)(
+          HttpClientRequest.put(`${endpoint}/${id}`).pipe(
+            HttpClientRequest.bodyJsonUnsafe({ id, revision, canvas }),
+          ),
+        ),
+      create: (body: { title: string; from: string | undefined }) =>
+        decoded(CanvasDocument)(
+          HttpClientRequest.post(endpoint).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
+        ),
+      history: (id: string, ref: string) =>
+        decoded(CanvasHistoryComparison)(
+          HttpClientRequest.get(`${endpoint}/${id}/history`, { urlParams: { ref } }),
+        ),
     }
+  }),
+}) {}
 
-    live.current = value
-    persisted.current = value.canvas
-    setDocument(value)
-    // Keep the node and pipeline params when reopening the canvas already in the URL.
-    const current = new URLSearchParams(location.search).get("canvas")
+/** Fans the server's change stream out to every atom that follows a canvas. */
+class CanvasChanges extends Context.Service<CanvasChanges>()("wiki-explorations/CanvasChanges", {
+  make: Effect.gen(function* () {
+    const changes = yield* PubSub.unbounded<CanvasDocument>()
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Server-Sent Event data is untrusted.
+    const decode = Schema.decodeUnknownOption(Schema.fromJsonString(CanvasDocument))
 
-    if (current !== value.id) {
-      history[current ? "pushState" : "replaceState"](
-        null,
-        "",
-        `?canvas=${encodeURIComponent(value.id)}`,
+    yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        // shortcut: changes made while EventSource reconnects are missed until that canvas changes again.
+        const source = new EventSource(`${endpoint}/events`)
+
+        source.addEventListener(canvasChangedEvent, ({ data }) => {
+          Option.map(decode(data), (document) => PubSub.publishUnsafe(changes, document))
+        })
+
+        return source
+      }),
+      (source) => Effect.sync(() => source.close()),
+    )
+
+    /** Subscribe before loading what the changes apply to, so none land in between. */
+    return { subscribe: PubSub.subscribe(changes) }
+  }),
+}) {}
+
+const runtime = Atom.runtime(
+  Layer.mergeAll(
+    Layer.effect(CanvasClient, CanvasClient.make).pipe(Layer.provide(FetchHttpClient.layer)),
+    Layer.effect(CanvasChanges, CanvasChanges.make),
+  ),
+)
+
+export const entriesAtom = runtime.atom(
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const client = yield* CanvasClient
+      const changes = yield* (yield* CanvasChanges).subscribe
+
+      return Stream.fromSubscription(changes).pipe(
+        Stream.as(undefined),
+        Stream.prepend([undefined]),
+        Stream.mapEffect(() => client.list),
+      )
+    }),
+  ),
+)
+
+/** The canvas in the URL, or the first one when the URL names none that exists. */
+export const currentCanvasIdAtom = Atom.make((get) => {
+  const requested = get(locationAtom).canvas
+  const entries = AsyncResult.value(get(entriesAtom))
+  if (Option.isNone(entries)) return requested
+  return entries.value.some(({ id }) => id === requested) ? requested : entries.value[0]?.id
+})
+
+/** Kept alive so undo history and unsaved edits survive switching canvases. */
+export const sessionAtom = Atom.family((_id: string) =>
+  Atom.make(Option.none<CanvasSession>()).pipe(Atom.keepAlive),
+)
+
+const autosaveDelay = "180 millis"
+
+/** Loads a canvas, then keeps it in step with disk: autosaves edits and applies changes made elsewhere. */
+export const sessionSyncAtom = Atom.family((id: string) =>
+  runtime
+    .atom((get) =>
+      Effect.gen(function* () {
+        const client = yield* CanvasClient
+        const changes = yield* (yield* CanvasChanges).subscribe
+        const state = sessionAtom(id)
+        const update = (f: (session: CanvasSession) => CanvasSession) =>
+          get.set(state, Option.map(get.once(state), f))
+
+        if (Option.isNone(get.once(state))) {
+          get.set(state, Option.some(openSession(yield* client.read(id))))
+        }
+
+        yield* Stream.fromSubscription(changes).pipe(
+          Stream.filter((document) => document.id === id),
+          Stream.runForEach((document) => Effect.sync(() => update((s) => receive(s, document)))),
+          Effect.forkScoped,
+        )
+
+        // A failed write is retried by the next edit or by clearing `saveError`, not in a loop.
+        let failed: Canvas | undefined
+
+        const save = Effect.gen(function* () {
+          const session = Option.getOrUndefined(get.once(state))
+          if (!session || !hasUnsavedChanges(session)) return
+          if (session.saveError !== undefined && session.canvas === failed) return
+          const saved = session.canvas
+
+          const { revision } = yield* client.write({
+            id,
+            revision: session.revision,
+            canvas: saved,
+          })
+
+          update((s) => markSaved(s, { saved, revision }))
+        }).pipe(
+          Effect.catchTag("CanvasStorageError", (error) =>
+            Effect.sync(() => {
+              failed = Option.getOrUndefined(get.once(state))?.canvas
+              update((s) => ({ ...s, saveError: error.message }))
+            }),
+          ),
+        )
+
+        yield* get.stream(state).pipe(
+          Stream.debounce(autosaveDelay),
+          Stream.runForEach(() => save),
+          Effect.forkScoped,
+        )
+
+        yield* Effect.acquireRelease(
+          Effect.sync(() => {
+            const warn = (event: BeforeUnloadEvent) => {
+              if (Option.exists(get.once(state), hasUnsavedChanges)) event.preventDefault()
+            }
+            window.addEventListener("beforeunload", warn)
+            return warn
+          }),
+          (warn) => Effect.sync(() => window.removeEventListener("beforeunload", warn)),
+        )
+      }),
+    )
+    .pipe(Atom.keepAlive),
+)
+
+/** The current canvas's session; mounting it loads the canvas and keeps it in sync. */
+export const currentSessionAtom = Atom.writable(
+  (get) => {
+    const id = get(currentCanvasIdAtom)
+    if (id === undefined) return Option.none<CanvasSession>()
+    get(sessionSyncAtom(id))
+    return get(sessionAtom(id))
+  },
+  (context, session: Option.Option<CanvasSession>) => {
+    const id = context.get(currentCanvasIdAtom)
+    if (id !== undefined) context.set(sessionAtom(id), session)
+  },
+)
+
+/** Why the current canvas couldn't load, if it couldn't. */
+export const currentLoadErrorAtom = Atom.make((get) => {
+  const id = get(currentCanvasIdAtom)
+  return id === undefined ? Option.none() : AsyncResult.error(get(sessionSyncAtom(id)))
+})
+
+/** Writes `from` before forking it: the server copies the canvas from disk. */
+export const createCanvasAtom = runtime.fn(
+  Effect.fnUntraced(function* ({ title, from }: { title: string; from: string | undefined }, get) {
+    if (from !== undefined) {
+      const registry = yield* AtomRegistry.AtomRegistry
+
+      yield* AtomRegistry.toStream(registry, sessionAtom(from)).pipe(
+        Stream.filter((session) => !Option.exists(session, hasUnsavedChanges)),
+        Stream.take(1),
+        Stream.runDrain,
+        Effect.timeoutOrElse({
+          duration: "5 seconds",
+          orElse: () =>
+            Effect.fail(new CanvasStorageError({ message: "Save the canvas before forking it." })),
+        }),
       )
     }
-  }
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const list = await request<Entry[]>(endpoint)
-        setEntries(list)
+    const document = yield* (yield* CanvasClient).create({ title, from })
+    get.set(sessionAtom(document.id), Option.some(openSession(document)))
+    get.set(locationAtom, { to: { canvas: document.id, mode: "graph" }, push: true })
+  }),
+)
 
-        const preferred = new URLSearchParams(location.search).get("canvas")
-        const first = list.find(({ id }) => id === preferred) ?? list[0]
-        if (first) open(await request<Document>(`${endpoint}/${first.id}`))
-      } catch (failure) {
-        setError(message(failure))
-      } finally {
-        setLoading(false)
-      }
-    }
+/** Refreshed on window focus: commits happen in another app. */
+export const canvasHistoryAtom = Atom.family((id: string) =>
+  Atom.family((ref: string) =>
+    runtime
+      .atom(CanvasClient.use((client) => client.history(id, ref)))
+      .pipe(Atom.refreshOnWindowFocus),
+  ),
+)
 
-    void load()
-    const warn = (event: BeforeUnloadEvent) => {
-      if (live.current?.canvas !== persisted.current) event.preventDefault()
-    }
-    window.addEventListener("beforeunload", warn)
-    window.addEventListener("keydown", onHistoryShortcut)
+export type NodeChangeStatus = "Added" | "Edited"
 
-    return () => {
-      window.removeEventListener("beforeunload", warn)
-      window.removeEventListener("keydown", onHistoryShortcut)
-      clearTimeout(timer.current)
-    }
-  }, [])
+/** Nodes of the current canvas added or edited since HEAD. */
+export const nodeStatusesAtom = Atom.make((get): ReadonlyMap<string, NodeChangeStatus> => {
+  const id = get(currentCanvasIdAtom)
+  if (id === undefined) return new Map()
+  const head = AsyncResult.value(get(canvasHistoryAtom(id)("HEAD")))
+  const session = get(sessionAtom(id))
+  if (Option.isNone(head) || Option.isNone(session)) return new Map()
 
-  function flush(): Promise<void> {
-    clearTimeout(timer.current)
-    if (pending.current) return pending.current
+  return new Map(
+    diffCanvas(head.value.baseline, session.value.canvas).nodes.flatMap(({ id, status }) =>
+      status === "Removed" ? [] : [[id, status] as const],
+    ),
+  )
+})
 
-    const save = async () => {
-      let current = live.current
+export const searchOpenAtom = Atom.make(false)
 
-      while (current && current.canvas !== persisted.current) {
-        const result = await request<Document>(`${endpoint}/${current.id}`, {
-          method: "PUT",
-          body: current,
-        })
-        const canvasHistory = histories.current.get(current.id)
-        if (canvasHistory) canvasHistory.revision = result.revision
-        persisted.current = current.canvas
-        if (live.current) live.current = { ...live.current, revision: result.revision }
-        current = live.current
-      }
+/** Open with a node to scroll to its changes. */
+export const historyDialogAtom = Atom.make<{ focusedNode?: string } | undefined>(undefined)
 
-      setError("")
-    }
-
-    pending.current = save().finally(() => {
-      pending.current = undefined
-    })
-    return pending.current
-  }
-
-  function apply(canvas: Canvas) {
-    if (!live.current) return
-    live.current = { ...live.current, canvas }
-    setDocument(live.current)
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => {
-      void flush().catch((failure: unknown) => setError(message(failure)))
-    }, 180)
-  }
-
-  function edit(canvas: Canvas, group?: symbol) {
-    const current = live.current
-    if (!current || !activeHistory || current.canvas === canvas) return
-    if (group === undefined || activeHistory.editGroup !== group) {
-      activeHistory.past.push(current.canvas)
-      if (activeHistory.past.length > historyLimit) activeHistory.past.shift()
-    }
-
-    activeHistory.editGroup = group
-    activeHistory.future.length = 0
-    apply(canvas)
-  }
-
-  function step(direction: "undo" | "redo") {
-    const current = live.current
-    if (loading || !current || !activeHistory) return
-    const { past, future } = activeHistory
-    const previous = (direction === "undo" ? past : future).pop()
-    if (!previous) return
-    const destination = direction === "undo" ? future : past
-    destination.push(current.canvas)
-    activeHistory.editGroup = undefined
-    apply(previous)
-  }
-
-  const onHistoryShortcut = useEffectEvent((event: KeyboardEvent) => {
+/** ⌘K search and ⌘Z / ⇧⌘Z undo and redo; mount it once. */
+export const keyboardShortcutsAtom = Atom.make((get) => {
+  const onKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || event.isComposing || event.altKey) return
     if (!(event.metaKey || event.ctrlKey)) return
+    const id = get.once(currentCanvasIdAtom)
+    if (id === undefined) return
+    const key = event.key.toLowerCase()
+
+    if (key === "k") {
+      event.preventDefault()
+      get.set(searchOpenAtom, !get.once(searchOpenAtom))
+      return
+    }
 
     if (
       event.target instanceof HTMLElement &&
@@ -187,52 +309,17 @@ export function useWorkspace() {
       return
     }
 
-    const key = event.key.toLowerCase()
     if (key === "z" || (event.ctrlKey && key === "y")) {
       event.preventDefault()
-      step(event.shiftKey || key === "y" ? "redo" : "undo")
-    }
-  })
-
-  async function navigate(load: () => Promise<Document>) {
-    setLoading(true)
-
-    try {
-      await flush()
-      open(await load())
-    } catch (failure) {
-      setError(message(failure))
-    } finally {
-      setLoading(false)
+      const direction = event.shiftKey || key === "y" ? "redo" : "undo"
+      const session = sessionAtom(id)
+      get.set(
+        session,
+        Option.map(get.once(session), (s) => step(s, direction)),
+      )
     }
   }
 
-  return {
-    entries,
-    document,
-    loading,
-    error,
-    edit,
-    canUndo: Boolean(activeHistory?.past.length) && !loading,
-    canRedo: Boolean(activeHistory?.future.length) && !loading,
-    undo: () => step("undo"),
-    redo: () => step("redo"),
-    retry: () => flush().catch((failure: unknown) => setError(message(failure))),
-    select: (id: string) => navigate(() => request<Document>(`${endpoint}/${id}`)),
-    create: (title: string, from?: string) =>
-      navigate(async () => {
-        const created = await request<Document>(endpoint, { method: "POST", body: { title, from } })
-
-        setEntries((list) => [
-          ...list,
-          {
-            id: created.id,
-            title: created.canvas.title,
-            ...(from === undefined ? {} : { forkedFrom: from }),
-          },
-        ])
-
-        return created
-      }),
-  }
-}
+  window.addEventListener("keydown", onKeyDown)
+  get.addFinalizer(() => window.removeEventListener("keydown", onKeyDown))
+})

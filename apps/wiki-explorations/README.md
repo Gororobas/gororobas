@@ -42,6 +42,16 @@ Decide whether a claim needs evaluation based on what happens when readers or do
 | Can multiple values be true at once? | Keep a set or a contextual summary. Merge equivalent values and preserve evidence. | Tasmania and Victoria can both be native areas. |
 | Does a downstream consumer require one value? | Define a selection rule for that consumer. Retain alternatives and their provenance. | Fetch metadata using one selected GBIF taxon ID. |
 
+## Claims, provenance and contexts
+
+A claim's **provenance** says who gave the information, and nothing else: a contributor (`CONTRIBUTOR`), an inference from a contributor's own publication (`INFERENCE`), or an external provider (`EXTERNAL_PROVIDER`).
+
+A claim's **context** says where its value holds, in a shape each claim type chooses: a place article, a profile context, or text in the contributor's words. Some claims have none, such as a GBIF taxon ID. To place a field, ask whether it would still be true if someone else made the same claim. If it would, it describes the value and belongs to the claim. If it wouldn't, it describes who said it and belongs to the provenance.
+
+A **profile context** is an entry of a profile's timeline: where and how a person lives and produces over a period. It's made of **dimensions**, and location is one of them. A dimension is **measured** (an elevation from the device's geolocation, a climate dataset) or **declared** ("we're at about 1,200 m", the kind of production). A profile context never changes. When something changes, the person starts a new one, so claims stay anchored on the context they were made in. Claims point to contexts instead of copying their dimensions, so a new dimension or dataset reaches every older claim.
+
+**Affinity** is how close a claim's context is to the reader's. Each dimension compares itself and explains the difference ("same rainfall pattern, 4 °C cooler"), and there's no overall score. It's computed when someone reads, never stored, and it ranks and annotates claims without hiding any. Each property declares its **relevant dimensions**, the ones affinity uses. Plant and animal properties default to climate and elevation.
+
 ## Working with a canvas from an agent
 
 Each file in `canvases/` contains a whole graph. Node IDs are stable and edges reference them directly. Use the local JSON API to make live changes with validation and stale-write detection.

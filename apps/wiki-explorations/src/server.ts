@@ -1,6 +1,7 @@
 import { NodeHttpServer, NodeRuntime, NodeServices } from "@effect/platform-node"
-import { Config, Effect, FileSystem, Layer, Order, Schema, Semaphore } from "effect"
+import { Config, Effect, FileSystem, Layer, Order, PubSub, Schema, Semaphore, Stream } from "effect"
 import { sort } from "effect/Array"
+import { Sse } from "effect/encoding"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 // oxlint-disable-next-line effect/avoid-node-imports, custom-lint-rules/no-node-apis -- Hash the stored bytes for optimistic concurrency.
 import { createHash } from "node:crypto"
@@ -9,6 +10,7 @@ import { createServer } from "node:http"
 // oxlint-disable-next-line effect/avoid-node-imports, custom-lint-rules/no-node-apis -- Resolve the checked-in canvas directory relative to this module.
 import { fileURLToPath } from "node:url"
 
+import { CanvasDocument, canvasChangedEvent } from "./canvas-api.js"
 import { GitRef, readCanvasHistory } from "./git-history.js"
 import { Canvas, decodeCanvasFile, inspectGraph } from "./graph.js"
 
@@ -20,6 +22,7 @@ const CreateCanvas = Schema.Struct({
 })
 const CanvasEdit = Schema.Struct({ revision: Schema.String, canvas: Canvas })
 
+const encodeDocument = Schema.encodeEffect(Schema.fromJsonString(CanvasDocument))
 const revisionOf = (content: string) => createHash("sha256").update(content).digest("hex")
 const problem = (status: number, error: string) =>
   HttpServerResponse.jsonUnsafe({ error }, { status })
@@ -55,6 +58,23 @@ const routes = HttpRouter.addAll(
         return { id, revision: revisionOf(content), canvas }
       }).pipe(Effect.uninterruptible)
 
+    // Every change on disk (this server's writes, other editors, Git checkouts) reaches each open tab.
+    const changes = yield* PubSub.sliding<CanvasDocument>(64)
+
+    yield* files.watch(directory).pipe(
+      Stream.map(({ path }) => path.match(/^([^/]+)\.json$/)?.[1]),
+      Stream.filter(validId),
+      // A file mid-write by another editor fails to decode; its final write emits again.
+      Stream.runForEach((id) =>
+        read(id).pipe(
+          Effect.flatMap((document) => PubSub.publish(changes, document)),
+          Effect.ignore,
+        ),
+      ),
+      Effect.catchCause(Effect.logError),
+      Effect.forkScoped,
+    )
+
     const storageError = Effect.catch((error) => {
       if (HttpServerResponse.isHttpServerResponse(error)) return Effect.succeed(error)
       return Effect.logError(error).pipe(
@@ -63,6 +83,27 @@ const routes = HttpRouter.addAll(
     })
 
     return [
+      HttpRouter.route(
+        "GET",
+        "/api/canvases/events",
+        Effect.succeed(
+          HttpServerResponse.stream(
+            Stream.fromPubSub(changes).pipe(
+              Stream.mapEffect((document) => encodeDocument(document)),
+              Stream.map((data) =>
+                Sse.encoder.write({
+                  _tag: "Event",
+                  event: canvasChangedEvent,
+                  id: undefined,
+                  data,
+                }),
+              ),
+              Stream.encodeText,
+            ),
+            { contentType: "text/event-stream", headers: { "cache-control": "no-store" } },
+          ),
+        ),
+      ),
       HttpRouter.route(
         "GET",
         "/api/canvases/:id/history",

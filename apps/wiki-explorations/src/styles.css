@@ -149,10 +149,10 @@ button.primary:hover:not(:disabled) {
   border-radius: 4px;
   color: #71717a;
 }
-.command-overlay {
+.dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: #18181b26;
+  background: #18181b60;
 }
 .command-palette {
   position: fixed;
@@ -166,7 +166,7 @@ button.primary:hover:not(:disabled) {
   box-shadow: 0 16px 48px #18181b29;
   overflow: hidden;
 }
-.command-palette [cmdk-input] {
+.command-input {
   width: 100%;
   padding: 14px 16px;
   border: 0;
@@ -175,16 +175,16 @@ button.primary:hover:not(:disabled) {
   font-size: 15px;
   outline: none;
 }
-.command-palette [cmdk-list] {
+.command-list {
   max-height: min(420px, 60vh);
   overflow: auto;
   padding: 6px;
 }
-.command-palette [cmdk-empty] {
+.command-empty:not(:empty) {
   padding: 14px 10px;
   color: #71717a;
 }
-.command-palette [cmdk-item] {
+.command-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -192,7 +192,7 @@ button.primary:hover:not(:disabled) {
   border-radius: 6px;
   cursor: pointer;
 }
-.command-palette [cmdk-item][data-selected="true"] {
+.command-item[data-highlighted] {
   background: #f4f4f5;
 }
 .command-item-text {
@@ -696,6 +696,17 @@ button.primary:hover:not(:disabled) {
   margin-top: 18px;
   color: #9f2929;
 }
+.history-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  overflow: auto;
+}
+.history-dialog h2 {
+  margin: 0 0 2px;
+  font-size: 18px;
+}
 .history-dialog,
 .example-dialog {
   width: min(960px, calc(100% - 24px));
@@ -707,7 +718,6 @@ button.primary:hover:not(:disabled) {
   background: #fafafa;
   box-shadow: 0 24px 60px #18181b2e;
 }
-.history-dialog::backdrop,
 .example-dialog::backdrop {
   background: #18181b60;
 }
@@ -722,10 +732,6 @@ button.primary:hover:not(:disabled) {
 }
 .history-heading {
   justify-content: space-between;
-}
-.history-heading h2 {
-  margin: 0 0 2px;
-  font-size: 18px;
 }
 .history-heading p {
   margin: 0;
@@ -803,6 +809,24 @@ button.primary:hover:not(:disabled) {
   border: 1px solid #e4e4e7;
   border-radius: 8px;
   background: white;
+}
+.diff-results details[data-focused] {
+  border-color: #9baad6;
+}
+.diff-results summary .show-node {
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: 12px;
+  font-weight: 400;
+}
+.node-change {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 18px;
+  color: #555560;
+  font-size: 12px;
 }
 .diff-results details[open] {
   padding-bottom: 10px;

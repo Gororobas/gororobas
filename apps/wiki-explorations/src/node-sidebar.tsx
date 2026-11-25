@@ -1,3 +1,4 @@
+import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { Option, Schema } from "effect"
 import {
   CircleDashed,
@@ -28,6 +29,7 @@ import {
   withLockFingerprint,
 } from "./graph.js"
 import { kinds } from "./node-card.js"
+import { historyDialogAtom, nodeStatusesAtom } from "./workspace.js"
 
 const parseExampleData = Schema.decodeOption(ExampleDataText)
 
@@ -235,6 +237,8 @@ export function NodeSidebar({
   const example = node.kind === "transformation" ? "" : formatExampleData(node.exampleData)
 
   const integrity = lockIntegrity(node)
+  const change = useAtomValue(nodeStatusesAtom).get(node.id)
+  const openHistory = useAtomSet(historyDialogAtom)
 
   function edit(next: GraphNode, group?: symbol) {
     saveNode(withLockFingerprint(node, next), group)
@@ -253,6 +257,14 @@ export function NodeSidebar({
           ×
         </button>
       </div>
+      {change && (
+        <button className="node-change" onClick={() => openHistory({ focusedNode: node.id })}>
+          <span className="diff-status" data-status={change}>
+            {change}
+          </span>
+          since last commit · View changes
+        </button>
+      )}
       {openPipeline && (
         <button className="open-pipeline" onClick={openPipeline}>
           Open pipeline

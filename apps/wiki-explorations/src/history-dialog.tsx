@@ -1,10 +1,13 @@
-import { Array as EffectArray } from "effect"
-import { useEffect, useRef, useState } from "react"
+import { Dialog } from "@base-ui/react/dialog"
+import { useAtomValue } from "@effect/atom-react"
+import { Array as EffectArray, Option } from "effect"
+import { AsyncResult } from "effect/reactivity"
+import { useLayoutEffect, useRef, useState } from "react"
 
+import type { CanvasHistoryComparison } from "./canvas-api.js"
 import { diffCanvas, diffWords, type WordChange } from "./canvas-diff.js"
-import type { CanvasHistoryComparison } from "./git-history.js"
 import type { Canvas } from "./graph.js"
-import { loadCanvasHistory } from "./workspace.js"
+import { canvasHistoryAtom } from "./workspace.js"
 
 function HighlightedText({ changes, side }: { changes: WordChange[]; side: "removed" | "added" }) {
   const parts = changes.filter(({ status }) => status === "same" || status === side)
@@ -50,9 +53,24 @@ function FieldChanges({
   )
 }
 
-function Comparison({ result, canvas }: { result: CanvasHistoryComparison; canvas: Canvas }) {
+function Comparison({
+  result,
+  canvas,
+  focusedNode,
+  onShowNode,
+}: {
+  result: CanvasHistoryComparison
+  canvas: Canvas
+  focusedNode: string | undefined
+  onShowNode: (id: string) => void
+}) {
   const { metadata, nodes, connections, moved } = diffCanvas(result.baseline, canvas)
   const shortCommit = result.commit.slice(0, 8)
+  const focused = useRef<HTMLDetailsElement>(null)
+
+  useLayoutEffect(() => {
+    focused.current?.scrollIntoView({ block: "start" })
+  }, [result.commit])
 
   return (
     <section className="diff-results" aria-label="Canvas changes">
@@ -71,12 +89,29 @@ function Comparison({ result, canvas }: { result: CanvasHistoryComparison; canva
         <section>
           <h4>Nodes ({nodes.length})</h4>
           {nodes.map(({ id, title, status, fields }) => (
-            <details key={id}>
+            <details
+              key={id}
+              ref={id === focusedNode ? focused : undefined}
+              open={id === focusedNode || undefined}
+              data-focused={id === focusedNode || undefined}
+            >
               <summary>
                 <span className="diff-status" data-status={status}>
                   {status}
                 </span>{" "}
                 {title}
+                {status !== "Removed" && (
+                  <button
+                    type="button"
+                    className="show-node"
+                    onClick={(event) => {
+                      event.preventDefault()
+                      onShowNode(id)
+                    }}
+                  >
+                    Show on canvas
+                  </button>
+                )}
               </summary>
               <FieldChanges fields={fields} />
             </details>
@@ -108,61 +143,38 @@ function Comparison({ result, canvas }: { result: CanvasHistoryComparison; canva
   )
 }
 
-export function HistoryDialog({
+function History({
   id,
   canvas,
-  onClose,
+  focusedNode,
+  onShowNode,
 }: {
   id: string
   canvas: Canvas
-  onClose: () => void
+  focusedNode: string | undefined
+  onShowNode: (id: string) => void
 }) {
-  const dialog = useRef<HTMLDialogElement>(null)
   const [ref, setRef] = useState("HEAD")
-  const [result, setResult] = useState<CanvasHistoryComparison>()
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-
-  async function compare(ref: string) {
-    setError("")
-    setLoading(true)
-
-    try {
-      setResult(await loadCanvasHistory(id, ref))
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Could not load canvas history.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    dialog.current?.showModal()
-    void compare("HEAD")
-  }, [id])
+  const [compared, setCompared] = useState("HEAD")
+  const comparison = useAtomValue(canvasHistoryAtom(id)(compared))
+  const result = Option.getOrUndefined(AsyncResult.value(comparison))
+  const loading = comparison.waiting || AsyncResult.isInitial(comparison)
+  const error = Option.getOrUndefined(AsyncResult.error(comparison))?.message
 
   return (
-    <dialog
-      ref={dialog}
-      className="history-dialog"
-      aria-labelledby="history-title"
-      onClose={onClose}
-      onKeyDown={(event) => event.stopPropagation()}
-    >
+    <>
       <div className="history-heading">
         <div>
-          <h2 id="history-title">Canvas history</h2>
-          <p>{canvas.title}</p>
+          <Dialog.Title>Canvas history</Dialog.Title>
+          <Dialog.Description>{canvas.title}</Dialog.Description>
         </div>
-        <form method="dialog">
-          <button>Close</button>
-        </form>
+        <Dialog.Close>Close</Dialog.Close>
       </div>
       <form
         className="history-compare"
         onSubmit={(event) => {
           event.preventDefault()
-          if (!loading && ref.trim()) void compare(ref.trim())
+          if (!loading && ref.trim()) setCompared(ref.trim())
         }}
       >
         <label>
@@ -195,7 +207,7 @@ export function HistoryDialog({
                 disabled={loading}
                 onClick={() => {
                   setRef(hash)
-                  void compare(hash)
+                  setCompared(hash)
                 }}
               >
                 <span>{subject || "(No subject)"}</span>
@@ -205,9 +217,39 @@ export function HistoryDialog({
               </button>
             ))}
           </section>
-          <Comparison result={result} canvas={canvas} />
+          <Comparison
+            result={result}
+            canvas={canvas}
+            focusedNode={focusedNode}
+            onShowNode={onShowNode}
+          />
         </div>
       )}
-    </dialog>
+    </>
+  )
+}
+
+/** Compares the canvas with a Git ref; `focusedNode` opens and scrolls to that node's changes. */
+export function HistoryDialog({
+  open,
+  onOpenChange,
+  ...history
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  id: string
+  canvas: Canvas
+  focusedNode: string | undefined
+  onShowNode: (id: string) => void
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="dialog-backdrop" />
+        <Dialog.Popup className="history-dialog nokey">
+          <History {...history} />
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

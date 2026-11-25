@@ -10,10 +10,11 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@dagrejs/dagre": "^2",
+    "@effect/atom-react": "catalog:",
     "@effect/platform-node": "catalog:",
     "@xyflow/react": "^12",
-    "cmdk": "^1.1.1",
     "effect": "catalog:",
     "highlight.js": "^11",
     "lucide-react": "^1.78.0",
