@@ -7,6 +7,7 @@ import {
   Lock,
   MessageSquareQuote,
   TriangleAlert,
+  UserRound,
   type LucideIcon,
 } from "lucide-react"
 import { useRef, useState } from "react"
@@ -38,6 +39,7 @@ const eventTypeIcons = {
   Claim: MessageSquareQuote,
   "External data": Globe,
   Report: Flag,
+  Person: UserRound,
 } satisfies Record<typeof EventType.Type, LucideIcon>
 
 function EditorMode({

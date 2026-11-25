@@ -2,7 +2,7 @@ import { Effect, Hash, Match, Schema } from "effect"
 
 import { legacyExampleSchema } from "./legacy-example-schema.js"
 
-export const EventType = Schema.Literals(["Claim", "External data", "Report"])
+export const EventType = Schema.Literals(["Claim", "External data", "Report", "Person"])
 export const ArchitectureConfidence = Schema.Literals(["NOT_REVIEWED", "LOCKED_IN", "UNCERTAIN"])
 export const defaultArchitectureConfidence = "NOT_REVIEWED"
 
@@ -41,7 +41,10 @@ export const GraphNode = Schema.Union([
     eventType: Schema.Literal("Claim"),
     isEvaluationRequired: Schema.Boolean,
   }),
-  Schema.Struct({ ...eventFields, eventType: Schema.Literals(["External data", "Report"]) }),
+  Schema.Struct({
+    ...eventFields,
+    eventType: Schema.Literals(["External data", "Report", "Person"]),
+  }),
   ...otherNodes,
 ])
 
