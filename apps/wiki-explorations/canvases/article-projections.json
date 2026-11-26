@@ -11,7 +11,7 @@
         "y": 0
       },
       "lockedContentHash": "e3902e37",
-      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  value: Schema.NonEmptyString,\n  language: SupportedLanguage,\n  gender: Schema.NullOr(GrammaticalGender),\n  provenance: ClaimProvenance,\n  context: Schema.optionalKey(\n    Schema.Union([\n      Schema.TaggedStruct(\"PLACE_ARTICLE\", {\n        placeArticleId: PlaceArticleId,\n      }),\n      Schema.TaggedStruct(\"PROFILE_CONTEXT\", {\n        profileContextId: ProfileContextId,\n      }),\n      Schema.TaggedStruct(\"TEXT\", {\n        text: Schema.NonEmptyString,\n      }),\n    ]),\n  ),\n})",
+      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  value: Schema.NonEmptyString,\n  language: SupportedLanguage,\n  gender: Schema.NullOr(GrammaticalGender),\n  provenance: ClaimProvenance,\n  context: OptionalColumn(\n    Schema.Union([\n      Schema.TaggedStruct(\"PLACE_ARTICLE\", {\n        placeArticleId: PlaceArticleId,\n      }),\n      Schema.TaggedStruct(\"PROFILE_CONTEXT\", {\n        profileContextId: ProfileContextId,\n      }),\n      Schema.TaggedStruct(\"TEXT\", {\n        text: Schema.NonEmptyString,\n      }),\n    ]),\n  ),\n})",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": false
@@ -37,7 +37,7 @@
         "y": 26.5
       },
       "openQuestions": "- Which source languages should we include? External data can include languages beyond our SupportedLanguage.",
-      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Record(\n    SupportedLanguage,\n    Schema.optionalKey(\n      Schema.NonEmptyArray(\n        Schema.Struct({\n          value: Schema.NonEmptyString,\n          gender: Schema.NullOr(GrammaticalGender),\n          sources: Schema.NonEmptyArray(\n            Schema.Union([\n              Schema.TaggedStruct(\"ContributorClaim\", {\n                claimId: ClaimId,\n              }),\n              Schema.TaggedStruct(\"GbifObservation\", {\n                observationId: ObservationId,\n              }),\n              Schema.TaggedStruct(\"WikidataObservation\", {\n                observationId: ObservationId,\n              }),\n            ]),\n          ),\n        }),\n      ),\n    ),\n  ),\n)",
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Record(\n    SupportedLanguage,\n    OptionalColumn(\n      Schema.NonEmptyArray(\n        Schema.Struct({\n          value: Schema.NonEmptyString,\n          gender: Schema.NullOr(GrammaticalGender),\n          sources: Schema.NonEmptyArray(\n            Schema.Union([\n              Schema.TaggedStruct(\"ContributorClaim\", {\n                claimId: ClaimId,\n              }),\n              Schema.TaggedStruct(\"GbifObservation\", {\n                observationId: ObservationId,\n              }),\n              Schema.TaggedStruct(\"WikidataObservation\", {\n                observationId: ObservationId,\n              }),\n            ]),\n          ),\n        }),\n      ),\n    ),\n  ),\n)",
       "kind": "property"
     },
     {
@@ -86,7 +86,7 @@
         "x": 1980,
         "y": 690
       },
-      "exampleSchema": "Schema.Struct({\n  observationId: ObservationId,\n  wikidataSelection: Schema.Struct({\n    wikidataId: WikidataId,\n    articleId: ArticleId,\n    provenance: WikidataSelectionProvenance,\n  }),\n  request: Schema.Struct({\n    url: Schema.URLFromString,\n    entityId: WikidataId,\n  }),\n  fetchedAt: Schema.DateTimeUtcFromString,\n  response: Schema.Struct({\n    entities: Schema.Record(\n      WikidataId,\n      Schema.StructWithRest(\n        Schema.Struct({\n          id: WikidataId,\n          lastrevid: WikidataRevisionId,\n          modified: Schema.DateTimeUtcFromString,\n          labels: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Struct({\n              language: Schema.NonEmptyString,\n              value: Schema.NonEmptyString,\n            }),\n          ),\n          descriptions: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Struct({\n              language: Schema.NonEmptyString,\n              value: Schema.NonEmptyString,\n            }),\n          ),\n          aliases: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Array(\n              Schema.Struct({\n                language: Schema.NonEmptyString,\n                value: Schema.NonEmptyString,\n              }),\n            ),\n          ),\n          claims: Schema.Record(\n            WikidataPropertyId,\n            Schema.Array(\n              Schema.StructWithRest(\n                Schema.Struct({\n                  id: WikidataStatementId,\n                  mainsnak: Schema.JsonObject,\n                  rank: Schema.NonEmptyString,\n                  references: Schema.optionalKey(Schema.Array(Schema.JsonObject)),\n                }),\n                [Schema.JsonObject],\n              ),\n            ),\n          ),\n          sitelinks: Schema.Record(Schema.NonEmptyString, Schema.JsonObject),\n        }),\n        [Schema.JsonObject],\n      ),\n    ),\n  }),\n})",
+      "exampleSchema": "Schema.Struct({\n  observationId: ObservationId,\n  wikidataSelection: Schema.Struct({\n    wikidataId: WikidataId,\n    articleId: ArticleId,\n    provenance: WikidataSelectionProvenance,\n  }),\n  request: Schema.Struct({\n    url: Schema.URLFromString,\n    entityId: WikidataId,\n  }),\n  fetchedAt: TimestampColumn,\n  response: Schema.Struct({\n    entities: Schema.Record(\n      WikidataId,\n      Schema.StructWithRest(\n        Schema.Struct({\n          id: WikidataId,\n          lastrevid: WikidataRevisionId,\n          modified: TimestampColumn,\n          labels: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Struct({\n              language: Schema.NonEmptyString,\n              value: Schema.NonEmptyString,\n            }),\n          ),\n          descriptions: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Struct({\n              language: Schema.NonEmptyString,\n              value: Schema.NonEmptyString,\n            }),\n          ),\n          aliases: Schema.Record(\n            Schema.NonEmptyString,\n            Schema.Array(\n              Schema.Struct({\n                language: Schema.NonEmptyString,\n                value: Schema.NonEmptyString,\n              }),\n            ),\n          ),\n          claims: Schema.Record(\n            WikidataPropertyId,\n            Schema.Array(\n              Schema.StructWithRest(\n                Schema.Struct({\n                  id: WikidataStatementId,\n                  mainsnak: Schema.JsonObject,\n                  rank: Schema.NonEmptyString,\n                  references: OptionalColumn(Schema.Array(Schema.JsonObject)),\n                }),\n                [Schema.JsonObject],\n              ),\n            ),\n          ),\n          sitelinks: Schema.Record(Schema.NonEmptyString, Schema.JsonObject),\n        }),\n        [Schema.JsonObject],\n      ),\n    ),\n  }),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -123,7 +123,7 @@
         "x": 3300,
         "y": 1161.5
       },
-      "exampleSchema": "Schema.Struct({\n  kind: Schema.Literal(\"TAXON_METADATA\"),\n  observationId: ObservationId,\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  fetchedAt: Schema.DateTimeUtcFromString,\n  response: Schema.Struct({\n    taxonID: GbifTaxonId,\n    scientificName: Schema.NonEmptyString,\n    taxonRank: Schema.NonEmptyString,\n    classification: Schema.Array(\n      Schema.Struct({\n        taxonID: GbifTaxonId,\n        scientificName: Schema.NonEmptyString,\n        taxonRank: Schema.NonEmptyString,\n      }),\n    ),\n    vernacularNames: Schema.Array(\n      Schema.Struct({\n        vernacularName: Schema.NonEmptyString,\n        language: Schema.NonEmptyString,\n      }),\n    ),\n    distributions: Schema.Array(\n      Schema.Struct({\n        locality: Schema.NonEmptyString,\n        establishmentMeans: Schema.NonEmptyString,\n        remarks: Schema.optionalKey(Schema.String),\n      }),\n    ),\n  }),\n})",
+      "exampleSchema": "Schema.Struct({\n  kind: Schema.Literal(\"TAXON_METADATA\"),\n  observationId: ObservationId,\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  fetchedAt: TimestampColumn,\n  response: Schema.Struct({\n    taxonID: GbifTaxonId,\n    scientificName: Schema.NonEmptyString,\n    taxonRank: Schema.NonEmptyString,\n    classification: Schema.Array(\n      Schema.Struct({\n        taxonID: GbifTaxonId,\n        scientificName: Schema.NonEmptyString,\n        taxonRank: Schema.NonEmptyString,\n      }),\n    ),\n    vernacularNames: Schema.Array(\n      Schema.Struct({\n        vernacularName: Schema.NonEmptyString,\n        language: Schema.NonEmptyString,\n      }),\n    ),\n    distributions: Schema.Array(\n      Schema.Struct({\n        locality: Schema.NonEmptyString,\n        establishmentMeans: Schema.NonEmptyString,\n        remarks: OptionalColumn(Schema.String),\n      }),\n    ),\n  }),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -159,7 +159,7 @@
         "x": 4620,
         "y": 1224.5
       },
-      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    observationId: ObservationId,\n    records: Schema.Array(\n      Schema.Struct({\n        occurrenceKey: GbifOccurrenceKey,\n        datasetKey: GbifDatasetKey,\n        eventDate: Schema.optionalKey(Schema.NonEmptyString),\n        basisOfRecord: Schema.NonEmptyString,\n        matchedTaxonId: GbifTaxonId,\n        placeArticleId: Schema.optionalKey(PlaceArticleId),\n        matchMethod: Schema.optionalKey(Schema.NonEmptyString),\n      }),\n    ),\n  }),\n)",
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    observationId: ObservationId,\n    records: Schema.Array(\n      Schema.Struct({\n        occurrenceKey: GbifOccurrenceKey,\n        datasetKey: GbifDatasetKey,\n        eventDate: OptionalColumn(Schema.NonEmptyString),\n        basisOfRecord: Schema.NonEmptyString,\n        matchedTaxonId: GbifTaxonId,\n        placeArticleId: OptionalColumn(PlaceArticleId),\n        matchMethod: OptionalColumn(Schema.NonEmptyString),\n      }),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -172,7 +172,7 @@
         "y": 1360.5
       },
       "openQuestions": "- Which practice questions are height's own, and which form a shared set (planting method, ground cover, pesticides) reused across plant properties? Some may belong on the profile context instead.",
-      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  minimumCm: Schema.optionalKey(Schema.Finite),\n  maximumCm: Schema.optionalKey(Schema.Finite),\n  provenance: ClaimProvenance,\n  context: Schema.optionalKey(\n    Schema.Union([\n      Schema.TaggedStruct(\"PLACE_ARTICLE\", {\n        placeArticleId: PlaceArticleId,\n        period: Schema.optionalKey(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: Schema.optionalKey(\n          Schema.Struct({\n            plantingMethod: Schema.optionalKey(Schema.NonEmptyString),\n            groundCover: Schema.optionalKey(Schema.NonEmptyString),\n            pesticides: Schema.optionalKey(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n      Schema.TaggedStruct(\"PROFILE_CONTEXT\", {\n        profileContextId: ProfileContextId,\n        period: Schema.optionalKey(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: Schema.optionalKey(\n          Schema.Struct({\n            plantingMethod: Schema.optionalKey(Schema.NonEmptyString),\n            groundCover: Schema.optionalKey(Schema.NonEmptyString),\n            pesticides: Schema.optionalKey(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n      Schema.TaggedStruct(\"TEXT\", {\n        text: Schema.NonEmptyString,\n        period: Schema.optionalKey(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: Schema.optionalKey(\n          Schema.Struct({\n            plantingMethod: Schema.optionalKey(Schema.NonEmptyString),\n            groundCover: Schema.optionalKey(Schema.NonEmptyString),\n            pesticides: Schema.optionalKey(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n    ]),\n  ),\n})",
+      "exampleSchema": "Schema.Struct({\n  claimId: ClaimId,\n  articleId: ArticleId,\n  minimumCm: OptionalColumn(Schema.Finite),\n  maximumCm: OptionalColumn(Schema.Finite),\n  provenance: ClaimProvenance,\n  context: OptionalColumn(\n    Schema.Union([\n      Schema.TaggedStruct(\"PLACE_ARTICLE\", {\n        placeArticleId: PlaceArticleId,\n        period: OptionalColumn(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: OptionalColumn(\n          Schema.Struct({\n            plantingMethod: OptionalColumn(Schema.NonEmptyString),\n            groundCover: OptionalColumn(Schema.NonEmptyString),\n            pesticides: OptionalColumn(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n      Schema.TaggedStruct(\"PROFILE_CONTEXT\", {\n        profileContextId: ProfileContextId,\n        period: OptionalColumn(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: OptionalColumn(\n          Schema.Struct({\n            plantingMethod: OptionalColumn(Schema.NonEmptyString),\n            groundCover: OptionalColumn(Schema.NonEmptyString),\n            pesticides: OptionalColumn(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n      Schema.TaggedStruct(\"TEXT\", {\n        text: Schema.NonEmptyString,\n        period: OptionalColumn(\n          Schema.Struct({\n            start: Schema.NonEmptyString,\n            end: Schema.NullOr(Schema.NonEmptyString),\n          }),\n        ),\n        practices: OptionalColumn(\n          Schema.Struct({\n            plantingMethod: OptionalColumn(Schema.NonEmptyString),\n            groundCover: OptionalColumn(Schema.NonEmptyString),\n            pesticides: OptionalColumn(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n    ]),\n  ),\n})",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": false
@@ -198,7 +198,7 @@
         "x": 5280,
         "y": 1496.5
       },
-      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    minimumCm: Schema.optionalKey(Schema.Finite),\n    maximumCm: Schema.optionalKey(Schema.Finite),\n    sources: Schema.NonEmptyArray(\n      Schema.Union([\n        Schema.TaggedStruct(\"ContributorClaim\", {\n          claimId: ClaimId,\n        }),\n        Schema.TaggedStruct(\"ExternalObservation\", {\n          observationId: ObservationId,\n        }),\n      ]),\n    ),\n    parentRange: Schema.optionalKey(\n      Schema.Struct({\n        minimumCm: Schema.optionalKey(Schema.Finite),\n        maximumCm: Schema.optionalKey(Schema.Finite),\n      }),\n    ),\n  }),\n)",
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    minimumCm: OptionalColumn(Schema.Finite),\n    maximumCm: OptionalColumn(Schema.Finite),\n    sources: Schema.NonEmptyArray(\n      Schema.Union([\n        Schema.TaggedStruct(\"ContributorClaim\", {\n          claimId: ClaimId,\n        }),\n        Schema.TaggedStruct(\"ExternalObservation\", {\n          observationId: ObservationId,\n        }),\n      ]),\n    ),\n    parentRange: OptionalColumn(\n      Schema.Struct({\n        minimumCm: OptionalColumn(Schema.Finite),\n        maximumCm: OptionalColumn(Schema.Finite),\n      }),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -221,7 +221,7 @@
         "x": 5940,
         "y": 1224.5
       },
-      "exampleSchema": "Schema.Struct({\n  articleId: ArticleId,\n  canonicalPath: ArticlePath,\n  names: Schema.Record(\n    SupportedLanguage,\n    Schema.optionalKey(\n      Schema.NonEmptyArray(\n        Schema.Struct({\n          value: Schema.NonEmptyString,\n          gender: Schema.NullOr(GrammaticalGender),\n          sources: Schema.NonEmptyArray(\n            Schema.Union([\n              Schema.TaggedStruct(\"ContributorClaim\", {\n                claimId: ClaimId,\n              }),\n              Schema.TaggedStruct(\"GbifObservation\", {\n                observationId: ObservationId,\n              }),\n              Schema.TaggedStruct(\"WikidataObservation\", {\n                observationId: ObservationId,\n              }),\n            ]),\n          ),\n        }),\n      ),\n    ),\n  ),\n  geographicalOrigin: Schema.optionalKey(\n    Schema.Struct({\n      gbif: Schema.optionalKey(\n        Schema.Struct({\n          observationId: ObservationId,\n        }),\n      ),\n      contributorByLanguage: Schema.Record(\n        SupportedLanguage,\n        Schema.optionalKey(\n          Schema.Struct({\n            claimId: ClaimId,\n            text: Schema.NonEmptyString,\n          }),\n        ),\n      ),\n    }),\n  ),\n  occurrenceSample: Schema.optionalKey(\n    Schema.Struct({\n      observationId: ObservationId,\n      records: Schema.Int,\n    }),\n  ),\n  taxonomy: Schema.optionalKey(\n    Schema.Struct({\n      observationId: ObservationId,\n      classification: Schema.Array(\n        Schema.Struct({\n          taxonId: GbifTaxonId,\n          scientificName: Schema.NonEmptyString,\n          taxonRank: Schema.NonEmptyString,\n        }),\n      ),\n    }),\n  ),\n  height: Schema.optionalKey(\n    Schema.Struct({\n      minimumCm: Schema.optionalKey(Schema.Finite),\n      maximumCm: Schema.optionalKey(Schema.Finite),\n      sources: Schema.NonEmptyArray(\n        Schema.Union([\n          Schema.TaggedStruct(\"ContributorClaim\", {\n            claimId: ClaimId,\n          }),\n          Schema.TaggedStruct(\"ExternalObservation\", {\n            observationId: ObservationId,\n          }),\n        ]),\n      ),\n      parentRange: Schema.optionalKey(\n        Schema.Struct({\n          minimumCm: Schema.optionalKey(Schema.Finite),\n          maximumCm: Schema.optionalKey(Schema.Finite),\n        }),\n      ),\n    }),\n  ),\n  images: Schema.optionalKey(\n    Schema.Struct({\n      observationId: ObservationId,\n      assets: Schema.Array(\n        Schema.Struct({\n          mediaAssetId: MediaAssetId,\n        }),\n      ),\n    }),\n  ),\n})",
+      "exampleSchema": "Schema.Struct({\n  articleId: ArticleId,\n  canonicalPath: ArticlePath,\n  names: Schema.Record(\n    SupportedLanguage,\n    OptionalColumn(\n      Schema.NonEmptyArray(\n        Schema.Struct({\n          value: Schema.NonEmptyString,\n          gender: Schema.NullOr(GrammaticalGender),\n          sources: Schema.NonEmptyArray(\n            Schema.Union([\n              Schema.TaggedStruct(\"ContributorClaim\", {\n                claimId: ClaimId,\n              }),\n              Schema.TaggedStruct(\"GbifObservation\", {\n                observationId: ObservationId,\n              }),\n              Schema.TaggedStruct(\"WikidataObservation\", {\n                observationId: ObservationId,\n              }),\n            ]),\n          ),\n        }),\n      ),\n    ),\n  ),\n  geographicalOrigin: OptionalColumn(\n    Schema.Struct({\n      gbif: OptionalColumn(\n        Schema.Struct({\n          observationId: ObservationId,\n        }),\n      ),\n      contributorByLanguage: Schema.Record(\n        SupportedLanguage,\n        OptionalColumn(\n          Schema.Struct({\n            claimId: ClaimId,\n            text: Schema.NonEmptyString,\n          }),\n        ),\n      ),\n    }),\n  ),\n  occurrenceSample: OptionalColumn(\n    Schema.Struct({\n      observationId: ObservationId,\n      records: Schema.Int,\n    }),\n  ),\n  taxonomy: OptionalColumn(\n    Schema.Struct({\n      observationId: ObservationId,\n      classification: Schema.Array(\n        Schema.Struct({\n          taxonId: GbifTaxonId,\n          scientificName: Schema.NonEmptyString,\n          taxonRank: Schema.NonEmptyString,\n        }),\n      ),\n    }),\n  ),\n  height: OptionalColumn(\n    Schema.Struct({\n      minimumCm: OptionalColumn(Schema.Finite),\n      maximumCm: OptionalColumn(Schema.Finite),\n      sources: Schema.NonEmptyArray(\n        Schema.Union([\n          Schema.TaggedStruct(\"ContributorClaim\", {\n            claimId: ClaimId,\n          }),\n          Schema.TaggedStruct(\"ExternalObservation\", {\n            observationId: ObservationId,\n          }),\n        ]),\n      ),\n      parentRange: OptionalColumn(\n        Schema.Struct({\n          minimumCm: OptionalColumn(Schema.Finite),\n          maximumCm: OptionalColumn(Schema.Finite),\n        }),\n      ),\n    }),\n  ),\n  images: OptionalColumn(\n    Schema.Struct({\n      observationId: ObservationId,\n      assets: Schema.Array(\n        Schema.Struct({\n          mediaAssetId: MediaAssetId,\n        }),\n      ),\n    }),\n  ),\n})",
       "kind": "property"
     },
     {
@@ -258,7 +258,7 @@
         "x": 4620,
         "y": 1752
       },
-      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    gbif: Schema.optionalKey(\n      Schema.Struct({\n        observationId: ObservationId,\n      }),\n    ),\n    contributorByLanguage: Schema.Record(\n      SupportedLanguage,\n      Schema.optionalKey(\n        Schema.Struct({\n          claimId: ClaimId,\n          text: Schema.NonEmptyString,\n        }),\n      ),\n    ),\n  }),\n)",
+      "exampleSchema": "Schema.Record(\n  ArticleId,\n  Schema.Struct({\n    gbif: OptionalColumn(\n      Schema.Struct({\n        observationId: ObservationId,\n      }),\n    ),\n    contributorByLanguage: Schema.Record(\n      SupportedLanguage,\n      OptionalColumn(\n        Schema.Struct({\n          claimId: ClaimId,\n          text: Schema.NonEmptyString,\n        }),\n      ),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -270,7 +270,7 @@
         "x": 3300,
         "y": 1287.5
       },
-      "exampleSchema": "Schema.Struct({\n  kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n  observationId: ObservationId,\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  fetchedAt: Schema.DateTimeUtcFromString,\n  query: Schema.Struct({\n    occurrenceStatus: Schema.Literal(\"DETECTED\"),\n    hasGeospatialIssue: Schema.Literal(false),\n    country: Schema.optionalKey(Schema.NonEmptyString),\n    limit: Schema.Int,\n  }),\n  response: Schema.Struct({\n    offset: Schema.Int,\n    limit: Schema.Int,\n    count: Schema.Int,\n    endOfRecords: Schema.Boolean,\n    results: Schema.Array(\n      Schema.Struct({\n        key: GbifOccurrenceKey,\n        datasetKey: GbifDatasetKey,\n        eventDate: Schema.optionalKey(Schema.String),\n        basisOfRecord: Schema.NonEmptyString,\n        countryCode: Schema.optionalKey(Schema.NonEmptyString),\n        stateProvince: Schema.optionalKey(Schema.NonEmptyString),\n        classifications: Schema.Record(\n          GbifChecklistKey,\n          Schema.Struct({\n            acceptedUsage: Schema.Struct({\n              key: GbifTaxonId,\n            }),\n          }),\n        ),\n        media: Schema.Array(\n          Schema.Struct({\n            type: Schema.NonEmptyString,\n            identifier: Schema.URLFromString,\n            creator: Schema.optionalKey(Schema.NonEmptyString),\n            license: Schema.optionalKey(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n    ),\n  }),\n})",
+      "exampleSchema": "Schema.Struct({\n  kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n  observationId: ObservationId,\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  fetchedAt: TimestampColumn,\n  query: Schema.Struct({\n    occurrenceStatus: Schema.Literal(\"DETECTED\"),\n    hasGeospatialIssue: Schema.Literal(false),\n    country: OptionalColumn(Schema.NonEmptyString),\n    limit: Schema.Int,\n  }),\n  response: Schema.Struct({\n    offset: Schema.Int,\n    limit: Schema.Int,\n    count: Schema.Int,\n    endOfRecords: Schema.Boolean,\n    results: Schema.Array(\n      Schema.Struct({\n        key: GbifOccurrenceKey,\n        datasetKey: GbifDatasetKey,\n        eventDate: OptionalColumn(Schema.String),\n        basisOfRecord: Schema.NonEmptyString,\n        countryCode: OptionalColumn(Schema.NonEmptyString),\n        stateProvince: OptionalColumn(Schema.NonEmptyString),\n        classifications: Schema.Record(\n          GbifChecklistKey,\n          Schema.Struct({\n            acceptedUsage: Schema.Struct({\n              key: GbifTaxonId,\n            }),\n          }),\n        ),\n        media: Schema.Array(\n          Schema.Struct({\n            type: Schema.NonEmptyString,\n            identifier: Schema.URLFromString,\n            creator: OptionalColumn(Schema.NonEmptyString),\n            license: OptionalColumn(Schema.NonEmptyString),\n          }),\n        ),\n      }),\n    ),\n  }),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -328,7 +328,7 @@
         "x": 3960,
         "y": 1198
       },
-      "exampleSchema": "Schema.Record(\n  ObservationId,\n  Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"TAXON_METADATA\"),\n      taxonSelection: Schema.Struct({\n        taxonId: GbifTaxonId,\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n        checklistKey: GbifChecklistKey,\n      }),\n      fetchedAt: Schema.DateTimeUtcFromString,\n      response: Schema.Struct({\n        taxonID: GbifTaxonId,\n        scientificName: Schema.NonEmptyString,\n        taxonRank: Schema.NonEmptyString,\n        classification: Schema.Array(\n          Schema.Struct({\n            taxonID: GbifTaxonId,\n            scientificName: Schema.NonEmptyString,\n            taxonRank: Schema.NonEmptyString,\n          }),\n        ),\n        vernacularNames: Schema.Array(\n          Schema.Struct({\n            vernacularName: Schema.NonEmptyString,\n            language: Schema.NonEmptyString,\n          }),\n        ),\n        distributions: Schema.Array(\n          Schema.Struct({\n            locality: Schema.NonEmptyString,\n            establishmentMeans: Schema.NonEmptyString,\n            remarks: Schema.optionalKey(Schema.String),\n          }),\n        ),\n      }),\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n      taxonSelection: Schema.Struct({\n        taxonId: GbifTaxonId,\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n        checklistKey: GbifChecklistKey,\n      }),\n      fetchedAt: Schema.DateTimeUtcFromString,\n      query: Schema.Struct({\n        occurrenceStatus: Schema.Literal(\"DETECTED\"),\n        hasGeospatialIssue: Schema.Literal(false),\n        country: Schema.optionalKey(Schema.NonEmptyString),\n        limit: Schema.Int,\n      }),\n      response: Schema.Struct({\n        offset: Schema.Int,\n        limit: Schema.Int,\n        count: Schema.Int,\n        endOfRecords: Schema.Boolean,\n        results: Schema.Array(\n          Schema.Struct({\n            key: GbifOccurrenceKey,\n            datasetKey: GbifDatasetKey,\n            eventDate: Schema.optionalKey(Schema.String),\n            basisOfRecord: Schema.NonEmptyString,\n            countryCode: Schema.optionalKey(Schema.NonEmptyString),\n            stateProvince: Schema.optionalKey(Schema.NonEmptyString),\n            classifications: Schema.Record(\n              GbifChecklistKey,\n              Schema.Struct({\n                acceptedUsage: Schema.Struct({\n                  key: GbifTaxonId,\n                }),\n              }),\n            ),\n            media: Schema.Array(\n              Schema.Struct({\n                type: Schema.NonEmptyString,\n                identifier: Schema.URLFromString,\n                creator: Schema.optionalKey(Schema.NonEmptyString),\n                license: Schema.optionalKey(Schema.NonEmptyString),\n              }),\n            ),\n          }),\n        ),\n      }),\n    }),\n  ]),\n)",
+      "exampleSchema": "Schema.Record(\n  ObservationId,\n  Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"TAXON_METADATA\"),\n      taxonSelection: Schema.Struct({\n        taxonId: GbifTaxonId,\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n        checklistKey: GbifChecklistKey,\n      }),\n      fetchedAt: TimestampColumn,\n      response: Schema.Struct({\n        taxonID: GbifTaxonId,\n        scientificName: Schema.NonEmptyString,\n        taxonRank: Schema.NonEmptyString,\n        classification: Schema.Array(\n          Schema.Struct({\n            taxonID: GbifTaxonId,\n            scientificName: Schema.NonEmptyString,\n            taxonRank: Schema.NonEmptyString,\n          }),\n        ),\n        vernacularNames: Schema.Array(\n          Schema.Struct({\n            vernacularName: Schema.NonEmptyString,\n            language: Schema.NonEmptyString,\n          }),\n        ),\n        distributions: Schema.Array(\n          Schema.Struct({\n            locality: Schema.NonEmptyString,\n            establishmentMeans: Schema.NonEmptyString,\n            remarks: OptionalColumn(Schema.String),\n          }),\n        ),\n      }),\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n      taxonSelection: Schema.Struct({\n        taxonId: GbifTaxonId,\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n        checklistKey: GbifChecklistKey,\n      }),\n      fetchedAt: TimestampColumn,\n      query: Schema.Struct({\n        occurrenceStatus: Schema.Literal(\"DETECTED\"),\n        hasGeospatialIssue: Schema.Literal(false),\n        country: OptionalColumn(Schema.NonEmptyString),\n        limit: Schema.Int,\n      }),\n      response: Schema.Struct({\n        offset: Schema.Int,\n        limit: Schema.Int,\n        count: Schema.Int,\n        endOfRecords: Schema.Boolean,\n        results: Schema.Array(\n          Schema.Struct({\n            key: GbifOccurrenceKey,\n            datasetKey: GbifDatasetKey,\n            eventDate: OptionalColumn(Schema.String),\n            basisOfRecord: Schema.NonEmptyString,\n            countryCode: OptionalColumn(Schema.NonEmptyString),\n            stateProvince: OptionalColumn(Schema.NonEmptyString),\n            classifications: Schema.Record(\n              GbifChecklistKey,\n              Schema.Struct({\n                acceptedUsage: Schema.Struct({\n                  key: GbifTaxonId,\n                }),\n              }),\n            ),\n            media: Schema.Array(\n              Schema.Struct({\n                type: Schema.NonEmptyString,\n                identifier: Schema.URLFromString,\n                creator: OptionalColumn(Schema.NonEmptyString),\n                license: OptionalColumn(Schema.NonEmptyString),\n              }),\n            ),\n          }),\n        ),\n      }),\n    }),\n  ]),\n)",
       "kind": "property"
     },
     {
@@ -340,7 +340,7 @@
         "x": 2970,
         "y": 995.5
       },
-      "exampleSchema": "Schema.Struct({\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  reason: Schema.NonEmptyString,\n  requests: Schema.Array(\n    Schema.Union([\n      Schema.Struct({\n        kind: Schema.Literal(\"TAXON_METADATA\"),\n        taxonId: GbifTaxonId,\n        checklistKey: GbifChecklistKey,\n        idempotencyKey: Schema.NonEmptyString,\n      }),\n      Schema.Struct({\n        kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n        taxonId: GbifTaxonId,\n        checklistKey: GbifChecklistKey,\n        query: Schema.Struct({\n          occurrenceStatus: Schema.Literal(\"DETECTED\"),\n          hasGeospatialIssue: Schema.Literal(false),\n          country: Schema.optionalKey(Schema.NonEmptyString),\n          limit: Schema.Int,\n        }),\n        idempotencyKey: Schema.NonEmptyString,\n      }),\n    ]),\n  ),\n})",
+      "exampleSchema": "Schema.Struct({\n  taxonSelection: Schema.Struct({\n    taxonId: GbifTaxonId,\n    articleId: ArticleId,\n    provenance: GbifSelectionProvenance,\n    checklistKey: GbifChecklistKey,\n  }),\n  reason: Schema.NonEmptyString,\n  requests: Schema.Array(\n    Schema.Union([\n      Schema.Struct({\n        kind: Schema.Literal(\"TAXON_METADATA\"),\n        taxonId: GbifTaxonId,\n        checklistKey: GbifChecklistKey,\n        idempotencyKey: Schema.NonEmptyString,\n      }),\n      Schema.Struct({\n        kind: Schema.Literal(\"TAXON_OCCURRENCES\"),\n        taxonId: GbifTaxonId,\n        checklistKey: GbifChecklistKey,\n        query: Schema.Struct({\n          occurrenceStatus: Schema.Literal(\"DETECTED\"),\n          hasGeospatialIssue: Schema.Literal(false),\n          country: OptionalColumn(Schema.NonEmptyString),\n          limit: Schema.Int,\n        }),\n        idempotencyKey: Schema.NonEmptyString,\n      }),\n    ]),\n  ),\n})",
       "kind": "trigger"
     },
     {
@@ -401,7 +401,7 @@
         "x": 3300,
         "y": 166
       },
-      "exampleSchema": "Schema.Record(\n  WikidataId,\n  Schema.Struct({\n    selected: Schema.Struct({\n      articleId: ArticleId,\n      claimId: ClaimId,\n    }),\n    conflicting: Schema.NonEmptyArray(\n      Schema.Struct({\n        articleId: ArticleId,\n        claimId: ClaimId,\n      }),\n    ),\n    since: Schema.DateTimeUtcFromString,\n  }),\n)",
+      "exampleSchema": "Schema.Record(\n  WikidataId,\n  Schema.Struct({\n    selected: Schema.Struct({\n      articleId: ArticleId,\n      claimId: ClaimId,\n    }),\n    conflicting: Schema.NonEmptyArray(\n      Schema.Struct({\n        articleId: ArticleId,\n        claimId: ClaimId,\n      }),\n    ),\n    since: TimestampColumn,\n  }),\n)",
       "kind": "property"
     },
     {
@@ -413,19 +413,19 @@
         "x": 3300,
         "y": 292
       },
-      "exampleSchema": "Schema.Record(\n  GbifTaxonId,\n  Schema.Struct({\n    selected: Schema.Struct({\n      articleId: ArticleId,\n      provenance: GbifSelectionProvenance,\n    }),\n    conflicting: Schema.NonEmptyArray(\n      Schema.Struct({\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n      }),\n    ),\n    since: Schema.DateTimeUtcFromString,\n  }),\n)",
+      "exampleSchema": "Schema.Record(\n  GbifTaxonId,\n  Schema.Struct({\n    selected: Schema.Struct({\n      articleId: ArticleId,\n      provenance: GbifSelectionProvenance,\n    }),\n    conflicting: Schema.NonEmptyArray(\n      Schema.Struct({\n        articleId: ArticleId,\n        provenance: GbifSelectionProvenance,\n      }),\n    ),\n    since: TimestampColumn,\n  }),\n)",
       "kind": "property"
     },
     {
       "id": "build-moderation-queue",
       "title": "BuildModerationQueue",
-      "description": "Merge everything awaiting a moderator into one list, oldest first. Each item keeps its kind and a reference to its source, so moderators open the entry in its own property for details:\n- ID conflicts, from WikidataIdConflicts and GbifTaxonIdConflicts.\n- Reported targets with open reports, from ClaimVisibilityById: one item per target, with every report's reason. Conduct reports go ahead of the rest, since their targets are already hidden. ReportOutcomesByPersonId ranks reports from people whose reports keep being rejected lower.\n- Fetches that stopped retrying (ExternalFetchFailed), while the article still selects the failed target.\n- People with repeated upheld conduct verdicts, for a blocking decision that is never automatic.",
+      "description": "Merge everything awaiting a moderator into one list, oldest first. Each item keeps its kind and a reference to its source, so moderators open the entry in its own property for details:\n- ID conflicts, from WikidataIdConflicts and GbifTaxonIdConflicts.\n- Reported targets with open reports, from ClaimVisibilityById: one item per target, with every report's reason. Conduct reports go ahead of the rest, since their targets are already hidden. ReportOutcomesByPersonId ranks reports from people whose reports keep being rejected lower.\n- Fetches that stopped retrying (ExternalFetchFailed), while the article still selects the failed target.\n- People with repeated upheld conduct verdicts, for a blocking decision that is never automatic.\n- People with open profile reports (OpenPersonReportsByPersonId), `AUTOMATED` and `IMPERSONATION` first.\n- People vouched for by someone who was just blocked, for review.\n- Vouchers whose vouchees keep getting blocked or censored (VoucherRecordsByPersonId).\n\nPeople who just signed up don't queue for a moderator's approval: they wait for anyone vouched to vouch for them.",
       "architectureConfidence": "UNCERTAIN",
       "position": {
         "x": 3630,
         "y": 491
       },
-      "openQuestions": "- Which other sources join later: newcomers awaiting approval, revisions awaiting evaluation?\n- How is an item assigned?",
+      "openQuestions": "- Which other sources join later, such as revisions awaiting evaluation?\n- How is an item assigned?\n- Should unvouched people who keep writing for weeks without a vouch show up somewhere, so a moderator can reach out?",
       "kind": "transformation"
     },
     {
@@ -437,7 +437,7 @@
         "x": 3960,
         "y": 491
       },
-      "exampleSchema": "Schema.Array(\n  Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"WIKIDATA_ID_CONFLICT\"),\n      wikidataId: WikidataId,\n      since: Schema.DateTimeUtcFromString,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"GBIF_TAXON_ID_CONFLICT\"),\n      taxonId: GbifTaxonId,\n      since: Schema.DateTimeUtcFromString,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM_REPORTS\"),\n      target: Schema.Union([\n        Schema.Struct({\n          kind: Schema.Literal(\"CLAIM\"),\n          claimId: ClaimId,\n        }),\n        Schema.Struct({\n          kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n          valueKey: ObservationValueKey,\n        }),\n      ]),\n      reasons: Schema.NonEmptyArray(\n        Schema.Literals([\n          \"ABUSIVE\",\n          \"SPAM\",\n          \"FALSE\",\n          \"DANGEROUS\",\n          \"MISTAKEN\",\n          \"OFF_TOPIC\",\n          \"WRONG_ENTITY\",\n        ]),\n      ),\n      since: Schema.DateTimeUtcFromString,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"EXTERNAL_FETCH_FAILED\"),\n      target: Schema.Union([\n        Schema.Struct({\n          kind: Schema.Literal(\"WIKIDATA\"),\n          wikidataId: WikidataId,\n        }),\n        Schema.Struct({\n          kind: Schema.Literal(\"GBIF\"),\n          taxonId: GbifTaxonId,\n          checklistKey: GbifChecklistKey,\n        }),\n      ]),\n      error: Schema.Literals([\"NOT_FOUND\", \"REDIRECTED\"]),\n      since: Schema.DateTimeUtcFromString,\n    }),\n  ]),\n)",
+      "exampleSchema": "Schema.Array(\n  Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"WIKIDATA_ID_CONFLICT\"),\n      wikidataId: WikidataId,\n      since: TimestampColumn,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"GBIF_TAXON_ID_CONFLICT\"),\n      taxonId: GbifTaxonId,\n      since: TimestampColumn,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM_REPORTS\"),\n      target: Schema.Union([\n        Schema.Struct({\n          kind: Schema.Literal(\"CLAIM\"),\n          claimId: ClaimId,\n        }),\n        Schema.Struct({\n          kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n          valueKey: ObservationValueKey,\n        }),\n      ]),\n      reasons: Schema.NonEmptyArray(\n        Schema.Literals([\n          \"ABUSIVE\",\n          \"SPAM\",\n          \"FALSE\",\n          \"DANGEROUS\",\n          \"MISTAKEN\",\n          \"OFF_TOPIC\",\n          \"WRONG_ENTITY\",\n        ]),\n      ),\n      since: TimestampColumn,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"EXTERNAL_FETCH_FAILED\"),\n      target: Schema.Union([\n        Schema.Struct({\n          kind: Schema.Literal(\"WIKIDATA\"),\n          wikidataId: WikidataId,\n        }),\n        Schema.Struct({\n          kind: Schema.Literal(\"GBIF\"),\n          taxonId: GbifTaxonId,\n          checklistKey: GbifChecklistKey,\n        }),\n      ]),\n      error: Schema.Literals([\"NOT_FOUND\", \"REDIRECTED\"]),\n      since: TimestampColumn,\n    }),\n  ]),\n)",
       "kind": "property"
     },
     {
@@ -450,7 +450,7 @@
         "y": 1433.5
       },
       "openQuestions": "- This isn't a claim about an article. Should the canvas get a third event type for profile changes?\n- If contexts never change, how does someone fix a typo or a wrong municipality without leaving their claims behind?",
-      "exampleSchema": "Schema.Union([\n  Schema.TaggedStruct(\"ADDED\", {\n    profileContextId: ProfileContextId,\n    personId: PersonId,\n    label: Schema.optionalKey(Schema.NonEmptyString),\n    period: Schema.Struct({\n      start: Schema.NonEmptyString,\n      end: Schema.NullOr(Schema.NonEmptyString),\n    }),\n    visibility: InformationVisibility,\n    dimensions: Schema.Array(\n      Schema.Union([\n        Schema.TaggedStruct(\"LOCATION\", {\n          place: Schema.TaggedStruct(\"GAZETTEER_PLACE\", {\n            placeArticleId: PlaceArticleId,\n          }),\n          elevation: Schema.optionalKey(\n            Schema.Union([\n              Schema.TaggedStruct(\"MEASURED\", {\n                source: Schema.NonEmptyString,\n                meters: Schema.Finite,\n              }),\n              Schema.TaggedStruct(\"DECLARED\", {\n                meters: Schema.Finite,\n              }),\n            ]),\n          ),\n        }),\n        Schema.TaggedStruct(\"PRODUCTION\", {\n          value: Schema.TaggedStruct(\"DECLARED\", {\n            kind: Schema.NonEmptyString,\n          }),\n        }),\n      ]),\n    ),\n  }),\n  Schema.TaggedStruct(\"DELETED\", {\n    profileContextId: ProfileContextId,\n    personId: PersonId,\n  }),\n])",
+      "exampleSchema": "Schema.Union([\n  Schema.TaggedStruct(\"ADDED\", {\n    profileContextId: ProfileContextId,\n    personId: PersonId,\n    label: OptionalColumn(Schema.NonEmptyString),\n    period: Schema.Struct({\n      start: Schema.NonEmptyString,\n      end: Schema.NullOr(Schema.NonEmptyString),\n    }),\n    visibility: InformationVisibility,\n    dimensions: Schema.Array(\n      Schema.Union([\n        Schema.TaggedStruct(\"LOCATION\", {\n          place: Schema.TaggedStruct(\"GAZETTEER_PLACE\", {\n            placeArticleId: PlaceArticleId,\n          }),\n          elevation: OptionalColumn(\n            Schema.Union([\n              Schema.TaggedStruct(\"MEASURED\", {\n                source: Schema.NonEmptyString,\n                meters: Schema.Finite,\n              }),\n              Schema.TaggedStruct(\"DECLARED\", {\n                meters: Schema.Finite,\n              }),\n            ]),\n          ),\n        }),\n        Schema.TaggedStruct(\"PRODUCTION\", {\n          value: Schema.TaggedStruct(\"DECLARED\", {\n            kind: Schema.NonEmptyString,\n          }),\n        }),\n      ]),\n    ),\n  }),\n  Schema.TaggedStruct(\"DELETED\", {\n    profileContextId: ProfileContextId,\n    personId: PersonId,\n  }),\n])",
       "kind": "event",
       "eventType": "Claim",
       "isEvaluationRequired": false
@@ -475,7 +475,7 @@
         "x": 3960,
         "y": 1433.5
       },
-      "exampleSchema": "Schema.Record(\n  ProfileContextId,\n  Schema.Struct({\n    personId: PersonId,\n    label: Schema.optionalKey(Schema.NonEmptyString),\n    period: Schema.Struct({\n      start: Schema.NonEmptyString,\n      end: Schema.NullOr(Schema.NonEmptyString),\n    }),\n    visibility: InformationVisibility,\n    dimensions: Schema.Array(\n      Schema.Union([\n        Schema.TaggedStruct(\"LOCATION\", {\n          place: Schema.TaggedStruct(\"GAZETTEER_PLACE\", {\n            placeArticleId: PlaceArticleId,\n          }),\n          elevation: Schema.optionalKey(\n            Schema.Union([\n              Schema.TaggedStruct(\"MEASURED\", {\n                source: Schema.NonEmptyString,\n                meters: Schema.Finite,\n              }),\n              Schema.TaggedStruct(\"DECLARED\", {\n                meters: Schema.Finite,\n              }),\n            ]),\n          ),\n        }),\n        Schema.TaggedStruct(\"PRODUCTION\", {\n          value: Schema.TaggedStruct(\"DECLARED\", {\n            kind: Schema.NonEmptyString,\n          }),\n        }),\n      ]),\n    ),\n  }),\n)",
+      "exampleSchema": "Schema.Record(\n  ProfileContextId,\n  Schema.Struct({\n    personId: PersonId,\n    label: OptionalColumn(Schema.NonEmptyString),\n    period: Schema.Struct({\n      start: Schema.NonEmptyString,\n      end: Schema.NullOr(Schema.NonEmptyString),\n    }),\n    visibility: InformationVisibility,\n    dimensions: Schema.Array(\n      Schema.Union([\n        Schema.TaggedStruct(\"LOCATION\", {\n          place: Schema.TaggedStruct(\"GAZETTEER_PLACE\", {\n            placeArticleId: PlaceArticleId,\n          }),\n          elevation: OptionalColumn(\n            Schema.Union([\n              Schema.TaggedStruct(\"MEASURED\", {\n                source: Schema.NonEmptyString,\n                meters: Schema.Finite,\n              }),\n              Schema.TaggedStruct(\"DECLARED\", {\n                meters: Schema.Finite,\n              }),\n            ]),\n          ),\n        }),\n        Schema.TaggedStruct(\"PRODUCTION\", {\n          value: Schema.TaggedStruct(\"DECLARED\", {\n            kind: Schema.NonEmptyString,\n          }),\n        }),\n      ]),\n    ),\n  }),\n)",
       "kind": "property"
     },
     {
@@ -488,7 +488,7 @@
         "y": 1559.5
       },
       "openQuestions": "- Which variables come first? The notebook covered mean, minimum and maximum temperature, rainfall, PET, humidity, VPD and shortwave.\n- Band width. 500 m bands lined up with the notebook's cuts, while 200 m bins shifted shares by up to 8 percentage points.\n- Compute every gazetteer place in a batch, or the first time a location references one?",
-      "exampleSchema": "Schema.Struct({\n  placeArticleId: PlaceArticleId,\n  whosOnFirstId: WhosOnFirstId,\n  boundarySource: Schema.NonEmptyString,\n  dataset: Schema.NonEmptyString,\n  computedAt: Schema.DateTimeUtcFromString,\n  months: Schema.Record(\n    Schema.String.check(Schema.isPattern(/^(?:[1-9]|1[0-2])$/)),\n    Schema.Struct({\n      temperatureMeanC: Schema.Struct({\n        mean: Schema.Finite,\n        p10: Schema.Finite,\n        p50: Schema.Finite,\n        p90: Schema.Finite,\n      }),\n      precipitationMm: Schema.Struct({\n        mean: Schema.Finite,\n        p10: Schema.Finite,\n        p50: Schema.Finite,\n        p90: Schema.Finite,\n      }),\n    }),\n  ),\n  elevationBands: Schema.Array(\n    Schema.Struct({\n      minimumMeters: Schema.Finite,\n      maximumMeters: Schema.Finite,\n      fractionOfPlace: Schema.Finite,\n      months: Schema.Record(\n        Schema.String.check(Schema.isPattern(/^(?:[1-9]|1[0-2])$/)),\n        Schema.Struct({\n          temperatureMeanC: Schema.Struct({\n            mean: Schema.Finite,\n            p10: Schema.Finite,\n            p50: Schema.Finite,\n            p90: Schema.Finite,\n          }),\n          precipitationMm: Schema.Struct({\n            mean: Schema.Finite,\n            p10: Schema.Finite,\n            p50: Schema.Finite,\n            p90: Schema.Finite,\n          }),\n        }),\n      ),\n    }),\n  ),\n})",
+      "exampleSchema": "Schema.Struct({\n  placeArticleId: PlaceArticleId,\n  whosOnFirstId: WhosOnFirstId,\n  boundarySource: Schema.NonEmptyString,\n  dataset: Schema.NonEmptyString,\n  computedAt: TimestampColumn,\n  months: Schema.Record(\n    Schema.String.check(Schema.isPattern(/^(?:[1-9]|1[0-2])$/)),\n    Schema.Struct({\n      temperatureMeanC: Schema.Struct({\n        mean: Schema.Finite,\n        p10: Schema.Finite,\n        p50: Schema.Finite,\n        p90: Schema.Finite,\n      }),\n      precipitationMm: Schema.Struct({\n        mean: Schema.Finite,\n        p10: Schema.Finite,\n        p50: Schema.Finite,\n        p90: Schema.Finite,\n      }),\n    }),\n  ),\n  elevationBands: Schema.Array(\n    Schema.Struct({\n      minimumMeters: Schema.Finite,\n      maximumMeters: Schema.Finite,\n      fractionOfPlace: Schema.Finite,\n      months: Schema.Record(\n        Schema.String.check(Schema.isPattern(/^(?:[1-9]|1[0-2])$/)),\n        Schema.Struct({\n          temperatureMeanC: Schema.Struct({\n            mean: Schema.Finite,\n            p10: Schema.Finite,\n            p50: Schema.Finite,\n            p90: Schema.Finite,\n          }),\n          precipitationMm: Schema.Struct({\n            mean: Schema.Finite,\n            p10: Schema.Finite,\n            p50: Schema.Finite,\n            p90: Schema.Finite,\n          }),\n        }),\n      ),\n    }),\n  ),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -537,7 +537,7 @@
         "x": 4620,
         "y": 1496.5
       },
-      "exampleSchema": "Schema.Record(\n  ProfileContextId,\n  Schema.Array(\n    Schema.Union([\n      Schema.TaggedStruct(\"LOCATION\", {\n        placeArticleId: PlaceArticleId,\n        ancestorPlaceArticleIds: Schema.Array(PlaceArticleId),\n      }),\n      Schema.TaggedStruct(\"ELEVATION\", {\n        value: Schema.Union([\n          Schema.TaggedStruct(\"MEASURED\", {\n            source: Schema.NonEmptyString,\n            meters: Schema.Finite,\n            band: Schema.optionalKey(\n              Schema.Struct({\n                minimumMeters: Schema.Finite,\n                maximumMeters: Schema.Finite,\n              }),\n            ),\n          }),\n          Schema.TaggedStruct(\"DECLARED\", {\n            meters: Schema.Finite,\n            band: Schema.optionalKey(\n              Schema.Struct({\n                minimumMeters: Schema.Finite,\n                maximumMeters: Schema.Finite,\n              }),\n            ),\n          }),\n        ]),\n      }),\n      Schema.TaggedStruct(\"CLIMATE\", {\n        value: Schema.TaggedStruct(\"MEASURED\", {\n          source: Schema.NonEmptyString,\n          annualMeanTemperatureC: Schema.Finite,\n          annualPrecipitationMm: Schema.Finite,\n          rainfallPattern: Schema.NonEmptyString,\n        }),\n      }),\n      Schema.TaggedStruct(\"PRODUCTION\", {\n        value: Schema.TaggedStruct(\"DECLARED\", {\n          kind: Schema.NonEmptyString,\n        }),\n      }),\n    ]),\n  ),\n)",
+      "exampleSchema": "Schema.Record(\n  ProfileContextId,\n  Schema.Array(\n    Schema.Union([\n      Schema.TaggedStruct(\"LOCATION\", {\n        placeArticleId: PlaceArticleId,\n        ancestorPlaceArticleIds: Schema.Array(PlaceArticleId),\n      }),\n      Schema.TaggedStruct(\"ELEVATION\", {\n        value: Schema.Union([\n          Schema.TaggedStruct(\"MEASURED\", {\n            source: Schema.NonEmptyString,\n            meters: Schema.Finite,\n            band: OptionalColumn(\n              Schema.Struct({\n                minimumMeters: Schema.Finite,\n                maximumMeters: Schema.Finite,\n              }),\n            ),\n          }),\n          Schema.TaggedStruct(\"DECLARED\", {\n            meters: Schema.Finite,\n            band: OptionalColumn(\n              Schema.Struct({\n                minimumMeters: Schema.Finite,\n                maximumMeters: Schema.Finite,\n              }),\n            ),\n          }),\n        ]),\n      }),\n      Schema.TaggedStruct(\"CLIMATE\", {\n        value: Schema.TaggedStruct(\"MEASURED\", {\n          source: Schema.NonEmptyString,\n          annualMeanTemperatureC: Schema.Finite,\n          annualPrecipitationMm: Schema.Finite,\n          rainfallPattern: Schema.NonEmptyString,\n        }),\n      }),\n      Schema.TaggedStruct(\"PRODUCTION\", {\n        value: Schema.TaggedStruct(\"DECLARED\", {\n          kind: Schema.NonEmptyString,\n        }),\n      }),\n    ]),\n  ),\n)",
       "kind": "property"
     },
     {
@@ -549,7 +549,7 @@
         "x": 3300,
         "y": 418
       },
-      "exampleSchema": "Schema.Struct({\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"WIKIDATA\"),\n      wikidataId: WikidataId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"GBIF\"),\n      taxonId: GbifTaxonId,\n      checklistKey: GbifChecklistKey,\n    }),\n  ]),\n  selection: Schema.Union([\n    Schema.Struct({\n      wikidataId: WikidataId,\n      articleId: ArticleId,\n      provenance: WikidataSelectionProvenance,\n    }),\n    Schema.Struct({\n      taxonId: GbifTaxonId,\n      articleId: ArticleId,\n      provenance: GbifSelectionProvenance,\n      checklistKey: GbifChecklistKey,\n    }),\n  ]),\n  failedAt: Schema.DateTimeUtcFromString,\n  error: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"NOT_FOUND\"),\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"REDIRECTED\"),\n      redirectedToWikidataId: WikidataId,\n    }),\n  ]),\n})",
+      "exampleSchema": "Schema.Struct({\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"WIKIDATA\"),\n      wikidataId: WikidataId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"GBIF\"),\n      taxonId: GbifTaxonId,\n      checklistKey: GbifChecklistKey,\n    }),\n  ]),\n  selection: Schema.Union([\n    Schema.Struct({\n      wikidataId: WikidataId,\n      articleId: ArticleId,\n      provenance: WikidataSelectionProvenance,\n    }),\n    Schema.Struct({\n      taxonId: GbifTaxonId,\n      articleId: ArticleId,\n      provenance: GbifSelectionProvenance,\n      checklistKey: GbifChecklistKey,\n    }),\n  ]),\n  failedAt: TimestampColumn,\n  error: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"NOT_FOUND\"),\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"REDIRECTED\"),\n      redirectedToWikidataId: WikidataId,\n    }),\n  ]),\n})",
       "kind": "event",
       "eventType": "External data"
     },
@@ -562,7 +562,7 @@
         "x": 0,
         "y": 823
       },
-      "exampleSchema": "Schema.Struct({\n  reportId: ReportId,\n  articleId: ArticleId,\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM\"),\n      claimId: ClaimId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n      observationId: ObservationId,\n      property: Schema.NonEmptyString,\n      valueKey: ObservationValueKey,\n    }),\n  ]),\n  reason: Schema.Literals([\n    \"ABUSIVE\",\n    \"SPAM\",\n    \"FALSE\",\n    \"DANGEROUS\",\n    \"MISTAKEN\",\n    \"OFF_TOPIC\",\n    \"WRONG_ENTITY\",\n  ]),\n  note: Schema.optionalKey(Schema.NonEmptyString),\n  reporterId: PersonId,\n  reportedAt: Schema.DateTimeUtcFromString,\n})",
+      "exampleSchema": "Schema.Struct({\n  reportId: ReportId,\n  articleId: ArticleId,\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM\"),\n      claimId: ClaimId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n      observationId: ObservationId,\n      property: Schema.NonEmptyString,\n      valueKey: ObservationValueKey,\n    }),\n  ]),\n  reason: Schema.Literals([\n    \"ABUSIVE\",\n    \"SPAM\",\n    \"FALSE\",\n    \"DANGEROUS\",\n    \"MISTAKEN\",\n    \"OFF_TOPIC\",\n    \"WRONG_ENTITY\",\n  ]),\n  note: OptionalColumn(Schema.NonEmptyString),\n  reporterId: PersonId,\n  reportedAt: TimestampColumn,\n})",
       "kind": "event",
       "eventType": "Report"
     },
@@ -576,14 +576,14 @@
         "y": 949
       },
       "lockedContentHash": "10df7131",
-      "exampleSchema": "Schema.Struct({\n  reportIds: Schema.NonEmptyArray(ReportId),\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM\"),\n      claimId: ClaimId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n      observationId: ObservationId,\n      property: Schema.NonEmptyString,\n      valueKey: ObservationValueKey,\n    }),\n  ]),\n  verdict: Schema.Literals([\"CENSOR\", \"KEEP\", \"KEEP_WITH_WARNING\"]),\n  note: Schema.optionalKey(Schema.NonEmptyString),\n  authorIds: Schema.Array(PersonId),\n  settledByPersonId: PersonId,\n  settledAt: Schema.DateTimeUtcFromString,\n})",
+      "exampleSchema": "Schema.Struct({\n  reportIds: Schema.NonEmptyArray(ReportId),\n  target: Schema.Union([\n    Schema.Struct({\n      kind: Schema.Literal(\"CLAIM\"),\n      claimId: ClaimId,\n    }),\n    Schema.Struct({\n      kind: Schema.Literal(\"OBSERVATION_VALUE\"),\n      observationId: ObservationId,\n      property: Schema.NonEmptyString,\n      valueKey: ObservationValueKey,\n    }),\n  ]),\n  verdict: Schema.Literals([\"CENSOR\", \"KEEP\", \"KEEP_WITH_WARNING\"]),\n  note: OptionalColumn(Schema.NonEmptyString),\n  authorIds: Schema.Array(PersonId),\n  settledByPersonId: PersonId,\n  settledAt: TimestampColumn,\n})",
       "kind": "event",
       "eventType": "Report"
     },
     {
       "id": "resolve-claim-visibility",
       "title": "ResolveClaimVisibility",
-      "description": "Derive each reported target's visibility from its reports and verdicts:\n- An open conduct report hides the target from everyone but its authors and moderators until a verdict. `KEEP` shows it again.\n- Open quality reports change nothing readers see until a verdict.\n- `CENSOR` hides it. For external values, the same value from the same source stays hidden on later refreshes; a different value from that source shows normally.\n- `KEEP_WITH_WARNING` shows it with the moderator's note.\n\nAfter a verdict, new reports with a reason it already settled join that verdict instead of reopening the target. A new reason reopens it.\n\nAlso tallies outcomes per person: upheld conduct verdicts against the target's authors, and how each reporter's reports were settled. Upheld quality verdicts count against no one, and an inferred claim's verdict counts against the inference, not the publication's author.",
+      "description": "Derive each reported target's visibility from its reports and verdicts:\n- An open conduct report hides the target from everyone but its authors and moderators until a verdict. `KEEP` shows it again.\n- Open quality reports change nothing readers see until a verdict.\n- `CENSOR` hides it. For external values, the same value from the same source stays hidden on later refreshes; a different value from that source shows normally.\n- `KEEP_WITH_WARNING` shows it with the moderator's note.\n\nAfter a verdict, new reports with a reason it already settled join that verdict instead of reopening the target. A new reason reopens it.\n\nAlso tallies outcomes per person: upheld conduct verdicts against the target's authors, and how each reporter's reports were settled. Upheld quality verdicts count against no one, and an inferred claim's verdict counts against the inference, not the publication's author.\n\nReads StandingByPersonId to ignore reports from `BLOCKED` people and rank reports from `UNVOUCHED` people lower. It doesn't add an entry for every claim of an unvouched person: readers combine this property with the author's standing.",
       "architectureConfidence": "NOT_REVIEWED",
       "position": {
         "x": 330,
@@ -594,14 +594,14 @@
     {
       "id": "claim-visibility",
       "title": "ClaimVisibilityById",
-      "description": "Visibility of every reported target, keyed by claim ID or value key: `HIDDEN` (with the reason, and whether an open report or a verdict hides it), `WARNED` (with the moderator's note), or `UNDER_REVIEW` (open quality reports only, still shown). Targets without an entry are visible.\n\nRead by every transformation that resolves values for readers, so hidden values also stay out of summaries, counts and selections. Read by the moderation queue for open reports, grouped per target.",
+      "description": "Visibility of every reported target, keyed by claim ID or value key: `HIDDEN` (with the reason, and whether an open report or a verdict hides it), `WARNED` (with the moderator's note), or `UNDER_REVIEW` (open quality reports only, still shown). Targets without an entry are visible, unless their author's standing says otherwise.\n\nRead by every transformation that resolves values for readers, so hidden values also stay out of summaries, counts and selections. Read by the moderation queue for open reports, grouped per target.\n\nTransformations build projections that every reader shares, so they only use claims visible to everyone: claims this property doesn't hide, from an `EXTERNAL_PROVIDER` or from a `CONTRIBUTOR` or `INFERENCE` whose author is `VOUCHED` in StandingByPersonId. An unvouched person's claim reaches no selection, summary or count, including the GBIF and Wikidata ID selections, until someone vouches for them. Its author and moderators still see the claim itself, marked as awaiting a vouch.",
       "architectureConfidence": "UNCERTAIN",
       "position": {
         "x": 660,
         "y": 1042
       },
       "openQuestions": "Can we have a better data structure?\n\n- I bet `visibility: \"HIDDEN_WHILE_REVIEWING\"` is much better than having an extra \"hiddenBy\"\n- top level `reasons` feels out of place when we have openReports.\n- why not just `reports` with the status of open | closed or something like that?",
-      "exampleSchema": "Schema.Record(\n  Schema.Union([ClaimId, ObservationValueKey]),\n  Schema.Union([\n    Schema.Struct({\n      visibility: Schema.Literal(\"HIDDEN\"),\n      hiddenBy: Schema.Literals([\"OPEN_REPORT\", \"VERDICT\"]),\n      reasons: Schema.NonEmptyArray(\n        Schema.Literals([\n          \"ABUSIVE\",\n          \"SPAM\",\n          \"FALSE\",\n          \"DANGEROUS\",\n          \"MISTAKEN\",\n          \"OFF_TOPIC\",\n          \"WRONG_ENTITY\",\n        ]),\n      ),\n      openReports: Schema.Array(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: Schema.DateTimeUtcFromString,\n        }),\n      ),\n    }),\n    Schema.Struct({\n      visibility: Schema.Literal(\"WARNED\"),\n      note: Schema.NonEmptyString,\n      settledByReportIds: Schema.NonEmptyArray(ReportId),\n      openReports: Schema.Array(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: Schema.DateTimeUtcFromString,\n        }),\n      ),\n    }),\n    Schema.Struct({\n      visibility: Schema.Literal(\"UNDER_REVIEW\"),\n      openReports: Schema.NonEmptyArray(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: Schema.DateTimeUtcFromString,\n        }),\n      ),\n    }),\n  ]),\n)",
+      "exampleSchema": "Schema.Record(\n  Schema.Union([ClaimId, ObservationValueKey]),\n  Schema.Union([\n    Schema.Struct({\n      visibility: Schema.Literal(\"HIDDEN\"),\n      hiddenBy: Schema.Literals([\"OPEN_REPORT\", \"VERDICT\"]),\n      reasons: Schema.NonEmptyArray(\n        Schema.Literals([\n          \"ABUSIVE\",\n          \"SPAM\",\n          \"FALSE\",\n          \"DANGEROUS\",\n          \"MISTAKEN\",\n          \"OFF_TOPIC\",\n          \"WRONG_ENTITY\",\n        ]),\n      ),\n      openReports: Schema.Array(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: TimestampColumn,\n        }),\n      ),\n    }),\n    Schema.Struct({\n      visibility: Schema.Literal(\"WARNED\"),\n      note: Schema.NonEmptyString,\n      settledByReportIds: Schema.NonEmptyArray(ReportId),\n      openReports: Schema.Array(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: TimestampColumn,\n        }),\n      ),\n    }),\n    Schema.Struct({\n      visibility: Schema.Literal(\"UNDER_REVIEW\"),\n      openReports: Schema.NonEmptyArray(\n        Schema.Struct({\n          reportId: ReportId,\n          reason: Schema.Literals([\n            \"ABUSIVE\",\n            \"SPAM\",\n            \"FALSE\",\n            \"DANGEROUS\",\n            \"MISTAKEN\",\n            \"OFF_TOPIC\",\n            \"WRONG_ENTITY\",\n          ]),\n          reportedAt: TimestampColumn,\n        }),\n      ),\n    }),\n  ]),\n)",
       "kind": "property"
     },
     {
@@ -613,8 +613,160 @@
         "x": 3300,
         "y": 783
       },
-      "exampleSchema": "Schema.Record(\n  PersonId,\n  Schema.Struct({\n    upheldConductVerdicts: Schema.Array(\n      Schema.Struct({\n        claimId: ClaimId,\n        reportIds: Schema.NonEmptyArray(ReportId),\n        reasons: Schema.NonEmptyArray(Schema.Literals([\"ABUSIVE\", \"SPAM\", \"FALSE\", \"DANGEROUS\"])),\n        settledAt: Schema.DateTimeUtcFromString,\n      }),\n    ),\n    reports: Schema.Struct({\n      upheld: Schema.Int,\n      kept: Schema.Int,\n      open: Schema.Int,\n    }),\n  }),\n)",
+      "exampleSchema": "Schema.Record(\n  PersonId,\n  Schema.Struct({\n    upheldConductVerdicts: Schema.Array(\n      Schema.Struct({\n        claimId: ClaimId,\n        reportIds: Schema.NonEmptyArray(ReportId),\n        reasons: Schema.NonEmptyArray(Schema.Literals([\"ABUSIVE\", \"SPAM\", \"FALSE\", \"DANGEROUS\"])),\n        settledAt: TimestampColumn,\n      }),\n    ),\n    reports: Schema.Struct({\n      upheld: Schema.Int,\n      kept: Schema.Int,\n      open: Schema.Int,\n    }),\n  }),\n)",
       "kind": "property"
+    },
+    {
+      "id": "person-signed-up",
+      "title": "PersonSignedUp",
+      "description": "Someone creates an account. They start `UNVOUCHED`: they can read and write, but their claims and publications only show to themselves and moderators until someone vouches for them.\n\nRate limits per account apply from the start, whatever the standing.",
+      "architectureConfidence": "UNCERTAIN",
+      "position": {
+        "x": 0,
+        "y": 1250
+      },
+      "openQuestions": "What data do we need to carry in this event? How much of auth will live in this node-based system?",
+      "exampleSchema": "Schema.Struct({\n  personId: PersonId,\n  signedUpAt: TimestampColumn,\n})",
+      "kind": "event",
+      "eventType": "Person"
+    },
+    {
+      "id": "person-vouched",
+      "title": "PersonVouched",
+      "description": "A vouched person vouches for someone else, with a reason in their own words (\"we did a mutirão together in 2024\", \"video call on 3 November\"). Only someone `VOUCHED` at that moment can vouch, so trust only spreads from people who already have it.\n\nA moderator approving a newcomer is a vouch like any other, so there's one mechanism instead of two. The vouch is public: the vouched person's profile lists who vouched for them.\n\nOne vouch is enough for now. We can tune this later, for example by requiring two, without changing the events.\n\nOnly VouchForPerson emits it, after checking the voucher's standing and allowance.",
+      "architectureConfidence": "UNCERTAIN",
+      "position": {
+        "x": 0,
+        "y": 1376
+      },
+      "exampleSchema": "Schema.Struct({\n  voucherId: PersonId,\n  vouchedPersonId: PersonId,\n  reason: Schema.NonEmptyString,\n  vouchedAt: TimestampColumn,\n})",
+      "kind": "event",
+      "eventType": "Person"
+    },
+    {
+      "id": "person-reported",
+      "title": "PersonReported",
+      "description": "Someone reports a profile itself, not a piece of its content:\n- `AUTOMATED`: a bot or a language model posing as a person.\n- `IMPERSONATION`: pretending to be another person or organization.\n- `SPAM` and `ABUSIVE`: a pattern across the profile, beyond a single claim (single claims use ClaimReported).\n\nUnlike conduct reports on a claim, an open profile report hides nothing, because hiding everything a person wrote on one report invites pile-ons. It only reaches the moderation queue.\n\nIts provenance says who reported it: a person (`PERSON`), or an automated detector (`AUTOMATED_SIGNAL`) with its version and the evidence it found.",
+      "architectureConfidence": "UNCERTAIN",
+      "position": {
+        "x": 0,
+        "y": 1502
+      },
+      "exampleSchema": "Schema.Struct({\n  reportId: PersonReportId,\n  personId: PersonId,\n  reason: Schema.Literals([\"AUTOMATED\", \"IMPERSONATION\", \"SPAM\", \"ABUSIVE\"]),\n  note: OptionalColumn(Schema.NonEmptyString),\n  reportedAt: TimestampColumn,\n  provenance: PersonReportProvenance,\n})",
+      "kind": "event",
+      "eventType": "Report"
+    },
+    {
+      "id": "person-standing-decided",
+      "title": "PersonStandingDecided",
+      "description": "A moderator decides on a person's standing:\n- `BLOCK`: everything they wrote is hidden from everyone but them and moderators, and they can't vouch or report.\n- `UNBLOCK`: back to the standing their vouches give them.\n- `REVOKE_VOUCHES`: back to `UNVOUCHED`, for someone who isn't abusive but shouldn't have been brought in.\n- `KEEP`: settle the reports without changing anything.\n\nIt can settle open profile reports, but doesn't need one: a block can also come from the queue's repeated-conduct item. Blocking is never automatic.",
+      "architectureConfidence": "UNCERTAIN",
+      "position": {
+        "x": 0,
+        "y": 1628
+      },
+      "exampleSchema": "Schema.Struct({\n  personId: PersonId,\n  decision: Schema.Literals([\"BLOCK\", \"UNBLOCK\", \"REVOKE_VOUCHES\", \"KEEP\"]),\n  settlesReportIds: Schema.HashSet(PersonReportId),\n  reason: Schema.NonEmptyString,\n  decidedByPersonId: PersonId,\n  decidedAt: TimestampColumn,\n})",
+      "kind": "event",
+      "eventType": "Person"
+    },
+    {
+      "id": "resolve-person-standing",
+      "title": "ResolvePersonStanding",
+      "description": "Derive each person's standing from the events, never stored as a column:\n1. `BLOCKED` if their latest standing decision is `BLOCK`.\n2. Otherwise `VOUCHED` if they have a vouch from someone who was `VOUCHED` when vouching, made after their latest `REVOKE_VOUCHES` and not withdrawn.\n3. Otherwise `UNVOUCHED`.\n\nBecause it's derived, every decision is reversible: unblocking or vouching again brings the person's past claims back. Blocking a voucher doesn't unvouch the people they vouched for: the moderation queue lists them for review instead.\n\nAlso indexes vouches by voucher, and keeps open profile reports for the queue.",
+      "architectureConfidence": "UNCERTAIN",
+      "position": {
+        "x": 330,
+        "y": 1439
+      },
+      "openQuestions": "- Should blocking a voucher hide their vouchees' claims until someone reviews them, instead of only listing them?",
+      "kind": "transformation"
+    },
+    {
+      "id": "standing",
+      "title": "StandingByPersonId",
+      "description": "Each person's standing, with the vouches that give it (who and why) or the decision that blocked them. People without an entry are `UNVOUCHED`.",
+      "architectureConfidence": "LOCKED_IN",
+      "position": {
+        "x": 660,
+        "y": 1250
+      },
+      "lockedContentHash": "fdf00e9b",
+      "exampleSchema": "Schema.Record(\n  PersonId,\n  Schema.TaggedUnion({\n    UNVOUCHED: {},\n    VOUCHED: {\n      vouches: Schema.NonEmptyArray(\n        Schema.Struct({\n          voucherId: PersonId,\n          reason: Schema.NonEmptyString,\n          vouchedAt: TimestampColumn,\n        }),\n      ),\n    },\n    BLOCKED: {\n      reason: Schema.NonEmptyString,\n      decidedByPersonId: PersonId,\n      decidedAt: TimestampColumn,\n    },\n  }),\n)",
+      "kind": "property"
+    },
+    {
+      "id": "vouches-by-voucher",
+      "title": "VouchesByVoucherId",
+      "description": "Who each person vouched for, and when. Used to hold vouchers accountable and to review a blocked voucher's vouchees. Withdrawn vouches stay, with when they were withdrawn.",
+      "architectureConfidence": "LOCKED_IN",
+      "position": {
+        "x": 660,
+        "y": 1376
+      },
+      "lockedContentHash": "170c6527",
+      "exampleSchema": "Schema.Record(\n  PersonId,\n  Schema.Array(\n    Schema.Struct({\n      vouchedPersonId: PersonId,\n      vouchedAt: TimestampColumn,\n      withdrawnAt: OptionalColumn(TimestampColumn),\n    }),\n  ),\n)",
+      "kind": "property"
+    },
+    {
+      "id": "open-person-reports",
+      "title": "OpenPersonReportsByPersonId",
+      "description": "Profile reports without a standing decision, per reported person, with every report's reason and provenance.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 660,
+        "y": 1502
+      },
+      "exampleSchema": "Schema.Record(\n  PersonId,\n  Schema.NonEmptyArray(\n    Schema.Struct({\n      reportId: PersonReportId,\n      reason: Schema.Literals([\"AUTOMATED\", \"IMPERSONATION\", \"SPAM\", \"ABUSIVE\"]),\n      provenance: PersonReportProvenance,\n      reportedAt: TimestampColumn,\n    }),\n  ),\n)",
+      "kind": "property"
+    },
+    {
+      "id": "summarize-voucher-records",
+      "title": "SummarizeVoucherRecords",
+      "description": "For each voucher, count what happened to the people they vouched for: blocked, vouches revoked, or with upheld conduct verdicts. A voucher whose vouchees keep getting censored moves up the moderation queue. It's a nudge for a moderator to talk to them, not an automatic penalty.",
+      "architectureConfidence": "LOCKED_IN",
+      "position": {
+        "x": 3630,
+        "y": 700
+      },
+      "lockedContentHash": "efb2e425",
+      "kind": "transformation"
+    },
+    {
+      "id": "voucher-records",
+      "title": "VoucherRecordsByPersonId",
+      "description": "Per voucher: every vouch they made and what became of it. When several outcomes apply, the most serious one wins: blocked, then revoked, then upheld conduct verdicts. An outcome after a withdrawal doesn't count.\n\nIt holds no allowance: an allowance like \"3 vouches a week after 4 vouches older than a month\" depends on the current time, and projections don't. VouchForPerson computes it from these records at the moment someone vouches.",
+      "architectureConfidence": "UNCERTAIN",
+      "position": {
+        "x": 3960,
+        "y": 700
+      },
+      "exampleSchema": "Schema.Record(\n  PersonId,\n  Schema.Array(\n    Schema.Struct({\n      vouchedPersonId: PersonId,\n      vouchedAt: TimestampColumn,\n      outcome: Schema.TaggedUnion({\n        IN_GOOD_STANDING: {},\n        WITHDRAWN: { withdrawnAt: TimestampColumn },\n        BLOCKED: { reason: Schema.NonEmptyString, blockedAt: TimestampColumn },\n        REVOKED: { revokedAt: TimestampColumn },\n        UPHELD_CONDUCT_VERDICTS: { claimIds: Schema.NonEmptyArray(ClaimId) },\n      }),\n    }),\n  ),\n)",
+      "kind": "property"
+    },
+    {
+      "id": "vouch-withdrawn",
+      "title": "VouchWithdrawn",
+      "description": "A voucher takes back their own vouch: they no longer trust the person, or shouldn't have vouched. If it was the person's only vouch, they go back to `UNVOUCHED`.\n\nWithdrawing doesn't count against the voucher in VoucherRecordsByPersonId, so vouchers have a reason to speak up instead of keeping quiet. It can't erase what already happened: a block or an upheld conduct verdict before the withdrawal still counts. Withdrawn vouches still count toward the voucher's allowance, so withdrawing and vouching again doesn't reset it.",
+      "architectureConfidence": "NOT_REVIEWED",
+      "position": {
+        "x": 0,
+        "y": 1754
+      },
+      "exampleSchema": "Schema.Struct({\n  voucherId: PersonId,\n  vouchedPersonId: PersonId,\n  reason: OptionalColumn(Schema.NonEmptyString),\n  withdrawnAt: TimestampColumn,\n})",
+      "kind": "event",
+      "eventType": "Person"
+    },
+    {
+      "id": "vouch-for-person",
+      "title": "VouchForPerson",
+      "description": "A person asks to vouch for someone. It emits PersonVouched only when:\n- the voucher is `VOUCHED` in StandingByPersonId,\n- the vouched person isn't `BLOCKED`, and the voucher hasn't vouched for them already,\n- the voucher's vouches in the allowance window fit their allowance.\n\nThe allowance is computed here, with the current time, from VoucherRecordsByPersonId: it grows as the voucher's past vouches hold up. A first-time voucher might get 1 vouch every 14 days, and someone with 4 vouches older than 30 days and none blocked 3 every 7 days. Rejected requests never become events.\n\nLike the fetch triggers, it reads properties and causes an event, so the canvas stays acyclic. Any command checked against derived state, rather than only against its own input, follows this shape.",
+      "architectureConfidence": "UNCERTAIN",
+      "position": {
+        "x": 312,
+        "y": 1211
+      },
+      "openQuestions": "- Which allowance values do we start with? The ones in the description are placeholders.\n- Does a moderator's vouch skip the allowance?",
+      "kind": "trigger"
     }
   ],
   "edges": [
@@ -917,6 +1069,106 @@
     {
       "source": "claim-visibility",
       "target": "build-moderation-queue"
+    },
+    {
+      "source": "person-signed-up",
+      "target": "resolve-person-standing"
+    },
+    {
+      "source": "person-vouched",
+      "target": "resolve-person-standing"
+    },
+    {
+      "source": "person-reported",
+      "target": "resolve-person-standing"
+    },
+    {
+      "source": "person-standing-decided",
+      "target": "resolve-person-standing"
+    },
+    {
+      "source": "resolve-person-standing",
+      "target": "standing"
+    },
+    {
+      "source": "resolve-person-standing",
+      "target": "vouches-by-voucher"
+    },
+    {
+      "source": "resolve-person-standing",
+      "target": "open-person-reports"
+    },
+    {
+      "source": "standing",
+      "target": "resolve-claim-visibility"
+    },
+    {
+      "source": "vouches-by-voucher",
+      "target": "summarize-voucher-records"
+    },
+    {
+      "source": "standing",
+      "target": "summarize-voucher-records"
+    },
+    {
+      "source": "report-outcomes",
+      "target": "summarize-voucher-records"
+    },
+    {
+      "source": "summarize-voucher-records",
+      "target": "voucher-records"
+    },
+    {
+      "source": "open-person-reports",
+      "target": "build-moderation-queue"
+    },
+    {
+      "source": "voucher-records",
+      "target": "build-moderation-queue"
+    },
+    {
+      "source": "vouches-by-voucher",
+      "target": "build-moderation-queue"
+    },
+    {
+      "source": "standing",
+      "target": "build-moderation-queue"
+    },
+    {
+      "source": "standing",
+      "target": "consolidate-names"
+    },
+    {
+      "source": "standing",
+      "target": "summarize-height"
+    },
+    {
+      "source": "standing",
+      "target": "derive-geographical-origin"
+    },
+    {
+      "source": "standing",
+      "target": "select-wikidata-id"
+    },
+    {
+      "source": "standing",
+      "target": "pick-gbif"
+    },
+    {
+      "source": "vouch-withdrawn",
+      "target": "resolve-person-standing"
+    },
+    {
+      "source": "standing",
+      "target": "vouch-for-person"
+    },
+    {
+      "source": "voucher-records",
+      "target": "vouch-for-person"
+    },
+    {
+      "source": "vouch-for-person",
+      "target": "person-vouched"
     }
   ]
 }

@@ -48,7 +48,7 @@ A claim's **provenance** says who gave the information, and nothing else: a cont
 
 ### Shared schemas
 
-Use named schemas in the snippets. App-owned language fields and lookup keys use `SupportedLanguage`. Provider responses keep their original language codes.
+Use named schemas in the snippets. Timestamps use `TimestampColumn` and optional fields use `OptionalColumn`, from `packages/domain/src/common/primitives.ts`. App-owned language fields and lookup keys use `SupportedLanguage`. Provider responses keep their original language codes.
 
 ```ts
 import { Schema } from "effect"
@@ -58,9 +58,11 @@ import {
   GrammaticalGender,
   InformationVisibility,
   MediaAssetId,
+  OptionalColumn,
   PersonId,
   PublicationId,
   SupportedLanguage,
+  TimestampColumn,
   WhosOnFirstId,
   WikiArticleId as ArticleId,
   WikidataId as WikidataIdentifier,
@@ -75,6 +77,7 @@ const PlaceArticleId = ArticleId.pipe(Schema.brand("PlaceArticleId"))
 const ProfileContextId = Schema.NonEmptyString.pipe(Schema.brand("ProfileContextId"))
 const ArticlePath = Schema.NonEmptyString.pipe(Schema.brand("ArticlePath"))
 const EvaluationId = Schema.NonEmptyString.pipe(Schema.brand("EvaluationId"))
+const PersonReportId = Schema.NonEmptyString.pipe(Schema.brand("PersonReportId"))
 const ObservationValueKey = Schema.NonEmptyString.pipe(Schema.brand("ObservationValueKey"))
 const GbifChecklistKey = Schema.NonEmptyString.pipe(Schema.brand("GbifChecklistKey"))
 const GbifDatasetKey = Schema.NonEmptyString.pipe(Schema.brand("GbifDatasetKey"))
@@ -88,6 +91,15 @@ const ClaimProvenance = Schema.TaggedUnion({
   EXTERNAL_PROVIDER: { provider: Schema.NonEmptyString, observationId: ObservationId },
 })
 
+const PersonReportProvenance = Schema.TaggedUnion({
+  PERSON: { reporterId: PersonId },
+  AUTOMATED_SIGNAL: {
+    detector: Schema.NonEmptyString,
+    detectorVersion: Schema.NonEmptyString,
+    evidence: Schema.NonEmptyString,
+  },
+})
+
 const WikidataSelectionProvenance = Schema.Struct({
   kind: Schema.Literal("CLAIM"),
   claimId: ClaimId,
@@ -96,7 +108,7 @@ const WikidataSelectionProvenance = Schema.Struct({
 const GbifSelectionProvenance = Schema.Union([
   Schema.Struct({
     ...WikidataSelectionProvenance.fields,
-    evaluationId: Schema.optionalKey(EvaluationId),
+    evaluationId: OptionalColumn(EvaluationId),
   }),
   Schema.Struct({
     kind: Schema.Literal("WIKIDATA"),

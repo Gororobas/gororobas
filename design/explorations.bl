@@ -9872,7 +9872,7 @@ a5b5612636b1d163 fr ds(gororobas) p(23730,3803) s(2200,2412) f[(395cf71a714a4c71
             68c41be8f529fa06 al(v,g(6),pad(14)) p(16,586.77) s(fill,hug:105.56) ext(343,) f[(48fdfb365476edea,#FFF9EE)] rd(16) "Frame 1376"
               6cf14cdd05f09006 t("Por que um lugar aparece com outro nome?",Alan Sans,14,sb,align(l),lh(1.35)) p(14,14) s(fill,hug:18.9) ext(315,) f[(f7025138b254fdac,#2A111C)] "Text 929"
               aac53cd7abf3c8c3 t("Quando o lugar ainda não existe no Gororobas, mostramos o nome que veio do GBIF, como “Kavkaz”.",Alan Sans,13,r,align(l),lh(1.35)) p(14,38.9) s(fill,hug:52.66) ext(315,) f[(57d561e9842f39fe,#6F3E4D)] "Text 930"
-6afbb62922736f8d al(v,g(24)) p(28400,3803) s(hug:2067,hug:959.86) f[] "Contexto · afinidade por dimensão (esboços) · mobile"
+6afbb62922736f8d al(v,g(24)) p(28400,3803) s(hug:2067,hug:959.86) f[(659ff433fd7d2170,#FFFFFF)] "Contexto · afinidade por dimensão (esboços) · mobile"
   736683621ce71def al(v,g(8)) p(0,0) s(fill,hug:89.01) ext(2067,) f[] "Frame 1377"
     48f1a2579b510cc3 al(h,y(c),g(10)) p(0,0) s(fill,hug:37.8) ext(2067,) f[] "Frame 1378"
       0c5a740e97aff160 t("Contexto · como um relato se aproxima do seu",Alan Sans,28,sb,align(l),lh(1.35)) p(0,0) s(hug:596.91,hug:37.8) f[(439b70d568af73fd,#A8325D)] "Text 931"
@@ -10418,7 +10418,7 @@ a5b5612636b1d163 fr ds(gororobas) p(23730,3803) s(2200,2412) f[(395cf71a714a4c71
                 5c85201d8b38d316 t("2021 até hoje",Alan Sans,12,sb,align(l),lh(auto,1.33)) p(26.08,4) s(hug:74.26,hug:16) f[(5f9bcc16581f4e5a,#2A111C)] "Text 1066"
           dcbf88fa644c326f al(h,x(c),pad(12)) p(16,412.19) s(fill,hug:42.9) ext(343,) f[(4789df14c294ae5c,#246E6A)] rd(999) "Frame 1622"
             6cef1ddab528f5b8 t("Contar",Alan Sans,14,sb,align(l),lh(1.35)) p(149.65,12) s(hug:43.71,hug:18.9) f[(2bec61372ea09e14,#F7F6E9)] "Text 1067"
-54a6754570098855 al(v,g(24)) p(28400,4963) s(hug:1644,hug:894.7) f[] "Propriedade · Ritmo de crescimento · afinidade (esboços) · mobile"
+54a6754570098855 al(v,g(24)) p(28400,4963) s(hug:1644,hug:894.7) f[(5297be12a90da267,#FFFFFF)] "Propriedade · Ritmo de crescimento · afinidade (esboços) · mobile"
   672fd02201571a98 al(v,g(8)) p(0,0) s(fill,hug:89.01) ext(1644,) f[] "Frame 1623"
     a01fddc559c25d36 al(h,y(c),g(10)) p(0,0) s(fill,hug:37.8) ext(1644,) f[] "Frame 1624"
       2d570dd63ec162a3 t("Ritmo de crescimento — a resposta depende de onde",Alan Sans,28,sb,align(l),lh(1.35)) p(0,0) s(hug:687.68,hug:37.8) f[(d48af8d1064c4755,#A8325D)] "Text 1068"
@@ -10982,7 +10982,7 @@ a5b5612636b1d163 fr ds(gororobas) p(23730,3803) s(2200,2412) f[(395cf71a714a4c71
             vr(r4) f[(01065e66ab2d3b5c,#246E6A)]
           9c02994b4944005d al(v) p(31,12) s(fill,fill) ext(300,48.61) f[] "Frame 1889"
             c310686d6bd6e857 t("Frase em português, uma bolinha por pessoa. A frase só diz o que as bolinhas mostram; quem desconfia confere.",Alan Sans,12,r,align(l),lh(1.35)) p(0,0) s(fill,hug:48.61) ext(300,) f[(da6688a87dbbffb3,#0C2B28)] "Text 1168"
-4b5dc06857505e98 al(v,g(24)) p(28400,6058) s(hug:1644,hug:850.92) f[] "Propriedades · faixas com contexto (esboços) · mobile"
+4b5dc06857505e98 al(v,g(24)) p(28400,6058) s(hug:1644,hug:850.92) f[(d9be3ae679282ea4,#FFFFFF)] "Propriedades · faixas com contexto (esboços) · mobile"
   c5409315a18f9310 al(v,g(8)) p(0,0) s(fill,hug:89.01) ext(1644,) f[] "Frame 1890"
     1a5209957c227dce al(h,y(c),g(10)) p(0,0) s(fill,hug:37.8) ext(1644,) f[] "Frame 1891"
       40b01329b3d9cb89 t("Faixas — o contexto muda os números",Alan Sans,28,sb,align(l),lh(1.35)) p(0,0) s(hug:495.16,hug:37.8) f[(a8f4e983b0fca76f,#A8325D)] "Text 1169"
@@ -11395,7 +11395,7 @@ a5b5612636b1d163 fr ds(gororobas) p(23730,3803) s(2200,2412) f[(395cf71a714a4c71
                 vr(r2) f[(83659f4e4372f9c4,#BD9197)]
               f83e5f534278f027 t("não usa clima",Alan Sans,11,sb,align(l),lh(auto,1.27)) p(21.76,3) s(hug:69.26,hug:14) f[(075de83a0353c4a6,#85515F)] "Text 1262"
           6db6c56b1127462c t("O que muda a copa é a mão de quem cuida, não a chuva. Cada propriedade escolhe as suas dimensões.",Alan Sans,11,r,align(l),lh(1.35)) p(16,66.86) s(fill,hug:29.71) ext(311,) f[(d1a2d0eca0ada06d,#6F3E4D)] "Text 1263"
-33ad5d91d8beeefd al(v,g(24)) p(28400,7109) s(hug:1644,hug:823.57) f[] "Propriedades · conjuntos com contexto (esboços) · mobile"
+33ad5d91d8beeefd al(v,g(24)) p(28400,7109) s(hug:1644,hug:823.57) f[(c0441107687570bf,#FFFFFF)] "Propriedades · conjuntos com contexto (esboços) · mobile"
   0c9a4ec7204603d7 al(v,g(8)) p(0,0) s(fill,hug:89.01) ext(1644,) f[] "Frame 2152"
     10d2306d5340f29f al(h,y(c),g(10)) p(0,0) s(fill,hug:37.8) ext(1644,) f[] "Frame 2153"
       41b600198be53c8c t("Conjuntos — cada membro com quem o viu, e onde",Alan Sans,28,sb,align(l),lh(1.35)) p(0,0) s(hug:659.12,hug:37.8) f[(147b5336e6227285,#A8325D)] "Text 1264"
@@ -11784,7 +11784,7 @@ a5b5612636b1d163 fr ds(gororobas) p(23730,3803) s(2200,2412) f[(395cf71a714a4c71
             vr(r4) f[(e3935e71d083f201,#246E6A)]
           6f47dee1c5bae732 al(v) p(31,12) s(fill,fill) ext(300,48.61) f[] "Frame 2370"
             93de5e14d770be59 t("O método é o mesmo em todo lugar; o que o contexto muda é o mês. As chuvas de quem lê ficam ao fundo, quem plantou por cima.",Alan Sans,12,r,align(l),lh(1.35)) p(0,0) s(fill,hug:48.61) ext(300,) f[(78b45632faffe716,#0C2B28)] "Text 1355"
-84ae5442ddd60234 al(v,g(24)) p(28400,8133) s(hug:1644,hug:783.59) f[] "Propriedades · valores, nomes e partes com contexto (esboços) · mobile"
+84ae5442ddd60234 al(v,g(24)) p(28400,8133) s(hug:1644,hug:783.59) f[(9b72892ffba335cd,#FFFFFF)] "Propriedades · valores, nomes e partes com contexto (esboços) · mobile"
   22260fc06182610c al(v,g(8)) p(0,0) s(fill,hug:89.01) ext(1644,) f[] "Frame 2371"
     f70865dfccae49d9 al(h,y(c),g(10)) p(0,0) s(fill,hug:37.8) ext(1644,) f[] "Frame 2372"
       99d6b911e2a92310 t("Valores inteiros, nomes e partes — e quando o contexto não entra",Alan Sans,28,sb,align(l),lh(1.35)) p(0,0) s(hug:848.01,hug:37.8) f[(d6ca4b63125ed014,#A8325D)] "Text 1356"
@@ -12133,7 +12133,7 @@ a5b5612636b1d163 fr ds(gororobas) p(23730,3803) s(2200,2412) f[(395cf71a714a4c71
             vr(r4) f[(f336c410cb9acf43,#246E6A)]
           0eb7f77bcb96275b al(v) p(31,12) s(fill,fill) ext(300,48.61) f[] "Frame 2555"
             d045eb5b47bc3e48 t("Uma propriedade sem dimensões relevantes fica igual para todo mundo. Mostrar afinidade em toda parte gastaria a atenção que ela merece onde importa.",Alan Sans,12,r,align(l),lh(1.35)) p(0,0) s(fill,hug:48.61) ext(300,) f[(65b226909e11ffc8,#0C2B28)] "Text 1454"
-dcda638b74f7a701 al(v,g(24)) p(28400,9117) s(hug:1644,hug:858.84) f[] "Propriedades · canônicas e a página inteira (esboços) · mobile"
+dcda638b74f7a701 al(v,g(24)) p(28400,9117) s(hug:1644,hug:858.84) f[(0dcfd8117a1e52b1,#FFFFFF)] "Propriedades · canônicas e a página inteira (esboços) · mobile"
   326de2579d25d49e al(v,g(8)) p(0,0) s(fill,hug:89.01) ext(1644,) f[] "Frame 2556"
     e207f386a2262c55 al(h,y(c),g(10)) p(0,0) s(fill,hug:37.8) ext(1644,) f[] "Frame 2557"
       02b27b64ac522e48 t("Canônicas, uma aposta, e o artigo lido pelo seu contexto",Alan Sans,28,sb,align(l),lh(1.35)) p(0,0) s(hug:727.14,hug:37.8) f[(9fc60aff6605ab42,#A8325D)] "Text 1455"
