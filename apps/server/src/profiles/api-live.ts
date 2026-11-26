@@ -2,6 +2,7 @@ import { assertAuthenticated, GororobasApi } from "@gororobas/domain"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
+import { queueLocationClimate } from "../climate/workflow.js"
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
 import { requestLocale } from "../common/request-locale.js"
 import { ProfileLocationsService } from "./locations-service.js"
@@ -77,11 +78,13 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
         const session = yield* assertAuthenticated
         const { language } = yield* requestLocale
 
-        return yield* (yield* ProfileLocationsService).add({
-          profileId: session.personId,
-          payload,
-          language,
-        })
+        return yield* (yield* ProfileLocationsService)
+          .add({
+            profileId: session.personId,
+            payload,
+            language,
+          })
+          .pipe(Effect.flatMap(queueLocationClimate))
       }).pipe(withApiInfrastructureErrors({ endpoint: "addMyLocation", group: "profiles" })),
     )
     .handle("updateMyLocation", ({ params, payload }) =>
@@ -89,12 +92,14 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
         const session = yield* assertAuthenticated
         const { language } = yield* requestLocale
 
-        return yield* (yield* ProfileLocationsService).update({
-          profileId: session.personId,
-          id: params.id,
-          payload,
-          language,
-        })
+        return yield* (yield* ProfileLocationsService)
+          .update({
+            profileId: session.personId,
+            id: params.id,
+            payload,
+            language,
+          })
+          .pipe(Effect.flatMap(queueLocationClimate))
       }).pipe(withApiInfrastructureErrors({ endpoint: "updateMyLocation", group: "profiles" })),
     )
     .handle("deleteMyLocation", ({ params }) =>

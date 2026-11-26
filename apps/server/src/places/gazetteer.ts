@@ -279,6 +279,14 @@ const makeGazetteer = Effect.gen(function* () {
     `,
   })
 
+  const findBoundary = SqlSchema.findOneOption({
+    Request: WhosOnFirstId,
+    Result: Schema.Struct({ geometry: Schema.fromJsonString(AreaGeometry) }),
+    execute: (id) => sql`
+      SELECT geometry FROM gazetteer_places WHERE id = ${Number(id)} AND place_kind = 'MUNICIPALITY'
+    `,
+  })
+
   const findRecordRow = SqlSchema.findOneOption({
     Request: WhosOnFirstId,
     Result: Schema.Struct({
@@ -376,6 +384,8 @@ const makeGazetteer = Effect.gen(function* () {
       },
       (_) => provide(_),
     ),
+
+    findMunicipalityBoundary: (id: WhosOnFirstId) => findBoundary(id).pipe(provide),
 
     findRecord: Effect.fn("gazetteer.findRecord")(
       function* (id: WhosOnFirstId) {

@@ -10,6 +10,8 @@ import {
   InformationVisibility,
   InvalidProfileLocationDatesError,
   PartialDate,
+  PlaceClimateProfile,
+  type PlaceClimateState,
   ProfileId,
   type ProfileLocationData,
   ProfileLocationId,
@@ -23,7 +25,7 @@ import {
   WhosOnFirstId,
   WikiArticleId,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Option, Schema } from "effect"
+import { Context, DateTime, Effect, Match, Option, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
 import { Gazetteer } from "../places/gazetteer.js"
@@ -53,7 +55,24 @@ const ListedProfileLocationRow = Schema.Struct({
   whosOnFirstId: Schema.NullOr(WhosOnFirstId),
   placeName: Schema.NullOr(Schema.String),
   placeHandle: Schema.NullOr(Handle),
+  climateState: Schema.NullOr(Schema.Literals(["GENERATING", "AVAILABLE", "UNAVAILABLE"])),
+  climateProfile: Schema.NullOr(Schema.fromJsonString(PlaceClimateProfile)),
 })
+
+const climateForLocation = (
+  row: typeof ListedProfileLocationRow.Type,
+): PlaceClimateState | undefined =>
+  Match.value(row.climateState).pipe(
+    Match.when("AVAILABLE", () =>
+      row.climateProfile === null
+        ? ({ _tag: "Unavailable" } as const)
+        : ({ _tag: "Available", profile: row.climateProfile } as const),
+    ),
+    Match.when("GENERATING", () => ({ _tag: "Generating" }) as const),
+    Match.when("UNAVAILABLE", () => ({ _tag: "Unavailable" }) as const),
+    Match.when(null, () => undefined),
+    Match.exhaustive,
+  )
 
 type PlaceColumns = Pick<
   ProfileLocationRow,
@@ -132,10 +151,13 @@ const listProfileLocationRows = SqlSchema.findAll({
     SqlClient.SqlClient.use(
       (sql) => sql`
         SELECT location.*, place.whos_on_first_id,
+          climate.state AS climate_state, climate.profile AS climate_profile,
           ${placeName(sql, { placeIdColumn: "location.place_id", language })} AS place_name,
           ${placeHandle(sql, { placeIdColumn: "location.place_id", language })} AS place_handle
         FROM profile_locations location
         LEFT JOIN place_projections place ON place.wiki_article_id = location.place_id
+        LEFT JOIN place_climate_profiles climate ON climate.whos_on_first_id = place.whos_on_first_id
+          AND climate.elevation_key = COALESCE(location.elevation, -10000)
         WHERE location.profile_id = ${profileId}
         ORDER BY ${profileLocationOrder(sql)}
       `,
@@ -179,6 +201,8 @@ export class ProfileLocationsService extends Context.Service<ProfileLocationsSer
               return []
             }
 
+            const climate = climateForLocation(row)
+
             return [
               {
                 ...common,
@@ -193,6 +217,7 @@ export class ProfileLocationsService extends Context.Service<ProfileLocationsSer
                       : (gazetteerPlaces[row.whosOnFirstId] ?? null),
                   label: row.label,
                   elevation: row.elevation,
+                  ...(climate === undefined ? {} : { climate }),
                 },
               },
             ]

@@ -18,6 +18,7 @@ import {
   TimestampColumn,
 } from "../common/primitives.js"
 import { PartialDate } from "../common/utils/dates.js"
+import { PlaceClimateState } from "../places/climate-profile.js"
 import { GazetteerPlace } from "../places/domain.js"
 
 const ELEVATION_STEP_IN_METERS = 10
@@ -134,6 +135,7 @@ export const ProfileLocationData = Schema.Struct({
       placeHandle: Handle,
       /** With its outline. Null for places that aren't in the gazetteer. */
       gazetteerPlace: Schema.NullOr(GazetteerPlace),
+      climate: Schema.optionalKey(PlaceClimateState),
       label: Schema.NullOr(ProfileLocationText),
       elevation: Schema.NullOr(ElevationInMeters),
     },
