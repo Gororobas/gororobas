@@ -10,7 +10,7 @@ const toHexByte = (channel: number): string =>
     .toString(16)
     .padStart(2, "0")
 
-/** Pencil only stores hex colors, so CSS `oklch()` ramps are converted (Björn Ottosson's Oklab matrices). */
+/** The design system stores hex colors, so CSS `oklch()` ramps are converted (Björn Ottosson's Oklab matrices). */
 export const colorToHex = (color: string): string => {
   const match = OKLCH_PATTERN.exec(color)
   if (match === null) {

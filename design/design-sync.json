@@ -1,145 +1,158 @@
 {
   "mirrors": [
     {
-      "penNode": "ui/app-button",
-      "source": "ui/app-button",
-      "sourceHash": "9bb092a39f2601bb",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/chip",
-      "source": "ui/chip",
-      "sourceHash": "13df001e81ee028e",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/thumbnail",
-      "source": "ui/thumbnail",
-      "sourceHash": "8162202fb81ceb40",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/untranslated-notice",
-      "source": "ui/untranslated-notice",
-      "sourceHash": "00e7fca04da15000",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/tab-navigation",
-      "source": "ui/tab-navigation",
-      "sourceHash": "456a553bd0912c8f",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/profile-row",
-      "source": "ui/profile-row",
-      "sourceHash": "73896ad69fe23ff3",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/provider-mark",
-      "source": "ui/provider-mark",
-      "sourceHash": "d06ee9ab8c1dfe5c",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/section-card",
-      "source": "ui/section-card",
-      "sourceHash": "7d74cf00f3a65f2d",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/empty-state",
-      "source": "ui/empty-state",
-      "sourceHash": "a5be4813d80eb5e3",
-      "kind": "component"
-    },
-    {
-      "penNode": "ui/app-shell",
+      "designNode": "ui/app-shell",
       "source": "ui/app-shell",
       "sourceHash": "724f278c85295439",
       "kind": "component"
     },
     {
-      "penNode": "ui/publication-card",
+      "designNode": "ui/chip",
+      "source": "ui/chip",
+      "sourceHash": "13df001e81ee028e",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/tab-navigation",
+      "source": "ui/tab-navigation",
+      "sourceHash": "1fe92d6fe4ee81c2",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/section-card",
+      "source": "ui/section-card",
+      "sourceHash": "8db903ae12944eba",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/profile-avatar",
+      "source": "ui/profile-avatar",
+      "sourceHash": "96f5a75f5d636e7e",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/profile-row",
+      "source": "ui/profile-row",
+      "sourceHash": "73896ad69fe23ff3",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/thumbnail",
+      "source": "ui/thumbnail",
+      "sourceHash": "8162202fb81ceb40",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/empty-state",
+      "source": "ui/empty-state",
+      "sourceHash": "a5be4813d80eb5e3",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/media-credit",
+      "source": "ui/media-credit",
+      "sourceHash": "909578dee73f0904",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/publication-card",
       "source": "ui/publication-card",
       "sourceHash": "079d2696680ab143",
       "kind": "component"
     },
     {
-      "penNode": "wiki-article/overview-fact",
+      "designNode": "ui/wiki-article-row",
+      "source": "ui/wiki-article-row",
+      "sourceHash": "3265b473b69a1869",
+      "kind": "component"
+    },
+    {
+      "designNode": "ui/wiki-article-card",
+      "source": "ui/wiki-article-card",
+      "sourceHash": "d6b4cb5928b495ca",
+      "kind": "component"
+    },
+    {
+      "designNode": "icon",
+      "source": "ui/icons",
+      "sourceHash": "5812274a5870ae18",
+      "kind": "component"
+    },
+    {
+      "designNode": "wiki-article/header",
+      "source": "blocks/wiki-article/view/view.ts",
+      "sourceHash": "cb8d5318a1833d57",
+      "kind": "component"
+    },
+    {
+      "designNode": "wiki-article/overview-fact",
       "source": "blocks/wiki-article/view/overview",
       "sourceHash": "3d643916b38f17bd",
       "kind": "component"
     },
     {
-      "penNode": "wiki-article/bookmark-picker",
+      "designNode": "wiki-article/bookmark-picker",
       "source": "blocks/wiki-article/view/bookmark-picker.ts",
       "sourceHash": "a28df744aecadb0c",
       "kind": "component"
     },
     {
-      "penNode": "wiki-article/classification-popover",
-      "source": "blocks/wiki-article/view/classification.ts",
-      "sourceHash": "6818cc30bf88b645",
+      "designNode": "wiki-article/contributor-row",
+      "source": "blocks/wiki-article/view/about.ts",
+      "sourceHash": "14cb56a2083c990f",
       "kind": "component"
     },
     {
-      "penNode": "Artigo · Planta (Cenoura) · Sobre · mobile",
+      "designNode": "search",
+      "source": "blocks/search",
+      "sourceHash": "e01e1a26a893ab25",
+      "kind": "component"
+    },
+    {
+      "designNode": "Article · About · mobile",
       "source": "blocks/wiki-article/view",
-      "sourceHash": "261fff838ade8b03",
+      "sourceHash": "b2fb8dc0a3e44e86",
       "kind": "screen"
     },
     {
-      "penNode": "Artigo · Livro (A Queda do Céu) · Sobre · mobile",
+      "designNode": "Article · Publications · mobile",
       "source": "blocks/wiki-article/view",
-      "sourceHash": "261fff838ade8b03",
+      "sourceHash": "b2fb8dc0a3e44e86",
       "kind": "screen"
     },
     {
-      "penNode": "Artigo · Fotos (aba) · mobile",
+      "designNode": "Article · Photos · mobile",
       "source": "blocks/wiki-article/view",
-      "sourceHash": "261fff838ade8b03",
+      "sourceHash": "b2fb8dc0a3e44e86",
       "kind": "screen"
     },
     {
-      "penNode": "Artigo · Contribuições (aba) · mobile",
+      "designNode": "Article · Contributions · mobile",
       "source": "blocks/wiki-article/view",
-      "sourceHash": "261fff838ade8b03",
+      "sourceHash": "b2fb8dc0a3e44e86",
       "kind": "screen"
     },
     {
-      "penNode": "Artigo · Publicações (aba) · mobile",
+      "designNode": "Article · About · desktop",
       "source": "blocks/wiki-article/view",
-      "sourceHash": "261fff838ade8b03",
+      "sourceHash": "b2fb8dc0a3e44e86",
       "kind": "screen"
     },
     {
-      "penNode": "Artigo · Cabeçalho · variações e classificação aberta · mobile",
-      "source": "blocks/wiki-article/view",
-      "sourceHash": "261fff838ade8b03",
+      "designNode": "Search · Browse · mobile",
+      "source": "blocks/search",
+      "sourceHash": "e01e1a26a893ab25",
       "kind": "screen"
     },
     {
-      "penNode": "Artigo · Estado · Não encontrado · mobile",
-      "source": "blocks/wiki-article/view/view.ts",
-      "sourceHash": "dd391e57f0d37e0d",
-      "kind": "screen"
-    },
-    {
-      "penNode": "Artigo · Estado · Erro ao carregar · mobile",
-      "source": "blocks/wiki-article/view/view.ts",
-      "sourceHash": "dd391e57f0d37e0d",
-      "kind": "screen"
-    },
-    {
-      "penNode": "Artigo · Estado · Carregando · mobile",
-      "source": "blocks/wiki-article/view/view.ts",
-      "sourceHash": "dd391e57f0d37e0d",
+      "designNode": "Search · Results · mobile",
+      "source": "blocks/search",
+      "sourceHash": "e01e1a26a893ab25",
       "kind": "screen"
     }
   ],
   "notYetMirrored": [
+    "app-button",
     "app-card",
     "app-dialog",
     "app-drawer",
@@ -149,18 +162,16 @@
     "choice-row",
     "drawer",
     "filter-chips",
-    "icons",
     "loading-state",
-    "media-credit",
     "mysterious-author",
     "option-cards",
     "photo-gallery",
     "place-outline",
     "popover-drawer",
-    "profile-avatar",
+    "provider-mark",
     "rich-text",
     "section-heading",
     "section-with-heading",
-    "wiki-article-row"
+    "untranslated-notice"
   ]
 }

@@ -22,9 +22,13 @@ import { PublicationCard } from "../../../ui/publication-card"
 import { RichText } from "../../../ui/rich-text"
 import { SectionCard, cardBleedStyle } from "../../../ui/section-card"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
+import { twoLineClampStyle } from "../../../ui/styles/line-clamp"
+import { overflowFadeStyle } from "../../../ui/styles/overflow-fade"
+import { pageColumnBleedStyle } from "../../../ui/styles/page-column"
+import { resultGridContainerStyle, resultGridStyle } from "../../../ui/styles/result-grid"
 import { breakpoint, fontWeight, radius, space, toneColors, tones } from "../../../ui/theme"
 import { UntranslatedNotice } from "../../../ui/untranslated-notice"
-import { WikiArticleRow } from "../../../ui/wiki-article-row"
+import { WikiArticleCard } from "../../../ui/wiki-article-card"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
 import { type Model } from "../model"
@@ -44,13 +48,22 @@ const PREVIEW_CONTRIBUTOR_COUNT = 3
 
 // SHARED STYLES
 
+/**
+ * In one column the strip runs to the screen's edges, so the next photo slides in from beyond
+ * them instead of being cut at the column's padding. Beside the sidebar it stays in its column,
+ * and the fade marks the edge where photos continue.
+ */
 const heroStyle = Style.make({
   display: "flex",
   gap: space[3],
   overflowX: "auto",
   scrollSnapType: "x mandatory",
   scrollbarWidth: "none",
-})
+}).pipe(
+  Style.merge(pageColumnBleedStyle),
+  Style.merge(overflowFadeStyle),
+  Style.when(breakpoint.lg, { marginInline: 0, paddingInline: 0, scrollPaddingInline: 0 }),
+)
 
 /** A card the photo sits in whole, uncropped, with its caption below. */
 const heroSlideStyle = Style.make({
@@ -156,11 +169,11 @@ const contentStyle = Style.make({ color: toneColors.foreground })
 
 // SECTIONS
 
-/** A photo's description, below it. */
+/** A photo's description, below it, cut to two lines: the full text is on hover and in the photo's alt. */
 const heroCaption = (photo: ArticlePhoto, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
   EffectArray.fromOption(
     Option.map(photo.maybeCaption, (text) =>
-      h.figcaption(styledAttributes([], heroCaptionStyle), [
+      h.figcaption(styledAttributes([h.Title(text)], heroCaptionStyle, twoLineClampStyle), [
         AppText.view({ element: "span", appearance: "footnote", children: [text] }, h),
       ]),
     ),
@@ -403,12 +416,11 @@ const cultivars = (
             styledAttributes([], carouselStyle, cardBleedStyle),
             varieties.map((cultivar) =>
               h.keyed("div")(cultivar.id, styledAttributes([], cultivarItemStyle), [
-                WikiArticleRow.view(
+                WikiArticleCard.view(
                   {
                     article: cultivar,
                     language,
                     maybeBookmarkState: HashMap.get(model.viewerBookmarks, cultivar.id),
-                    isCard: true,
                   },
                   h,
                 ),
@@ -444,7 +456,7 @@ const related = (
           )
           .slice(0, PREVIEW_RELATED_COUNT)
 
-        return h.div(styledAttributes([], listStyle), [
+        return h.div(styledAttributes([], listStyle, resultGridContainerStyle), [
           ...(kinds.length > 1
             ? [
                 FilterChips.view(
@@ -468,23 +480,27 @@ const related = (
                 h,
               ),
             ],
-            onNonEmpty: (nonEmpty) =>
-              nonEmpty.map((article) =>
-                h.keyed("div")(
-                  article.id,
-                  [],
-                  [
-                    WikiArticleRow.view(
-                      {
-                        article,
-                        language,
-                        maybeBookmarkState: HashMap.get(model.viewerBookmarks, article.id),
-                      },
-                      h,
-                    ),
-                  ],
+            onNonEmpty: (nonEmpty) => [
+              h.div(
+                styledAttributes([], resultGridStyle),
+                nonEmpty.map((article) =>
+                  h.keyed("div")(
+                    article.id,
+                    [],
+                    [
+                      WikiArticleCard.view(
+                        {
+                          article,
+                          language,
+                          maybeBookmarkState: HashMap.get(model.viewerBookmarks, article.id),
+                        },
+                        h,
+                      ),
+                    ],
+                  ),
                 ),
               ),
+            ],
           }),
         ])
       },

@@ -1,0 +1,17 @@
+    b9fd96c363a26a1c fr comp axes[state[default,current]] p(1155.25,0) s(282.56,91) f[] st[(605b87cb348a55c0,#7C6BF0,w(1),dash(10,5))] rd(16) "ui/tab-navigation/tab"
+      e07d0d2c6ae955ac al(v,g(0:$pen.space.0),pad(0:$pen.space.0)) variant(state(default)) p(20,20) s(hug:109.28,hug:51) f[] "Frame 262"
+        533a882195566729 al(h,y(c),g(8:$pen.space.2),pad(12:$pen.space.3,16:$pen.space.4,12:$pen.space.3,16:$pen.space.4)) mref(533a882195566729) p(0,0) s(hug:109.28,hug:48) f[] rd(9999:$radius.full, smooth(1)) "Content"
+          f49fc21c812dfc4a al(h,x(c),y(c),pad(0:$pen.space.0)) slot mref(f49fc21c812dfc4a) p(16,12) s(24,24) f[] "Icon"
+            94b6c950855e3d04 inst(icon/notebook3) at(mode(outline)) p(0,0) ext(24,24) mref(94b6c950855e3d04) "icon/notebook3"
+              override(321958cbaab48fb5) ov[fills] f[(eb4fb1748e64a506,tok(pen.tone.neutral.shade.700,#6F3E4D))]
+          0eaf3f69c8eff04d t("About",Alan Sans,16:$pen.font-size.regular,sb,align(l),lh(auto,1.31)) mref(0eaf3f69c8eff04d) p(48,13.5) s(hug:45.28,hug:21) f[(40a579374c62f7c5,tok(pen.tone.neutral.shade.700,#6F3E4D))] "Label"
+        6e07f5d46daac402 al(h,pad(0:$pen.space.0,16:$pen.space.4,0:$pen.space.0,16:$pen.space.4)) mref(6e07f5d46daac402) p(0,48) s(fill,hug:3) ext(109.28,) f[] "Indicator"
+          074df8168cb96594 r mref(074df8168cb96594) p(16,0) s(fill,3) ext(77.28,) f[(f2a3870cde7514bf,solid(tok(pen.tone.accent.shade.600,#2E8581),o(0)))] rd(9999:$radius.full) "Bar"
+      417ea7ca88879aaf al(v,g(0:$pen.space.0),pad(0:$pen.space.0)) variant(state(current)) p(153.28,20) s(hug:109.28,hug:51) f[] "Frame 263"
+        e5b65c92b6289338 al(h,y(c),g(8:$pen.space.2),pad(12:$pen.space.3,16:$pen.space.4,12:$pen.space.3,16:$pen.space.4)) mref(533a882195566729) p(0,0) s(hug:109.28,hug:48) f[] rd(9999:$radius.full, smooth(1)) "Content"
+          9d91d03526e85f56 al(h,x(c),y(c),pad(0:$pen.space.0)) slot mref(f49fc21c812dfc4a) p(16,12) s(24,24) f[] "Icon"
+            fa1c17c5f498c381 inst(icon/notebook3) at(mode(duotone)) p(0,0) ext(24,24) mref(94b6c950855e3d04) "icon/notebook3"
+              override(321958cbaab48fb5) ov[fills] f[(62007ad53cd0ff3b,tok(pen.tone.accent.shade.800,#1C5753))]
+          038ed5f0f3ad7d45 t("About",Alan Sans,16:$pen.font-size.regular,sb,align(l),lh(auto,1.31)) mref(0eaf3f69c8eff04d) p(48,13.5) s(hug:45.28,hug:21) f[(e502983ab14afa50,tok(pen.tone.accent.shade.800,#1C5753))] "Label"
+        447eeda35094216a al(h,pad(0:$pen.space.0,16:$pen.space.4,0:$pen.space.0,16:$pen.space.4)) mref(6e07f5d46daac402) p(0,48) s(fill,hug:3) ext(109.28,) f[] "Indicator"
+          297f1e3354814d7b r mref(074df8168cb96594) p(16,0) s(fill,3) ext(77.28,) f[(67403af89905f67f,tok(pen.tone.accent.shade.600,#2E8581))] rd(9999:$radius.full) "Bar"

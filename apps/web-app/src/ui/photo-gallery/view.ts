@@ -7,6 +7,7 @@ import { streamMediaQueryMatches } from "../../lib/media-query"
 import { AppText } from "../app-text"
 import type { MediaDimensions } from "../media-credit"
 import { styledAttributes } from "../pleat-attributes"
+import { twoLineClampStyle } from "../styles/line-clamp"
 import { radius, space, tones } from "../theme"
 
 /** What the gallery needs of a photo, wherever it comes from. */
@@ -98,10 +99,9 @@ export const figure = <Message, Photo extends GalleryPhoto>(
     ]),
     ...EffectArray.fromOption(
       Option.map(photo.maybeCaption, (text) =>
-        h.figcaption(
-          [],
-          [AppText.view({ element: "span", appearance: "footnote", children: [text] }, h)],
-        ),
+        h.figcaption(styledAttributes([h.Title(text)], twoLineClampStyle), [
+          AppText.view({ element: "span", appearance: "footnote", children: [text] }, h),
+        ]),
       ),
     ),
   ])

@@ -32,11 +32,16 @@ export type ArticleState = Readonly<{
 
 export const sectionsStyle = Style.make({
   display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
   rowGap: space[5],
   paddingBlock: space[5],
 }).pipe(Style.when(breakpoint.md, { rowGap: space[6], paddingBlock: space[8] }))
 
-export const listStyle = Style.make({ display: "grid", rowGap: space[3] })
+export const listStyle = Style.make({
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  rowGap: space[3],
+})
 
 const tabIcons: Readonly<Record<WikiArticleTab, (config?: IconConfig) => Html>> = {
   About: Icons.encyclopedia,

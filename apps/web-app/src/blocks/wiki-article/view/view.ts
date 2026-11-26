@@ -68,12 +68,13 @@ const headerStyle = Style.make({
 }).pipe(Style.when(breakpoint.md, { paddingBlockStart: space[8] }))
 
 // `minInlineSize: 0` lets long names and the classification shrink instead of widening the page.
+// Phones stack the photo above the names, so the names keep the full width.
 const identityStyle = Style.make({
   display: "flex",
-  alignItems: "center",
-  gap: space[4],
+  flexDirection: "column",
+  gap: space[3],
   minInlineSize: 0,
-})
+}).pipe(Style.when(breakpoint.md, { flexDirection: "row", alignItems: "center", gap: space[4] }))
 
 const identityTextStyle = Style.make({ flex: 1, minInlineSize: 0 })
 const debugLinkStyle = Style.make({ alignSelf: "flex-start", flexShrink: 0 })
@@ -120,13 +121,9 @@ const parentPlantLinkStyle = Style.make({
 
 const statusStyle = Style.make({ paddingBlock: space[6] })
 
-/** Phones leave the photo to the compact header, so names and classification get the width. */
-const headerThumbnailStyle = Style.make({ display: "none" }).pipe(
-  Style.when(breakpoint.md, { display: "contents" }),
-)
-
 const thumbnailLinkStyle = Style.make({
   flexShrink: 0,
+  alignSelf: "flex-start",
   borderRadius: "28%",
   outline: "none",
 }).pipe(Style.when(When.focusVisible, focusRingDeclarations))
@@ -310,12 +307,10 @@ const header = (
   }: Readonly<{ model: Model; language: SupportedLanguage; page: Page; tab: WikiArticleTab }>,
   h: WikiArticleViewBuilder,
 ): Html =>
-  h.div(styledAttributes([], headerBandStyle, toneStyle("primary")), [
+  h.div(styledAttributes([], headerBandStyle, toneStyle("neutral")), [
     h.header(styledAttributes([], pageColumnStyle, headerStyle), [
       h.div(styledAttributes([], identityStyle), [
-        h.div(styledAttributes([], headerThumbnailStyle), [
-          headerThumbnail({ language, page, size: "md" }, h),
-        ]),
+        headerThumbnail({ language, page, size: "md" }, h),
         h.div(styledAttributes([], identityTextStyle), [
           AppText.view(
             {
@@ -370,7 +365,7 @@ const compactHeader = (
   }: Readonly<{ language: SupportedLanguage; page: Page; tab: WikiArticleTab }>,
   h: WikiArticleViewBuilder,
 ): Html =>
-  h.div(styledAttributes([], compactHeaderStyle, toneStyle("primary")), [
+  h.div(styledAttributes([], compactHeaderStyle, toneStyle("neutral")), [
     h.div(styledAttributes([], pageColumnStyle, compactInnerStyle), [
       h.a(
         styledAttributes(

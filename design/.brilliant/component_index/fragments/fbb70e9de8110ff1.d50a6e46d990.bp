@@ -1,0 +1,14 @@
+    fbb70e9de8110ff1 fr comp p(407,0) s(hug:375,hug:60) f[] "ui/app-shell/bottom-navigation"
+      3e587a67998d2ffa al(h,x(sa),pad(8:$pen.space.2,8:$pen.space.2,0:$pen.space.0,8:$pen.space.2)) mref(3e587a67998d2ffa) p(0,0) s(375,hug:60) f[(dc2afc872bc00419,tok(pen.tone.neutral.background-card,#FCF8F7))] st[(352f64023238f29b,tok(pen.tone.neutral.border,#EAD4D3),w(1:$pen.stroke.width-1,0:$pen.stroke.width-0,0:$pen.stroke.width-0,0:$pen.stroke.width-0),pos(i))] "Bar"
+        f71d01efde003416 al(v,x(c),g(0:$pen.space.0),pad(4:$pen.space.1,4:$pen.space.1,8:$pen.space.2,4:$pen.space.1)) mref(f71d01efde003416) p(34.01,8) s(hug:81.14,hug:52) f[] rd(9999:$radius.full, smooth(1)) "Encyclopedia"
+          d298d00a70e0737d inst(icon/notebook3) at(mode(duotone)) p(28.57,4) ext(24,24) "icon/notebook3"
+            override(321958cbaab48fb5) ov[fills] f[(62007ad53cd0ff3b,tok(pen.tone.accent.ramp.950,#0C2B28))]
+          4bb8f815c903b8d8 t("Encyclopedia",Alan Sans,12:$pen.font-size.caption,m,align(l),lh(auto,1.33)) p(4,28) s(hug:73.14,hug:16) f[(f196f29bf090d21e,tok(pen.tone.accent.ramp.950,#0C2B28))] "Label"
+        3d7e8f396a05e000 al(v,x(c),g(0:$pen.space.0),pad(4:$pen.space.1,4:$pen.space.1,8:$pen.space.2,4:$pen.space.1)) p(167.16,8) s(hug:75.85,hug:52) f[] rd(9999:$radius.full, smooth(1)) "Publications"
+          48a52bfe0534abbb inst(icon/clipboard) at(mode(outline)) p(25.93,4) ext(24,24) "icon/clipboard"
+            override(68bbcc639e4cac76) ov[fills] f[(858923bbd66ce1cd,tok(pen.tone.neutral.shade.700,#6F3E4D))]
+          4e7ca5999665ba9a t("Publications",Alan Sans,12:$pen.font-size.caption,m,align(l),lh(auto,1.33)) p(4,28) s(hug:67.85,hug:16) f[(847f56b6734c545f,tok(pen.tone.neutral.shade.700,#6F3E4D))] "Label"
+        161c08c54a4f8b8d al(v,x(c),g(0:$pen.space.0),pad(4:$pen.space.1,4:$pen.space.1,8:$pen.space.2,4:$pen.space.1)) p(295.02,8) s(hug:45.98,hug:52) f[] rd(9999:$radius.full, smooth(1)) "People"
+          8ca038424a15c2f7 inst(icon/users) at(mode(outline)) p(10.99,4) ext(24,24) "icon/users"
+            override(7c3a4222fbb6ac89) ov[fills] f[(ee7240e972c495df,tok(pen.tone.neutral.shade.700,#6F3E4D))]
+          4e60f03ff0038eec t("People",Alan Sans,12:$pen.font-size.caption,m,align(l),lh(auto,1.33)) p(4,28) s(hug:37.98,hug:16) f[(77d736cb421f46b0,tok(pen.tone.neutral.shade.700,#6F3E4D))] "Label"

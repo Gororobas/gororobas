@@ -1,0 +1,11 @@
+    bf6ad1e1939710fc fr comp p(343,607) s(hug:343,hug:44) f[] "wiki-article/bookmark-picker"
+      9a58f536f7e42a4c al(h,y(c),g(12:$pen.space.3),pad(0:$pen.space.0,4:$pen.space.1,0:$pen.space.0,16:$pen.space.4)) mref(9a58f536f7e42a4c) p(0,0) s(343,44) f[(2dcafae4c3c1fd9a,tok(pen.tone.primary.ramp.400,#F0D095))] st[(7c5e6d4c99d26ec4,tok(pen.tone.neutral.emphasis,#85515F),w(2:$pen.stroke.width-2))] rd(9999:$radius.full, smooth(1)) pin(lr,t) "Frame 271"
+        4511fdec8c1e5ab1 inst(icon/bookmark) at(mode(outline)) p(16,10) ext(24,24) "icon/bookmark"
+          override(7217e2959e2d7508) ov[fills] f[(06bffe4dde14c7aa,tok(pen.tone.neutral.ramp.900,#432231))]
+        c3bc709693170384 t("Save to my list",Alan Sans,16:$pen.font-size.regular,m,align(l),lh(auto,1.31)) p(52,11.5) s(fill,hug:21) ext(243,) f[(c6ebd50efbf8eb98,tok(pen.tone.neutral.ramp.900,#432231))] "Label"
+        b53adaff1607b782 al(h,x(c),y(c),pad(0:$pen.space.0)) p(307,6) s(32,32) f[(8887f1af618c5f2e,tok(pen.tone.primary.ramp.500,#D8B05C))] rd(9999:$radius.full, smooth(0.6)) "Menu"
+          81002e1e2bcf2156 inst(icon/chevron-down,emb,mask(alpha)) at(mode(outline)) ov[size] p(8,8) s(16,16) f[] "icon/chevron-down"
+            9e524ce12835b32d r mref(42be1d5983cf2621) ov[fills] p(0,0) s(24,24) f[(88cda3ad6e8ae5fd,tok(pen.tone.neutral.ramp.900,#432231))] pin(scale,scale) "Color"
+            79e818ae71272770 fr mref(f41fea4955290db5) p(0,0) s(hug:24,hug:24) f[] pin(scale,scale) "Glyph"
+              d12e31e18a784d46 r mref(075b0ca79802f3cd) p(0,0) s(24,24) f[(655b895986f450ba,#000000)] o(0) "Rectangle"
+              317dca9542dc7706 v(nodes[(0,16.659999999999997,0,st),(1,8.33,8.33,st),(2,0,0,st)],edges[(0,0,1,0,0,0,0),(1,1,2,0,0,0,0)]) mref(d6077f98f733cf75) p(3.67,8.67) s(16.66,8.33) st[(eb1d9f857b15a75d,#000000,w(1.5),dashcap(r))] "Polyline"

@@ -1,0 +1,5 @@
+    6f7562302e72f7c9 fr comp p(0,607) s(hug:311,hug:33) f[] "wiki-article/overview-fact"
+      dbc74d212d2a77b7 al(h,g(16:$pen.space.4),pad(0:$pen.space.0,0:$pen.space.0,12:$pen.space.3,0:$pen.space.0)) mref(dbc74d212d2a77b7) p(0,0) s(311,hug:33) f[] st[(7e74b211d9d8de7b,tok(pen.tone.primary.border,#FDE7BF),w(0:$pen.stroke.width-0,0:$pen.stroke.width-0,1:$pen.stroke.width-1,0:$pen.stroke.width-0),pos(i))] pin(lr,t) "Frame 270"
+        f09fa14d63ef48e7 t("Origin",Alan Sans,16:$pen.font-size.regular,sb,align(l),lh(auto,1.31)) mref(f09fa14d63ef48e7) p(0,0) s(118,hug:21) f[(4c81c6cde0ee4a20,tok(pen.tone.neutral.ramp.800,#59303E))] "Label"
+        d0d12218026279c2 al(v,g(8:$pen.space.2),pad(0:$pen.space.0)) slot mref(d0d12218026279c2) p(134,0) s(fill,hug:21) ext(177,) f[] "Value"
+          2895d8790b409039 t("Paraty, RJ",Alan Sans,16:$pen.font-size.regular,r,align(l),lh(auto,1.31)) mref(2895d8790b409039) p(0,0) s(fill,hug:21) ext(177,) f[(e5571019bcef5f34,tok(pen.tone.neutral.foreground,#2A111C))] "Text 3"

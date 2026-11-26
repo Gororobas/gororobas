@@ -5,6 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { Chip } from "../chip"
 import { styledAttributes } from "../pleat-attributes"
 import { cardBleedStyle } from "../section-card"
+import { overflowFadeStyle } from "../styles/overflow-fade"
 import { space } from "../theme"
 
 const chipRowStyle = Style.make({
@@ -13,7 +14,7 @@ const chipRowStyle = Style.make({
   overflowX: "auto",
   scrollbarWidth: "none",
   paddingBlock: space[1],
-})
+}).pipe(Style.merge(overflowFadeStyle))
 
 export type FilterChipsConfig<Value, Message> = Readonly<{
   label: string

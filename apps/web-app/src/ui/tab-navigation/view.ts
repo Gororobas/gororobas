@@ -1,9 +1,10 @@
-import { Global, Recipe, Style, When } from "@pleat/core"
+import { Recipe, Style, When } from "@pleat/core"
 import type { Html, HtmlBuilder } from "foldkit/html"
 
 import type { IconConfig } from "../icons"
 import { styledAttributes } from "../pleat-attributes"
 import { focusRingDeclarations } from "../styles/focus-ring"
+import { OVERFLOW_FADE, overflowFadeStyle } from "../styles/overflow-fade"
 import {
   borderWidth,
   duration,
@@ -26,23 +27,6 @@ const SLIDING_INDICATOR_QUERY = "(anchor-scope: all) and (anchor-name: --a)"
 const supportsSlidingIndicator = When.supports(SLIDING_INDICATOR_QUERY)
 const lacksSlidingIndicator = When.supports(`not (${SLIDING_INDICATOR_QUERY})`)
 
-/** How far the edges fade out where tabs continue past them. */
-const OVERFLOW_FADE = "4rem"
-
-const fadeMask = ({ start, end }: Readonly<{ start: boolean; end: boolean }>) =>
-  `linear-gradient(to right, ${start ? "transparent" : "black"}, black ${start ? OVERFLOW_FADE : "0%"}, black calc(100% - ${end ? OVERFLOW_FADE : "0%"}), ${end ? "transparent" : "black"})`
-
-/**
- * Fades whichever edge has more tabs past it, so a clipped list doesn't read as complete. Driven
- * by the list's own scroll timeline, which is inactive (and so leaves no mask) when the tabs fit.
- * Masks don't interpolate: each one holds until the next keyframe takes over.
- */
-const overflowFade = Global.keyframes("tab-navigation-overflow-fade", {
-  "from, 1%": { maskImage: fadeMask({ start: false, end: true }) },
-  "2%, 98%": { maskImage: fadeMask({ start: true, end: true }) },
-  "99%, to": { maskImage: fadeMask({ start: true, end: false }) },
-})
-
 const listStyle = Style.make({
   position: "relative",
   display: "flex",
@@ -50,14 +34,7 @@ const listStyle = Style.make({
   scrollbarWidth: "none",
   paddingBlockEnd: INDICATOR_THICKNESS,
   anchorScope: CURRENT_TAB_ANCHOR,
-}).pipe(
-  Style.when(When.supports("(animation-timeline: scroll())"), {
-    animationName: overflowFade,
-    animationTimingFunction: "linear",
-    animationFillMode: "both",
-    animationTimeline: "scroll(self inline)",
-  }),
-)
+}).pipe(Style.merge(overflowFadeStyle))
 
 /** No gap between tabs: each tab's padding spaces them, so the hit areas touch. */
 const tabStyle = Recipe.make({
@@ -86,7 +63,13 @@ const tabStyle = Recipe.make({
       compact: { paddingInline: space[3], paddingBlock: space[2], fontSize: fontSize.footnote },
     },
     isCurrent: {
-      true: Style.make({ color: tones.accent.shade[800], anchorName: CURRENT_TAB_ANCHOR }).pipe(
+      true: Style.make({
+        color: tones.accent.shade[800],
+        anchorName: CURRENT_TAB_ANCHOR,
+        // A current tab past the strip's edge starts scrolled into view, clear of the fade.
+        scrollInitialTarget: "nearest",
+        scrollMarginInline: OVERFLOW_FADE,
+      }).pipe(
         // Without a sliding indicator, the current tab draws its own.
         Style.when(lacksSlidingIndicator, {
           textDecorationLine: "underline",

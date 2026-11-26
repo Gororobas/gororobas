@@ -102,7 +102,7 @@ msgstr "{count, plural, one {# resultado para} other {# resultados para}}"
 msgid "{count}+ results for"
 msgstr "{count}+ resultados para"
 
-#: src/ui/wiki-article-row/view.ts
+#: src/lib/wiki-article-labels.ts
 msgid "{gender, select, other {{kind} of {name}}}"
 msgstr "{gender, select, female {{kind} da {name}} male {{kind} do {name}} other {{kind} de {name}}}"
 

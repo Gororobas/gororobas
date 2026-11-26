@@ -5,7 +5,8 @@ import { colorToHex } from "./oklch"
 
 /**
  * What the web app promises the design file: color roles per mode and the primitive scales.
- * The `.pen` file's variables mirror this; `design:check` fails when they drift.
+ * The design system's tokens (`design/Styles/gororobas.ds`) mirror this; `design:check` fails
+ * when they drift.
  */
 export type DesignVariable =
   | Readonly<{ type: "color"; value: Readonly<Record<"light" | "dark", string>> }>

@@ -1,0 +1,13 @@
+    a3df53a42aad4a9c fr comp p(1142.13,123) s(hug:311,hug:150) f[] "ui/empty-state"
+      ea1a8bf5ad5a437c al(v,x(c),g(8:$pen.space.2),pad(16:$pen.space.4)) mref(ea1a8bf5ad5a437c) p(0,0) s(311,hug:150) f[] st[(0183b639efdd54c9,tok(pen.tone.primary.border,#FDE7BF),w(1:$pen.stroke.width-1),dash(3,3))] rd(16:$radius.2xl, smooth(0.6)) pin(lr,t) "Frame 269"
+        2f49771bc2255318 al(h,x(c),y(c),pad(0:$pen.space.0)) slot mref(2f49771bc2255318) p(131.5,16) s(48,48) f[(0833be51273f07bb,tok(pen.tone.primary.shade.300,#F6DAA6))] rd(9999:$radius.full, smooth(1)) "Icon"
+          06602c2a3bf0aaa1 inst(icon/heart,emb,mask(alpha)) at(mode(duotone)) ov[size] p(8,8) s(32,32) f[] "icon/heart"
+            b805613fd59286c6 r mref(7988b9052f183beb) ov[fills] p(0,0) s(24,24) f[(1b4db868d843abc1,tok(pen.tone.accent.ramp.500,#839D58))] pin(scale,scale) "Color"
+            66cbbc8400a104fa fr mref(3d53a101d0033148) p(0,0) s(hug:24,hug:24) f[] pin(scale,scale) "Glyph"
+              29016fce3c105bd5 r mref(33fc5a959f8caea2) p(0,0) s(24,24) f[(393af8379e699f3d,#000000)] o(0) "Rectangle"
+              d2fb52995c923120 v(nodes[(0,6.109999999999999,14.97,as),(1,0,5.860000000000001,mi),(2,10,2.22,di),(3,10,17.22,di),(4,6.960000000000001,15.63,as)],edges[(0,0,1,-2.81,-2.16,0,4.41),(1,1,2,0,-4.86,-4.5,-4.68),(2,2,3,0,0,0,0),(3,3,4,-1,0,1.04,0.82),(4,0,4,0.29,0.22,-0.28,-0.22)],regions[(0+1+2+3+4-)]) mref(ba893ec49b1854dc) p(2,3.28) s(10,17.22) o(0.5) "Path"
+                vr(r1) f[(353bf589492b8183,#000000)]
+              9153218ea09c3b77 v(nodes[(0,3.039999999999999,15.63,as),(1,10,5.860000000000001,mi),(2,0,2.22,di),(3,0,17.22,di)],edges[(0,0,1,2.94,-2.32,0,4.86),(1,1,2,0,-4.86,4.5,-4.68),(2,2,3,0,0,0,0),(3,0,3,-1.04,0.82,1,0)],regions[(0-3+2-1-)]) mref(8bb09cd5be163c2d) p(12,3.28) s(10,17.22) "Path"
+                vr(r1) f[(71913b7c42829e92,#000000)]
+        c33384cc4461f2a2 t("Nobody here yet",Alan Sans,14:$pen.font-size.footnote,sb,align(l),lh(auto,1.29)) p(101.8,72) s(hug:107.41,hug:18) f[(4988f646b0c7b514,tok(pen.tone.neutral.shade.900,#432231))] "Title"
+        297c122426fe8c42 t("Save this article to show up here and find people interested in it too.",Alan Sans,14:$pen.font-size.footnote,r,align(c),lh(auto,1.29)) p(16,98) s(fill,hug:36) ext(279,) f[(41b638cd30bf31a7,tok(pen.tone.neutral.foreground-muted,#6F3E4D))] "Description"

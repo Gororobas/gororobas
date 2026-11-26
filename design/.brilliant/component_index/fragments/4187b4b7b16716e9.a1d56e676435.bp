@@ -1,0 +1,5 @@
+    4187b4b7b16716e9 fr comp axes[state[option,selected]] p(814,0) s(194.14,66) f[] st[(c0e22caeb7c26e41,#7C6BF0,w(1),dash(10,5))] rd(16) "ui/chip"
+      9450f0e909d48805 al(h,y(c),g(4:$pen.space.1),pad(4:$pen.space.1,12:$pen.space.3,4:$pen.space.1,12:$pen.space.3)) variant(state(option)) p(20,20) s(hug:65.07,hug:26) f[(a637477423d3ba48,tok(pen.tone.primary.background-muted,#FDE7BF))] rd(9999:$radius.full, smooth(1)) "Frame 259"
+        c733947a652b0189 t("Plants",Alan Sans,14:$pen.font-size.footnote,m,align(l),lh(auto,1.29)) mref(c733947a652b0189) p(12,4) s(hug:41.07,hug:18) f[(6682afcfdf8f38d2,tok(pen.tone.primary.foreground,#2A111C))] "Label"
+      cf60b3a71d28eee5 al(h,y(c),g(4:$pen.space.1),pad(4:$pen.space.1,12:$pen.space.3,4:$pen.space.1,12:$pen.space.3)) variant(state(selected)) p(109.07,20) s(hug:65.07,hug:26) f[(ca03bbf64638fd36,tok(pen.tone.primary.action.background,#926C16))] rd(9999:$radius.full, smooth(1)) "Frame 260"
+        70bcac05a8858e19 t("Plants",Alan Sans,14:$pen.font-size.footnote,m,align(l),lh(auto,1.29)) mref(c733947a652b0189) p(12,4) s(hug:41.07,hug:18) f[(31c24f97b4ad5e80,tok(pen.tone.primary.action.foreground,#FFF9EE))] "Label"

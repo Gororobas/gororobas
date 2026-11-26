@@ -1,12 +1,14 @@
 /**
- * Keeps `design/explorations.pen` in sync with the web app, which is canonical.
+ * Keeps the design file (`design/main.bl`, tokens in `design/Styles/gororobas.ds`) in sync with
+ * the web app, which is canonical.
  *
  * pnpm --filter @gororobas/web-app design:check
  * pnpm --filter @gororobas/web-app design:variables
- * pnpm --filter @gororobas/web-app design:acknowledge <penNode>... | --all
+ * pnpm --filter @gororobas/web-app design:acknowledge <designNode>... | --all
  *
- * `design:variables` prints the tokens the design file should hold, as a snippet for Pencil's
- * `execute` tool. `design:acknowledge` re-records a mirror's source hash after the design was updated.
+ * `design:variables` prints the tokens the design system should hold, as a ```ds fence for
+ * Brilliant's `edit` tool (Brilliant owns its files while open, so they aren't written here).
+ * `design:acknowledge` re-records a mirror's source hash after the design was updated.
  */
 import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import {
@@ -23,7 +25,8 @@ import {
 import { Argument, Command, Flag } from "effect/cli"
 import { createHash } from "node:crypto"
 
-import { PenDocument, SyncLedger, checkDesignSync } from "./check"
+import { SyncLedger, checkDesignSync, designTokenName } from "./check"
+import { parseCanvas, parseDesignSystem } from "./design-file"
 import { designVariables } from "./design-tokens"
 
 /** A failure the person running the command can fix: printed as is, without a stack trace. */
@@ -34,7 +37,6 @@ class DesignSyncError extends Schema.TaggedError<DesignSyncError>()("DesignSyncE
 }
 
 const LedgerJson = Schema.fromJsonString(SyncLedger, { space: 2 })
-const PenJson = Schema.fromJsonString(PenDocument)
 
 /** `theme` is mirrored as variables and `styles` holds CSS helpers, so neither is a component. */
 const NOT_COMPONENTS = new Set(["theme", "styles"])
@@ -49,7 +51,8 @@ const locations = Effect.gen(function* () {
 
   return {
     webAppSource,
-    penPath: path.join(designDirectory, "explorations.pen"),
+    canvasPath: path.join(designDirectory, "main.bl"),
+    designSystemPath: path.join(designDirectory, "Styles", "gororobas.ds"),
     ledgerPath: path.join(designDirectory, "design-sync.json"),
   }
 })
@@ -134,7 +137,7 @@ const uiFolders = Effect.gen(function* () {
 const check = Command.make("check", {}, () =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem
-    const { penPath } = yield* locations
+    const { canvasPath, designSystemPath } = yield* locations
     const ledger = yield* readLedger
 
     const sourceHashes = yield* Effect.forEach(ledger.mirrors, ({ source }) =>
@@ -145,7 +148,10 @@ const check = Command.make("check", {}, () =>
     )
 
     const problems = checkDesignSync({
-      pen: yield* Schema.decodeEffect(PenJson)(yield* fileSystem.readFileString(penPath)),
+      design: {
+        nodes: parseCanvas(yield* fileSystem.readFileString(canvasPath)),
+        tokens: parseDesignSystem(yield* fileSystem.readFileString(designSystemPath)),
+      },
       ledger,
       variables: designVariables(),
       uiFolders: yield* uiFolders,
@@ -165,8 +171,8 @@ const check = Command.make("check", {}, () =>
 const acknowledge = Command.make(
   "acknowledge",
   {
-    penNodes: Argument.String("penNode").pipe(
-      Argument.withDescription("Mirrors to acknowledge, by their penNode in design-sync.json"),
+    designNodes: Argument.String("designNode").pipe(
+      Argument.withDescription("Mirrors to acknowledge, by their designNode in design-sync.json"),
       Argument.variadic,
     ),
     all: Flag.Boolean("all").pipe(
@@ -174,23 +180,23 @@ const acknowledge = Command.make(
       Flag.withDescription("Acknowledge every mirror"),
     ),
   },
-  ({ penNodes, all }) =>
+  ({ designNodes, all }) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem
       const { ledgerPath } = yield* locations
       const ledger = yield* readLedger
-      const unknown = penNodes.filter(
-        (name) => !ledger.mirrors.some((mirror) => mirror.penNode === name),
+      const unknown = designNodes.filter(
+        (name) => !ledger.mirrors.some((mirror) => mirror.designNode === name),
       )
 
-      if ((!all && penNodes.length === 0) || unknown.length > 0) {
+      if ((!all && designNodes.length === 0) || unknown.length > 0) {
         return yield* new DesignSyncError({
           message: `Name mirrors from design/design-sync.json, or pass --all. Unknown: ${unknown.join(", ") || "(none given)"}`,
         })
       }
 
       const mirrors = yield* Effect.forEach(ledger.mirrors, (mirror) =>
-        all || penNodes.includes(mirror.penNode)
+        all || designNodes.includes(mirror.designNode)
           ? Effect.map(hashSource(mirror.source), (hash) => ({
               ...mirror,
               sourceHash: Option.getOrElse(hash, () => mirror.sourceHash),
@@ -208,33 +214,23 @@ const acknowledge = Command.make(
 )
 
 const variables = Command.make("variables", {}, () => {
-  const entries = Object.entries(designVariables()).map(([name, variable]) =>
+  const statements = Object.entries(designVariables()).map(([name, variable]) =>
     variable.type === "color"
-      ? [
-          name,
-          {
-            type: "color",
-            value:
-              variable.value.light === variable.value.dark
-                ? variable.value.light
-                : [
-                    { value: variable.value.light, theme: { mode: "light" } },
-                    { value: variable.value.dark, theme: { mode: "dark" } },
-                  ],
-          },
-        ]
-      : [name, variable],
+      ? variable.value.light === variable.value.dark
+        ? `${designTokenName(name)}: ${variable.value.light}`
+        : `${designTokenName(name)} { $default: ${variable.value.light}, theme.dark: ${variable.value.dark} }`
+      : `${designTokenName(name)}: ${variable.value}`,
   )
 
-  return Console.log(`SetVariables(${JSON.stringify(Object.fromEntries(entries))})`)
+  return Console.log(["```ds", 'file("Styles/gororobas.ds")', ...statements, "```"].join("\n"))
 }).pipe(
   Command.withDescription(
-    "Print the design file's tokens as a snippet to paste into Pencil's `execute`",
+    "Print the design system's tokens as a ```ds fence for Brilliant's `edit` tool",
   ),
 )
 
 const command = Command.make("design-sync").pipe(
-  Command.withDescription("Keep design/explorations.pen in sync with the web app"),
+  Command.withDescription("Keep design/main.bl in sync with the web app"),
   Command.withSubcommands([check, variables, acknowledge]),
 )
 

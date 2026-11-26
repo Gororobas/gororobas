@@ -1,6 +1,6 @@
 import type {} from "csstype"
 
-// NOTE: csstype 3.2 predates `corner-shape`. Pleat's declaration types come from csstype,
+// NOTE: csstype 3.2 predates `corner-shape` and `scroll-initial-target`. Pleat's declaration types come from csstype,
 // so augmenting it here makes the property available to `Style.make` and `Global.rule`.
 declare module "csstype" {
   interface StandardLonghandProperties<TLength, TTime> {
@@ -12,5 +12,6 @@ declare module "csstype" {
       | "notch"
       | "square"
       | (string & Record<never, never>)
+    scrollInitialTarget?: "none" | "nearest"
   }
 }

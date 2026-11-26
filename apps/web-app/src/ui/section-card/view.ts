@@ -24,6 +24,8 @@ const CARD_PADDING = space[4]
 
 const cardStyle = Style.make({
   display: "grid",
+  // Without it, the column grows to its widest child's min-content, such as a row of tags.
+  gridTemplateColumns: "minmax(0, 1fr)",
   rowGap: space[4],
   padding: CARD_PADDING,
   borderRadius: radius.lg,
@@ -43,7 +45,12 @@ export const cardBleedStyle = Style.make({
 })
 
 /** The same layout without the card surface, for a page that is only this section. */
-const bareStyle = Style.make({ display: "grid", rowGap: space[4], paddingBlock: space[2] })
+const bareStyle = Style.make({
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  rowGap: space[4],
+  paddingBlock: space[2],
+})
 
 const headingRowStyle = Style.make({
   display: "flex",

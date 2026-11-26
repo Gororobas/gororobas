@@ -18,6 +18,7 @@ import { PhotoGallery } from "../../../ui/photo-gallery"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { PublicationCard } from "../../../ui/publication-card"
 import { SectionCard } from "../../../ui/section-card"
+import { WikiArticleCard } from "../../../ui/wiki-article-card"
 import { WikiArticleRow } from "../../../ui/wiki-article-row"
 import type { ProfileViewBuilder } from "../composition"
 import { Message } from "../message"
@@ -321,12 +322,11 @@ export const bookmarks = (
                             bookmark.article.id,
                             [],
                             [
-                              WikiArticleRow.view(
+                              WikiArticleCard.view(
                                 {
                                   article: bookmark.article,
                                   language,
                                   maybeBookmarkState: Option.some(bookmark.state),
-                                  isCard: true,
                                 },
                                 h,
                               ),

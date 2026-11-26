@@ -42,6 +42,7 @@ import { ProfileRow } from "../../ui/profile-row"
 import { PublicationCard } from "../../ui/publication-card"
 import * as SectionHeading from "../../ui/section-heading"
 import { focusRingDeclarations } from "../../ui/styles/focus-ring"
+import { overflowFadeStyle } from "../../ui/styles/overflow-fade"
 import { pageColumnStyle } from "../../ui/styles/page-column"
 import {
   type ColumnCount,
@@ -68,7 +69,7 @@ import {
   toneStyle,
 } from "../../ui/theme"
 import { visuallyHiddenStyle } from "../../ui/visually-hidden"
-import { WikiArticleRow } from "../../ui/wiki-article-row"
+import { WikiArticleCard } from "../../ui/wiki-article-card"
 import {
   FilterPopoversBinding,
   FiltersDrawerBinding,
@@ -166,7 +167,7 @@ const tabListStyle = Style.make({
   overflowX: "auto",
   scrollbarWidth: "none",
   paddingBlock: space[3],
-})
+}).pipe(Style.merge(overflowFadeStyle))
 
 const searchInputStyle = Style.make({ paddingInlineEnd: space[9] })
 
@@ -574,7 +575,7 @@ const resultSkeletons = (type: SearchType, h: SearchViewBuilder) =>
       skeleton: h.div(styledAttributes([], resultGridContainerStyle), [
         h.div(
           styledAttributes([], resultGridStyle),
-          EffectArray.makeBy(6, () => WikiArticleRow.cardSkeleton(h)),
+          EffectArray.makeBy(6, () => WikiArticleCard.skeleton(h)),
         ),
       ]),
     })),
@@ -646,12 +647,11 @@ const articleGrid = (
             (article) =>
               [
                 article.id,
-                WikiArticleRow.view(
+                WikiArticleCard.view(
                   {
                     article,
                     language,
                     maybeBookmarkState: HashMap.get(model.viewerBookmarks, article.id),
-                    isCard: true,
                   },
                   h,
                 ),
@@ -814,7 +814,8 @@ const overviewSection = (
                   children: [i18n._(msg`See all`), Icons.arrowRight({ size: "sm" })],
                   href: typeUrl({ language, query, type: Option.some(type) }),
                   tone: "accent",
-                  mode: "faded",
+                  // Outlined like the result types above: a faded fill barely reads on the page.
+                  mode: "outline",
                   size: "sm",
                   styles: EffectArray.fromOption(
                     Option.map(maybeLoadedCount, (count) => morePreviewedStyle({ shownAt, count })),

@@ -3,9 +3,11 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 
 import { AppButton } from "../app-button"
 import { styledAttributes } from "../pleat-attributes"
+import { overflowFadeStyle } from "../styles/overflow-fade"
 import { breakpoint, space, toneColors, tones } from "../theme"
 
-/** Scrolls sideways on small screens, bleeding to the page's edges; wraps on wide ones. */
+/** Scrolls sideways on small screens, bleeding to the page's edges and fading where choices
+ *  continue; wraps on wide ones. */
 export const choiceRowStyle = Style.make({
   display: "flex",
   alignItems: "center",
@@ -16,6 +18,7 @@ export const choiceRowStyle = Style.make({
   marginInline: `calc(-1 * ${space[4]})`,
   paddingInline: space[4],
 }).pipe(
+  Style.merge(overflowFadeStyle),
   Style.when(breakpoint.sm, { marginInline: `calc(-1 * ${space[6]})`, paddingInline: space[6] }),
   Style.when(breakpoint.md, {
     flexWrap: "wrap",
