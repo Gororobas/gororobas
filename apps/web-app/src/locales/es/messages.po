@@ -319,6 +319,14 @@ msgstr "Animales"
 msgid "Annual"
 msgstr "Anual"
 
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Annual mean temperature {temperature} °C"
+msgstr "Temperatura media anual {temperature} °C"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Annual rainfall {rainfall} mm"
+msgstr "Precipitación anual {rainfall} mm"
+
 #: src/blocks/profile-editor/blocks/profile-settings-editor/view.ts
 msgid "Anyone who can see your profile."
 msgstr "Cualquier persona que pueda ver tu perfil."
@@ -476,6 +484,14 @@ msgstr "Borrar filtros"
 #: src/blocks/search/view.ts
 msgid "Clear search"
 msgstr "Borrar búsqueda"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Climate profile"
+msgstr "Perfil climático"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Climate profile unavailable. Save the place again to retry."
+msgstr "Perfil climático no disponible. Guarda el lugar de nuevo para volver a intentarlo."
 
 #: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Close"
@@ -805,6 +821,10 @@ msgstr "Indica el año de fin."
 msgid "Enter the start year."
 msgstr "Indica el año de inicio."
 
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Estimated daylight on the 15th (h)"
+msgstr "Duración estimada del día el día 15 (h)"
+
 #: src/lib/vocabulary.ts
 msgid "Events"
 msgstr "Eventos"
@@ -917,6 +937,10 @@ msgstr "Combustible"
 #: src/ui/rich-text/view.ts
 msgid "Gallery"
 msgstr "Galería"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Generating climate profile…"
+msgstr "Generando el perfil climático…"
 
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Genres"
@@ -1411,6 +1435,14 @@ msgstr "Usos principales"
 msgid "Making a branch grow roots while it's still attached to the plant, by burying its tip or wrapping a wounded stretch of it in moist soil (air layering), then cutting it off as a new plant. Used for lychee, jabuticaba and many shrubs."
 msgstr "Hacer que una rama eche raíces mientras sigue unida a la planta, enterrando su punta o envolviendo un tramo herido en tierra húmeda (acodo aéreo), y luego cortarla como una nueva planta. Se usa para el lichi, la jabuticaba y muchos arbustos."
 
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Mean daily maximum (°C)"
+msgstr "Máxima diaria media (°C)"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Mean daily minimum (°C)"
+msgstr "Mínima diaria media (°C)"
+
 #: src/lib/vocabulary.ts
 msgid "Measurement"
 msgstr "Medición"
@@ -1432,6 +1464,14 @@ msgstr "Medio"
 msgid "Meet people near you who share the same interests"
 msgstr "Conoce a personas cerca de ti con los mismos intereses"
 
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Minimum area coverage {coverage}%"
+msgstr "Cobertura mínima del área {coverage}%"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Month"
+msgstr "Mes"
+
 #. placeholder {0}: config.label
 #: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Month ({0})"
@@ -1440,6 +1480,10 @@ msgstr "Mes ({0})"
 #: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Month (optional)"
 msgstr "Mes (opcional)"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Monthly means and P10–P90 ranges"
+msgstr "Medias mensuales e intervalos P10–P90"
 
 #: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "More actions for {title}"
@@ -1845,6 +1889,10 @@ msgstr "Posts"
 msgid "Posts and events show up here as soon as they're shared."
 msgstr "Las publicaciones y eventos aparecen aquí en cuanto se comparten."
 
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Potential evapotranspiration (mm)"
+msgstr "Evapotranspiración potencial (mm)"
+
 #: src/lib/vocabulary.ts
 msgid "Practicing it"
 msgstr "Practicándolo"
@@ -1920,6 +1968,14 @@ msgstr "Publicación"
 msgid "Publisher"
 msgstr "Editorial"
 
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Rainfall (mm)"
+msgstr "Precipitación (mm)"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Rainfall by month"
+msgstr "Precipitación por mes"
+
 #: src/lib/vocabulary.ts
 msgid "Raising them"
 msgstr "Criándolos"
@@ -1939,6 +1995,10 @@ msgstr "Búsquedas recientes"
 #: src/blocks/wiki-article/view/about.ts
 msgid "Related articles"
 msgstr "Artículos relacionados"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Relative humidity (%)"
+msgstr "Humedad relativa (%)"
 
 #: src/blocks/wiki-article/view/overview/index.ts
 msgid "Released"
@@ -2202,6 +2262,10 @@ msgstr "Comparte dónde cultivas y mira quién cultiva cerca"
 msgid "Share your journey on your profile, if you choose to"
 msgstr "Comparte tu camino en tu perfil, si quieres"
 
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Shortwave radiation (W/m²)"
+msgstr "Radiación de onda corta (W/m²)"
+
 #: src/blocks/wiki-article/view/child-places.ts
 msgid "Show more places"
 msgstr "Mostrar más lugares"
@@ -2341,6 +2405,18 @@ msgstr "Participan"
 #: src/blocks/profile-editor/blocks/profile-locations-editor/view.ts
 msgid "Tell where you grow, where you've lived or where you're passing through."
 msgstr "Cuenta dónde cultivas, dónde has vivido o por dónde estás pasando."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Temperature (°C)"
+msgstr "Temperatura (°C)"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Temperature by month"
+msgstr "Temperatura por mes"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Terrain within 50 m of {elevation} m · {support}% of municipality · Copernicus GLO-90"
+msgstr "Terreno a menos de 50 m de {elevation} m de altitud · {support}% del municipio · Copernicus GLO-90"
 
 #: src/lib/vocabulary.ts
 msgid "Territory"
@@ -2494,6 +2570,10 @@ msgstr "Usos"
 #: src/lib/vocabulary.ts
 msgid "Using it"
 msgstr "Usándolo"
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Vapor pressure deficit (kPa)"
+msgstr "Déficit de presión de vapor (kPa)"
 
 #: src/lib/vocabulary.ts
 msgid "Varieties"
@@ -2659,6 +2739,10 @@ msgstr "Quién puede ver tu perfil"
 #: src/ui/mysterious-author/view.ts
 msgid "Whoever wrote this shares their profile only with the Gororobas community, so their name stays a secret here. What they published is for everyone, though."
 msgstr "Quien escribió esto comparte su perfil solo con la comunidad de Gororobas, así que su nombre queda en secreto aquí. Pero lo que publicó es para todo el mundo."
+
+#: src/blocks/profile-editor/blocks/profile-locations-editor/climate-profile-view.ts
+msgid "Whole municipality"
+msgstr "Municipio completo"
 
 #: src/blocks/authentication/view.ts
 msgid "Why create an account"

@@ -82,3 +82,5 @@ export * from "./wiki/wiki-article-common-name.js"
 export * from "./wiki/wiki-article-crdt.js"
 
 export { initializeWikiArticleCommonNames } from "./wiki/wiki-article-common-name.crdt.js"
+
+export * from "./places/climate-profile.js"

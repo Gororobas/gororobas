@@ -139,6 +139,16 @@ CREATE TABLE profile_locations (
 
 CREATE INDEX idx_profile_locations_profile_id ON profile_locations (profile_id);
 
+-- A climate profile belongs to a public gazetteer place, independent of who selected it.
+CREATE TABLE place_climate_profiles (
+  whos_on_first_id TEXT NOT NULL,
+  elevation_key INTEGER NOT NULL,
+  generation TEXT NOT NULL,
+  state TEXT NOT NULL,
+  profile TEXT,
+  PRIMARY KEY (whos_on_first_id, elevation_key)
+);
+
 CREATE TABLE people (
   id text PRIMARY KEY,
   access_level text NOT NULL, -- PlatformAccessLevel

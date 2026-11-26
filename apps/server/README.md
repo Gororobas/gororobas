@@ -125,3 +125,35 @@ pnpm run check
 ```
 
 `test/auth.feature` specifies sign-up, sign-in, wrong codes, browser binding and sign-out through the real HTTP stack with captured email delivery; `src/authentication/authentication.test.ts` covers transport details (origins, CSRF, cookie flags). Mailpit is not required for the automated tests.
+
+
+## Place climate profiles
+
+Saving a municipality in the signed-in person's itinerary starts a background workflow. The
+itinerary and `GET /people/me/locations` show the workflow status and then the climate profile.
+The cache key combines the Who’s On First ID and the stored elevation in meters. Saving a
+different elevation selects a different result. A failed generation can be retried by saving
+the location again.
+
+With a recorded elevation, Copernicus GLO-90 surface heights select terrain from 50 m below
+(inclusive) to 50 m above (exclusive). Native DEM footprints are intersected with the municipal
+boundary and the CHELSA cells in equal-area coordinates. This 100 m window is a sampling choice.
+The profile reports the selected fraction of the municipality. Coverage and spatial quantiles
+refer to that selected area. Missing terrain or an empty selection makes generation unavailable.
+An entry without elevation uses the whole municipality.
+
+The workflow reads range requests from CHELSA v2.1 for the 1981–2010 monthly normals at
+30 arc-seconds. Fields include mean, minimum and maximum temperature (°C), precipitation and
+potential evapotranspiration (mm/month), relative humidity (%), vapor pressure deficit (kPa)
+and shortwave radiation (W/m²). Estimated daylight is the area-weighted sunrise-to-sunset
+interval on the 15th at the selected climate cells’ latitudes, assuming an unobstructed horizon.
+The spatial P10–P90 interval describes variation within the selected terrain.
+
+Set `CHELSA_CLIMATOLOGIES_URL` to a range-enabled mirror with the original climatologies
+layout, and `CLIMATE_DEM_URL` to a mirror of the Copernicus GLO-90 bucket if needed.
+
+Bundled boundaries cover Viçosa, Rio Acima, Belo Horizonte and Petrópolis (IBGE 2024) and Villa de Leyva (IGAC, November 2026). For a different set of IBGE, IGAC or DANE boundaries, place `admin-<WOF ID>.geojson` in
+`CLIMATE_BOUNDARIES_DIRECTORY`. Supply an EPSG:4326 Polygon or MultiPolygon Feature and the
+`geometry_source` and `geometry_version` properties, as in the research spike. Other municipalities
+use the full Who's On First polygon from the built gazetteer. Build the real gazetteer before
+testing places outside its default development fixture.

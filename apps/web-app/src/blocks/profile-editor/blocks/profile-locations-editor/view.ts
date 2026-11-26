@@ -44,6 +44,7 @@ import {
   toneColors,
   tones,
 } from "../../../../ui/theme"
+import { climateProfileView } from "./climate-profile-view"
 import {
   CONFIRM_DELETE_BUTTON_ID,
   entryMenuButtonId,
@@ -564,6 +565,9 @@ const entryView = (
               ]
             : []),
         ]),
+        ...(LocationPlace.guards.KnownPlace(place) && place.climate !== undefined
+          ? [climateProfileView({ climate: place.climate, language }, h)]
+          : []),
         ...(isLatest && !isOnProfile
           ? [
               muted(

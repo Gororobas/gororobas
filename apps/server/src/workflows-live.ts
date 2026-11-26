@@ -1,5 +1,6 @@
 import { Layer } from "effect"
 
+import { PlaceClimateWorkflowLive } from "./climate/workflow.js"
 import { PublicationLinkInferenceWorkflowLayer } from "./link-inference/publication-link-inference-workflow.js"
 import { WikiArticleLinkInferenceWorkflowLayer } from "./link-inference/wiki-article-link-inference-workflow.js"
 import { MediaDeletionWorkflowLayer } from "./media-assets/media-deletion-workflow.js"
@@ -15,6 +16,7 @@ import { WikiArticlesRepository } from "./wiki/repository.js"
 const WikiArticlesRepositoryLive = Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make)
 
 export const WorkflowsLive = Layer.mergeAll(
+  PlaceClimateWorkflowLive,
   MediaDeletionWorkflowLayer.pipe(
     Layer.provide(Layer.effect(MediaAssetsStorage, MediaAssetsStorage.make)),
   ),
