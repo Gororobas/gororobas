@@ -70,7 +70,12 @@ export const PlaceClimateWorkflowLive = PlaceClimateWorkflow.toLayer(
         boundaryVersion: official?.properties.geometry_version ?? null,
         computedAt: DateTime.formatIso(yield* DateTime.now),
         elevationMeters: generation.elevationMeters,
-        ...(yield* aggregateChelsa(baseUrl, boundary, generation.elevationMeters, demUrl)),
+        ...(yield* aggregateChelsa({
+          baseUrl,
+          boundary,
+          elevation: generation.elevationMeters,
+          demUrl,
+        })),
       })
     }).pipe(
       Effect.tapError((error) =>

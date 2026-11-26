@@ -30,7 +30,7 @@ type Field = keyof typeof encodingScale
 // Approximate sunrise to sunset on the 15th, including standard horizon refraction.
 export const daylightHours = (latitude: number, month: number) => {
   const radians = Math.PI / 180
-  const day = (Date.UTC(2021, month - 1, 15) - Date.UTC(2021, 0, 0)) / 86400000
+  const day = [15, 46, 74, 105, 135, 166, 196, 227, 258, 288, 319, 349][month - 1] ?? 15
   const declination = 23.44 * radians * Math.sin((2 * Math.PI * (day - 80)) / 365)
   const lat = latitude * radians
   const hourAngle =
@@ -77,19 +77,28 @@ const matchesGrid = (left: RasterGrid, right: RasterGrid) =>
   left.width === right.width &&
   left.height === right.height
 
-export const aggregateChelsa = (
-  baseUrl: string,
-  boundary: AreaGeometry,
-  elevation: number | null,
-  demUrl: string,
-) =>
+interface ClimateGridCache {
+  shared?: { grid: RasterGrid; weights: ReturnType<typeof climateCellWeights> }
+}
+
+export const aggregateChelsa = ({
+  baseUrl,
+  boundary,
+  elevation,
+  demUrl,
+}: {
+  baseUrl: string
+  boundary: AreaGeometry
+  elevation: number | null
+  demUrl: string
+}) =>
   Effect.gen(function* () {
     const fetchRaster = yield* FetchHttpClient.Fetch
     const terrain =
       elevation === null
         ? undefined
         : { meters: elevation, tiles: yield* readTerrain(demUrl, boundary) }
-    let shared: { grid: RasterGrid; weights: ReturnType<typeof climateCellWeights> } | undefined
+    const cache: ClimateGridCache = {}
 
     const read = (field: Field, month: number) => {
       const url = `${baseUrl.replace(/\/$/, "")}/${field}/1981-2010/CHELSA_${field}_${String(month).padStart(2, "0")}_1981-2010_V.2.1.tif`
@@ -137,7 +146,10 @@ export const aggregateChelsa = (
             try: async (signal) => {
               const image = await tiff.getImage()
               const grid = rasterGrid(image)
-              shared ??= { grid, weights: climateCellWeights(boundary, grid, terrain) }
+              const shared = (cache.shared ??= {
+                grid,
+                weights: climateCellWeights({ boundary, grid, terrain }),
+              })
               if (!matchesGrid(shared.grid, grid)) {
                 throw new ClimateRasterError({ message: "CHELSA grids do not align" })
               }
@@ -197,11 +209,8 @@ export const aggregateChelsa = (
       { concurrency: 2 },
     )
 
-    if (!shared) return yield* new ClimateRasterError({ message: "Missing climate grid" })
-    const { grid, weights } = shared as {
-      grid: RasterGrid
-      weights: ReturnType<typeof climateCellWeights>
-    }
+    if (!cache.shared) return yield* new ClimateRasterError({ message: "Missing climate grid" })
+    const { grid, weights } = cache.shared
     const [left, top, right] = weights.window
     const area = weights.cells.reduce((sum, cell) => sum + cell.area, 0)
 

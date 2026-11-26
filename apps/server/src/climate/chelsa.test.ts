@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Record } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { writeArrayBuffer } from "geotiff"
 
@@ -19,23 +19,22 @@ it.effect("decodes all monthly fields over the selected elevation footprints", (
         GTRasterTypeGeoKey: 1,
       })
 
-    const fields = new Map(
-      Object.entries({
-        tas: raster([2900, 3000]),
-        tasmin: raster([2800, 2900]),
-        tasmax: raster([3000, 3100]),
-        pr: raster([100, 300]),
-        hurs: raster([7500, 8500]),
-        pet: raster([5000, 7000]),
-        vpd: raster([5000, 8000]),
-        rsds: raster([150, 200]),
-      }),
-    )
+    const fields = {
+      tas: raster([2900, 3000]),
+      tasmin: raster([2800, 2900]),
+      tasmax: raster([3000, 3100]),
+      pr: raster([100, 300]),
+      hurs: raster([7500, 8500]),
+      pet: raster([5000, 7000]),
+      vpd: raster([5000, 8000]),
+      rsds: raster([150, 200]),
+    }
 
     const fetchRaster: typeof fetch = async (input, options) => {
-      const path = new URL(String(input)).pathname
+      const path = new URL(input instanceof Request ? input.url : input).pathname
       if (path.includes("Copernicus")) return new Response(raster([800, 1200]))
-      const bytes = fields.get(path.split("/")[1] ?? "")
+      const field = path.split("/")[1] ?? ""
+      const bytes = Record.toEntries(fields).find(([name]) => name === field)?.[1]
       const range = /^bytes=(\d+)-(\d+)$/.exec(new Headers(options?.headers).get("Range") ?? "")
       if (!bytes || !range) return new Response(null, { status: 404 })
       const start = Number(range[1])
@@ -63,14 +62,18 @@ it.effect("decodes all monthly fields over the selected elevation footprints", (
     } as const
 
     const profile = (meters: number | null) =>
-      aggregateChelsa("https://normals.test", boundary, meters, "https://terrain.test").pipe(
-        Effect.provideService(FetchHttpClient.Fetch, fetchRaster),
-      )
+      aggregateChelsa({
+        baseUrl: "https://normals.test",
+        boundary,
+        elevation: meters,
+        demUrl: "https://terrain.test",
+      }).pipe(Effect.provideService(FetchHttpClient.Fetch, fetchRaster))
+
     const selected = yield* profile(1200)
     expect(selected.supportFraction).toBeCloseTo(0.5)
     expect(selected.months).toHaveLength(12)
 
-    for (const month of selected.months) {
+    selected.months.forEach((month) => {
       expect(month.temperatureC.mean).toBeCloseTo(26.85)
       expect(month.minimumTemperatureC.mean).toBeCloseTo(16.85)
       expect(month.maximumTemperatureC.mean).toBeCloseTo(36.85)
@@ -81,7 +84,7 @@ it.effect("decodes all monthly fields over the selected elevation footprints", (
       expect(month.shortwaveRadiationWm2.mean).toBeCloseTo(200)
       expect(month.daylightHours).toBeGreaterThan(11.9)
       expect(month.daylightHours).toBeLessThan(12.2)
-    }
+    })
 
     const whole = yield* profile(null)
     expect(whole.months[0]?.precipitationMm.mean).toBeCloseTo(20)

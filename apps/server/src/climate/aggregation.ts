@@ -84,11 +84,12 @@ export interface TerrainTile extends RasterGrid {
 
 // Sutherland–Hodgman clipping against one axis-aligned half-plane. Only the
 // enclosed area is needed, so disconnected pieces can share cancelling edges.
-const clipRing = (ring: Ring, axis: 0 | 1, limit: number, keepAbove: boolean): Ring => {
+const clipRing = (ring: Ring, [axis, limit, keepAbove]: [0 | 1, number, boolean]): Ring => {
   const result: Ring = []
   let previous = ring.at(-1)
   if (!previous) return result
 
+  // oxlint-disable-next-line effect/imperative-loops -- Each edge starts at the previous vertex.
   for (const point of ring) {
     const inside = keepAbove ? point[axis] >= limit : point[axis] <= limit
     const wasInside = keepAbove ? previous[axis] >= limit : previous[axis] <= limit
@@ -112,20 +113,13 @@ const clipRing = (ring: Ring, axis: 0 | 1, limit: number, keepAbove: boolean): R
 
 const rectangleArea = (
   polygon: MultiPolygon,
-  west: number,
-  south: number,
-  east: number,
-  north: number,
+  [west, south, east, north]: [number, number, number, number],
 ) =>
   areaOf(
     polygon.map((rings) =>
       rings.map((ring) => {
-        const clipped = clipRing(
-          clipRing(clipRing(clipRing(ring, 0, west, true), 0, east, false), 1, south, true),
-          1,
-          north,
-          false,
-        )
+        const horizontal = clipRing(clipRing(ring, [0, west, true]), [0, east, false])
+        const clipped = clipRing(clipRing(horizontal, [1, south, true]), [1, north, false])
 
         if (clipped[0]) clipped.push(clipped[0])
         return clipped
@@ -133,15 +127,20 @@ const rectangleArea = (
     ),
   )
 
-const elevationArea = (
-  polygon: MultiPolygon,
-  bounds: [number, number, number, number],
-  tiles: readonly TerrainTile[],
-  target: number,
-) => {
+const elevationArea = ({
+  polygon,
+  bounds,
+  terrain,
+}: {
+  polygon: MultiPolygon
+  bounds: [number, number, number, number]
+  terrain: TerrainSelection
+}) => {
+  const { tiles, meters: target } = terrain
   const [west, south, east, north] = bounds
   let total = 0
 
+  // oxlint-disable-next-line effect/imperative-loops -- Scan DEM windows without allocating a list of pixel coordinates.
   for (const tile of tiles) {
     const [left, top, right, bottom] = windowFor(
       {
@@ -153,6 +152,7 @@ const elevationArea = (
       tile,
     )
 
+    // oxlint-disable-next-line effect/imperative-loops -- Accumulate one raster scanline at a time.
     for (let row = top; row < bottom; row++) {
       const y = tile.north - row * tile.cellHeight
       const upper = projectLatitude(Math.min(north, y))
@@ -160,6 +160,7 @@ const elevationArea = (
       // Adjacent matching DEM pixels on a scanline form a single rectangle.
       let run = left
 
+      // oxlint-disable-next-line effect/imperative-loops -- Track the start of each contiguous altitude run in constant memory.
       for (let col = left; col <= right; col++) {
         const height = tile.elevation[row * tile.width + col]
 
@@ -172,10 +173,11 @@ const elevationArea = (
         ) {
           continue
         }
+
         if (col > run && upper > lower) {
           const start = Math.max(west, tile.west + run * tile.cellWidth)
           const end = Math.min(east, tile.west + col * tile.cellWidth)
-          if (end > start) total += rectangleArea(polygon, start, lower, end, upper)
+          if (end > start) total += rectangleArea(polygon, [start, lower, end, upper])
         }
 
         run = col + 1
@@ -186,11 +188,20 @@ const elevationArea = (
   return total
 }
 
-export const climateCellWeights = (
-  boundary: AreaGeometry,
-  grid: RasterGrid,
-  terrain?: { tiles: readonly TerrainTile[]; meters: number },
-) => {
+interface TerrainSelection {
+  tiles: readonly TerrainTile[]
+  meters: number
+}
+
+export const climateCellWeights = ({
+  boundary,
+  grid,
+  terrain,
+}: {
+  boundary: AreaGeometry
+  grid: RasterGrid
+  terrain?: TerrainSelection | undefined
+}) => {
   const window = windowFor(geometryToBoundingBox(boundary), grid)
   const [left, top, right, bottom] = window
   const width = right - left
@@ -235,17 +246,16 @@ export const climateCellWeights = (
 
       const area =
         terrain && cut.length
-          ? elevationArea(
-              cut,
-              [
+          ? elevationArea({
+              polygon: cut,
+              bounds: [
                 longitude(column),
                 grid.north - (row + 1) * grid.cellHeight,
                 longitude(column + 1),
                 grid.north - row * grid.cellHeight,
               ],
-              terrain.tiles,
-              terrain.meters,
-            )
+              terrain,
+            })
           : areaOf(cut)
 
       return area > 0 ? [{ index: (row - top) * width + column - left, area }] : []
@@ -256,6 +266,7 @@ export const climateCellWeights = (
   if (matchingArea <= 0) {
     throw new ClimateRasterError({ message: "No terrain within the requested elevation range" })
   }
+
   return {
     window,
     cells,

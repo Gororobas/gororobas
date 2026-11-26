@@ -4,8 +4,8 @@ import { climateCellWeights, summarizeClimateCells } from "./aggregation.js"
 
 describe("climate cell aggregation", () => {
   it("weights a partial cell, removes a hole and reports missing coverage", () => {
-    const weights = climateCellWeights(
-      {
+    const weights = climateCellWeights({
+      boundary: {
         type: "Polygon",
         coordinates: [
           [
@@ -24,8 +24,8 @@ describe("climate cell aggregation", () => {
           ],
         ],
       },
-      { west: 0, north: 1, cellWidth: 1, cellHeight: 1, width: 2, height: 1 },
-    )
+      grid: { west: 0, north: 1, cellWidth: 1, cellHeight: 1, width: 2, height: 1 },
+    })
 
     expect(weights.window).toEqual([0, 0, 2, 1])
     const summary = summarizeClimateCells({ weights, values: [10, 30], decode: (value) => value })
@@ -71,12 +71,12 @@ it("clips matching DEM footprints across climate cells and excludes terrain outs
     noData: null,
   }
 
-  const weights = climateCellWeights(boundary, grid, { tiles: [tile], meters: 1000 })
+  const weights = climateCellWeights({ boundary, grid, terrain: { tiles: [tile], meters: 1000 } })
   expect(weights.supportFraction).toBeCloseTo(1.25 / 1.75)
   const summary = summarizeClimateCells({ weights, values: [10, 30], decode: (value) => value })
   expect(summary.mean).toBeCloseTo((10 * 0.5 + 30 * 0.75) / 1.25)
   expect(summary.coverage).toBeCloseTo(1)
-  expect(() => climateCellWeights(boundary, grid, { tiles: [tile], meters: 500 })).toThrow(
-    /No terrain/,
-  )
+  expect(() =>
+    climateCellWeights({ boundary, grid, terrain: { tiles: [tile], meters: 500 } }),
+  ).toThrow(/No terrain/)
 })
